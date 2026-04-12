@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rhosocial_activerecord_oracle"
-version = "1.0.0.dev1"
+version = "1.0.0.dev2"
 description = "Oracle backend implementation for rhosocial-activerecord, providing robust and optimized Oracle database support."
 readme = "README.md"
 license = { file = "LICENSE" }
