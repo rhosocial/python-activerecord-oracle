@@ -1,13 +1,6 @@
 name: Python Package Publish
 
 on:
-  workflow_run:
-    workflows: ["Python Test"]
-    types:
-      - completed
-    branches:
-      - main
-
   workflow_dispatch:
     inputs:
       destination:
