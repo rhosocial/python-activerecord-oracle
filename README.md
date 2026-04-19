@@ -22,8 +22,8 @@ Oracle backend implementation for rhosocial-activerecord, providing Oracle datab
 
 ## Requirements
 
-- **Python**: 3.8+
-- **Driver**: `oracledb>=2.0.0`
+- **Python**: 3.9+ (Python 3.8 is NOT supported due to `oracledb` driver requirements)
+- **Driver**: `oracledb>=3.4.2`
 
 ## Installation
 

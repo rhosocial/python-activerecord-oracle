@@ -704,3 +704,97 @@ class OracleDialect(
         """Check if Oracle version supports JSON Relational Duality (23ai+)."""
         return self.version >= (23, 0, 0)
     # endregion
+
+    # region Hierarchical Query Support
+    def supports_hierarchical_queries(self) -> bool:
+        """Oracle supports CONNECT BY for hierarchical queries."""
+        return True
+
+    def supports_connect_by(self) -> bool:
+        """Oracle supports CONNECT BY clause."""
+        return True
+
+    def supports_level_pseudo_column(self) -> bool:
+        """Oracle supports LEVEL pseudo-column."""
+        return True
+
+    def supports_connect_by_root(self) -> bool:
+        """Oracle supports CONNECT_BY_ROOT operator."""
+        return True
+
+    def supports_sys_connect_by_path(self) -> bool:
+        """Oracle supports SYS_CONNECT_BY_PATH function."""
+        return True
+    # endregion
+
+    # region PIVOT/UNPIVOT Support
+    def supports_pivot(self) -> bool:
+        """Oracle supports PIVOT (11g+)."""
+        return self.version >= (11, 0, 0)
+
+    def supports_unpivot(self) -> bool:
+        """Oracle supports UNPIVOT (11g+)."""
+        return self.version >= (11, 0, 0)
+
+    def supports_pivot_xml(self) -> bool:
+        """Oracle supports PIVOT XML for dynamic pivoting."""
+        return self.version >= (11, 0, 0)
+    # endregion
+
+    # region Query Hint Support
+    def supports_query_hints(self) -> bool:
+        """Oracle supports query hints via /*+ ... */."""
+        return True
+
+    def supports_parallel_hint(self) -> bool:
+        """Oracle supports PARALLEL hint."""
+        return True
+
+    def supports_index_hint(self) -> bool:
+        """Oracle supports INDEX hint."""
+        return True
+
+    def supports_leading_hint(self) -> bool:
+        """Oracle supports LEADING hint."""
+        return True
+
+    def supports_optimizer_hints(self) -> bool:
+        """Oracle supports optimizer hints."""
+        return True
+    # endregion
+
+    # region Enhanced Locking Support
+    def supports_for_update_nowait(self) -> bool:
+        """Oracle supports FOR UPDATE NOWAIT."""
+        return True
+
+    def supports_for_update_wait(self) -> bool:
+        """Oracle supports FOR UPDATE WAIT n."""
+        return True
+
+    def supports_for_update_of(self) -> bool:
+        """Oracle supports FOR UPDATE OF columns."""
+        return True
+    # endregion
+
+    # region Expression Formatting Methods
+    def format_connect_by(self, expr) -> Tuple[str, List[Any]]:
+        """Format CONNECT BY expression."""
+        return expr.to_sql(self)
+
+    def format_pivot(self, expr) -> Tuple[str, List[Any]]:
+        """Format PIVOT expression."""
+        return expr.to_sql(self)
+
+    def format_unpivot(self, expr) -> Tuple[str, List[Any]]:
+        """Format UNPIVOT expression."""
+        return expr.to_sql(self)
+
+    def format_hint(self, expr) -> Tuple[str, List[Any]]:
+        """Format query hint expression."""
+        return expr.to_sql(self)
+
+    def format_for_update(self, expr) -> Tuple[str, List[Any]]:
+        """Format FOR UPDATE expression."""
+        return expr.to_sql(self)
+    # endregion

@@ -14,6 +14,12 @@ Architecture:
 - OracleBackend: Synchronous implementation using oracledb
 - AsyncOracleBackend: Asynchronous implementation using oracledb (thin mode)
 - Independent from ORM frameworks - uses only native drivers
+
+Subpackages:
+- explain: EXPLAIN result types
+- types: Oracle-specific type definitions
+- expression: Oracle-specific SQL expressions
+- functions: Oracle function factories
 """
 
 from .backend import OracleBackend
@@ -23,20 +29,38 @@ from .dialect import OracleDialect
 from .transaction import OracleTransactionManager
 from .async_transaction import AsyncOracleTransactionManager
 
+# Type adapters
+from .adapters import (
+    OracleBooleanAdapter,
+    OracleDateTimeAdapter,
+    OracleDateAdapter,
+    OracleTimeAdapter,
+    OracleDecimalAdapter,
+    OracleJSONAdapter,
+    OracleBytesAdapter,
+)
+
 __all__ = [
-    # Synchronous Backend
+    # Backend classes
     'OracleBackend',
-
-    # Asynchronous Backend
     'AsyncOracleBackend',
-
+    
     # Configuration
     'OracleConnectionConfig',
-
-    # Dialect related
+    
+    # Dialect
     'OracleDialect',
-
-    # Transaction - Sync and Async
+    
+    # Transaction management
     'OracleTransactionManager',
     'AsyncOracleTransactionManager',
+    
+    # Type adapters
+    'OracleBooleanAdapter',
+    'OracleDateTimeAdapter',
+    'OracleDateAdapter',
+    'OracleTimeAdapter',
+    'OracleDecimalAdapter',
+    'OracleJSONAdapter',
+    'OracleBytesAdapter',
 ]

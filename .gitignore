@@ -175,5 +175,6 @@ cython_debug/
 .pypirc
 
 # Project specific
+.claude/plan/
 .claude/tmp/
 tests/config/

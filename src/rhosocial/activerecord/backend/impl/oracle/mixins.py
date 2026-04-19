@@ -47,11 +47,17 @@ class OracleBackendMixin:
             OracleDecimalAdapter,
             OracleJSONAdapter,
             OracleBytesAdapter,
+            OracleIntervalAdapter,
+            OracleRowIDAdapter,
+            OracleXMLAdapter,
+            OracleSDOGeometryAdapter,
+            OracleVectorAdapter,
         )
 
         # Initialize instance-level cache
         self._default_suggestions_cache = None
 
+        # Base adapters (always registered)
         oracle_adapters = [
             OracleBooleanAdapter(),
             OracleDateTimeAdapter(),
@@ -60,7 +66,22 @@ class OracleBackendMixin:
             OracleDecimalAdapter(),
             OracleJSONAdapter(),
             OracleBytesAdapter(),
+            OracleIntervalAdapter(),
+            OracleRowIDAdapter(),
         ]
+
+        # Version-specific adapters
+        version = self._version if hasattr(self, '_version') and self._version else (23, 0, 0)
+        
+        # XMLType is available in all versions with XML DB
+        oracle_adapters.append(OracleXMLAdapter())
+        
+        # SDO_GEOMETRY requires Spatial option
+        oracle_adapters.append(OracleSDOGeometryAdapter())
+        
+        # VECTOR type requires Oracle 23ai+
+        if version[0] >= 23:
+            oracle_adapters.append(OracleVectorAdapter())
 
         for adapter in oracle_adapters:
             for py_type, db_types in adapter.supported_types.items():
