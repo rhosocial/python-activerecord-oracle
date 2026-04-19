@@ -26,14 +26,16 @@ class OracleTransactionManager(OracleTransactionMixin, TransactionManager):
 
     def _ensure_connection_ready(self):
         """Ensure connection is ready for transaction operations."""
-        if not self._connection:
+        connection = self._backend._connection if hasattr(self._backend, '_connection') else None
+        if not connection:
             error_msg = "No valid connection for transaction"
             self.log(logging.ERROR, error_msg)
             raise TransactionError(error_msg)
+        return connection
 
     def _do_begin(self) -> None:
         """Begin Oracle transaction."""
-        self._ensure_connection_ready()
+        connection = self._ensure_connection_ready()
 
         try:
             # Oracle starts transactions implicitly on first DML
@@ -42,13 +44,13 @@ class OracleTransactionManager(OracleTransactionMixin, TransactionManager):
 
             # Handle isolation level
             if self._isolation_level == IsolationLevel.SERIALIZABLE:
-                cursor = self._connection.cursor()
+                cursor = connection.cursor()
                 cursor.execute("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
                 cursor.close()
 
             # Handle transaction mode (READ_ONLY vs READ_WRITE)
             if self._transaction_mode == TransactionMode.READ_ONLY:
-                cursor = self._connection.cursor()
+                cursor = connection.cursor()
                 cursor.execute("SET TRANSACTION READ ONLY")
                 cursor.close()
             # READ_WRITE is the default, no need to set explicitly
@@ -65,10 +67,10 @@ class OracleTransactionManager(OracleTransactionMixin, TransactionManager):
 
     def _do_commit(self) -> None:
         """Commit Oracle transaction."""
-        self._ensure_connection_ready()
+        connection = self._ensure_connection_ready()
 
         try:
-            self._connection.commit()
+            connection.commit()
             self._state = TransactionState.COMMITTED
             self.log(logging.DEBUG, "Committed Oracle transaction")
         except Exception as e:
@@ -78,10 +80,10 @@ class OracleTransactionManager(OracleTransactionMixin, TransactionManager):
 
     def _do_rollback(self) -> None:
         """Rollback Oracle transaction."""
-        self._ensure_connection_ready()
+        connection = self._ensure_connection_ready()
 
         try:
-            self._connection.rollback()
+            connection.rollback()
             self._state = TransactionState.ROLLED_BACK
             self.log(logging.DEBUG, "Rolled back Oracle transaction")
         except Exception as e:
@@ -91,10 +93,10 @@ class OracleTransactionManager(OracleTransactionMixin, TransactionManager):
 
     def _do_create_savepoint(self, name: str) -> None:
         """Create Oracle savepoint."""
-        self._ensure_connection_ready()
+        connection = self._ensure_connection_ready()
 
         try:
-            cursor = self._connection.cursor()
+            cursor = connection.cursor()
             cursor.execute(f"SAVEPOINT {name}")
             cursor.close()
             self.log(logging.DEBUG, f"Created savepoint: {name}")
@@ -111,10 +113,10 @@ class OracleTransactionManager(OracleTransactionMixin, TransactionManager):
 
     def _do_rollback_savepoint(self, name: str) -> None:
         """Rollback to Oracle savepoint."""
-        self._ensure_connection_ready()
+        connection = self._ensure_connection_ready()
 
         try:
-            cursor = self._connection.cursor()
+            cursor = connection.cursor()
             cursor.execute(f"ROLLBACK TO SAVEPOINT {name}")
             cursor.close()
             self.log(logging.DEBUG, f"Rolled back to savepoint: {name}")

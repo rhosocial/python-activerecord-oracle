@@ -85,7 +85,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleBackendMixin, StorageBackend
         # Initialize Oracle-specific components (lazy load dialect)
         self._dialect = None
         # Initialize transaction manager with connection (will be set when connected)
-        self._transaction_manager = OracleTransactionManager(None, self.logger)
+        self._transaction_manager = OracleTransactionManager(self, self.logger)
 
         # Register Oracle-specific type adapters
         self._register_oracle_adapters()
@@ -192,8 +192,6 @@ class OracleBackend(IntrospectorBackendMixin, OracleBackendMixin, StorageBackend
 
             self._connection = oracledb.connect(**conn_params)
 
-            # Update transaction manager with connection
-            self._transaction_manager = OracleTransactionManager(self._connection, self.logger)
 
             self.log(
                 logging.INFO,
