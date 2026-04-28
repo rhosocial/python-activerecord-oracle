@@ -1,6 +1,5 @@
 # tests/rhosocial/activerecord_oracle_test/feature/backend/test_phase5_cli.py
-"""
-Tests for Phase 5 CLI tool.
+"""Tests for Phase 5 CLI tool.
 
 Tests the command-line interface functionality for Oracle backend.
 """
@@ -35,6 +34,123 @@ class TestCLIModule:
         assert callable(get_provider)
 
 
+class TestCLIModularStructure:
+    """Test the modular CLI structure."""
+
+    def test_cli_package_import(self):
+        """Test importing the CLI package."""
+        from rhosocial.activerecord.backend.impl.oracle import cli
+        assert cli is not None
+
+    def test_cli_command_names(self):
+        """Test COMMAND_NAMES includes all expected commands."""
+        from rhosocial.activerecord.backend.impl.oracle.cli import COMMAND_NAMES
+        assert 'info' in COMMAND_NAMES
+        assert 'query' in COMMAND_NAMES
+        assert 'introspect' in COMMAND_NAMES
+        assert 'status' in COMMAND_NAMES
+        assert 'named-query' in COMMAND_NAMES
+        assert 'named-procedure' in COMMAND_NAMES
+        assert 'named-connection' in COMMAND_NAMES
+
+    def test_cli_register_commands(self):
+        """Test register_commands function."""
+        from rhosocial.activerecord.backend.impl.oracle.cli import register_commands
+        assert callable(register_commands)
+
+    def test_cli_get_handler(self):
+        """Test get_handler function."""
+        from rhosocial.activerecord.backend.impl.oracle.cli import get_handler
+        assert callable(get_handler)
+
+    def test_cli_connection_module(self):
+        """Test connection module imports."""
+        from rhosocial.activerecord.backend.impl.oracle.cli.connection import (
+            add_connection_args, add_version_arg,
+            create_connection_parent_parser,
+            resolve_connection_config_from_args, create_backend,
+        )
+        assert callable(add_connection_args)
+        assert callable(add_version_arg)
+        assert callable(create_connection_parent_parser)
+        assert callable(resolve_connection_config_from_args)
+        assert callable(create_backend)
+
+    def test_cli_output_module(self):
+        """Test output module imports."""
+        from rhosocial.activerecord.backend.impl.oracle.cli.output import (
+            create_provider, RICH_AVAILABLE,
+        )
+        assert callable(create_provider)
+
+    def test_cli_info_module(self):
+        """Test info module imports."""
+        from rhosocial.activerecord.backend.impl.oracle.cli.info import (
+            create_parser, handle, parse_version,
+        )
+        assert callable(create_parser)
+        assert callable(handle)
+        assert callable(parse_version)
+
+    def test_cli_query_module(self):
+        """Test query module imports."""
+        from rhosocial.activerecord.backend.impl.oracle.cli.query import (
+            create_parser, handle,
+        )
+        assert callable(create_parser)
+        assert callable(handle)
+
+    def test_cli_introspect_module(self):
+        """Test introspect module imports."""
+        from rhosocial.activerecord.backend.impl.oracle.cli.introspect import (
+            create_parser, handle, INTROSPECT_TYPES,
+        )
+        assert callable(create_parser)
+        assert callable(handle)
+        assert "sequences" in INTROSPECT_TYPES
+
+    def test_cli_status_module(self):
+        """Test status module imports."""
+        from rhosocial.activerecord.backend.impl.oracle.cli.status import (
+            create_parser, handle, STATUS_TYPES,
+        )
+        assert callable(create_parser)
+        assert callable(handle)
+        assert "tablespaces" in STATUS_TYPES
+
+    def test_cli_named_query_module(self):
+        """Test named_query module imports."""
+        from rhosocial.activerecord.backend.impl.oracle.cli.named_query import (
+            create_parser, handle,
+        )
+        assert callable(create_parser)
+        assert callable(handle)
+
+    def test_cli_named_procedure_module(self):
+        """Test named_procedure module imports."""
+        from rhosocial.activerecord.backend.impl.oracle.cli.named_procedure import (
+            create_parser, handle,
+        )
+        assert callable(create_parser)
+        assert callable(handle)
+
+    def test_cli_named_connection_module(self):
+        """Test named_connection module imports."""
+        from rhosocial.activerecord.backend.impl.oracle.cli.named_connection import (
+            create_parser, handle,
+        )
+        assert callable(create_parser)
+        assert callable(handle)
+
+    def test_get_handler_returns_callable(self):
+        """Test that get_handler returns a callable for each command."""
+        from rhosocial.activerecord.backend.impl.oracle.cli import get_handler
+        for cmd in ['info', 'query', 'introspect', 'status',
+                     'named-query', 'named-procedure', 'named-connection']:
+            handler = get_handler(cmd)
+            assert callable(handler), f"Handler for '{cmd}' is not callable"
+
+
 class TestCLIInfoCommand:
     """Test CLI info command."""
 
@@ -51,7 +167,6 @@ class TestCLIInfoCommand:
         """Test version parsing with defaults."""
         from rhosocial.activerecord.backend.impl.oracle.__main__ import parse_version
 
-        # Single digit defaults
         assert parse_version("19") == (19, 0, 0)
         assert parse_version("21.3") == (21, 3, 0)
 
@@ -69,6 +184,9 @@ class TestCLIInfoCommand:
             version = "19.0.0"
             output = "json"
             verbose = 0
+            rich_ascii = False
+            named_connection = None
+            connection_params = []
 
         provider = JsonOutputProvider()
         info = handle_info(MockArgs(), provider)
@@ -81,6 +199,27 @@ class TestCLIInfoCommand:
         assert "locking" in info
         assert "pagination" in info
 
+    def test_handle_info_from_info_module(self):
+        """Test info command directly from cli.info module."""
+        from rhosocial.activerecord.backend.impl.oracle.cli.info import handle as info_handle
+        from rhosocial.activerecord.backend.output import JsonOutputProvider
+
+        class MockArgs:
+            host = "localhost"
+            port = 1521
+            service = "ORCL"
+            user = "system"
+            password = ""
+            version = "19.0.0"
+            output = "json"
+            verbose = 0
+            rich_ascii = False
+            named_connection = None
+            connection_params = []
+
+        info = info_handle(MockArgs())
+        assert info["database"]["type"] == "oracle"
+
 
 class TestCLIOutputProviders:
     """Test CLI output providers."""
@@ -89,33 +228,31 @@ class TestCLIOutputProviders:
         """Test JSON output provider."""
         from rhosocial.activerecord.backend.impl.oracle.__main__ import get_provider
 
-        class MockArgs:
-            output = "json"
-            rich_ascii = False
-
-        provider = get_provider(MockArgs())
+        provider = get_provider("json", ascii_borders=False)
         assert provider is not None
 
     def test_csv_provider(self):
         """Test CSV output provider."""
         from rhosocial.activerecord.backend.impl.oracle.__main__ import get_provider
 
-        class MockArgs:
-            output = "csv"
-            rich_ascii = False
-
-        provider = get_provider(MockArgs())
+        provider = get_provider("csv", ascii_borders=False)
         assert provider is not None
 
     def test_tsv_provider(self):
         """Test TSV output provider."""
         from rhosocial.activerecord.backend.impl.oracle.__main__ import get_provider
 
-        class MockArgs:
-            output = "tsv"
-            rich_ascii = False
+        provider = get_provider("tsv", ascii_borders=False)
+        assert provider is not None
 
-        provider = get_provider(MockArgs())
+    def test_create_provider_from_output_module(self):
+        """Test create_provider from cli.output module."""
+        from rhosocial.activerecord.backend.impl.oracle.cli.output import create_provider
+
+        provider = create_provider("json")
+        assert provider is not None
+
+        provider = create_provider("csv")
         assert provider is not None
 
 
@@ -202,8 +339,6 @@ class TestCLIArgumentParser:
     def test_parser_exists(self):
         """Test that parser can be created."""
         from rhosocial.activerecord.backend.impl.oracle.__main__ import parse_args
-        # This test just ensures the parser doesn't crash
-        # We don't actually run it since it calls sys.argv
 
     def test_introspect_types_defined(self):
         """Test introspection types are defined."""
@@ -216,6 +351,7 @@ class TestCLIArgumentParser:
         assert "indexes" in INTROSPECT_TYPES
         assert "foreign-keys" in INTROSPECT_TYPES
         assert "database" in INTROSPECT_TYPES
+        assert "sequences" in INTROSPECT_TYPES
 
     def test_status_types_defined(self):
         """Test status types are defined."""
@@ -227,6 +363,7 @@ class TestCLIArgumentParser:
         assert "connections" in STATUS_TYPES
         assert "storage" in STATUS_TYPES
         assert "users" in STATUS_TYPES
+        assert "tablespaces" in STATUS_TYPES
 
 
 class TestCLIInfoFeatures:
@@ -246,29 +383,28 @@ class TestCLIInfoFeatures:
             version = "19.0.0"
             output = "json"
             verbose = 0
+            rich_ascii = False
+            named_connection = None
+            connection_params = []
 
         provider = JsonOutputProvider()
         info = handle_info(MockArgs(), provider)
 
-        # Check top-level keys
         assert "database" in info
         assert "features" in info
         assert "locking" in info
         assert "pagination" in info
 
-        # Check database info
         assert "type" in info["database"]
         assert "version" in info["database"]
         assert "version_tuple" in info["database"]
         assert "connected" in info["database"]
 
-        # Check features
         features = info["features"]
         assert "hierarchical_queries" in features
         assert "pivot" in features
         assert "query_hints" in features
 
-        # Check locking
         locking = info["locking"]
         assert "for_update" in locking
         assert "for_update_nowait" in locking
@@ -279,7 +415,6 @@ class TestCLIInfoFeatures:
         from rhosocial.activerecord.backend.impl.oracle.__main__ import handle_info
         from rhosocial.activerecord.backend.output import JsonOutputProvider
 
-        # Test 19c
         class MockArgs19c:
             host = "localhost"
             port = 1521
@@ -289,16 +424,17 @@ class TestCLIInfoFeatures:
             version = "19.0.0"
             output = "json"
             verbose = 0
+            rich_ascii = False
+            named_connection = None
+            connection_params = []
 
         provider = JsonOutputProvider()
         info_19c = handle_info(MockArgs19c(), provider)
 
-        # 19c should support pivot but not boolean/vector
         assert info_19c["features"]["pivot"] is True
         assert info_19c["features"]["boolean_type"] is False
         assert info_19c["features"]["vector_type"] is False
 
-        # Test 23ai
         class MockArgs23ai:
             host = "localhost"
             port = 1521
@@ -308,10 +444,12 @@ class TestCLIInfoFeatures:
             version = "23.0.0"
             output = "json"
             verbose = 0
+            rich_ascii = False
+            named_connection = None
+            connection_params = []
 
         info_23ai = handle_info(MockArgs23ai(), provider)
 
-        # 23ai should support boolean and vector
         assert info_23ai["features"]["boolean_type"] is True
         assert info_23ai["features"]["vector_type"] is True
 
