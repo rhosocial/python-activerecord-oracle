@@ -50,8 +50,8 @@ pip install -r requirements-dev.txt
 
 - name: Install activerecord and testsuite from PyPI
 run: |
-pip install rhosocial-activerecord==1.0.0.dev24
-pip install rhosocial-activerecord-testsuite==1.0.0.dev11
+pip install git+https://github.com/rhosocial/python-activerecord.git@release/v1.0.0.dev26#egg=rhosocial-activerecord
+        pip install git+https://github.com/rhosocial/python-activerecord-testsuite.git@release/v1.0.0.dev13#egg=rhosocial-activerecord-testsuite
 
 - name: Test Oracle connectivity
 run: |
@@ -137,8 +137,8 @@ pip install -r requirements-dev.txt
 
 - name: Install activerecord and testsuite from PyPI
 run: |
-pip install rhosocial-activerecord==1.0.0.dev24
-pip install rhosocial-activerecord-testsuite==1.0.0.dev11
+pip install git+https://github.com/rhosocial/python-activerecord.git@release/v1.0.0.dev26#egg=rhosocial-activerecord
+        pip install git+https://github.com/rhosocial/python-activerecord-testsuite.git@release/v1.0.0.dev13#egg=rhosocial-activerecord-testsuite
 
 - name: Test Oracle connectivity
 run: |
@@ -223,8 +223,8 @@ pip install -r requirements-dev.txt
 
 - name: Install activerecord and testsuite from PyPI
 run: |
-pip install rhosocial-activerecord==1.0.0.dev24
-pip install rhosocial-activerecord-testsuite==1.0.0.dev11
+pip install git+https://github.com/rhosocial/python-activerecord.git@release/v1.0.0.dev26#egg=rhosocial-activerecord
+        pip install git+https://github.com/rhosocial/python-activerecord-testsuite.git@release/v1.0.0.dev13#egg=rhosocial-activerecord-testsuite
 
 - name: Create Oracle scenario config
 run: |
@@ -279,8 +279,8 @@ pip install -r requirements-dev.txt
 
 - name: Install activerecord and testsuite from PyPI
 run: |
-pip install rhosocial-activerecord==1.0.0.dev24
-pip install rhosocial-activerecord-testsuite==1.0.0.dev11
+pip install git+https://github.com/rhosocial/python-activerecord.git@release/v1.0.0.dev26#egg=rhosocial-activerecord
+        pip install git+https://github.com/rhosocial/python-activerecord-testsuite.git@release/v1.0.0.dev13#egg=rhosocial-activerecord-testsuite
 
 - name: Create Oracle scenario config
 run: |
@@ -334,8 +334,8 @@ pip install -r requirements-dev.txt
 
 - name: Install activerecord and testsuite from PyPI
 run: |
-pip install rhosocial-activerecord==1.0.0.dev24
-pip install rhosocial-activerecord-testsuite==1.0.0.dev11
+pip install git+https://github.com/rhosocial/python-activerecord.git@release/v1.0.0.dev26#egg=rhosocial-activerecord
+        pip install git+https://github.com/rhosocial/python-activerecord-testsuite.git@release/v1.0.0.dev13#egg=rhosocial-activerecord-testsuite
 
 - name: Create Oracle scenario config
 run: |
@@ -390,8 +390,8 @@ pip install -r requirements-dev.txt
 
 - name: Install activerecord and testsuite from PyPI
 run: |
-pip install rhosocial-activerecord==1.0.0.dev24
-pip install rhosocial-activerecord-testsuite==1.0.0.dev11
+pip install git+https://github.com/rhosocial/python-activerecord.git@release/v1.0.0.dev26#egg=rhosocial-activerecord
+        pip install git+https://github.com/rhosocial/python-activerecord-testsuite.git@release/v1.0.0.dev13#egg=rhosocial-activerecord-testsuite
 
 - name: Create Oracle scenario config
 run: |
@@ -445,8 +445,8 @@ pip install -r requirements-dev.txt
 
 - name: Install activerecord and testsuite from PyPI
 run: |
-pip install rhosocial-activerecord==1.0.0.dev24
-pip install rhosocial-activerecord-testsuite==1.0.0.dev11
+pip install git+https://github.com/rhosocial/python-activerecord.git@release/v1.0.0.dev26#egg=rhosocial-activerecord
+        pip install git+https://github.com/rhosocial/python-activerecord-testsuite.git@release/v1.0.0.dev13#egg=rhosocial-activerecord-testsuite
 
 - name: Create Oracle scenario config
 run: |
@@ -501,8 +501,8 @@ pip install -r requirements-dev.txt
 
 - name: Install activerecord and testsuite from PyPI
 run: |
-pip install rhosocial-activerecord==1.0.0.dev24
-pip install rhosocial-activerecord-testsuite==1.0.0.dev11
+pip install git+https://github.com/rhosocial/python-activerecord.git@release/v1.0.0.dev26#egg=rhosocial-activerecord
+        pip install git+https://github.com/rhosocial/python-activerecord-testsuite.git@release/v1.0.0.dev13#egg=rhosocial-activerecord-testsuite
 
 - name: Create Oracle scenario config
 run: |
