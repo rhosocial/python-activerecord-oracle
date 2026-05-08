@@ -192,6 +192,10 @@ class OracleBackend(IntrospectorBackendMixin, OracleBackendMixin, StorageBackend
 
             self._connection = oracledb.connect(**conn_params)
 
+            # Disable SECUREFILE LOB to support SYSTEM tablespace (non-ASSM) on Oracle 21c XE
+            cursor = self._connection.cursor()
+            cursor.execute("ALTER SESSION SET db_securefile = 'NEVER'")
+            cursor.close()
 
             self.log(
                 logging.INFO,

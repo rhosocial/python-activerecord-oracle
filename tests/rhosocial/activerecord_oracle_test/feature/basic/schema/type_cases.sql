@@ -20,4 +20,4 @@ CREATE TABLE type_cases (
     json_val JSON,
     array_val JSON,
     is_active NUMBER(1)
-) LOB (text_val, blob_val) STORE AS BASICFILE (TABLESPACE USERS)
+)
