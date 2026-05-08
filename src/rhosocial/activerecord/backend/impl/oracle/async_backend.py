@@ -163,9 +163,9 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             self._connection = await oracledb.connect_async(**conn_params)
 
             # Disable SECUREFILE LOB to support SYSTEM tablespace (non-ASSM) on Oracle 21c XE
-            cursor = await self._connection.cursor()
+            cursor = self._connection.cursor()
             await cursor.execute("ALTER SESSION SET db_securefile = 'NEVER'")
-            await cursor.close()
+            cursor.close()
 
             self._transaction_manager = AsyncOracleTransactionManager(self._connection, self.logger)
 
