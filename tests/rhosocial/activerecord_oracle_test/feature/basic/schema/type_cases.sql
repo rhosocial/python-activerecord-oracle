@@ -12,11 +12,11 @@ CREATE TABLE type_cases (
     decimal_val NUMBER(20,4),
     char_val CHAR(10),
     varchar_val VARCHAR2(4000),
-    text_val CLOB,
+    text_val CLOB BASICFILE,
     date_val DATE,
     time_val VARCHAR2(20),
     timestamp_val TIMESTAMP WITH TIME ZONE,
-    blob_val BLOB,
+    blob_val BLOB BASICFILE,
     json_val JSON,
     array_val JSON,
     is_active NUMBER(1)
