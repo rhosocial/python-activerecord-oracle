@@ -165,10 +165,10 @@ class BasicProvider(IBasicProvider, WorkerTestProtocol):
         except Exception:
             pass
 
-        # Disable SECUREFILE LOB for SYSTEM tablespace (non-ASSM) on Oracle 21c XE
+        # Ensure USERS tablespace exists (Oracle 21c XE may not have it by default)
         try:
             model_class.__backend__.execute(
-                "ALTER SESSION SET db_securefile = 'NEVER'",
+                "CREATE TABLESPACE users DATAFILE '/opt/oracle/oradata/XE/users01.dbf' SIZE 100M AUTOEXTEND ON NEXT 10M",
                 options=ddl_options
             )
         except Exception:
@@ -188,10 +188,10 @@ class BasicProvider(IBasicProvider, WorkerTestProtocol):
         except Exception:
             pass
 
-        # Disable SECUREFILE LOB for SYSTEM tablespace (non-ASSM) on Oracle 21c XE
+        # Ensure USERS tablespace exists (Oracle 21c XE may not have it by default)
         try:
             await model_class.__backend__.execute(
-                "ALTER SESSION SET db_securefile = 'NEVER'",
+                "CREATE TABLESPACE users DATAFILE '/opt/oracle/oradata/XE/users01.dbf' SIZE 100M AUTOEXTEND ON NEXT 10M",
                 options=ddl_options
             )
         except Exception:
