@@ -2,38 +2,42 @@
 # Oracle Database containers for development and testing
 services:
   oracle_21c:
-    image: container-registry.oracle.com/database/express:21.3.0-xe
+    image: gvenzl/oracle-xe:21-slim
     container_name: rhosocial_oracle_21c
     ports:
       - "11521:1521"
     environment:
-      - ORACLE_PWD=password
+      - ORACLE_PASSWORD=password
       - ORACLE_CHARACTERSET=AL32UTF8
+      - APP_USER=testuser
+      - APP_USER_PASSWORD=password
     volumes:
       - oracle_21c_data:/opt/oracle/oradata
     networks:
       - rhosocial_net
     healthcheck:
-      test: ["CMD", "sqlplus", "-L", "system/password@XEPDB1", "@health.sql"]
+      test: ["CMD", "healthcheck.sh"]
       interval: 30s
       timeout: 10s
       retries: 10
       start_period: 120s
 
   oracle_23c:
-    image: container-registry.oracle.com/database/free:23.6.0.0
+    image: gvenzl/oracle-free:23-slim
     container_name: rhosocial_oracle_23c
     ports:
       - "11522:1521"
     environment:
-      - ORACLE_PWD=password
+      - ORACLE_PASSWORD=password
       - ORACLE_CHARACTERSET=AL32UTF8
+      - APP_USER=testuser
+      - APP_USER_PASSWORD=password
     volumes:
       - oracle_23c_data:/opt/oracle/oradata
     networks:
       - rhosocial_net
     healthcheck:
-      test: ["CMD", "sqlplus", "-L", "system/password@FREEPDB1", "@health.sql"]
+      test: ["CMD", "healthcheck.sh"]
       interval: 30s
       timeout: 10s
       retries: 10

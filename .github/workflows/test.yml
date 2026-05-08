@@ -27,14 +27,14 @@ jobs:
 
     services:
       oracle:
-        image: container-registry.oracle.com/database/express:21.3.0-xe
+        image: gvenzl/oracle-xe:21-slim
         env:
-          ORACLE_PWD: password
+          ORACLE_PASSWORD: password
           ORACLE_CHARACTERSET: AL32UTF8
         ports:
           - 1521:1521
         options: >-
-          --health-cmd "/opt/oracle/checkDBStatus"
+          --health-cmd "healthcheck.sh"
           --health-interval 30s
           --health-timeout 60s
           --health-retries 15
@@ -80,6 +80,27 @@ jobs:
                       sys.exit(1)
           "
 
+      - name: Ensure PDB service registered with listener
+        run: |
+          python -c "
+          import sys, time, oracledb
+          # Connect as sysdba to force PDB registration with listener
+          conn = oracledb.connect(
+              user='system', password='password',
+              dsn='localhost:1521/XE')
+          cursor = conn.cursor()
+          cursor.execute('alter system set local_listener=''(ADDRESS=(PROTOCOL=TCP)(HOST=0.0.0.0)(PORT=1521))'' scope=both')
+          cursor.execute('alter system register')
+          conn.close()
+          # Verify PDB service is now available
+          time.sleep(5)
+          conn = oracledb.connect(
+              user='system', password='password',
+              dsn='localhost:1521/XEPDB1')
+          conn.close()
+          print('PDB service XEPDB1 registered OK')
+          "  # note: Oracle 21c XE uses service 'XE' for CDB and 'XEPDB1' for PDB
+
       - name: Create Oracle scenario config
         run: |
           cat > oracle_scenarios.yaml << EOF
@@ -94,8 +115,7 @@ jobs:
           EOF
           echo "ORACLE_SCENARIOS_CONFIG_PATH=$(pwd)/oracle_scenarios.yaml" >> $GITHUB_ENV
 
-      - name: Run tests (skip for Python 3.14)
-        if: matrix.python-version != '3.14'
+      - name: Run tests
         run: |
           export PYTHONPATH=src
           python -m pytest tests/ --tb=short
@@ -104,7 +124,7 @@ jobs:
         if: matrix.python-version == '3.14'
         run: |
           export PYTHONPATH=src
-          pip install codecov
+          pip install coverage
           coverage run --source=src -m pytest tests/ --tb=short
           coverage xml
 
@@ -128,14 +148,14 @@ jobs:
 
     services:
       oracle:
-        image: container-registry.oracle.com/database/free:23.6.0.0
+        image: gvenzl/oracle-free:23-slim
         env:
-          ORACLE_PWD: password
+          ORACLE_PASSWORD: password
           ORACLE_CHARACTERSET: AL32UTF8
         ports:
           - 1521:1521
         options: >-
-          --health-cmd "/opt/oracle/checkDBStatus"
+          --health-cmd "healthcheck.sh"
           --health-interval 30s
           --health-timeout 60s
           --health-retries 15
@@ -181,6 +201,25 @@ jobs:
                       sys.exit(1)
           "
 
+      - name: Ensure PDB service registered with listener
+        run: |
+          python -c "
+          import sys, time, oracledb
+          # Force PDB registration with listener for consistency
+          conn = oracledb.connect(
+              user='system', password='password',
+              dsn='localhost:1521/FREE')
+          cursor = conn.cursor()
+          cursor.execute('alter system register')
+          conn.close()
+          time.sleep(3)
+          conn = oracledb.connect(
+              user='system', password='password',
+              dsn='localhost:1521/FREEPDB1')
+          conn.close()
+          print('PDB service FREEPDB1 registered OK')
+          "  # note: Oracle 23c Free uses service 'FREE' for CDB and 'FREEPDB1' for PDB
+
       - name: Create Oracle scenario config
         run: |
           cat > oracle_scenarios.yaml << EOF
@@ -199,3 +238,21 @@ jobs:
         run: |
           export PYTHONPATH=src
           python -m pytest tests/ --tb=short
+
+      - name: Run tests with coverage (only for Python 3.14)
+        if: matrix.python-version == '3.14'
+        run: |
+          export PYTHONPATH=src
+          pip install coverage
+          coverage run --source=src -m pytest tests/ --tb=short
+          coverage xml
+
+      - name: Upload coverage to Codecov
+        if: matrix.python-version == '3.14'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          flags: unittests,python-${{ matrix.python-version }},oracle-23c
+          name: codecov-oracle-${{ matrix.python-version }}-23c
+          fail_ci_if_error: false
