@@ -646,7 +646,7 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         # Create DeleteExpression and generate SQL
         delete_expr = DeleteExpression(
             dialect=self.dialect,
-            table=options.table,
+            tables=options.table,
             where=options.where,
             returning=returning_clause,
         )

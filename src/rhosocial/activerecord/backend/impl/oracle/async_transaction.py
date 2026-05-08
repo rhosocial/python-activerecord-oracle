@@ -20,6 +20,7 @@ class AsyncOracleTransactionManager(OracleTransactionMixin, AsyncTransactionMana
     def __init__(self, connection, logger=None):
         """Initialize async Oracle transaction manager."""
         super().__init__(connection, logger)
+        self._connection = connection
         self._isolation_level = IsolationLevel.READ_COMMITTED
         self._state = TransactionState.INACTIVE
 

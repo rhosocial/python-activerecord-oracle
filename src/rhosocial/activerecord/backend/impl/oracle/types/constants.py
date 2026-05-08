@@ -134,4 +134,7 @@ def get_oracle_type(python_type: Type, size: int = None,
         precision = precision or TIMESTAMP_DEFAULT_PRECISION
         return f"TIMESTAMP({precision})"
     
+    if base_type in LOB_TYPES:
+        return f"{base_type} BASICFILE"
+    
     return base_type
