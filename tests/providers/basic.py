@@ -165,6 +165,15 @@ class BasicProvider(IBasicProvider, WorkerTestProtocol):
         except Exception:
             pass
 
+        # Disable SECUREFILE LOB for SYSTEM tablespace (non-ASSM) on Oracle 21c XE
+        try:
+            model_class.__backend__.execute(
+                "ALTER SESSION SET db_securefile = 'NEVER'",
+                options=ddl_options
+            )
+        except Exception:
+            pass
+
         schema_sql = self._load_oracle_schema(f"{table_name}.sql")
         model_class.__backend__.execute(schema_sql, options=ddl_options)
 
@@ -174,6 +183,15 @@ class BasicProvider(IBasicProvider, WorkerTestProtocol):
             # Oracle: drop table with PURGE to completely remove it
             await model_class.__backend__.execute(
                 f"BEGIN EXECUTE IMMEDIATE 'DROP TABLE {table_name} CASCADE CONSTRAINTS PURGE'; EXCEPTION WHEN OTHERS THEN NULL; END;",
+                options=ddl_options
+            )
+        except Exception:
+            pass
+
+        # Disable SECUREFILE LOB for SYSTEM tablespace (non-ASSM) on Oracle 21c XE
+        try:
+            await model_class.__backend__.execute(
+                "ALTER SESSION SET db_securefile = 'NEVER'",
                 options=ddl_options
             )
         except Exception:
