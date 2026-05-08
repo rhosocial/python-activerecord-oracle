@@ -24,7 +24,10 @@ from .hint import (
     dynamic_sampling_hint, gather_plan_statistics_hint,
     monitor_hint, no_monitor_hint
 )
-from .locking import OracleForUpdateExpression
+from .locking import (
+    OracleForUpdateExpression, OracleLockTableExpression,
+    for_update, for_update_nowait, for_update_wait, for_update_skip_locked,
+)
 
 __all__ = [
 # Hierarchical query expressions
@@ -45,5 +48,6 @@ __all__ = [
     'dynamic_sampling_hint', 'gather_plan_statistics_hint',
     'monitor_hint', 'no_monitor_hint',
     # Locking expressions
-    'OracleForUpdateExpression',
+    'OracleForUpdateExpression', 'OracleLockTableExpression',
+    'for_update', 'for_update_nowait', 'for_update_wait', 'for_update_skip_locked',
 ]

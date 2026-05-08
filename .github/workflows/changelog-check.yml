@@ -1,0 +1,106 @@
+# .github/workflows/changelog-check.yml
+name: Changelog Fragment Check
+
+on:
+  pull_request:
+    branches:
+      - main
+      - 'release/v**'
+      - 'maint/**'
+  push:
+    branches:
+      - 'release/v**'
+      - 'maint/**'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '.github/workflows/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  check-fragment:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Check for changelog fragment
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title || '' }}
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          # For push events
+          if [[ "$EVENT_NAME" == "push" ]]; then
+            echo "Push event detected - checking for changelog fragments in last commit"
+
+            LAST_COMMIT_FILES=$(git diff-tree --no-commit-id --name-only -r HEAD)
+
+            if echo "$LAST_COMMIT_FILES" | grep -q "^changelog.d/[0-9].*\.md$"; then
+              echo "Changelog fragment found in last commit"
+              exit 0
+            fi
+
+            LAST_MSG=$(git log -1 --pretty=%B)
+            if [[ "$LAST_MSG" =~ ^chore:\ bump\ version ]] || [[ "$LAST_MSG" =~ ^docs:\ update\ CHANGELOG ]]; then
+              echo "Version bump or changelog update commit, fragment not required"
+              exit 0
+            fi
+
+            if echo "$LAST_COMMIT_FILES" | grep -qE "^src/.*\.py$"; then
+              echo "Warning: Source code changes without changelog fragment"
+              exit 0
+            fi
+
+            echo "No source code changes requiring fragment"
+            exit 0
+          fi
+
+          # For pull_request events
+          git fetch origin ${{ github.base_ref }}
+
+          if [[ "$HEAD_REF" =~ ^release/ ]]; then
+            echo "Release branch PR, fragment check skipped"
+            exit 0
+          fi
+
+          CHANGED_FILES=$(git diff --name-only --diff-filter=A origin/${{ github.base_ref }}...HEAD)
+
+          if [[ "$PR_TITLE" =~ ^docs:\ update\ CHANGELOG ]]; then
+            echo "PR title indicates changelog update, fragment check skipped"
+            exit 0
+          fi
+
+          if echo "$CHANGED_FILES" | grep -q "^changelog.d/[0-9].*\.md$"; then
+            echo "Changelog fragment found"
+            exit 0
+          fi
+
+          if echo "$CHANGED_FILES" | grep -qE "^(tests/|docs/|\.github/)"; then
+            echo "Internal change, fragment not required"
+            exit 0
+          fi
+
+          if [[ "$PR_TITLE" =~ \[trivial\] ]]; then
+            echo "PR marked as trivial, fragment not required"
+            exit 0
+          fi
+
+          echo "Missing changelog fragment"
+          echo "Please add a changelog fragment in changelog.d/"
+          echo "Example: changelog.d/${{ github.event.number }}.fixed.md"
+          echo ""
+          echo "Fragment types:"
+          echo "  - added.md      - New features"
+          echo "  - fixed.md      - Bug fixes"
+          echo "  - changed.md    - Behavior changes"
+          echo "  - deprecated.md - Deprecations"
+          echo "  - removed.md    - Removed features"
+          echo "  - security.md   - Security fixes"
+          echo ""
+          echo "If this PR does not need a changelog entry, add [trivial] to the title."
+          exit 1

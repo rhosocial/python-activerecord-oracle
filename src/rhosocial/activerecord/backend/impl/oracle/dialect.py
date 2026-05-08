@@ -43,6 +43,11 @@ from rhosocial.activerecord.backend.dialect.protocols import (
     SequenceSupport,
     TableSupport,
     IntrospectionSupport,
+    SetOperationSupport,
+    TruncateSupport,
+    ConstraintSupport,
+    TransactionControlSupport,
+    SQLFunctionSupport,
 )
 from rhosocial.activerecord.backend.dialect.mixins import (
     CTEMixin,
@@ -62,11 +67,14 @@ from rhosocial.activerecord.backend.dialect.mixins import (
     UpsertMixin,
     LateralJoinMixin,
     JoinMixin,
+    SetOperationMixin,
+    TruncateMixin,
     ViewMixin,
     SchemaMixin,
     IndexMixin,
     SequenceMixin,
     TableMixin,
+    ConstraintMixin,
     IntrospectionMixin,
 )
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
@@ -99,11 +107,14 @@ class OracleDialect(
     UpsertMixin,
     LateralJoinMixin,
     JoinMixin,
+    SetOperationMixin,
+    TruncateMixin,
     ViewMixin,
     SchemaMixin,
     IndexMixin,
     SequenceMixin,
     TableMixin,
+    ConstraintMixin,
     IntrospectionMixin,
     # Protocols for type checking
     CTESupport,
@@ -124,12 +135,17 @@ class OracleDialect(
     LateralJoinSupport,
     WildcardSupport,
     JoinSupport,
+    SetOperationSupport,
+    TruncateSupport,
     ViewSupport,
     SchemaSupport,
     IndexSupport,
     SequenceSupport,
     TableSupport,
+    ConstraintSupport,
     IntrospectionSupport,
+    TransactionControlSupport,
+    SQLFunctionSupport,
 ):
     """
     Oracle dialect implementation that adapts to the Oracle version.
@@ -319,6 +335,90 @@ class OracleDialect(
     def supports_wildcard(self) -> bool:
         """Wildcard (*) is supported."""
         return True
+    # endregion
+
+    # region Constraint Support (Oracle-specific overrides)
+    def supports_fk_on_update(self) -> bool:
+        """Oracle does not support ON UPDATE referential actions."""
+        return False
+
+    def supports_fk_match(self) -> bool:
+        """Oracle does not support MATCH PARTIAL/FULL (uses default MATCH NONE)."""
+        return False
+
+    def supports_constraint_enforced(self) -> bool:
+        """Oracle supports RELY/NORELY (NOT ENFORCED) since 12c."""
+        return self.version >= (12, 0, 0)
+    # endregion
+
+    # region Transaction Control Support
+    def supports_transaction_mode(self) -> bool:
+        """Oracle supports READ ONLY/READ WRITE transaction mode."""
+        return True
+
+    def supports_isolation_level_in_begin(self) -> bool:
+        """Oracle uses SET TRANSACTION before the first statement, not in BEGIN."""
+        return False
+
+    def supports_read_only_transaction(self) -> bool:
+        """Oracle supports READ ONLY transactions."""
+        return True
+
+    def supports_deferrable_transaction(self) -> bool:
+        """Oracle supports DEFERRABLE for transactions."""
+        return True
+
+    def supports_savepoint(self) -> bool:
+        """Oracle supports savepoints."""
+        return True
+
+    def format_begin_transaction(
+        self, expr
+    ) -> Tuple[str, tuple]:
+        """Format BEGIN TRANSACTION for Oracle. Oracle doesn't require BEGIN."""
+        return ("", ())
+
+    def format_commit_transaction(
+        self, expr
+    ) -> Tuple[str, tuple]:
+        """Format COMMIT for Oracle."""
+        return ("COMMIT", ())
+
+    def format_rollback_transaction(
+        self, expr
+    ) -> Tuple[str, tuple]:
+        """Format ROLLBACK for Oracle with optional savepoint."""
+        params = expr.get_params()
+        savepoint = params.get("savepoint")
+        if savepoint:
+            return (f"ROLLBACK TO SAVEPOINT {self.format_identifier(savepoint)}", ())
+        return ("ROLLBACK", ())
+
+    def format_savepoint(self, expr) -> Tuple[str, tuple]:
+        """Format SAVEPOINT for Oracle."""
+        return (f"SAVEPOINT {self.format_identifier(expr.name)}", ())
+
+    def format_release_savepoint(
+        self, expr
+    ) -> Tuple[str, tuple]:
+        """Oracle does not support RELEASE SAVEPOINT (savepoints are released on commit/rollback)."""
+        return ("", ())
+
+    def format_set_transaction(
+        self, expr
+    ) -> Tuple[str, tuple]:
+        """Format SET TRANSACTION for Oracle."""
+        params = expr.get_params()
+        parts = ["SET TRANSACTION"]
+        isolation = params.get("isolation_level")
+        if isolation:
+            parts.append(f"ISOLATION LEVEL {isolation}")
+        mode = params.get("mode")
+        if mode:
+            parts.append(str(mode))
+        if params.get("deferrable"):
+            parts.append("DEFERRABLE")
+        return (" ".join(parts), ())
     # endregion
 
     # region Set Operation Support
@@ -797,4 +897,38 @@ class OracleDialect(
     def format_for_update(self, expr) -> Tuple[str, List[Any]]:
         """Format FOR UPDATE expression."""
         return expr.to_sql(self)
+    # endregion
+
+    # region Truncate Support
+    def supports_truncate_cascade(self) -> bool:
+        """Oracle does not support CASCADE on TRUNCATE."""
+        return False
+
+    def format_truncate_statement(
+        self, expr
+    ) -> Tuple[str, tuple]:
+        """Format TRUNCATE TABLE statement for Oracle."""
+        from rhosocial.activerecord.backend.expression.statements import TruncateExpression
+        parts = ["TRUNCATE TABLE"]
+        parts.append(self.format_identifier(expr.table_name))
+        return (' '.join(parts), ())
+    # endregion
+
+    # region Function Support
+    def supports_functions(self) -> Dict[str, bool]:
+        """Return supported SQL functions as function_name -> bool mapping.
+
+        Builds the function support dict from core functions and Oracle-specific
+        functions, checking version requirements.
+        """
+        from rhosocial.activerecord.backend.impl.oracle.function_versions import (
+            ORACLE_FUNCTION_VERSIONS
+        )
+        result = {}
+        for func_name, (min_ver, max_ver) in ORACLE_FUNCTION_VERSIONS.items():
+            if max_ver is None:
+                result[func_name] = self.version >= min_ver
+            else:
+                result[func_name] = min_ver <= self.version <= max_ver
+        return result
     # endregion

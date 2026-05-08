@@ -28,8 +28,7 @@ class TestIntervalAdapter:
         adapter = OracleIntervalAdapter()
         interval = IntervalYearToMonth(years=1, months=6)
         
-        # to database
-        db_value = adapter.python_to_db(interval, str, None)
+        db_value = adapter.to_database(interval, str)
         assert db_value == "01-06"
 
     def test_interval_day_to_second_conversion(self):
@@ -40,7 +39,7 @@ class TestIntervalAdapter:
         adapter = OracleIntervalAdapter()
         interval = IntervalDayToSecond(days=5, hours=12, minutes=30, seconds=45)
         
-        db_value = adapter.python_to_db(interval, str, None)
+        db_value = adapter.to_database(interval, str)
         assert "5" in db_value
 
 
@@ -60,7 +59,7 @@ class TestRowIDAdapter:
         adapter = OracleRowIDAdapter()
         rowid = OracleRowID("AAASdqAAEAAAAInAAA")
         
-        db_value = adapter.python_to_db(rowid, str, None)
+        db_value = adapter.to_database(rowid, str)
         assert db_value == "AAASdqAAEAAAAInAAA"
 
     def test_rowid_from_database(self):
@@ -69,7 +68,7 @@ class TestRowIDAdapter:
 
         adapter = OracleRowIDAdapter()
         
-        result = adapter.db_to_python("AAASdqAAEAAAAInAAA", str, None)
+        result = adapter.from_database("AAASdqAAEAAAAInAAA", str)
         assert hasattr(result, 'data_object_number')
 
 
@@ -89,7 +88,7 @@ class TestXMLAdapter:
         adapter = OracleXMLAdapter()
         xml = OracleXMLType("<root><name>test</name></root>")
         
-        db_value = adapter.python_to_db(xml, str, None)
+        db_value = adapter.to_database(xml, str)
         assert "<root>" in db_value
 
 
@@ -109,7 +108,7 @@ class TestSDOGeometryAdapter:
         adapter = OracleSDOGeometryAdapter()
         point = SDOGeometry.point(10.0, 20.0)
         
-        db_value = adapter.python_to_db(point, str, None)
+        db_value = adapter.to_database(point, str)
         assert "SDO_GEOMETRY" in db_value
         assert "SDO_POINT_TYPE" in db_value
 
@@ -127,7 +126,7 @@ class TestSDOGeometryAdapter:
             'SDO_ORDINATES': []
         }
         
-        result = adapter.db_to_python(geom_dict, str, None)
+        result = adapter.from_database(geom_dict, str)
         assert result.sdo_gtype == 2001
 
 
@@ -147,7 +146,7 @@ class TestVectorAdapter:
         adapter = OracleVectorAdapter()
         vec = OracleVector(dimensions=3, values=[1.0, 2.0, 3.0])
         
-        db_value = adapter.python_to_db(vec, str, None)
+        db_value = adapter.to_database(vec, str)
         assert db_value == "[1.0, 2.0, 3.0]"
 
     def test_vector_from_string(self):
@@ -156,7 +155,7 @@ class TestVectorAdapter:
 
         adapter = OracleVectorAdapter()
         
-        result = adapter.db_to_python("[1.0, 2.0, 3.0]", str, None)
+        result = adapter.from_database("[1.0, 2.0, 3.0]", str)
         assert result.dimensions == 3
 
 

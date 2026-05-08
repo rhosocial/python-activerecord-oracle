@@ -1,524 +1,201 @@
 # .github/workflows/test.yml
-name: Python Test with Oracle
+name: Python Test and Coverage with Oracle
 
 on:
-push:
-branches:
-- main
-- "release/v**"
-- "maint/**"
-pull_request:
-branches:
-- main
-- "release/v**"
-- "maint/**"
+  push:
+    branches:
+      - main
+      - 'release/v**'
+      - 'maint/**'
+  pull_request:
+    branches:
+      - main
+      - 'release/v**'
+      - 'maint/**'
 
 permissions:
-contents: read
+  contents: read
 
 jobs:
-# Python 3.9 tests
-test-py39-oracle19c:
-name: Run tests with Python 3.9 and Oracle 19c
-runs-on: ubuntu-latest
-services:
-oracle:
-image: gvenzl/oracle-xe:19-slim
-env:
-ORACLE_PASSWORD: password
-options: >-
---health-cmd "echo 'SELECT 1 FROM dual' | sqlplus -S system/password@//localhost/XEPDB1"
---health-interval 30s
---health-timeout 60s
---health-retries 15
-ports:
-- 1521:1521
+  test-oracle-21c:
+    name: Python ${{ matrix.python-version }} / Oracle 21c
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.8', '3.10', '3.12', '3.14', '3.14t']
 
-steps:
-- name: Check out the repository
-uses: actions/checkout@v6
+    services:
+      oracle:
+        image: container-registry.oracle.com/database/express:21.3.0-xe
+        env:
+          ORACLE_PWD: password
+          ORACLE_CHARACTERSET: AL32UTF8
+        ports:
+          - 1521:1521
+        options: >-
+          --health-cmd "/opt/oracle/checkDBStatus"
+          --health-interval 30s
+          --health-timeout 60s
+          --health-retries 15
 
-- name: Set up Python 3.9
-uses: actions/setup-python@v6
-with:
-python-version: "3.9"
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v6
 
-- name: Install dependencies
-run: |
-pip install -r requirements.txt
-pip install -r requirements-dev.txt
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
 
-- name: Install activerecord and testsuite from PyPI
-run: |
-pip install git+https://github.com/rhosocial/python-activerecord.git@release/v1.0.0.dev26#egg=rhosocial-activerecord
-        pip install git+https://github.com/rhosocial/python-activerecord-testsuite.git@release/v1.0.0.dev13#egg=rhosocial-activerecord-testsuite
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
 
-- name: Test Oracle connectivity
-run: |
-python -c "
-import sys
-import time
-import oracledb
+      - name: Install activerecord and testsuite from git
+        run: |
+          pip install git+https://github.com/rhosocial/python-activerecord.git@release/v1.0.0.dev26#egg=rhosocial-activerecord
+          pip install git+https://github.com/rhosocial/python-activerecord-testsuite.git@release/v1.0.0.dev13#egg=rhosocial-activerecord-testsuite
 
-max_retries = 30
-for attempt in range(max_retries):
-try:
-connection = oracledb.connect(
-user='system',
-password='password',
-dsn='localhost:1521/XEPDB1'
-)
-cursor = connection.cursor()
-cursor.execute('SELECT 1 FROM dual')
-result = cursor.fetchone()
-print(f'Oracle connectivity test passed: {result[0]}')
-cursor.close()
-connection.close()
-break
-except oracledb.ConnectionError as e:
-if attempt < max_retries - 1:
-print(f'Retry {attempt + 1}/{max_retries}: {e}')
-time.sleep(10)
-else:
-print(f'Failed after {max_retries} attempts: {e}')
-sys.exit(1)
-"
+      - name: Wait for Oracle and test connectivity
+        run: |
+          python -c "
+          import sys, time, oracledb
+          max_retries = 30
+          for attempt in range(max_retries):
+              try:
+                  conn = oracledb.connect(
+                      user='system', password='password',
+                      dsn='localhost:1521/XEPDB1')
+                  conn.close()
+                  print('Oracle 21c connectivity OK')
+                  break
+              except Exception as e:
+                  if attempt < max_retries - 1:
+                      print(f'Retry {attempt+1}/{max_retries}: {e}')
+                      time.sleep(10)
+                  else:
+                      print(f'Failed: {e}')
+                      sys.exit(1)
+          "
 
-- name: Create Oracle scenario config
-run: |
-cat > oracle_scenarios.yaml << EOF
-scenarios:
-oracle_19c:
-host: localhost
-port: 1521
-username: system
-password: password
-service_name: XEPDB1
-encoding: AL32UTF8
-EOF
-echo "ORACLE_SCENARIOS_CONFIG_PATH=$(pwd)/oracle_scenarios.yaml" >> $GITHUB_ENV
+      - name: Create Oracle scenario config
+        run: |
+          cat > oracle_scenarios.yaml << EOF
+          scenarios:
+            oracle_21c:
+              host: localhost
+              port: 1521
+              username: system
+              password: password
+              service_name: XEPDB1
+              encoding: AL32UTF8
+          EOF
+          echo "ORACLE_SCENARIOS_CONFIG_PATH=$(pwd)/oracle_scenarios.yaml" >> $GITHUB_ENV
 
-- name: Run tests
-run: |
-export PYTHONPATH=src
-python -m pytest tests/
+      - name: Run tests (skip for Python 3.14)
+        if: matrix.python-version != '3.14'
+        run: |
+          export PYTHONPATH=src
+          python -m pytest tests/ --tb=short
 
-# Python 3.10 tests
-test-py310-oracle21c:
-name: Run tests with Python 3.10 and Oracle 21c
-runs-on: ubuntu-latest
-services:
-oracle:
-image: container-registry.oracle.com/database/express:21.3.0-xe
-env:
-ORACLE_PWD: password
-ORACLE_CHARACTERSET: AL32UTF8
-options: >-
---health-cmd "echo 'SELECT 1 FROM dual' | sqlplus -S system/password@//localhost/XEPDB1"
---health-interval 30s
---health-timeout 60s
---health-retries 15
-ports:
-- 1521:1521
+      - name: Run tests with coverage (only for Python 3.14)
+        if: matrix.python-version == '3.14'
+        run: |
+          export PYTHONPATH=src
+          pip install codecov
+          coverage run --source=src -m pytest tests/ --tb=short
+          coverage xml
 
-steps:
-- name: Check out the repository
-uses: actions/checkout@v6
+      - name: Upload coverage to Codecov
+        if: matrix.python-version == '3.14'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          flags: unittests,python-${{ matrix.python-version }},oracle-21c
+          name: codecov-oracle-${{ matrix.python-version }}-21c
+          fail_ci_if_error: false
 
-- name: Set up Python 3.10
-uses: actions/setup-python@v6
-with:
-python-version: "3.10"
+  test-oracle-23c:
+    name: Python ${{ matrix.python-version }} / Oracle 23c
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.9', '3.11', '3.13', '3.13t']
 
-- name: Install dependencies
-run: |
-pip install -r requirements.txt
-pip install -r requirements-dev.txt
+    services:
+      oracle:
+        image: container-registry.oracle.com/database/free:23.6.0.0
+        env:
+          ORACLE_PWD: password
+          ORACLE_CHARACTERSET: AL32UTF8
+        ports:
+          - 1521:1521
+        options: >-
+          --health-cmd "/opt/oracle/checkDBStatus"
+          --health-interval 30s
+          --health-timeout 60s
+          --health-retries 15
 
-- name: Install activerecord and testsuite from PyPI
-run: |
-pip install git+https://github.com/rhosocial/python-activerecord.git@release/v1.0.0.dev26#egg=rhosocial-activerecord
-        pip install git+https://github.com/rhosocial/python-activerecord-testsuite.git@release/v1.0.0.dev13#egg=rhosocial-activerecord-testsuite
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v6
 
-- name: Test Oracle connectivity
-run: |
-python -c "
-import sys
-import time
-import oracledb
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
 
-max_retries = 30
-for attempt in range(max_retries):
-try:
-connection = oracledb.connect(
-user='system',
-password='password',
-dsn='localhost:1521/XEPDB1'
-)
-cursor = connection.cursor()
-cursor.execute('SELECT 1 FROM dual')
-result = cursor.fetchone()
-print(f'Oracle connectivity test passed: {result[0]}')
-cursor.close()
-connection.close()
-break
-except oracledb.ConnectionError as e:
-if attempt < max_retries - 1:
-print(f'Retry {attempt + 1}/{max_retries}: {e}')
-time.sleep(10)
-else:
-print(f'Failed after {max_retries} attempts: {e}')
-sys.exit(1)
-"
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
 
-- name: Create Oracle scenario config
-run: |
-cat > oracle_scenarios.yaml << EOF
-scenarios:
-oracle_21c:
-host: localhost
-port: 1521
-username: system
-password: password
-service_name: XEPDB1
-encoding: AL32UTF8
-EOF
-echo "ORACLE_SCENARIOS_CONFIG_PATH=$(pwd)/oracle_scenarios.yaml" >> $GITHUB_ENV
+      - name: Install activerecord and testsuite from git
+        run: |
+          pip install git+https://github.com/rhosocial/python-activerecord.git@release/v1.0.0.dev26#egg=rhosocial-activerecord
+          pip install git+https://github.com/rhosocial/python-activerecord-testsuite.git@release/v1.0.0.dev13#egg=rhosocial-activerecord-testsuite
 
-- name: Run tests
-run: |
-export PYTHONPATH=src
-python -m pytest tests/
+      - name: Wait for Oracle and test connectivity
+        run: |
+          python -c "
+          import sys, time, oracledb
+          max_retries = 30
+          for attempt in range(max_retries):
+              try:
+                  conn = oracledb.connect(
+                      user='system', password='password',
+                      dsn='localhost:1521/FREEPDB1')
+                  conn.close()
+                  print('Oracle 23c connectivity OK')
+                  break
+              except Exception as e:
+                  if attempt < max_retries - 1:
+                      print(f'Retry {attempt+1}/{max_retries}: {e}')
+                      time.sleep(10)
+                  else:
+                      print(f'Failed: {e}')
+                      sys.exit(1)
+          "
 
-# Python 3.11 tests
-test-py311-oracle19c:
-name: Run tests with Python 3.11 and Oracle 19c
-runs-on: ubuntu-latest
-services:
-oracle:
-image: gvenzl/oracle-xe:19-slim
-env:
-ORACLE_PASSWORD: password
-options: >-
---health-cmd "echo 'SELECT 1 FROM dual' | sqlplus -S system/password@//localhost/XEPDB1"
---health-interval 30s
---health-timeout 60s
---health-retries 15
-ports:
-- 1521:1521
+      - name: Create Oracle scenario config
+        run: |
+          cat > oracle_scenarios.yaml << EOF
+          scenarios:
+            oracle_23c:
+              host: localhost
+              port: 1521
+              username: system
+              password: password
+              service_name: FREEPDB1
+              encoding: AL32UTF8
+          EOF
+          echo "ORACLE_SCENARIOS_CONFIG_PATH=$(pwd)/oracle_scenarios.yaml" >> $GITHUB_ENV
 
-steps:
-- name: Check out the repository
-uses: actions/checkout@v6
-
-- name: Set up Python 3.11
-uses: actions/setup-python@v6
-with:
-python-version: "3.11"
-
-- name: Install dependencies
-run: |
-pip install -r requirements.txt
-pip install -r requirements-dev.txt
-
-- name: Install activerecord and testsuite from PyPI
-run: |
-pip install git+https://github.com/rhosocial/python-activerecord.git@release/v1.0.0.dev26#egg=rhosocial-activerecord
-        pip install git+https://github.com/rhosocial/python-activerecord-testsuite.git@release/v1.0.0.dev13#egg=rhosocial-activerecord-testsuite
-
-- name: Create Oracle scenario config
-run: |
-cat > oracle_scenarios.yaml << EOF
-scenarios:
-oracle_19c:
-host: localhost
-port: 1521
-username: system
-password: password
-service_name: XEPDB1
-encoding: AL32UTF8
-EOF
-echo "ORACLE_SCENARIOS_CONFIG_PATH=$(pwd)/oracle_scenarios.yaml" >> $GITHUB_ENV
-
-- name: Run tests
-run: |
-export PYTHONPATH=src
-python -m pytest tests/
-
-# Python 3.12 tests
-test-py312-oracle21c:
-name: Run tests with Python 3.12 and Oracle 21c
-runs-on: ubuntu-latest
-services:
-oracle:
-image: container-registry.oracle.com/database/express:21.3.0-xe
-env:
-ORACLE_PWD: password
-ORACLE_CHARACTERSET: AL32UTF8
-options: >-
---health-cmd "echo 'SELECT 1 FROM dual' | sqlplus -S system/password@//localhost/XEPDB1"
---health-interval 30s
---health-timeout 60s
---health-retries 15
-ports:
-- 1521:1521
-
-steps:
-- name: Check out the repository
-uses: actions/checkout@v6
-
-- name: Set up Python 3.12
-uses: actions/setup-python@v6
-with:
-python-version: "3.12"
-
-- name: Install dependencies
-run: |
-pip install -r requirements.txt
-pip install -r requirements-dev.txt
-
-- name: Install activerecord and testsuite from PyPI
-run: |
-pip install git+https://github.com/rhosocial/python-activerecord.git@release/v1.0.0.dev26#egg=rhosocial-activerecord
-        pip install git+https://github.com/rhosocial/python-activerecord-testsuite.git@release/v1.0.0.dev13#egg=rhosocial-activerecord-testsuite
-
-- name: Create Oracle scenario config
-run: |
-cat > oracle_scenarios.yaml << EOF
-scenarios:
-oracle_21c:
-host: localhost
-port: 1521
-username: system
-password: password
-service_name: XEPDB1
-encoding: AL32UTF8
-EOF
-echo "ORACLE_SCENARIOS_CONFIG_PATH=$(pwd)/oracle_scenarios.yaml" >> $GITHUB_ENV
-
-- name: Run tests
-run: |
-export PYTHONPATH=src
-python -m pytest tests/
-
-# Python 3.13 tests
-test-py313-oracle19c:
-name: Run tests with Python 3.13 and Oracle 19c
-runs-on: ubuntu-latest
-services:
-oracle:
-image: gvenzl/oracle-xe:19-slim
-env:
-ORACLE_PASSWORD: password
-options: >-
---health-cmd "echo 'SELECT 1 FROM dual' | sqlplus -S system/password@//localhost/XEPDB1"
---health-interval 30s
---health-timeout 60s
---health-retries 15
-ports:
-- 1521:1521
-
-steps:
-- name: Check out the repository
-uses: actions/checkout@v6
-
-- name: Set up Python 3.13
-uses: actions/setup-python@v6
-with:
-python-version: "3.13"
-
-- name: Install dependencies
-run: |
-pip install -r requirements.txt
-pip install -r requirements-dev.txt
-
-- name: Install activerecord and testsuite from PyPI
-run: |
-pip install git+https://github.com/rhosocial/python-activerecord.git@release/v1.0.0.dev26#egg=rhosocial-activerecord
-        pip install git+https://github.com/rhosocial/python-activerecord-testsuite.git@release/v1.0.0.dev13#egg=rhosocial-activerecord-testsuite
-
-- name: Create Oracle scenario config
-run: |
-cat > oracle_scenarios.yaml << EOF
-scenarios:
-oracle_19c:
-host: localhost
-port: 1521
-username: system
-password: password
-service_name: XEPDB1
-encoding: AL32UTF8
-EOF
-echo "ORACLE_SCENARIOS_CONFIG_PATH=$(pwd)/oracle_scenarios.yaml" >> $GITHUB_ENV
-
-- name: Run tests
-run: |
-export PYTHONPATH=src
-python -m pytest tests/
-
-# Python 3.14 tests
-test-py314-oracle21c:
-name: Run tests with Python 3.14 and Oracle 21c
-runs-on: ubuntu-latest
-services:
-oracle:
-image: container-registry.oracle.com/database/express:21.3.0-xe
-env:
-ORACLE_PWD: password
-ORACLE_CHARACTERSET: AL32UTF8
-options: >-
---health-cmd "echo 'SELECT 1 FROM dual' | sqlplus -S system/password@//localhost/XEPDB1"
---health-interval 30s
---health-timeout 60s
---health-retries 15
-ports:
-- 1521:1521
-
-steps:
-- name: Check out the repository
-uses: actions/checkout@v6
-
-- name: Set up Python 3.14
-uses: actions/setup-python@v6
-with:
-python-version: "3.14"
-
-- name: Install dependencies
-run: |
-pip install -r requirements.txt
-pip install -r requirements-dev.txt
-
-- name: Install activerecord and testsuite from PyPI
-run: |
-pip install git+https://github.com/rhosocial/python-activerecord.git@release/v1.0.0.dev26#egg=rhosocial-activerecord
-        pip install git+https://github.com/rhosocial/python-activerecord-testsuite.git@release/v1.0.0.dev13#egg=rhosocial-activerecord-testsuite
-
-- name: Create Oracle scenario config
-run: |
-cat > oracle_scenarios.yaml << EOF
-scenarios:
-oracle_21c:
-host: localhost
-port: 1521
-username: system
-password: password
-service_name: XEPDB1
-encoding: AL32UTF8
-EOF
-echo "ORACLE_SCENARIOS_CONFIG_PATH=$(pwd)/oracle_scenarios.yaml" >> $GITHUB_ENV
-
-- name: Run tests
-run: |
-export PYTHONPATH=src
-python -m pytest tests/
-
-# Python 3.13 free-threaded tests
-test-py313t-oracle19c:
-name: Run tests with Python 3.13t (free-threaded) and Oracle 19c
-runs-on: ubuntu-latest
-services:
-oracle:
-image: gvenzl/oracle-xe:19-slim
-env:
-ORACLE_PASSWORD: password
-options: >-
---health-cmd "echo 'SELECT 1 FROM dual' | sqlplus -S system/password@//localhost/XEPDB1"
---health-interval 30s
---health-timeout 60s
---health-retries 15
-ports:
-- 1521:1521
-
-steps:
-- name: Check out the repository
-uses: actions/checkout@v6
-
-- name: Set up Python 3.13t (free-threaded)
-uses: actions/setup-python@v6
-with:
-python-version: "3.13t"
-
-- name: Install dependencies
-run: |
-pip install -r requirements.txt
-pip install -r requirements-dev.txt
-
-- name: Install activerecord and testsuite from PyPI
-run: |
-pip install git+https://github.com/rhosocial/python-activerecord.git@release/v1.0.0.dev26#egg=rhosocial-activerecord
-        pip install git+https://github.com/rhosocial/python-activerecord-testsuite.git@release/v1.0.0.dev13#egg=rhosocial-activerecord-testsuite
-
-- name: Create Oracle scenario config
-run: |
-cat > oracle_scenarios.yaml << EOF
-scenarios:
-oracle_19c:
-host: localhost
-port: 1521
-username: system
-password: password
-service_name: XEPDB1
-encoding: AL32UTF8
-EOF
-echo "ORACLE_SCENARIOS_CONFIG_PATH=$(pwd)/oracle_scenarios.yaml" >> $GITHUB_ENV
-
-- name: Run tests
-run: |
-export PYTHONPATH=src
-python -m pytest tests/
-
-# Python 3.14 free-threaded tests
-test-py314t-oracle21c:
-name: Run tests with Python 3.14t (free-threaded) and Oracle 21c
-runs-on: ubuntu-latest
-services:
-oracle:
-image: container-registry.oracle.com/database/express:21.3.0-xe
-env:
-ORACLE_PWD: password
-ORACLE_CHARACTERSET: AL32UTF8
-options: >-
---health-cmd "echo 'SELECT 1 FROM dual' | sqlplus -S system/password@//localhost/XEPDB1"
---health-interval 30s
---health-timeout 60s
---health-retries 15
-ports:
-- 1521:1521
-
-steps:
-- name: Check out the repository
-uses: actions/checkout@v6
-
-- name: Set up Python 3.14t (free-threaded)
-uses: actions/setup-python@v6
-with:
-python-version: "3.14t"
-
-- name: Install dependencies
-run: |
-pip install -r requirements.txt
-pip install -r requirements-dev.txt
-
-- name: Install activerecord and testsuite from PyPI
-run: |
-pip install git+https://github.com/rhosocial/python-activerecord.git@release/v1.0.0.dev26#egg=rhosocial-activerecord
-        pip install git+https://github.com/rhosocial/python-activerecord-testsuite.git@release/v1.0.0.dev13#egg=rhosocial-activerecord-testsuite
-
-- name: Create Oracle scenario config
-run: |
-cat > oracle_scenarios.yaml << EOF
-scenarios:
-oracle_21c:
-host: localhost
-port: 1521
-username: system
-password: password
-service_name: XEPDB1
-encoding: AL32UTF8
-EOF
-echo "ORACLE_SCENARIOS_CONFIG_PATH=$(pwd)/oracle_scenarios.yaml" >> $GITHUB_ENV
-
-- name: Run tests
-run: |
-export PYTHONPATH=src
-python -m pytest tests/
+      - name: Run tests
+        run: |
+          export PYTHONPATH=src
+          python -m pytest tests/ --tb=short

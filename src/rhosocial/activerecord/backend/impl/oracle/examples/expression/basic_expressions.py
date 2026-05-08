@@ -155,6 +155,44 @@ sql, params = col_lock.to_sql(dialect)
 print(f"\nFOR UPDATE OF columns NOWAIT:")
 print(f"  SQL: {sql}")
 
+print("\n" + "-" * 40)
+print("5. LOCK TABLE Statement")
+print("-" * 40)
+
+from rhosocial.activerecord.backend.impl.oracle.expression import (
+    OracleLockTableExpression,
+    for_update, for_update_nowait, for_update_wait, for_update_skip_locked,
+)
+
+lock_table = OracleLockTableExpression(table="users", mode="EXCLUSIVE")
+sql, params = lock_table.to_sql(dialect)
+print(f"LOCK TABLE exclusive:")
+print(f"  SQL: {sql}")
+
+lock_table_share = OracleLockTableExpression(
+    table="accounts", mode="SHARE", nowait=True
+)
+sql, params = lock_table_share.to_sql(dialect)
+print(f"\nLOCK TABLE share NOWAIT:")
+print(f"  SQL: {sql}")
+
+print(f"\nFactory functions:")
+basic_for_update = for_update()
+sql, params = basic_for_update.to_sql(dialect)
+print(f"  for_update(): {sql}")
+
+nowait_factory = for_update_nowait()
+sql, params = nowait_factory.to_sql(dialect)
+print(f"  for_update_nowait(): {sql}")
+
+wait_factory = for_update_wait(seconds=5)
+sql, params = wait_factory.to_sql(dialect)
+print(f"  for_update_wait(5): {sql}")
+
+skip_locked_factory = for_update_skip_locked()
+sql, params = skip_locked_factory.to_sql(dialect)
+print(f"  for_update_skip_locked(): {sql}")
+
 print("\n" + "=" * 60)
 print("All expression examples completed successfully!")
 print("=" * 60)

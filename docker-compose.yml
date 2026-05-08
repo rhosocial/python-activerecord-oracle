@@ -1,0 +1,48 @@
+# docker-compose.yml
+# Oracle Database containers for development and testing
+services:
+  oracle_21c:
+    image: container-registry.oracle.com/database/express:21.3.0-xe
+    container_name: rhosocial_oracle_21c
+    ports:
+      - "11521:1521"
+    environment:
+      - ORACLE_PWD=password
+      - ORACLE_CHARACTERSET=AL32UTF8
+    volumes:
+      - oracle_21c_data:/opt/oracle/oradata
+    networks:
+      - rhosocial_net
+    healthcheck:
+      test: ["CMD", "sqlplus", "-L", "system/password@XEPDB1", "@health.sql"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+
+  oracle_23c:
+    image: container-registry.oracle.com/database/free:23.6.0.0
+    container_name: rhosocial_oracle_23c
+    ports:
+      - "11522:1521"
+    environment:
+      - ORACLE_PWD=password
+      - ORACLE_CHARACTERSET=AL32UTF8
+    volumes:
+      - oracle_23c_data:/opt/oracle/oradata
+    networks:
+      - rhosocial_net
+    healthcheck:
+      test: ["CMD", "sqlplus", "-L", "system/password@FREEPDB1", "@health.sql"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+
+volumes:
+  oracle_21c_data:
+  oracle_23c_data:
+
+networks:
+  rhosocial_net:
+    driver: bridge
