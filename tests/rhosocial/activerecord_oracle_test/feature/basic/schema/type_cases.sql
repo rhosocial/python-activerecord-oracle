@@ -1,5 +1,7 @@
 -- Oracle version of the type_cases table schema
 
+ALTER SESSION SET db_securefile = 'NEVER';
+
 CREATE TABLE type_cases (
     id CHAR(36) NOT NULL PRIMARY KEY,
     username VARCHAR2(4000) NOT NULL,
