@@ -162,6 +162,13 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             # Use async connection
             self._connection = await oracledb.connect_async(**conn_params)
 
+            # Set NLS date format to match ISO format for datetime string binding
+            cursor = self._connection.cursor()
+            await cursor.execute("ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD HH24:MI:SS'")
+            await cursor.execute("ALTER SESSION SET NLS_TIMESTAMP_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF'")
+            await cursor.execute("ALTER SESSION SET NLS_TIMESTAMP_TZ_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF TZH:TZM'")
+            cursor.close()
+
             self._transaction_manager = AsyncOracleTransactionManager(self._connection, self.logger)
 
             self.log(logging.INFO, f"Connected to Oracle database (async): {dsn}")

@@ -192,6 +192,13 @@ class OracleBackend(IntrospectorBackendMixin, OracleBackendMixin, StorageBackend
 
             self._connection = oracledb.connect(**conn_params)
 
+            # Set NLS date format to match ISO format for datetime string binding
+            cursor = self._connection.cursor()
+            cursor.execute("ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD HH24:MI:SS'")
+            cursor.execute("ALTER SESSION SET NLS_TIMESTAMP_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF'")
+            cursor.execute("ALTER SESSION SET NLS_TIMESTAMP_TZ_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF TZH:TZM'")
+            cursor.close()
+
             self.log(
                 logging.INFO,
                 f"Connected to Oracle database: {dsn}"
