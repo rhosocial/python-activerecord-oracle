@@ -247,43 +247,39 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
 
         return ''.join(result_parts), converted_params
 
-    def _convert_datetime_params(self, params: Tuple) -> Tuple:
+def _convert_datetime_params(self, params: Tuple) -> Tuple:
         """
-        Convert datetime parameters to use Oracle DB_TYPE_TIMESTAMP_TZ.
+        Convert datetime and time parameters to Oracle-compatible types.
 
         This is necessary to preserve microseconds and timezone information
-        when binding datetime values to Oracle.
-
-        Note: This method creates a temporary cursor for variable creation.
-        For async backends, the cursor is obtained synchronously since
-        variable creation doesn't require database I/O.
+        when binding datetime values to Oracle, and to handle time values
+        that oracledb thin mode doesn't support natively.
 
         Args:
             params: Original parameter tuple
 
         Returns:
             Tuple with datetime values converted to oracledb variables
+            and time values converted to ISO format strings
         """
-        from datetime import datetime
+        from datetime import datetime, time
 
         converted = []
         cursor = None
         try:
             for param in params:
                 if isinstance(param, datetime):
-                    # Get a cursor for creating variables
-                    # Note: We use a sync cursor since variable creation is local
                     if cursor is None:
-                        cursor = self._connection.cursor()
-                    # Create a variable with DB_TYPE_TIMESTAMP_TZ to preserve microseconds
+                        cursor = self._get_cursor()
                     var = cursor.var(oracledb.DB_TYPE_TIMESTAMP_TZ)
                     var.setvalue(0, param)
                     converted.append(var)
+                elif isinstance(param, time):
+                    converted.append(param.isoformat())
                 else:
                     converted.append(param)
             return tuple(converted)
         finally:
-            # Close the temporary cursor if we created one
             if cursor:
                 cursor.close()
 
@@ -732,8 +728,10 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
                 elif col_lower in ('created_at', 'updated_at'):
                     # Use DB_TYPE_TIMESTAMP_TZ to preserve microseconds and timezone
                     out_var = cursor.var(oracledb.DB_TYPE_TIMESTAMP_TZ)
+                elif col_lower in ('time_val',):
+                    out_var = cursor.var(oracledb.DB_TYPE_VARCHAR)
                 else:
-                    out_var = cursor.var(str)
+                    out_var = cursor.var(oracledb.DB_TYPE_VARCHAR)
                 out_vars.append(out_var)
                 exec_params.append(out_var)
 
@@ -754,6 +752,10 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
                 # getvalue() returns a list for batch operations, single value otherwise
                 if isinstance(value, list) and len(value) == 1:
                     value = value[0]
+                # Apply column adapter if available to convert types (e.g. str -> time)
+                if column_adapters and col_key in column_adapters:
+                    adapter, target_type = column_adapters[col_key]
+                    value = adapter.from_database(value, target_type)
                 row_data[col_key] = value
             data = [row_data]
 
