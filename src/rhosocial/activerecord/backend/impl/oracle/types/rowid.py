@@ -158,7 +158,10 @@ class OracleURowID:
         return len(self.value) > 18 or len(self.value) < 18
 
 
-def parse_rowid(value: str) -> OracleRowID | OracleURowID:
+from typing import Union
+
+
+def parse_rowid(value: str) -> Union[OracleRowID, OracleURowID]:
     """Parse a ROWID string into appropriate type.
     
     Args:
