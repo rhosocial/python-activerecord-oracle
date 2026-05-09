@@ -247,7 +247,7 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
 
         return ''.join(result_parts), converted_params
 
-def _convert_datetime_params(self, params: Tuple) -> Tuple:
+    def _convert_datetime_params(self, params: Tuple) -> Tuple:
         """
         Convert datetime and time parameters to Oracle-compatible types.
 
@@ -270,7 +270,7 @@ def _convert_datetime_params(self, params: Tuple) -> Tuple:
             for param in params:
                 if isinstance(param, datetime):
                     if cursor is None:
-                        cursor = self._get_cursor()
+                        cursor = self._connection.cursor()
                     var = cursor.var(oracledb.DB_TYPE_TIMESTAMP_TZ)
                     var.setvalue(0, param)
                     converted.append(var)
