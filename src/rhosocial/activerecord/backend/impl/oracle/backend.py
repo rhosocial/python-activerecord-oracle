@@ -283,20 +283,20 @@ class OracleBackend(IntrospectorBackendMixin, OracleBackendMixin, StorageBackend
 
     def _convert_datetime_params(self, params: Tuple) -> Tuple:
         """
-        Convert datetime and time parameters to Oracle-compatible types.
+        Convert datetime, time, and complex types (dict, list) to Oracle-compatible values.
 
-        This is necessary to preserve microseconds and timezone information
-        when binding datetime values to Oracle, and to handle time values
-        that oracledb thin mode doesn't support natively.
+        oracledb thin mode doesn't support Python time, dict, or list natively.
+        These are serialized to strings: time -> ISO format, dict/list -> JSON.
 
         Args:
             params: Original parameter tuple
 
         Returns:
-            Tuple with datetime values converted to oracledb variables
-            and time values converted to ISO format strings
+            Tuple with datetime values converted to oracledb variables,
+            time to ISO strings, and dict/list to JSON strings
         """
         from datetime import datetime, time
+        import json
 
         converted = []
         cursor = None
@@ -310,6 +310,8 @@ class OracleBackend(IntrospectorBackendMixin, OracleBackendMixin, StorageBackend
                     converted.append(var)
                 elif isinstance(param, time):
                     converted.append(param.isoformat())
+                elif isinstance(param, (dict, list)):
+                    converted.append(json.dumps(param))
                 else:
                     converted.append(param)
             return tuple(converted)
