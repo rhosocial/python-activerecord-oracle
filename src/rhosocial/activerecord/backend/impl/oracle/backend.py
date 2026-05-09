@@ -301,15 +301,10 @@ class OracleBackend(IntrospectorBackendMixin, OracleBackendMixin, StorageBackend
         import json
 
         converted = []
-        cursor = None
         try:
             for param in params:
                 if isinstance(param, datetime):
-                    if cursor is None:
-                        cursor = self._get_cursor()
-                    var = cursor.var(oracledb.DB_TYPE_TIMESTAMP_TZ)
-                    var.setvalue(0, param)
-                    converted.append(var)
+                    converted.append(param.isoformat())
                 elif isinstance(param, time):
                     converted.append(param.isoformat())
                 elif isinstance(param, (dict, list)):
@@ -324,8 +319,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleBackendMixin, StorageBackend
                     converted.append(param)
             return tuple(converted)
         finally:
-            if cursor:
-                cursor.close()
+            pass
 
     def execute(self, sql: str, params: Optional[Tuple] = None, *, options, **kwargs) -> QueryResult:
         """Execute a SQL statement with optional parameters.
