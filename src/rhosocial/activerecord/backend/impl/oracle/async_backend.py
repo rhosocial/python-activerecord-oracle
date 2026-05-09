@@ -277,9 +277,9 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         try:
             for param in params:
                 if isinstance(param, datetime):
-                    converted.append(param.isoformat())
+                    converted.append(param.strftime('%Y-%m-%d %H:%M:%S'))
                 elif isinstance(param, time):
-                    converted.append(param.isoformat())
+                    converted.append(param.strftime('%H:%M:%S'))
                 elif isinstance(param, (dict, list)):
                     converted.append(json.dumps(param))
                 elif isinstance(param, UUID):
