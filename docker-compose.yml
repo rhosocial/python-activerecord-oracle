@@ -7,10 +7,10 @@ services:
     ports:
       - "11520:1521"
     environment:
-      - ORACLE_PASSWORD=password
+      - ORACLE_PASSWORD=Password1!
       - ORACLE_CHARACTERSET=AL32UTF8
       - APP_USER=testuser
-      - APP_USER_PASSWORD=password
+      - APP_USER_PASSWORD=Password1!
     volumes:
       - oracle_11g_data:/opt/oracle/oradata
     networks:
@@ -28,10 +28,10 @@ services:
     ports:
       - "11521:1521"
     environment:
-      - ORACLE_PASSWORD=password
+      - ORACLE_PASSWORD=Password1!
       - ORACLE_CHARACTERSET=AL32UTF8
       - APP_USER=testuser
-      - APP_USER_PASSWORD=password
+      - APP_USER_PASSWORD=Password1!
     volumes:
       - oracle_18c_data:/opt/oracle/oradata
     networks:
@@ -49,10 +49,10 @@ services:
     ports:
       - "11522:1521"
     environment:
-      - ORACLE_PASSWORD=password
+      - ORACLE_PASSWORD=Password1!
       - ORACLE_CHARACTERSET=AL32UTF8
       - APP_USER=testuser
-      - APP_USER_PASSWORD=password
+      - APP_USER_PASSWORD=Password1!
     volumes:
       - oracle_21c_data:/opt/oracle/oradata
     networks:
@@ -70,10 +70,10 @@ services:
     ports:
       - "11523:1521"
     environment:
-      - ORACLE_PASSWORD=password
+      - ORACLE_PASSWORD=Password1!
       - ORACLE_CHARACTERSET=AL32UTF8
       - APP_USER=testuser
-      - APP_USER_PASSWORD=password
+      - APP_USER_PASSWORD=Password1!
     volumes:
       - oracle_23c_data:/opt/oracle/oradata
     networks:
