@@ -162,17 +162,19 @@ class OracleDialect(
     - VECTOR type (since 23ai)
     """
 
-    def __init__(self, version: Tuple[int, int, int] = (19, 0, 0)):
+    def __init__(self, version: Optional[Tuple[int, int, int]] = None):
         """
         Initialize Oracle dialect with specific version.
 
         Args:
-            version: Oracle version tuple (major, minor, patch)
-                    Common versions: (11, 2, 0), (12, 1, 0), (12, 2, 0),
-                                    (19, 0, 0), (21, 0, 0), (23, 0, 0)
+            version: Oracle version tuple (major, minor, patch).
+                If None, the dialect must be adapted via
+                backend.introspect_and_adapt() before version-dependent
+                features can be used.
         """
-        self.version = version
         super().__init__()
+        if version is not None:
+            self.version = version
 
     def get_parameter_placeholder(self, position: int = 0) -> str:
         """
@@ -206,8 +208,16 @@ class OracleDialect(
         """Oracle supports MATERIALIZE hint for CTEs."""
         return True
 
-    def supports_returning_clause(self) -> bool:
-        """RETURNING clause is supported since Oracle 8i."""
+    def supports_returning_insert(self) -> bool:
+        """RETURNING clause is supported for INSERT since Oracle 8i."""
+        return True
+
+    def supports_returning_update(self) -> bool:
+        """RETURNING clause is supported for UPDATE since Oracle 8i."""
+        return True
+
+    def supports_returning_delete(self) -> bool:
+        """RETURNING clause is supported for DELETE since Oracle 8i."""
         return True
 
     def supports_window_functions(self) -> bool:
@@ -349,6 +359,10 @@ class OracleDialect(
     def supports_constraint_enforced(self) -> bool:
         """Oracle supports RELY/NORELY (NOT ENFORCED) since 12c."""
         return self.version >= (12, 0, 0)
+
+    def supports_deferrable_constraint(self) -> bool:
+        """Oracle supports DEFERRABLE constraints since 8i."""
+        return True
     # endregion
 
     # region Transaction Control Support
@@ -736,7 +750,16 @@ class OracleDialect(
                 constraint_parts.append("UNIQUE")
             elif constraint.constraint_type == ColumnConstraintType.DEFAULT:
                 if constraint.default_value is not None:
-                    constraint_parts.append(f"DEFAULT {constraint.default_value}")
+                    from rhosocial.activerecord.backend.expression import bases
+                    if isinstance(constraint.default_value, bases.BaseExpression):
+                        default_sql, default_params = constraint.default_value.to_sql()
+                        constraint_parts.append(f"DEFAULT {default_sql}")
+                        params.extend(default_params)
+                    elif isinstance(constraint.default_value, str):
+                        escaped = self._escape_sql_string(constraint.default_value)
+                        constraint_parts.append(f"DEFAULT '{escaped}'")
+                    else:
+                        constraint_parts.append(f"DEFAULT {constraint.default_value}")
             elif constraint.constraint_type == ColumnConstraintType.NULL:
                 constraint_parts.append("NULL")
 

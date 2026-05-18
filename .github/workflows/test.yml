@@ -55,8 +55,8 @@ jobs:
 
       - name: Install activerecord and testsuite from git
         run: |
-          pip install git+https://github.com/rhosocial/python-activerecord.git@release/v1.0.0.dev26#egg=rhosocial-activerecord
-          pip install git+https://github.com/rhosocial/python-activerecord-testsuite.git@release/v1.0.0.dev13#egg=rhosocial-activerecord-testsuite
+          pip install git+https://github.com/rhosocial/python-activerecord.git@release/v1.0.0.dev27#egg=rhosocial-activerecord
+          pip install git+https://github.com/rhosocial/python-activerecord-testsuite.git@release/v1.0.0.dev14#egg=rhosocial-activerecord-testsuite
 
       - name: Wait for Oracle and test connectivity
         run: |
@@ -172,8 +172,8 @@ jobs:
 
       - name: Install activerecord and testsuite from git
         run: |
-          pip install git+https://github.com/rhosocial/python-activerecord.git@release/v1.0.0.dev26#egg=rhosocial-activerecord
-          pip install git+https://github.com/rhosocial/python-activerecord-testsuite.git@release/v1.0.0.dev13#egg=rhosocial-activerecord-testsuite
+          pip install git+https://github.com/rhosocial/python-activerecord.git@release/v1.0.0.dev27#egg=rhosocial-activerecord
+          pip install git+https://github.com/rhosocial/python-activerecord-testsuite.git@release/v1.0.0.dev14#egg=rhosocial-activerecord-testsuite
 
       - name: Wait for Oracle and test connectivity
         run: |
