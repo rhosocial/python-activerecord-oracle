@@ -141,7 +141,7 @@ class TestExpressionModule:
         )
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
         
-        dialect = OracleDialect()
+        dialect = OracleDialect(version=(19, 0, 0))
         
         root_expr = ConnectByRootExpression(column="employee_id")
         sql, params = root_expr.to_sql(dialect)

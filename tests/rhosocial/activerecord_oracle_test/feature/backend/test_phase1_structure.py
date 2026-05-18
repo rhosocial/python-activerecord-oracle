@@ -213,7 +213,7 @@ class TestExpressionModule:
         """Test CONNECT_BY_ROOT expression."""
         from rhosocial.activerecord.backend.impl.oracle.expression import ConnectByRootExpression
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
-        dialect = OracleDialect()
+        dialect = OracleDialect(version=(19, 0, 0))
         expr = ConnectByRootExpression(column="employee_id")
         sql, params = expr.to_sql(dialect)
         assert "CONNECT_BY_ROOT" in sql
@@ -222,7 +222,7 @@ class TestExpressionModule:
         """Test SYS_CONNECT_BY_PATH expression."""
         from rhosocial.activerecord.backend.impl.oracle.expression import SysConnectByPathExpression
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
-        dialect = OracleDialect()
+        dialect = OracleDialect(version=(19, 0, 0))
         expr = SysConnectByPathExpression(column="name", separator="/")
         sql, params = expr.to_sql(dialect)
         assert "SYS_CONNECT_BY_PATH" in sql
@@ -232,7 +232,7 @@ class TestExpressionModule:
         """Test PIVOT expression."""
         from rhosocial.activerecord.backend.impl.oracle.expression import PivotExpression
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
-        dialect = OracleDialect()
+        dialect = OracleDialect(version=(19, 0, 0))
         pivot = PivotExpression(
             aggregate_function="SUM",
             value_column="amount",
@@ -247,7 +247,7 @@ class TestExpressionModule:
         """Test hint expression."""
         from rhosocial.activerecord.backend.impl.oracle.expression import OracleHintExpression
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
-        dialect = OracleDialect()
+        dialect = OracleDialect(version=(19, 0, 0))
         hint = OracleHintExpression(hints=["FULL(users)", "PARALLEL(4)"])
         sql, params = hint.to_sql(dialect)
         assert "/*+ FULL(users) PARALLEL(4) */" in sql
@@ -256,7 +256,7 @@ class TestExpressionModule:
         """Test FOR UPDATE expression."""
         from rhosocial.activerecord.backend.impl.oracle.expression import OracleForUpdateExpression
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
-        dialect = OracleDialect()
+        dialect = OracleDialect(version=(19, 0, 0))
         
         lock = OracleForUpdateExpression()
         sql, params = lock.to_sql(dialect)
