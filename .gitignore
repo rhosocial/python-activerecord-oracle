@@ -178,3 +178,4 @@ cython_debug/
 .claude/plan/
 .claude/tmp/
 tests/config/
+test_connection.py
