@@ -23,7 +23,7 @@ config = OracleConnectionConfig(
     host=os.getenv('ORACLE_HOST', 'localhost'),
     port=int(os.getenv('ORACLE_PORT', '1521')),
     username=os.getenv('ORACLE_USER', 'system'),
-    password=os.getenv('ORACLE_PASSWORD', 'password'),
+    password=os.getenv('ORACLE_PASSWORD', ''),
     service_name=os.getenv('ORACLE_SERVICE', 'XEPDB1'),
 )
 
