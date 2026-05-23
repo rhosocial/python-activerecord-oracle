@@ -311,7 +311,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleBackendMixin, StorageBackend
         try:
             for param in params:
                 if isinstance(param, datetime):
-                    converted.append(param.strftime('%Y-%m-%d %H:%M:%S'))
+                    converted.append(param.strftime('%Y-%m-%d %H:%M:%S.%f'))
                 elif isinstance(param, time):
                     converted.append(param.strftime('%H:%M:%S'))
                 elif isinstance(param, (dict, list)):
@@ -319,7 +319,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleBackendMixin, StorageBackend
                 elif isinstance(param, UUID):
                     converted.append(str(param))
                 elif isinstance(param, Decimal):
-                    converted.append(float(param))
+                    converted.append(str(param))
                 elif param is not None and not isinstance(param, (str, int, float, bytes)):
                     converted.append(str(param))
                 else:
