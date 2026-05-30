@@ -17,122 +17,227 @@ permissions:
   contents: read
 
 jobs:
-  # test-oracle-21c:
-  #   name: Python ${{ matrix.python-version }} / Oracle 21c
-  #   runs-on: ubuntu-latest
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       python-version: ['3.8', '3.10', '3.12', '3.14']
-  #
-  #   services:
-  #     oracle:
-  #       image: gvenzl/oracle-xe:21-slim
-  #       env:
-  #         ORACLE_PASSWORD: password
-  #         ORACLE_CHARACTERSET: AL32UTF8
-  #       ports:
-  #         - 1521:1521
-  #       options: >-
-  #         --health-cmd "healthcheck.sh"
-  #         --health-interval 30s
-  #         --health-timeout 60s
-  #         --health-retries 15
-  #
-  #   steps:
-  #     - name: Check out the repository
-  #       uses: actions/checkout@v6
-  #
-  #     - name: Set up Python ${{ matrix.python-version }}
-  #       uses: actions/setup-python@v6
-  #       with:
-  #         python-version: ${{ matrix.python-version }}
-  #
-  #     - name: Install dependencies
-  #       run: |
-  #         pip install -r requirements.txt
-  #         pip install -r requirements-dev.txt
-  #
-  #     - name: Install activerecord and testsuite from git
-  #       run: |
-  #         pip install git+https://github.com/rhosocial/python-activerecord.git@release/v1.0.0.dev27#egg=rhosocial-activerecord
-  #         pip install git+https://github.com/rhosocial/python-activerecord-testsuite.git@release/v1.0.0.dev14#egg=rhosocial-activerecord-testsuite
-  #
-  #     - name: Wait for Oracle and test connectivity
-  #       run: |
-  #         python -c "
-  #         import sys, time, oracledb
-  #         max_retries = 30
-  #         for attempt in range(max_retries):
-  #             try:
-  #                 conn = oracledb.connect(
-  #                     user='system', password='password',
-  #                     dsn='localhost:1521/XEPDB1')
-  #                 conn.close()
-  #                 print('Oracle 21c connectivity OK')
-  #                 break
-  #             except Exception as e:
-  #                 if attempt < max_retries - 1:
-  #                     print(f'Retry {attempt+1}/{max_retries}: {e}')
-  #                     time.sleep(10)
-  #                 else:
-  #                     print(f'Failed: {e}')
-  #                     sys.exit(1)
-  #         "
-  #
-  #     - name: Ensure PDB service registered with listener
-  #       run: |
-  #         docker exec ${{ job.services.oracle.id }} sqlplus -L / as sysdba <<EOF
-  #         alter system set local_listener='(ADDRESS=(PROTOCOL=TCP)(HOST=0.0.0.0)(PORT=1521))' scope=both;
-  #         alter system register;
-  #         exit;
-  #         EOF
-  #         sleep 5
-  #         python -c "
-  #         import oracledb
-  #         conn = oracledb.connect(
-  #             user='system', password='password',
-  #             dsn='localhost:1521/XEPDB1')
-  #         conn.close()
-  #         print('PDB service XEPDB1 registered OK')
-  #         "
-  #
-  #     - name: Create Oracle scenario config
-  #       run: |
-  #         cat > oracle_scenarios.yaml << EOF
-  #         scenarios:
-  #           oracle_21c:
-  #             host: localhost
-  #             port: 1521
-  #             username: system
-  #             password: password
-  #             service_name: XEPDB1
-  #             encoding: AL32UTF8
-  #         EOF
-  #         echo "ORACLE_SCENARIOS_CONFIG_PATH=$(pwd)/oracle_scenarios.yaml" >> $GITHUB_ENV
-  #
-  #     - name: Run tests
-  #       run: |
-  #         export PYTHONPATH=src
-  #         python -m pytest tests/ --tb=short
-  #
-  #     - name: Run tests with coverage (only for Python 3.14)
-  #       if: matrix.python-version == '3.14'
-  #       run: |
-  #         export PYTHONPATH=src
-  #         pip install coverage
-  #         coverage run --source=src -m pytest tests/ --tb=short
-  #         coverage xml
-  #
-  #     - name: Upload coverage to Codecov
-  #       if: matrix.python-version == '3.14'
-  #       uses: codecov/codecov-action@v5
-  #       with:
-  #         token: ${{ secrets.CODECOV_TOKEN }}
-  #         files: ./coverage.xml
-  #         flags: unittests,python-${{ matrix.python-version }},oracle-21c
-  #         name: codecov-oracle-${{ matrix.python-version }}-21c
-  #         fail_ci_if_error: false
+  test-oracle-18c:
+    name: Python 3.14 / Oracle 18c
+    runs-on: ubuntu-latest
+
+    services:
+      oracle:
+        image: gvenzl/oracle-xe:18-slim
+        env:
+          ORACLE_PASSWORD: password
+          ORACLE_CHARACTERSET: AL32UTF8
+        ports:
+          - 1521:1521
+        options: >-
+          --health-cmd "healthcheck.sh"
+          --health-interval 30s
+          --health-timeout 60s
+          --health-retries 15
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Install activerecord and testsuite from git
+        run: |
+          pip install git+https://github.com/rhosocial/python-activerecord.git@release/v1.0.0.dev27#egg=rhosocial-activerecord
+          pip install git+https://github.com/rhosocial/python-activerecord-testsuite.git@release/v1.0.0.dev14#egg=rhosocial-activerecord-testsuite
+
+      - name: Wait for Oracle and test connectivity
+        run: |
+          python -c "
+          import sys, time, oracledb
+          max_retries = 30
+          for attempt in range(max_retries):
+              try:
+                  conn = oracledb.connect(
+                      user='system', password='password',
+                      dsn='localhost:1521/XEPDB1')
+                  conn.close()
+                  print('Oracle 18c connectivity OK')
+                  break
+              except Exception as e:
+                  if attempt < max_retries - 1:
+                      print(f'Retry {attempt+1}/{max_retries}: {e}')
+                      time.sleep(10)
+                  else:
+                      print(f'Failed: {e}')
+                      sys.exit(1)
+          "
+
+      - name: Ensure PDB service registered with listener
+        run: |
+          docker exec ${{ job.services.oracle.id }} sqlplus -L / as sysdba <<EOF
+          alter system set local_listener='(ADDRESS=(PROTOCOL=TCP)(HOST=0.0.0.0)(PORT=1521))' scope=both;
+          alter system register;
+          exit;
+          EOF
+          sleep 5
+          python -c "
+          import oracledb
+          conn = oracledb.connect(
+              user='system', password='password',
+              dsn='localhost:1521/XEPDB1')
+          conn.close()
+          print('PDB service XEPDB1 registered OK')
+          "
+
+      - name: Create Oracle scenario config
+        run: |
+          cat > oracle_scenarios.yaml << EOF
+          scenarios:
+            oracle_18c:
+              host: localhost
+              port: 1521
+              username: system
+              password: password
+              service_name: XEPDB1
+              encoding: AL32UTF8
+          EOF
+          echo "ORACLE_SCENARIOS_CONFIG_PATH=$(pwd)/oracle_scenarios.yaml" >> $GITHUB_ENV
+
+      - name: Run tests
+        run: |
+          export PYTHONPATH=src
+          python -m pytest tests/ --tb=short
+
+      - name: Run tests with coverage
+        run: |
+          export PYTHONPATH=src
+          pip install coverage
+          coverage run --source=src -m pytest tests/ --tb=short
+          coverage xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          flags: unittests,python-3.14,oracle-18c
+          name: codecov-oracle-3.14-18c
+          fail_ci_if_error: false
+
+  test-oracle-21c:
+    name: Python 3.14 / Oracle 21c
+    runs-on: ubuntu-latest
+
+    services:
+      oracle:
+        image: gvenzl/oracle-xe:21-slim
+        env:
+          ORACLE_PASSWORD: password
+          ORACLE_CHARACTERSET: AL32UTF8
+        ports:
+          - 1521:1521
+        options: >-
+          --health-cmd "healthcheck.sh"
+          --health-interval 30s
+          --health-timeout 60s
+          --health-retries 15
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Install activerecord and testsuite from git
+        run: |
+          pip install git+https://github.com/rhosocial/python-activerecord.git@release/v1.0.0.dev27#egg=rhosocial-activerecord
+          pip install git+https://github.com/rhosocial/python-activerecord-testsuite.git@release/v1.0.0.dev14#egg=rhosocial-activerecord-testsuite
+
+      - name: Wait for Oracle and test connectivity
+        run: |
+          python -c "
+          import sys, time, oracledb
+          max_retries = 30
+          for attempt in range(max_retries):
+              try:
+                  conn = oracledb.connect(
+                      user='system', password='password',
+                      dsn='localhost:1521/XEPDB1')
+                  conn.close()
+                  print('Oracle 21c connectivity OK')
+                  break
+              except Exception as e:
+                  if attempt < max_retries - 1:
+                      print(f'Retry {attempt+1}/{max_retries}: {e}')
+                      time.sleep(10)
+                  else:
+                      print(f'Failed: {e}')
+                      sys.exit(1)
+          "
+
+      - name: Ensure PDB service registered with listener
+        run: |
+          docker exec ${{ job.services.oracle.id }} sqlplus -L / as sysdba <<EOF
+          alter system set local_listener='(ADDRESS=(PROTOCOL=TCP)(HOST=0.0.0.0)(PORT=1521))' scope=both;
+          alter system register;
+          exit;
+          EOF
+          sleep 5
+          python -c "
+          import oracledb
+          conn = oracledb.connect(
+              user='system', password='password',
+              dsn='localhost:1521/XEPDB1')
+          conn.close()
+          print('PDB service XEPDB1 registered OK')
+          "
+
+      - name: Create Oracle scenario config
+        run: |
+          cat > oracle_scenarios.yaml << EOF
+          scenarios:
+            oracle_21c:
+              host: localhost
+              port: 1521
+              username: system
+              password: password
+              service_name: XEPDB1
+              encoding: AL32UTF8
+          EOF
+          echo "ORACLE_SCENARIOS_CONFIG_PATH=$(pwd)/oracle_scenarios.yaml" >> $GITHUB_ENV
+
+      - name: Run tests
+        run: |
+          export PYTHONPATH=src
+          python -m pytest tests/ --tb=short
+
+      - name: Run tests with coverage
+        run: |
+          export PYTHONPATH=src
+          pip install coverage
+          coverage run --source=src -m pytest tests/ --tb=short
+          coverage xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          flags: unittests,python-3.14,oracle-21c
+          name: codecov-oracle-3.14-21c
+          fail_ci_if_error: false
 
   test-oracle-23c:
     name: Python 3.14 / Oracle 23c

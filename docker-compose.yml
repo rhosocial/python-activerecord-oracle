@@ -1,27 +1,6 @@
 # docker-compose.yml
 # Oracle Database containers for development and testing
 services:
-  oracle_11g:
-    image: registry.cn-shanghai.aliyuncs.com/vistart_public/oracle-xe:11-slim
-    container_name: rhosocial_oracle_11g
-    ports:
-      - "11520:1521"
-    environment:
-      - ORACLE_PASSWORD=Password1!
-      - ORACLE_CHARACTERSET=AL32UTF8
-      - APP_USER=testuser
-      - APP_USER_PASSWORD=Password1!
-    volumes:
-      - oracle_11g_data:/opt/oracle/oradata
-    networks:
-      - rhosocial_net
-    healthcheck:
-      test: ["CMD", "healthcheck.sh"]
-      interval: 30s
-      timeout: 10s
-      retries: 10
-      start_period: 120s
-
   oracle_18c:
     image: registry.cn-shanghai.aliyuncs.com/vistart_public/oracle-xe:18-slim
     container_name: rhosocial_oracle_18c
@@ -86,7 +65,6 @@ services:
       start_period: 120s
 
 volumes:
-  oracle_11g_data:
   oracle_18c_data:
   oracle_21c_data:
   oracle_23c_data:
