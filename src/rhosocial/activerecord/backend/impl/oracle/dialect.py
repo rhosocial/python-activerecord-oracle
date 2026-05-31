@@ -463,6 +463,24 @@ class OracleDialect(
     def supports_set_operation_for_update(self) -> bool:
         """Set operations with FOR UPDATE have limitations."""
         return False
+
+    def format_set_operation_expression(
+        self,
+        left,
+        right,
+        operation: str,
+        alias: Optional[str],
+        all_: bool,
+        order_by_clause=None,
+        limit_offset_clause=None,
+        for_update_clause=None,
+    ) -> Tuple[str, Tuple]:
+        """Format set operation expression for Oracle."""
+        if operation.upper() == "EXCEPT":
+            operation = "MINUS"
+        return super().format_set_operation_expression(
+            left, right, operation, alias, all_, order_by_clause, limit_offset_clause, for_update_clause
+        )
     # endregion
 
     def format_identifier(self, identifier: str) -> str:
@@ -479,8 +497,33 @@ class OracleDialect(
         Returns:
             Uppercase identifier without quotes
         """
-        # Convert to uppercase for Oracle (unquoted identifiers are stored as uppercase)
         return identifier.upper()
+
+    def format_column(self, name: str, table: Optional[str] = None, alias: Optional[str] = None, schema_name: Optional[str] = None) -> Tuple[str, Tuple]:
+        """Format column reference for Oracle queries."""
+        if schema_name and table:
+            col_sql = f"{self.format_identifier(schema_name)}.{self.format_identifier(table)}.{name}"
+        elif table:
+            col_sql = f"{self.format_identifier(table)}.{name}"
+        else:
+            col_sql = name
+
+        if alias:
+            return f"{col_sql} AS {self.format_identifier(alias)}", ()
+        return col_sql, ()
+
+    def format_table(
+        self, table_name: str, alias: Optional[str] = None, schema_name: Optional[str] = None
+    ) -> Tuple[str, Tuple]:
+        """Format table reference for Oracle."""
+        if schema_name:
+            table_sql = f"{self.format_identifier(schema_name)}.{self.format_identifier(table_name)}"
+        else:
+            table_sql = self.format_identifier(table_name)
+
+        if alias:
+            return f"{table_sql} {self.format_identifier(alias)}", ()
+        return table_sql, ()
 
     def format_limit_offset(self, limit: Optional[int] = None,
                             offset: Optional[int] = None) -> Tuple[Optional[str], List[Any]]:

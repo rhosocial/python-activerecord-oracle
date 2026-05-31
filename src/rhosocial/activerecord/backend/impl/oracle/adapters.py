@@ -49,6 +49,8 @@ class OracleDateTimeAdapter(BaseSQLTypeAdapter):
         return value
 
     def _do_from_database(self, value: Any, target_type: Type, options: Optional[Dict[str, Any]]) -> Any:
+        if isinstance(value, (int, float, Decimal)):
+            return datetime.fromtimestamp(float(value))
         if isinstance(value, datetime):
             # Oracle TIMESTAMP WITH TIME ZONE returns datetime without tzinfo
             # If the datetime has no timezone but the field expects one,
@@ -157,6 +159,8 @@ class OracleJSONAdapter(BaseSQLTypeAdapter):
         return json.dumps(value)
 
     def _do_from_database(self, value: Any, target_type: Type, options: Optional[Dict[str, Any]]) -> Any:
+        if hasattr(value, 'read'):
+            value = value.read()
         if isinstance(value, str):
             try:
                 return json.loads(value)

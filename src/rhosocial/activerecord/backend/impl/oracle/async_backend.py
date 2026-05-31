@@ -94,6 +94,17 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             self._dialect = OracleDialect(self._version)
         return self._dialect
 
+    async def _handle_auto_commit(self) -> None:
+        """Commit operations outside explicit transactions."""
+        try:
+            if not self._connection:
+                return
+            if not self._transaction_manager or not self._transaction_manager.is_active:
+                await self._connection.commit()
+                self.log(logging.DEBUG, "Auto-committed operation (not in active transaction)")
+        except Exception as e:
+            self.log(logging.WARNING, f"Failed to auto-commit: {str(e)}")
+
     async def introspect_and_adapt(self) -> None:
         """Introspect backend and adapt to actual server capabilities."""
         if not self._connection:
@@ -276,8 +287,10 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         converted = []
         try:
             for param in params:
-                if isinstance(param, datetime):
-                    converted.append(param.strftime('%Y-%m-%d %H:%M:%S'))
+                if isinstance(param, bool):
+                    converted.append(1 if param else 0)
+                elif isinstance(param, datetime):
+                    converted.append(param.strftime('%Y-%m-%d %H:%M:%S.%f'))
                 elif isinstance(param, time):
                     converted.append(param.strftime('%H:%M:%S'))
                 elif isinstance(param, (dict, list)):
@@ -286,6 +299,8 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
                     converted.append(str(param))
                 elif isinstance(param, Decimal):
                     converted.append(float(param))
+                elif param == "":
+                    converted.append(" ")
                 elif param is not None and not isinstance(param, (str, int, float, bytes)):
                     converted.append(str(param))
                 else:
@@ -294,6 +309,30 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         finally:
             pass
 
+    async def _process_result_set(
+        self, cursor, is_select, column_adapters=None, column_mapping=None
+    ):
+        if not is_select:
+            return None
+        rows = await cursor.fetchall()
+        if not rows:
+            return []
+        column_names = [desc[0].strip('"') for desc in cursor.description]
+        final_results = []
+        adapters = column_adapters or {}
+        mapping = column_mapping or {}
+        for row in rows:
+            row_dict = dict(zip(column_names, row))
+            for col_name, value in list(row_dict.items()):
+                if hasattr(value, 'read'):
+                    value = await value.read()
+                if isinstance(value, str):
+                    value = value.rstrip()
+                row_dict[col_name] = value
+            adapted_row = self._adapt_row_types(row_dict, adapters)
+            final_row = self._remap_row_columns(adapted_row, mapping)
+            final_results.append(final_row)
+        return final_results
 
     async def execute(self, sql: str, params: Optional[Tuple] = None, *, options, **kwargs) -> QueryResult:
         """Execute a SQL statement asynchronously.
@@ -513,6 +552,102 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             if cursor:
                 cursor.close()
 
+    async def bulk_insert(self, options) -> 'QueryResult':
+        """Insert multiple rows using Oracle-compatible single-row statements."""
+        from rhosocial.activerecord.backend.base.operations import _is_sql_expression
+
+        if not options.rows:
+            return QueryResult(affected_rows=0, data=[], duration=0.0, last_insert_id=None)
+
+        if not self._connection:
+            await self.connect()
+
+        table_name = f"{options.schema_name}.{options.table}" if options.schema_name else options.table
+        columns_sql = ", ".join(options.columns)
+        placeholders = ", ".join(["?"] * len(options.columns))
+        sql = f"INSERT INTO {table_name} ({columns_sql}) VALUES ({placeholders})"
+        if options.returning_columns:
+            returning_sql = ", ".join(options.returning_columns)
+            into_placeholders = ", ".join(["?"] * len(options.returning_columns))
+            sql = f"{sql} RETURNING {returning_sql} INTO {into_placeholders}"
+
+        cursor = None
+        start_time = datetime.datetime.now()
+        affected_rows = 0
+        returned_data = []
+
+        try:
+            cursor = await self._get_cursor()
+
+            for row in options.rows:
+                if any(_is_sql_expression(value) for value in row):
+                    raise QueryError("Oracle bulk_insert does not support SQL expressions in row values")
+
+                converted_params = self._convert_datetime_params(tuple(row))
+                oracle_sql, _ = self._convert_placeholders_to_oracle(sql, converted_params)
+                exec_params = list(converted_params)
+                out_vars = []
+
+                if options.returning_columns:
+                    for col in options.returning_columns:
+                        col_lower = col.lower() if isinstance(col, str) else str(col).lower()
+                        if col_lower == 'id':
+                            out_var = cursor.var(int)
+                        elif col_lower in ('created_at', 'updated_at'):
+                            out_var = cursor.var(oracledb.DB_TYPE_TIMESTAMP_TZ)
+                        elif col_lower in ('time_val',):
+                            out_var = cursor.var(oracledb.DB_TYPE_VARCHAR)
+                        else:
+                            out_var = cursor.var(oracledb.DB_TYPE_VARCHAR)
+                        out_vars.append(out_var)
+                        exec_params.append(out_var)
+
+                await cursor.execute(oracle_sql, exec_params)
+                affected_rows += cursor.rowcount if cursor.rowcount > 0 else 1
+
+                if options.returning_columns:
+                    row_data = {}
+                    for i, col in enumerate(options.returning_columns):
+                        col_key = col if isinstance(col, str) else str(col)
+                        value = out_vars[i].getvalue()
+                        if isinstance(value, list) and len(value) == 1:
+                            value = value[0]
+                        if options.column_adapters and col_key in options.column_adapters:
+                            adapter, target_type = options.column_adapters[col_key]
+                            value = adapter.from_database(value, target_type)
+                        field_key = options.column_mapping.get(col_key, col_key) if options.column_mapping else col_key
+                        row_data[field_key] = value
+                    returned_data.append(row_data)
+
+            duration = (datetime.datetime.now() - start_time).total_seconds()
+
+            if options.auto_commit:
+                await self._handle_auto_commit_if_needed()
+
+            return QueryResult(
+                affected_rows=affected_rows,
+                data=returned_data if options.returning_columns else None,
+                duration=duration,
+                last_insert_id=None,
+            )
+
+        except OracleIntegrityError as e:
+            self.log(logging.ERROR, f"Integrity error in bulk insert: {str(e)}")
+            raise IntegrityError(str(e)) from e
+        except OracleDatabaseError as e:
+            error_msg = str(e)
+            if "ORA-00060" in error_msg:
+                raise DeadlockError(error_msg) from e
+            raise DatabaseError(error_msg) from e
+        except OracleOperationalError as e:
+            raise OperationalError(str(e)) from e
+        except OracleError as e:
+            self.log(logging.ERROR, f"Oracle error in bulk insert: {str(e)}")
+            raise DatabaseError(str(e)) from e
+        finally:
+            if cursor:
+                cursor.close()
+
     async def insert(self, options) -> 'QueryResult':
         """
         Insert a record with special handling for Oracle RETURNING INTO clause.
@@ -537,9 +672,13 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         # Create ValuesSource
         values_source = ValuesSource(self.dialect, [processed_values])
 
+        data_keys = {str(key).lower(): key for key in options.data.keys()}
+        returning_keys = [str(col).lower() for col in options.returning_columns or []]
+        returning_values_provided = bool(returning_keys) and all(col in data_keys for col in returning_keys)
+
         # Create ReturningClause if specified
         returning_clause = None
-        if options.returning_columns:
+        if options.returning_columns and not returning_values_provided:
             returning_expressions = [ExprColumn(self.dialect, col) for col in options.returning_columns]
             returning_clause = ReturningClause(self.dialect, returning_expressions)
 
@@ -554,20 +693,32 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
 
         sql, params = insert_expr.to_sql()
 
-        # Handle RETURNING INTO clause
-        if options.returning_columns:
-            return await self._execute_with_returning_into(
-                sql, params, options.returning_columns,
-                options.column_adapters, options.column_mapping
-            )
-
-        # Standard execution without RETURNING
         exec_options = ExecutionOptions(
             stmt_type=StatementType.DML,
             column_adapters=options.column_adapters,
             column_mapping=options.column_mapping,
         )
-        result = await self.execute(sql, params, options=exec_options)
+
+        # Handle RETURNING INTO clause
+        if options.returning_columns and returning_values_provided:
+            result = await self.execute(sql, params, options=exec_options)
+            row_data = {}
+            for col in options.returning_columns:
+                col_key = col if isinstance(col, str) else str(col)
+                data_key = data_keys[col_key.lower()]
+                field_key = (
+                    options.column_mapping.get(col_key, options.column_mapping.get(col_key.lower(), col_key))
+                    if options.column_mapping else col_key
+                )
+                row_data[field_key] = options.data[data_key]
+            result.data = [row_data]
+        elif options.returning_columns:
+            result = await self._execute_with_returning_into(
+                sql, params, options.returning_columns,
+                options.column_adapters, options.column_mapping
+            )
+        else:
+            result = await self.execute(sql, params, options=exec_options)
 
         if options.auto_commit:
             await self._handle_auto_commit_if_needed()

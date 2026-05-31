@@ -7,13 +7,14 @@ Usage:
   python -m rhosocial.activerecord.backend.impl.oracle <command> [options]
 
 Commands:
-  info              Display Oracle environment information
-  query             Execute SQL queries
-  introspect        Database introspection
-  status            Display session status
-  named-query       Execute named queries
-  named-procedure   Execute named procedures
-  named-connection  Manage named connections
+  info                    Display Oracle environment information
+  query                   Execute SQL queries
+  introspect              Database introspection
+  status                  Display session status
+  named-expression        Execute named expressions
+  named-procedure         Execute named procedures
+  named-procedure-graph   Execute named procedure graphs (DAG)
+  named-connection        Manage named connections
 """
 
 import argparse

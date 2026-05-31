@@ -49,8 +49,9 @@ class TestCLIModularStructure:
         assert 'query' in COMMAND_NAMES
         assert 'introspect' in COMMAND_NAMES
         assert 'status' in COMMAND_NAMES
-        assert 'named-query' in COMMAND_NAMES
+        assert 'named-expression' in COMMAND_NAMES
         assert 'named-procedure' in COMMAND_NAMES
+        assert 'named-procedure-graph' in COMMAND_NAMES
         assert 'named-connection' in COMMAND_NAMES
 
     def test_cli_register_commands(self):
@@ -118,9 +119,17 @@ class TestCLIModularStructure:
         assert callable(handle)
         assert "tablespaces" in STATUS_TYPES
 
-    def test_cli_named_query_module(self):
-        """Test named_query module imports."""
-        from rhosocial.activerecord.backend.impl.oracle.cli.named_query import (
+    def test_cli_named_expression_module(self):
+        """Test named_expression module imports."""
+        from rhosocial.activerecord.backend.impl.oracle.cli.named_expression import (
+            create_parser, handle,
+        )
+        assert callable(create_parser)
+        assert callable(handle)
+
+    def test_cli_named_procedure_graph_module(self):
+        """Test named_procedure_graph module imports."""
+        from rhosocial.activerecord.backend.impl.oracle.cli.named_procedure_graph import (
             create_parser, handle,
         )
         assert callable(create_parser)
@@ -146,7 +155,8 @@ class TestCLIModularStructure:
         """Test that get_handler returns a callable for each command."""
         from rhosocial.activerecord.backend.impl.oracle.cli import get_handler
         for cmd in ['info', 'query', 'introspect', 'status',
-                     'named-query', 'named-procedure', 'named-connection']:
+                     'named-expression', 'named-procedure', 'named-procedure-graph',
+                     'named-connection']:
             handler = get_handler(cmd)
             assert callable(handler), f"Handler for '{cmd}' is not callable"
 
