@@ -333,8 +333,6 @@ class OracleBackend(IntrospectorBackendMixin, OracleBackendMixin, StorageBackend
                     converted.append(str(param))
                 elif isinstance(param, Decimal):
                     converted.append(float(param))
-                elif param == "":
-                    converted.append(" ")
                 elif param is not None and not isinstance(param, (str, int, float, bytes)):
                     converted.append(str(param))
                 else:
@@ -348,11 +346,17 @@ class OracleBackend(IntrospectorBackendMixin, OracleBackendMixin, StorageBackend
             col_name: value.read() if hasattr(value, 'read') else value
             for col_name, value in row_dict.items()
         }
-        row_dict = {
-            col_name: value.rstrip() if isinstance(value, str) else value
-            for col_name, value in row_dict.items()
-        }
         return super()._adapt_row_types(row_dict, column_adapters)
+
+    def _set_input_sizes_for_params(self, cursor, params) -> None:
+        if not params:
+            return
+        sizes = [
+            oracledb.DB_TYPE_CLOB if isinstance(param, str) and len(param.encode('utf-8')) > 4000 else None
+            for param in params
+        ]
+        if any(size is not None for size in sizes):
+            cursor.setinputsizes(*sizes)
 
     def execute(self, sql: str, params: Optional[Tuple] = None, *, options, **kwargs) -> QueryResult:
         """Execute a SQL statement with optional parameters.
@@ -385,6 +389,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleBackendMixin, StorageBackend
                     self.log(logging.DEBUG, f"Parameters: {oracle_params}")
 
             if oracle_params:
+                self._set_input_sizes_for_params(cursor, oracle_params)
                 cursor.execute(oracle_sql, oracle_params)
             else:
                 cursor.execute(oracle_sql)
@@ -646,6 +651,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleBackendMixin, StorageBackend
                         out_vars.append(out_var)
                         exec_params.append(out_var)
 
+                self._set_input_sizes_for_params(cursor, exec_params)
                 cursor.execute(oracle_sql, exec_params)
                 affected_rows += cursor.rowcount if cursor.rowcount > 0 else 1
 
@@ -946,6 +952,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleBackendMixin, StorageBackend
                 self.log(logging.DEBUG, f"RETURNING INTO params: {len(exec_params)} ({len(converted_params) if converted_params else 0} input + {len(out_vars)} output)")
 
             # Execute the SQL with input params and output variables
+            self._set_input_sizes_for_params(cursor, exec_params)
             cursor.execute(oracle_sql, exec_params)
 
             duration = (datetime.datetime.now() - start_time).total_seconds()

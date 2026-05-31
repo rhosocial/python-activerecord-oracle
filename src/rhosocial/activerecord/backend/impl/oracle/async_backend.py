@@ -299,8 +299,6 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
                     converted.append(str(param))
                 elif isinstance(param, Decimal):
                     converted.append(float(param))
-                elif param == "":
-                    converted.append(" ")
                 elif param is not None and not isinstance(param, (str, int, float, bytes)):
                     converted.append(str(param))
                 else:
@@ -326,13 +324,21 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             for col_name, value in list(row_dict.items()):
                 if hasattr(value, 'read'):
                     value = await value.read()
-                if isinstance(value, str):
-                    value = value.rstrip()
                 row_dict[col_name] = value
             adapted_row = self._adapt_row_types(row_dict, adapters)
             final_row = self._remap_row_columns(adapted_row, mapping)
             final_results.append(final_row)
         return final_results
+
+    def _set_input_sizes_for_params(self, cursor, params) -> None:
+        if not params:
+            return
+        sizes = [
+            oracledb.DB_TYPE_CLOB if isinstance(param, str) and len(param.encode('utf-8')) > 4000 else None
+            for param in params
+        ]
+        if any(size is not None for size in sizes):
+            cursor.setinputsizes(*sizes)
 
     async def execute(self, sql: str, params: Optional[Tuple] = None, *, options, **kwargs) -> QueryResult:
         """Execute a SQL statement asynchronously.
@@ -365,6 +371,7 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
                     self.log(logging.DEBUG, f"Parameters: {oracle_params}")
 
             if oracle_params:
+                self._set_input_sizes_for_params(cursor, oracle_params)
                 await cursor.execute(oracle_sql, oracle_params)
             else:
                 await cursor.execute(oracle_sql)
@@ -602,6 +609,7 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
                         out_vars.append(out_var)
                         exec_params.append(out_var)
 
+                self._set_input_sizes_for_params(cursor, exec_params)
                 await cursor.execute(oracle_sql, exec_params)
                 affected_rows += cursor.rowcount if cursor.rowcount > 0 else 1
 
@@ -647,6 +655,31 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         finally:
             if cursor:
                 cursor.close()
+
+    async def _write_long_string_lobs_after_insert(self, table: str, pk_value, data: dict, column_mapping: Optional[dict]) -> None:
+        long_strings = {
+            key: value for key, value in data.items()
+            if isinstance(value, str) and len(value.encode('utf-8')) > 4000
+        }
+        if not long_strings:
+            return
+
+        reverse_mapping = {field: column for column, field in (column_mapping or {}).items()}
+        cursor = await self._get_cursor()
+        try:
+            for key, value in long_strings.items():
+                column = reverse_mapping.get(key, key)
+                lob_var = cursor.var(oracledb.DB_TYPE_CLOB)
+                await cursor.execute(
+                    f"UPDATE {table} SET {column} = EMPTY_CLOB() WHERE id = :1 RETURNING {column} INTO :2",
+                    [pk_value, lob_var],
+                )
+                lob = lob_var.getvalue()
+                if isinstance(lob, list) and len(lob) == 1:
+                    lob = lob[0]
+                await lob.write(value)
+        finally:
+            cursor.close()
 
     async def insert(self, options) -> 'QueryResult':
         """
@@ -719,6 +752,12 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             )
         else:
             result = await self.execute(sql, params, options=exec_options)
+
+        pk_value = result.data[0].get('id') if options.returning_columns and result.data else None
+        if pk_value is not None:
+            await self._write_long_string_lobs_after_insert(
+                options.table, pk_value, options.data, options.column_mapping
+            )
 
         if options.auto_commit:
             await self._handle_auto_commit_if_needed()
@@ -901,6 +940,7 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
                 self.log(logging.DEBUG, f"RETURNING INTO params (async): {len(exec_params)} ({len(converted_params) if converted_params else 0} input + {len(out_vars)} output)")
 
             # Execute the SQL with input params and output variables
+            self._set_input_sizes_for_params(cursor, exec_params)
             await cursor.execute(oracle_sql, exec_params)
 
             duration = (datetime.datetime.now() - start_time).total_seconds()
