@@ -47,6 +47,7 @@ class OracleBackendMixin:
             OracleDecimalAdapter,
             OracleJSONAdapter,
             OracleBytesAdapter,
+            OracleStringAdapter,
             OracleIntervalAdapter,
             OracleRowIDAdapter,
             OracleXMLAdapter,
@@ -66,6 +67,7 @@ class OracleBackendMixin:
             OracleDecimalAdapter(),
             OracleJSONAdapter(),
             OracleBytesAdapter(),
+            OracleStringAdapter(),
             OracleIntervalAdapter(),
             OracleRowIDAdapter(),
         ]
@@ -101,6 +103,7 @@ class OracleBackendMixin:
         # Type mappings for Oracle
         type_mappings = [
             (bool, int),           # Oracle uses NUMBER(1) for boolean
+            (str, str),            # Oracle string types (handles '' → NULL)
             (datetime, str),       # Oracle TIMESTAMP
             (date, str),           # Oracle DATE
             (time, str),           # Store as VARCHAR2 or INTERVAL

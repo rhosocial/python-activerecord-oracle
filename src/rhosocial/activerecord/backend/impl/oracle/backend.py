@@ -82,6 +82,8 @@ class OracleBackend(IntrospectorBackendMixin, OracleBackendMixin, StorageBackend
 
         # Store the expected Oracle server version
         self._version = version or (19, 0, 0)
+        # Cached column type info from cursor.description for _adapt_row_types
+        self._current_column_types = None
         # Initialize Oracle-specific components (lazy load dialect)
         self._dialect = None
         # Initialize transaction manager with connection (will be set when connected)
@@ -346,6 +348,14 @@ class OracleBackend(IntrospectorBackendMixin, OracleBackendMixin, StorageBackend
             col_name: value.read() if hasattr(value, 'read') else value
             for col_name, value in row_dict.items()
         }
+        # Oracle CHAR/NCHAR pads values with spaces. Strip trailing spaces.
+        col_types = getattr(self, '_current_column_types', None)
+        if col_types is not None:
+            for col_name, value in list(row_dict.items()):
+                if value is not None and isinstance(value, str):
+                    db_type = col_types.get(col_name)
+                    if db_type in (oracledb.DB_TYPE_CHAR, oracledb.DB_TYPE_NCHAR):
+                        row_dict[col_name] = value.rstrip()
         return super()._adapt_row_types(row_dict, column_adapters)
 
     def _set_input_sizes_for_params(self, cursor, params) -> None:
@@ -441,8 +451,17 @@ class OracleBackend(IntrospectorBackendMixin, OracleBackendMixin, StorageBackend
                     # If no column_mapping provided, create a default one that maps uppercase to lowercase
                     column_mapping = {col: col.lower() for col in oracle_columns}
 
+            # Store column type info for _adapt_row_types to handle Oracle-specific behaviors
+            # (empty string → NULL, CHAR padding)
+            self._current_column_types = {
+                desc[0].strip('"'): desc[1] for desc in cursor.description
+            } if is_select and cursor.description else None
+
             # Process result set using parent's method for type adaptation
-            data = self._process_result_set(cursor, is_select, column_adapters, column_mapping)
+            try:
+                data = self._process_result_set(cursor, is_select, column_adapters, column_mapping)
+            finally:
+                self._current_column_types = None
 
             result = QueryResult(
                 affected_rows=cursor.rowcount,

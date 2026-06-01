@@ -17,7 +17,7 @@ Oracle has some unique type handling requirements:
 import json
 from datetime import datetime, date, time
 from decimal import Decimal
-from typing import Any, Dict, Optional, Tuple, Type, Set, Union
+from typing import Any, Dict, Optional, Tuple, Type, Set, Union, get_origin, get_args
 
 from rhosocial.activerecord.backend.type_adapter import BaseSQLTypeAdapter
 
@@ -314,6 +314,39 @@ class OracleVectorAdapter(BaseSQLTypeAdapter):
         return value
 
 
+class OracleStringAdapter(BaseSQLTypeAdapter):
+    """Adapter for Oracle string types.
+
+    Oracle treats empty strings ('') as NULL. This adapter converts None back to ''
+    for non-Optional str fields when reading from the database, preserving the
+    original Python default value semantics.
+
+    For Optional[str] fields, None is preserved as-is (genuine NULL).
+    """
+
+    def __init__(self):
+        super().__init__()
+        self._register_type(str, str)
+
+    def _do_to_database(self, value: Any, target_type: Type, options: Optional[Dict[str, Any]]) -> Any:
+        return value
+
+    def _do_from_database(self, value: Any, target_type: Type, options: Optional[Dict[str, Any]]) -> Any:
+        return value
+
+    def _on_none_from_database(self, target_type: Type, **kwargs) -> Any:
+        original_type = kwargs.get('original_type', target_type)
+        origin = get_origin(original_type)
+        import types
+        is_union = origin is Union or (hasattr(types, "UnionType") and origin is types.UnionType)
+        if is_union:
+            args = get_args(original_type)
+            non_none = [a for a in args if a is not type(None)]
+            if len(non_none) == 1 and non_none[0] is str:
+                return None
+        return ''
+
+
 # List of all Oracle adapters for easy registration
 oracle_adapters = [
     OracleBooleanAdapter,
@@ -323,6 +356,7 @@ oracle_adapters = [
     OracleDecimalAdapter,
     OracleJSONAdapter,
     OracleBytesAdapter,
+    OracleStringAdapter,
     OracleIntervalAdapter,
     OracleRowIDAdapter,
     OracleXMLAdapter,

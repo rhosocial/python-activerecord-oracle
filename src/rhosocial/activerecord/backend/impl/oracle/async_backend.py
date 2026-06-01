@@ -70,6 +70,7 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         super().__init__(**kwargs)
 
         self._version = version or (19, 0, 0)
+        self._current_column_types = None
         self._dialect = None
         self._transaction_manager = AsyncOracleTransactionManager(None, self.logger)
 
@@ -319,12 +320,20 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         final_results = []
         adapters = column_adapters or {}
         mapping = column_mapping or {}
+        col_types = getattr(self, '_current_column_types', None)
         for row in rows:
             row_dict = dict(zip(column_names, row))
             for col_name, value in list(row_dict.items()):
                 if hasattr(value, 'read'):
                     value = await value.read()
                 row_dict[col_name] = value
+            # Oracle CHAR/NCHAR pads values with spaces. Strip trailing spaces.
+            if col_types is not None:
+                for col_name, value in list(row_dict.items()):
+                    if value is not None and isinstance(value, str):
+                        db_type = col_types.get(col_name)
+                        if db_type in (oracledb.DB_TYPE_CHAR, oracledb.DB_TYPE_NCHAR):
+                            row_dict[col_name] = value.rstrip()
             adapted_row = self._adapt_row_types(row_dict, adapters)
             final_row = self._remap_row_columns(adapted_row, mapping)
             final_results.append(final_row)
@@ -423,8 +432,16 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
                     # If no column_mapping provided, create a default one that maps uppercase to lowercase
                     column_mapping = {col: col.lower() for col in oracle_columns}
 
+            # Store column type info for _process_result_set to handle CHAR padding
+            self._current_column_types = {
+                desc[0].strip('"'): desc[1] for desc in cursor.description
+            } if is_select and cursor.description else None
+
             # Process result set using parent's method for type adaptation
-            data = await self._process_result_set(cursor, is_select, column_adapters, column_mapping)
+            try:
+                data = await self._process_result_set(cursor, is_select, column_adapters, column_mapping)
+            finally:
+                self._current_column_types = None
 
             result = QueryResult(
                 affected_rows=cursor.rowcount,
