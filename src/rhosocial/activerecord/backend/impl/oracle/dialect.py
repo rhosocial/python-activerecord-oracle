@@ -83,7 +83,7 @@ from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeature
 from .collation import validate_oracle_collation_name
 
 if TYPE_CHECKING:
-    from rhosocial.activerecord.backend.expression.collation import CollationName
+    from rhosocial.activerecord.backend.expression.collation import CollateExpression
     from rhosocial.activerecord.backend.expression.statements import (
         CreateTableExpression, CreateViewExpression, DropViewExpression,
         ColumnDefinition, TableConstraint, IndexDefinition,
@@ -205,11 +205,12 @@ class OracleDialect(
         """Oracle supports expression-level COLLATE since 12.2."""
         return self.version >= (12, 2, 0)
 
-    def validate_collation_name(self, collation: "CollationName") -> str:
+    def validate_collation_name(self, expr: "CollateExpression") -> str:
         """Validate Oracle collation names and return their SQL representation."""
-        if collation.schema is not None or collation.keyword is not None:
-            raise UnsupportedFeatureError(self.name, "schema-qualified or keyword COLLATE")
-        return validate_oracle_collation_name(collation.name, getattr(self, "version", None))
+        if expr.collation_options:
+            unsupported = ", ".join(sorted(expr.collation_options))
+            raise UnsupportedFeatureError(self.name, f"COLLATE options: {unsupported}")
+        return validate_oracle_collation_name(expr.collation_name, getattr(self, "version", None))
 
     # region Protocol Support Checks based on version
     def supports_basic_cte(self) -> bool:

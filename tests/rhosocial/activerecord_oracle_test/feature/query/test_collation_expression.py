@@ -6,7 +6,6 @@ Tests for expression-level COLLATE support on Oracle.
 import pytest
 
 from rhosocial.activerecord.backend.expression import Column, Literal
-from rhosocial.activerecord.backend.expression.collation import CollationName
 from rhosocial.activerecord.backend.impl.oracle import OracleCollation, OracleDialect
 
 
@@ -74,9 +73,9 @@ class TestOracleCollationExpression:
             expr.to_sql()
 
     def test_rejects_schema_qualified_collation(self, dialect):
-        expr = Column(dialect, "name").collate(CollationName("BINARY_CI", schema="SYS"))
+        expr = Column(dialect, "name").collate("BINARY_CI", schema="SYS")
 
-        with pytest.raises(Exception, match="schema-qualified or keyword COLLATE"):
+        with pytest.raises(Exception, match="COLLATE options: schema"):
             expr.to_sql()
 
     def test_rejects_unsupported_collation(self, dialect):
