@@ -204,8 +204,8 @@ class OracleDialect(
         """Oracle supports expression-level COLLATE since 12.2."""
         return self.version >= (12, 2, 0)
 
-    def format_collation_name(self, collation) -> str:
-        """Format Oracle collation names as validated bare tokens."""
+    def validate_collation_name(self, collation) -> str:
+        """Validate Oracle collation names and return their SQL representation."""
         if collation.schema is not None or collation.keyword is not None:
             raise UnsupportedFeatureError(self.name, "schema-qualified or keyword COLLATE")
         return validate_oracle_collation_name(collation.name, getattr(self, "version", None))
