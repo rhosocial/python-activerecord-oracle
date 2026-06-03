@@ -25,6 +25,7 @@ Subpackages:
 from .backend import OracleBackend
 from .async_backend import AsyncOracleBackend
 from .config import OracleConnectionConfig
+from .collation import OracleCollation
 from .dialect import OracleDialect
 from .transaction import OracleTransactionManager
 from .async_transaction import AsyncOracleTransactionManager
@@ -50,6 +51,7 @@ __all__ = [
     
     # Dialect
     'OracleDialect',
+    'OracleCollation',
     
     # Transaction management
     'OracleTransactionManager',

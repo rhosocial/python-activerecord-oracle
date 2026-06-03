@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 from rhosocial.activerecord.backend.dialect.base import SQLDialectBase
 from rhosocial.activerecord.backend.dialect.protocols import (
+    CollationSupport,
     CTESupport,
     FilterClauseSupport,
     WindowFunctionSupport,
@@ -50,6 +51,7 @@ from rhosocial.activerecord.backend.dialect.protocols import (
     SQLFunctionSupport,
 )
 from rhosocial.activerecord.backend.dialect.mixins import (
+    CollationMixin,
     CTEMixin,
     FilterClauseMixin,
     WindowFunctionMixin,
@@ -78,6 +80,7 @@ from rhosocial.activerecord.backend.dialect.mixins import (
     IntrospectionMixin,
 )
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
+from .collation import validate_oracle_collation_name
 
 if TYPE_CHECKING:
     from rhosocial.activerecord.backend.expression.statements import (
@@ -90,6 +93,7 @@ if TYPE_CHECKING:
 class OracleDialect(
     SQLDialectBase,
     # Include mixins for features that Oracle supports
+    CollationMixin,
     CTEMixin,
     FilterClauseMixin,
     WindowFunctionMixin,
@@ -117,6 +121,7 @@ class OracleDialect(
     ConstraintMixin,
     IntrospectionMixin,
     # Protocols for type checking
+    CollationSupport,
     CTESupport,
     FilterClauseSupport,
     WindowFunctionSupport,
@@ -194,6 +199,16 @@ class OracleDialect(
     def get_server_version(self) -> Tuple[int, int, int]:
         """Return the Oracle version this dialect is configured for."""
         return self.version
+
+    def supports_collate_expression(self) -> bool:
+        """Oracle supports expression-level COLLATE since 12.2."""
+        return self.version >= (12, 2, 0)
+
+    def format_collation_name(self, collation) -> str:
+        """Format Oracle collation names as validated bare tokens."""
+        if collation.schema is not None or collation.keyword is not None:
+            raise UnsupportedFeatureError(self.name, "schema-qualified or keyword COLLATE")
+        return validate_oracle_collation_name(collation.name, getattr(self, "version", None))
 
     # region Protocol Support Checks based on version
     def supports_basic_cte(self) -> bool:
