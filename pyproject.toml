@@ -43,10 +43,10 @@ rhosocial-activerecord-oracle = "rhosocial.activerecord.backend.impl.oracle.__ma
 
 [project.optional-dependencies]
 test = [
-    "pytest>=7.0.0",
+    "pytest",
     "coverage>=7.0.0",
-    "pytest-asyncio>=0.10.0",
-    "pytest-cov>=4.0.0",
+    "pytest-asyncio",
+    "pytest-cov",
     "pyyaml>=6.0",
     "email-validator>=2.0.0",
 ]
