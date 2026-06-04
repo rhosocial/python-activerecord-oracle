@@ -19,6 +19,12 @@ from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 from rhosocial.activerecord.backend.dialect.base import SQLDialectBase
 from rhosocial.activerecord.backend.dialect.protocols import (
+    SQLXMLSupport,
+    SQLXMLParsingSupport,
+    SQLXMLSerializationSupport,
+    SQLXMLConstructionSupport,
+    SQLXMLAggregationSupport,
+    SQLXMLQueryingSupport,
     CollationSupport,
     CTESupport,
     FilterClauseSupport,
@@ -51,6 +57,7 @@ from rhosocial.activerecord.backend.dialect.protocols import (
     SQLFunctionSupport,
 )
 from rhosocial.activerecord.backend.dialect.mixins import (
+    SQLXMLMixin,
     CollationMixin,
     CTEMixin,
     FilterClauseMixin,
@@ -94,6 +101,7 @@ if TYPE_CHECKING:
 class OracleDialect(
     SQLDialectBase,
     # Include mixins for features that Oracle supports
+    SQLXMLMixin,
     CollationMixin,
     CTEMixin,
     FilterClauseMixin,
@@ -122,6 +130,12 @@ class OracleDialect(
     ConstraintMixin,
     IntrospectionMixin,
     # Protocols for type checking
+    SQLXMLSupport,
+    SQLXMLParsingSupport,
+    SQLXMLSerializationSupport,
+    SQLXMLConstructionSupport,
+    SQLXMLAggregationSupport,
+    SQLXMLQueryingSupport,
     CollationSupport,
     CTESupport,
     FilterClauseSupport,
@@ -200,6 +214,58 @@ class OracleDialect(
     def get_server_version(self) -> Tuple[int, int, int]:
         """Return the Oracle version this dialect is configured for."""
         return self.version
+
+    def supports_xmlparse(self) -> bool:
+        """Oracle exposes XMLType constructor rather than standard XMLPARSE."""
+        return False
+
+    def supports_xmlserialize(self) -> bool:
+        """XMLSERIALIZE is supported since Oracle 9i."""
+        return self.version >= (9, 0, 0)
+
+    def supports_xmlelement(self) -> bool:
+        """XMLELEMENT is supported since Oracle 9i."""
+        return self.version >= (9, 0, 0)
+
+    def supports_xmlattributes(self) -> bool:
+        """XMLATTRIBUTES is part of Oracle XMLELEMENT support."""
+        return self.version >= (9, 0, 0)
+
+    def supports_xmlforest(self) -> bool:
+        """XMLFOREST is supported since Oracle 9i."""
+        return self.version >= (9, 0, 0)
+
+    def supports_xmlconcat(self) -> bool:
+        """XMLCONCAT is supported as standard SQL/XML construction."""
+        return self.version >= (9, 0, 0)
+
+    def supports_xmlcomment(self) -> bool:
+        """XMLCOMMENT is supported as standard SQL/XML construction."""
+        return self.version >= (9, 0, 0)
+
+    def supports_xmlpi(self) -> bool:
+        """XMLPI is supported since Oracle 9i."""
+        return self.version >= (9, 0, 0)
+
+    def supports_xmlroot(self) -> bool:
+        """XMLROOT is supported since Oracle 9i."""
+        return self.version >= (9, 0, 0)
+
+    def supports_xmlagg(self) -> bool:
+        """XMLAGG is supported since Oracle 9i."""
+        return self.version >= (9, 0, 0)
+
+    def supports_xmlquery(self) -> bool:
+        """XMLQUERY is supported since Oracle 9.2."""
+        return self.version >= (9, 2, 0)
+
+    def supports_xmlexists(self) -> bool:
+        """XMLEXISTS is supported with Oracle XML DB XQuery support."""
+        return self.version >= (9, 2, 0)
+
+    def supports_xmltable(self) -> bool:
+        """XMLTABLE is supported since Oracle 9.2."""
+        return self.version >= (9, 2, 0)
 
     def supports_collate_expression(self) -> bool:
         """Oracle supports expression-level COLLATE since 12.2."""
@@ -1026,8 +1092,25 @@ class OracleDialect(
         from rhosocial.activerecord.backend.impl.oracle.function_versions import (
             ORACLE_FUNCTION_VERSIONS
         )
+        expression_constructors = {
+            "xmlagg",
+            "xmlattributes",
+            "xmlcomment",
+            "xmlconcat",
+            "xmlelement",
+            "xmlexists",
+            "xmlforest",
+            "xmlparse",
+            "xmlpi",
+            "xmlquery",
+            "xmlroot",
+            "xmlserialize",
+            "xmltable",
+        }
         result = {}
         for func_name, (min_ver, max_ver) in ORACLE_FUNCTION_VERSIONS.items():
+            if func_name in expression_constructors:
+                continue
             if max_ver is None:
                 result[func_name] = self.version >= min_ver
             else:
