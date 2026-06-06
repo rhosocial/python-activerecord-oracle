@@ -1,6 +1,6 @@
 # requirements.txt
-# Core dependency
-rhosocial-activerecord>=1.0.0.dev0,<2.0.0
+# Backend-specific dependencies only
+# Core dependency (rhosocial-activerecord) is installed via CI workflow from git
 
 # Oracle driver
 oracledb>=3.4.2
