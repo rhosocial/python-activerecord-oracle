@@ -32,10 +32,10 @@ from rhosocial.activerecord.backend.introspection.backend_mixin import Introspec
 from .config import OracleConnectionConfig
 from .dialect import OracleDialect
 from .transaction import OracleTransactionManager
-from .mixins import OracleBackendMixin
+from .mixins import OracleBackendMixin, OracleConcurrencyMixin
 
 
-class OracleBackend(IntrospectorBackendMixin, OracleBackendMixin, StorageBackend):
+class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBackendMixin, StorageBackend):
     """Oracle-specific backend implementation."""
 
     def __init__(self, **kwargs):

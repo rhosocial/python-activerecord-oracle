@@ -1,11 +1,11 @@
-# src/rhosocial/activerecord/backend/impl/oracle/protocols.py
-"""Backward-compatible re-exports from protocols/ package."""
+# src/rhosocial/activerecord/backend/impl/oracle/protocols/__init__.py
+"""Oracle-specific protocol definitions."""
 
-from .protocols import (
-    HierarchicalQuerySupport,
-    PivotSupport,
-    QueryHintSupport,
-    OracleLockingSupport,
+from .hierarchical import HierarchicalQuerySupport
+from .pivot import PivotSupport
+from .hint import QueryHintSupport
+from .locking import OracleLockingSupport
+from .json_support import (
     OracleNativeJSONSupport,
     OracleBooleanTypeSupport,
     OracleVectorTypeSupport,
