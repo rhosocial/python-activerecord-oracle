@@ -52,14 +52,18 @@ from .mixins import (
 )
 
 from .expression.types import (
-    OracleIntegerType,
-    OracleVarChar2Type,
+    OracleBigIntType,
+    OracleBlobType,
+    OracleCharType,
     OracleClobType,
+    OracleIntegerType,
+    OracleLongRawType,
+    OracleLongType,
     OracleNClobType,
     OracleNVarChar2Type,
     OracleRawType,
-    OracleLongType,
-    OracleLongRawType,
+    OracleSmallIntType,
+    OracleVarChar2Type,
     OracleXmlType,
 )
 
@@ -108,14 +112,18 @@ __all__ = [
 
     # DDL DataType subclasses
     "OracleIntegerType",
+    "OracleSmallIntType",
+    "OracleBigIntType",
     "OracleVarChar2Type",
+    "OracleNVarChar2Type",
+    "OracleCharType",
     "OracleClobType",
     "OracleNClobType",
-    "OracleNVarChar2Type",
-    "OracleRawType",
     "OracleLongType",
-    "OracleLongRawType",
     "OracleXmlType",
+    "OracleRawType",
+    "OracleLongRawType",
+    "OracleBlobType",
 
     # Schema differ
     "OracleSchemaDiffer",

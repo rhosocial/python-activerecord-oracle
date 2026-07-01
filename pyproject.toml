@@ -85,6 +85,7 @@ markers = [
     "requires_capability: marks tests requiring specific backend capabilities",
     "requires_protocol: marks tests requiring specific backend protocol support",
     "requires_inner_join: marks tests requiring INNER JOIN support",
+    "backend: marks tests for backend-specific features",
 ]
 
 [tool.coverage.run]

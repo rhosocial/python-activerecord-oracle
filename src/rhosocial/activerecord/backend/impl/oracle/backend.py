@@ -28,6 +28,7 @@ from rhosocial.activerecord.backend.errors import (
     QueryError,
 )
 from rhosocial.activerecord.backend.result import QueryResult
+from rhosocial.activerecord.backend.options import ExecutionOptions
 from rhosocial.activerecord.backend.introspection.backend_mixin import IntrospectorBackendMixin
 from .config import OracleConnectionConfig
 from .dialect import OracleDialect
@@ -368,13 +369,19 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         if any(size is not None for size in sizes):
             cursor.setinputsizes(*sizes)
 
-    def execute(self, sql: str, params: Optional[Tuple] = None, *, options, **kwargs) -> QueryResult:
+    def execute(
+        self, sql: str, params: Optional[Tuple] = None, *,
+        options: Optional[ExecutionOptions] = None, **kwargs
+    ) -> QueryResult:
         """Execute a SQL statement with optional parameters.
 
         Args:
             sql: SQL string with ? placeholders
             params: Parameter tuple
-            options: ExecutionOptions (REQUIRED - must include stmt_type)
+            options: ExecutionOptions. When omitted, defaults to a DDL
+                statement type (matching the core ExecutionMixin contract),
+                so callers may invoke ``execute(sql, params)`` without
+                specifying ``options`` for simple DDL/DML statements.
 
         Returns:
             QueryResult with execution results
@@ -382,7 +389,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         from rhosocial.activerecord.backend.options import ExecutionOptions, StatementType
 
         if options is None:
-            raise ValueError("options parameter is required with stmt_type specified")
+            options = ExecutionOptions(stmt_type=StatementType.DDL)
 
         cursor = None
         start_time = datetime.datetime.now()

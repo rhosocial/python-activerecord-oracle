@@ -177,6 +177,19 @@ class QueryProvider(IQueryProvider, WorkerTestProtocol):
     def setup_mapped_models(self, scenario_name: str) -> Tuple[Type[ActiveRecord], Type[ActiveRecord], Type[ActiveRecord]]:
         return self._setup_multiple_models([(MappedUser, "users"), (MappedPost, "posts"), (MappedComment, "comments")], scenario_name)
 
+    # --- Profile fixtures ---
+
+    def setup_profile_fixtures(
+        self, scenario_name: str
+    ) -> Tuple[Type[ActiveRecord], Type[ActiveRecord]]:
+        # Resolve Profile via the relationship descriptor so we get the same
+        # class that batch loading will find (version-specific model files
+        # define their own Profile classes; importing models.Profile would
+        # target the wrong class on Python 3.10+).
+        Profile = User.get_relation('profile').get_related_model(User)
+
+        return self._setup_multiple_models([(User, "users"), (Profile, "profiles")], scenario_name)
+
     async def setup_async_order_fixtures(self, scenario_name: str) -> Tuple[Type[ActiveRecord], Type[ActiveRecord], Type[ActiveRecord]]:
         from rhosocial.activerecord.testsuite.feature.query.fixtures.async_models import AsyncUser, AsyncOrder, AsyncOrderItem
         return await self._setup_multiple_models_async([(AsyncUser, "users"), (AsyncOrder, "orders"), (AsyncOrderItem, "order_items")], scenario_name)
@@ -218,6 +231,18 @@ class QueryProvider(IQueryProvider, WorkerTestProtocol):
     async def setup_async_mapped_models(self, scenario_name: str) -> Tuple[Type[ActiveRecord], Type[ActiveRecord], Type[ActiveRecord]]:
         from rhosocial.activerecord.testsuite.feature.query.fixtures.async_mapped_models import AsyncMappedUser, AsyncMappedPost, AsyncMappedComment
         return await self._setup_multiple_models_async([(AsyncMappedUser, "users"), (AsyncMappedPost, "posts"), (AsyncMappedComment, "comments")], scenario_name)
+
+    async def setup_async_profile_fixtures(
+        self, scenario_name: str
+    ) -> Tuple[Type[ActiveRecord], Type[ActiveRecord]]:
+        from rhosocial.activerecord.testsuite.feature.query.fixtures.async_models import (
+            AsyncUser,
+            AsyncProfile,
+        )
+
+        return await self._setup_multiple_models_async(
+            [(AsyncUser, "users"), (AsyncProfile, "profiles")], scenario_name
+        )
 
     def _load_oracle_schema(self, filename: str) -> str:
         schema_dir = os.path.join(os.path.dirname(__file__), "..", "rhosocial", "activerecord_oracle_test", "feature", "query", "schema")

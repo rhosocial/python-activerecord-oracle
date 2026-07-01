@@ -45,27 +45,21 @@ def _load_scenarios_from_config():
     Load scenarios from a configuration file with the following priority:
     1. Environment variable specified path (highest priority)
     2. Default path tests/config/oracle_scenarios.yaml (lowest priority)
-    If no valid configuration file is found, terminate with an error.
+    If no valid configuration file is found, scenarios remain empty (tests skipped).
     """
-    import yaml
-    
-    # First, try to load from path specified in environment variable
     env_config_path = os.getenv("ORACLE_SCENARIOS_CONFIG_PATH")
     if env_config_path and os.path.exists(env_config_path):
         print(f"Loading Oracle scenarios from environment-specified path: {env_config_path}")
         config_path = env_config_path
     else:
-        # Default path with lowest priority
         config_path = os.path.join(os.path.dirname(__file__), "..", "config", "oracle_scenarios.yaml")
         if not os.path.exists(config_path):
-            raise FileNotFoundError(
-                "No Oracle scenarios configuration file found. "
-                "Either set ORACLE_SCENARIOS_CONFIG_PATH environment variable to point to a valid YAML file "
-                "or place oracle_scenarios.yaml in the tests/config directory."
-            )
+            print("No Oracle scenarios configuration file found. Skipping scenario registration.")
+            return
         print(f"Loading Oracle scenarios from default path: {config_path}")
     
     try:
+        import yaml
         with open(config_path, 'r', encoding='utf-8') as f:
             config_data = yaml.safe_load(f)
         

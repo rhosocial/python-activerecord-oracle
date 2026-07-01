@@ -1,0 +1,1 @@
+Added `named-migration` CLI subcommand with `--async` support for Oracle, enabling asynchronous migration execution via `AsyncOracleBackend` and `AsyncMigrationRunner`. Added `examples/named_migrations/` including async migration demos.

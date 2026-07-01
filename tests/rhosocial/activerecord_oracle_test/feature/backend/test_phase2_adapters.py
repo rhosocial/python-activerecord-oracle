@@ -166,7 +166,7 @@ class TestAdapterList:
         """Test that all adapters are in the list."""
         from rhosocial.activerecord.backend.impl.oracle.adapters import oracle_adapters
         
-        assert len(oracle_adapters) == 12
+        assert len(oracle_adapters) == 13
         adapter_names = [a.__name__ for a in oracle_adapters]
         
         assert 'OracleBooleanAdapter' in adapter_names

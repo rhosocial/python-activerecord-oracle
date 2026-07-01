@@ -340,5 +340,5 @@ class TestAdaptersList:
         """Test that expected number of adapters are defined."""
         from rhosocial.activerecord.backend.impl.oracle.adapters import oracle_adapters
         # Should have: Boolean, DateTime, Date, Time, Decimal, JSON, Bytes,
-        # Interval, RowID, XML, SDOGeometry, Vector = 12 adapters
-        assert len(oracle_adapters) == 12
+        # String, Interval, RowID, XML, SDOGeometry, Vector = 13 adapters
+        assert len(oracle_adapters) == 13

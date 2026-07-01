@@ -67,3 +67,34 @@ def test_escape_sql_string_inherited(dialect):
     """Test Oracle inherits _escape_sql_string from base dialect."""
     result = dialect._escape_sql_string("test's value")
     assert result == "test''s value"
+
+
+def test_malicious_data_type_rejected_at_construction(dialect):
+    """Malicious data_type string is rejected at ColumnDefinition construction.
+
+    Core #108: ``ColumnDefinition.data_type`` must be a ``DataType`` instance.
+    A raw string payload (e.g. SQL injection attempt) raises ``TypeError``
+    at construction time, before any dialect formatting is invoked.
+    """
+    from rhosocial.activerecord.backend.expression.statements import ColumnDefinition
+
+    with pytest.raises(TypeError, match="data_type must be a DataType instance"):
+        ColumnDefinition(
+            name="test_col",
+            data_type="VARCHAR2(255); DROP TABLE users--",
+        )
+
+
+def test_data_type_instance_rendered_via_dialect(dialect):
+    """A DataType instance is rendered through format_data_type dispatch.
+
+    Verifies the #108 chain: ``data_type.to_sql(dialect)`` delegates to
+    ``dialect.format_data_type`` registered in ``OracleTypeSupportMixin``.
+    """
+    from rhosocial.activerecord.backend.expression.statements import ColumnDefinition
+    from rhosocial.activerecord.backend.expression.types import VarCharType
+
+    col_def = ColumnDefinition(name="test_col", data_type=VarCharType(255))
+    sql, params = dialect.format_column_definition(col_def)
+    assert sql == "TEST_COL VARCHAR2(255)"
+    assert params == ()

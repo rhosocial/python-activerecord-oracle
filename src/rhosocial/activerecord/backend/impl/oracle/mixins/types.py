@@ -29,6 +29,21 @@ from rhosocial.activerecord.backend.expression.types import (
     DataType,
     CustomType,
 )
+from ..expression.types import (
+    OracleBigIntType,
+    OracleBlobType,
+    OracleCharType,
+    OracleClobType,
+    OracleIntegerType,
+    OracleLongRawType,
+    OracleLongType,
+    OracleNClobType,
+    OracleNVarChar2Type,
+    OracleRawType,
+    OracleSmallIntType,
+    OracleVarChar2Type,
+    OracleXmlType,
+)
 
 
 class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
@@ -109,10 +124,70 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
     def format_data_type_json(self, data_type: JsonType) -> Tuple[str, tuple]:
         return "VARCHAR2(4000)", ()
 
+    # --- Oracle-specific type formatters ---
+    # These give precise round-trip rendering for Oracle-only types so that
+    # introspection → DataType → SQL preserves the original Oracle spelling
+    # (e.g. NVARCHAR2, NCLOB, LONG, RAW, XMLType) instead of collapsing to
+    # the generic core rendering.
+
+    @DDLTypeMixin.handles(OracleIntegerType)
+    def format_data_type_oracle_integer(self, data_type: OracleIntegerType) -> Tuple[str, tuple]:
+        return "NUMBER(10)", ()
+
+    @DDLTypeMixin.handles(OracleSmallIntType)
+    def format_data_type_oracle_smallint(self, data_type: OracleSmallIntType) -> Tuple[str, tuple]:
+        return "NUMBER(5)", ()
+
+    @DDLTypeMixin.handles(OracleBigIntType)
+    def format_data_type_oracle_bigint(self, data_type: OracleBigIntType) -> Tuple[str, tuple]:
+        return "NUMBER(19)", ()
+
+    @DDLTypeMixin.handles(OracleVarChar2Type)
+    def format_data_type_oracle_varchar2(self, data_type: OracleVarChar2Type) -> Tuple[str, tuple]:
+        return (f"VARCHAR2({data_type.length})" if data_type.length is not None else "VARCHAR2(4000)"), ()
+
+    @DDLTypeMixin.handles(OracleNVarChar2Type)
+    def format_data_type_oracle_nvarchar2(self, data_type: OracleNVarChar2Type) -> Tuple[str, tuple]:
+        return (f"NVARCHAR2({data_type.length})" if data_type.length is not None else "NVARCHAR2(2000)"), ()
+
+    @DDLTypeMixin.handles(OracleCharType)
+    def format_data_type_oracle_char(self, data_type: OracleCharType) -> Tuple[str, tuple]:
+        return (f"CHAR({data_type.length})" if data_type.length is not None else "CHAR"), ()
+
+    @DDLTypeMixin.handles(OracleClobType)
+    def format_data_type_oracle_clob(self, data_type: OracleClobType) -> Tuple[str, tuple]:
+        return "CLOB", ()
+
+    @DDLTypeMixin.handles(OracleNClobType)
+    def format_data_type_oracle_nclob(self, data_type: OracleNClobType) -> Tuple[str, tuple]:
+        return "NCLOB", ()
+
+    @DDLTypeMixin.handles(OracleLongType)
+    def format_data_type_oracle_long(self, data_type: OracleLongType) -> Tuple[str, tuple]:
+        return "LONG", ()
+
+    @DDLTypeMixin.handles(OracleXmlType)
+    def format_data_type_oracle_xml(self, data_type: OracleXmlType) -> Tuple[str, tuple]:
+        return "XMLTYPE", ()
+
+    @DDLTypeMixin.handles(OracleRawType)
+    def format_data_type_oracle_raw(self, data_type: OracleRawType) -> Tuple[str, tuple]:
+        return (f"RAW({data_type.length})" if data_type.length is not None else "RAW(2000)"), ()
+
+    @DDLTypeMixin.handles(OracleLongRawType)
+    def format_data_type_oracle_long_raw(self, data_type: OracleLongRawType) -> Tuple[str, tuple]:
+        return "LONG RAW", ()
+
+    @DDLTypeMixin.handles(OracleBlobType)
+    def format_data_type_oracle_blob(self, data_type: OracleBlobType) -> Tuple[str, tuple]:
+        return "BLOB", ()
+
     # --- Parsing ---
 
     _ORACLE_NUMBER_TYPES = re.compile(r"^(?:NUMBER|FLOAT|BINARY_FLOAT|BINARY_DOUBLE)\b", re.IGNORECASE)
-    _ORACLE_STRING_TYPES = re.compile(r"^(?:VARCHAR2|NVARCHAR2|CHAR|NCHAR|CLOB|NCLOB)\b", re.IGNORECASE)
+    # NOTE: LONG RAW must be matched before LONG; _ORACLE_BLOB_TYPES is
+    # checked ahead of _ORACLE_STRING_TYPES in parse_type() for this reason.
+    _ORACLE_STRING_TYPES = re.compile(r"^(?:VARCHAR2|NVARCHAR2|CHAR|NCHAR|CLOB|NCLOB|LONG)\b", re.IGNORECASE)
     _ORACLE_BLOB_TYPES = re.compile(r"^(?:BLOB|RAW|LONG\s+RAW)\b", re.IGNORECASE)
     _ORACLE_DATE_TYPES = re.compile(r"^(?:DATE|TIMESTAMP|INTERVAL)\b", re.IGNORECASE)
     _ORACLE_XML_TYPES = re.compile(r"^(?:XMLTYPE|SYS\.XMLTYPE)\b", re.IGNORECASE)
@@ -128,24 +203,60 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
                 return DoubleType()
             nums = re.findall(r"\d+", stripped)
             if len(nums) >= 2:
-                return DecimalType(int(nums[0]), int(nums[1]))
+                p, s = int(nums[0]), int(nums[1])
+                # NUMBER(10) -> INTEGER, NUMBER(5) -> SMALLINT, NUMBER(19) -> BIGINT
+                if s == 0 and p == 10:
+                    return OracleIntegerType()
+                if s == 0 and p == 5:
+                    return OracleSmallIntType()
+                if s == 0 and p == 19:
+                    return OracleBigIntType()
+                return DecimalType(p, s)
             if len(nums) == 1:
-                return DecimalType(int(nums[0]))
+                p = int(nums[0])
+                if p == 10:
+                    return OracleIntegerType()
+                if p == 5:
+                    return OracleSmallIntType()
+                if p == 19:
+                    return OracleBigIntType()
+                return DecimalType(p)
             return DecimalType()
 
-        if self._ORACLE_STRING_TYPES.match(upper):
-            if "CLOB" in upper or "NCLOB" in upper:
-                return TextType()
-            if "VARCHAR2" in upper or "NVARCHAR2" in upper:
+        # BLOB types checked before string types so "LONG RAW" matches the
+        # binary branch rather than being consumed by the "LONG" string rule.
+        if self._ORACLE_BLOB_TYPES.match(upper):
+            if "LONG RAW" in upper:
+                return OracleLongRawType()
+            if "RAW" in upper:
                 length_match = re.search(r"\((\d+)", stripped)
                 length = int(length_match.group(1)) if length_match else None
-                return VarCharType(length or 4000)
+                return OracleRawType(length or 2000)
+            return OracleBlobType()
+
+        if self._ORACLE_STRING_TYPES.match(upper):
+            if "NCLOB" in upper:
+                return OracleNClobType()
+            if "CLOB" in upper:
+                return OracleClobType()
+            if "NVARCHAR2" in upper:
+                length_match = re.search(r"\((\d+)", stripped)
+                length = int(length_match.group(1)) if length_match else None
+                return OracleNVarChar2Type(length or 2000)
+            if "VARCHAR2" in upper:
+                length_match = re.search(r"\((\d+)", stripped)
+                length = int(length_match.group(1)) if length_match else None
+                return OracleVarChar2Type(length or 4000)
+            if "NCHAR" in upper:
+                length_match = re.search(r"\((\d+)", stripped)
+                length = int(length_match.group(1)) if length_match else None
+                return OracleCharType(length or 1)
+            if upper.startswith("LONG"):
+                return OracleLongType()
+            # CHAR
             length_match = re.search(r"\((\d+)", stripped)
             length = int(length_match.group(1)) if length_match else None
-            return CharType(length or 1)
-
-        if self._ORACLE_BLOB_TYPES.match(upper):
-            return BlobType()
+            return OracleCharType(length or 1)
 
         if self._ORACLE_DATE_TYPES.match(upper):
             if "TIMESTAMP" in upper:
@@ -155,6 +266,6 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
             return DateType()
 
         if self._ORACLE_XML_TYPES.match(upper):
-            return TextType()
+            return OracleXmlType()
 
         return CustomType(stripped)

@@ -11,6 +11,7 @@ from .json_support import (
     OracleVectorTypeSupport,
     OracleJSONDualitySupport,
 )
+from .partition import OraclePartitionSupport
 
 __all__ = [
     "HierarchicalQuerySupport",
@@ -21,4 +22,5 @@ __all__ = [
     "OracleBooleanTypeSupport",
     "OracleVectorTypeSupport",
     "OracleJSONDualitySupport",
+    "OraclePartitionSupport",
 ]

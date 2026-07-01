@@ -85,9 +85,36 @@ from rhosocial.activerecord.backend.dialect.mixins import (
     TableMixin,
     ConstraintMixin,
     IntrospectionMixin,
+    # Core identifier/predicate/expression/datetime formatters.
+    # OracleDialect overrides format_identifier/format_column/format_table
+    # above; these mixins supply the remaining formatters
+    # (format_wildcard, format_comparison_predicate, format_function_call,
+    # format_case_expression, format_extract_expression, ...). Order mirrors
+    # MySQLDialect so MRO stays consistent across backends.
+    # DDLColumnMixin provides the generic ``format_column_definition`` which
+    # delegates type rendering to ``data_type.to_sql(self)`` (core #108).
+    # Oracle-specific column formatting (IDENTITY, inline constraints) is
+    # preserved via the ``_format_column_definition_oracle`` override below,
+    # which also routes the type segment through ``data_type.to_sql(self)``.
+    DDLColumnMixin,
+    IdentifierMixin,
+    PredicateMixin,
+    ExpressionMixin,
+    DateTimeMixin,
+    DQLMixin,
+    DMLMixin,
+    # Table partitioning: core PartitionMixin provides the unsupported
+    # defaults; OraclePartitionMixin overrides them with version-gated
+    # RANGE/LIST/HASH support. PartitionMixin is placed in MRO so the
+    # Oracle-specific mixin overrides take precedence.
+    PartitionMixin,
 )
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 from .collation import validate_oracle_collation_name
+from .mixins.types import OracleTypeSupportMixin
+from .mixins.partition import OraclePartitionMixin
+from .mixins.partition_lifecycle import OraclePartitionLifecycleMixin
+from .protocols.partition import OraclePartitionSupport
 
 if TYPE_CHECKING:
     from rhosocial.activerecord.backend.expression.collation import CollateExpression
@@ -129,6 +156,33 @@ class OracleDialect(
     TableMixin,
     ConstraintMixin,
     IntrospectionMixin,
+    # Oracle-specific DataType formatting/parsing (#108 adaptation).
+    OracleTypeSupportMixin,
+    # Oracle table partitioning (RANGE/LIST/HASH/INTERVAL/REFERENCE, 11g+).
+    # Phase 5: OraclePartitionMixin provides the strategy formatters and
+    # capability methods; OraclePartitionLifecycleMixin provides the
+    # maintenance statement formatters (ADD/DROP/SPLIT/MERGE/EXCHANGE/MOVE/
+    # TRUNCATE PARTITION). The core PartitionMixin is listed last so the
+    # Oracle-specific overrides take precedence.
+    OraclePartitionMixin,
+    OraclePartitionLifecycleMixin,
+    PartitionMixin,
+    # Core identifier/predicate/expression/datetime formatters.
+    # Placed after Oracle-specific mixins so Oracle overrides
+    # (format_identifier, format_column, format_table, format_limit_offset,
+    # format_limit_offset_clause) take precedence over the generic mixin
+    # implementations in the MRO.
+    # DDLColumnMixin provides the generic ``format_column_definition``;
+    # Oracle-specific column formatting is handled by the
+    # ``_format_column_definition_oracle`` override which routes the type
+    # segment through ``data_type.to_sql(self)`` (core #108).
+    DDLColumnMixin,
+    IdentifierMixin,
+    PredicateMixin,
+    ExpressionMixin,
+    DateTimeMixin,
+    DQLMixin,
+    DMLMixin,
     # Protocols for type checking
     SQLXMLSupport,
     SQLXMLParsingSupport,
@@ -166,6 +220,7 @@ class OracleDialect(
     IntrospectionSupport,
     TransactionControlSupport,
     SQLFunctionSupport,
+    OraclePartitionSupport,
 ):
     """
     Oracle dialect implementation that adapts to the Oracle version.
@@ -897,10 +952,6 @@ class OracleDialect(
         """GLOBAL TEMPORARY tables are supported."""
         return True
 
-    def supports_table_partitioning(self) -> bool:
-        """Table partitioning is supported."""
-        return True
-
     def format_create_table_statement(
         self, expr: "CreateTableExpression"
     ) -> Tuple[str, tuple]:
@@ -935,6 +986,14 @@ class OracleDialect(
         # Combine all parts
         parts.append(f"({', '.join(column_parts)})")
 
+        # Add partition clause generated through PartitionClause expression.
+        # Oracle supports PARTITION BY as a trailing clause of CREATE TABLE.
+        if expr.partition is not None:
+            partition_sql, partition_params = expr.partition.to_sql()
+            if partition_sql:
+                parts.append(partition_sql.strip())
+                all_params.extend(partition_params)
+
         return ' '.join(parts), tuple(all_params)
 
     def _format_column_definition_oracle(
@@ -942,12 +1001,24 @@ class OracleDialect(
         col_def: "ColumnDefinition",
         ColumnConstraintType
     ) -> Tuple[str, List[Any]]:
-        """Format a single column definition with Oracle-specific syntax."""
-        parts = [self.format_identifier(col_def.name), col_def.data_type]
-        params: List[Any] = []
+        """Format a single column definition with Oracle-specific syntax.
+
+        The type segment is rendered via ``col_def.data_type.to_sql(self)``
+        (core #108), which delegates to ``format_data_type`` registered in
+        ``OracleTypeSupportMixin``. Oracle-specific syntax (GENERATED AS
+        IDENTITY for 12c+) is appended as column constraints.
+        """
+        type_sql, type_params = col_def.data_type.to_sql(self)
+        parts = [self.format_identifier(col_def.name), type_sql]
+        params: List[Any] = list(type_params)
 
         # Build constraint parts
         constraint_parts = []
+        # Oracle's identity clause (GENERATED BY DEFAULT AS IDENTITY) must
+        # appear immediately after the column data type and BEFORE any other
+        # inline constraints (ORA-03076 is raised if it follows PRIMARY KEY
+        # etc.). Collect it separately and prepend to the constraint list.
+        identity_clause: Optional[str] = None
         for constraint in col_def.constraints:
             if constraint.constraint_type == ColumnConstraintType.PRIMARY_KEY:
                 constraint_parts.append("PRIMARY KEY")
@@ -973,10 +1044,13 @@ class OracleDialect(
             # Handle GENERATED AS IDENTITY (Oracle 12c+)
             if constraint.is_auto_increment:
                 if self.version >= (12, 0, 0):
-                    constraint_parts.append("GENERATED BY DEFAULT AS IDENTITY")
+                    identity_clause = "GENERATED BY DEFAULT AS IDENTITY"
                 else:
                     # Pre-12c: use sequence + trigger (handled separately)
                     pass
+
+        if identity_clause is not None:
+            constraint_parts.insert(0, identity_clause)
 
         if constraint_parts:
             parts.append(' '.join(constraint_parts))
