@@ -460,6 +460,14 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
 
             self.log(logging.INFO, f"Async query executed, affected {cursor.rowcount} rows")
 
+            # Apply auto-commit semantics consistent with the core async
+            # ExecutionMixin contract (see base/execution.py:262).
+            # Without this, async INSERT/UPDATE/DELETE issued outside
+            # explicit transactions against `pool.connection()` contexts
+            # would never be persisted, leading to data visibility bugs
+            # (see testsuite basic/connection/test_active_record_crud.py).
+            await self._handle_auto_commit_if_needed()
+
             return result
 
         except OracleIntegrityError as e:
@@ -681,7 +689,9 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             if cursor:
                 cursor.close()
 
-    async def _write_long_string_lobs_after_insert(self, table: str, pk_value, data: dict, column_mapping: Optional[dict]) -> None:
+    async def _write_long_string_lobs_after_insert(
+        self, table: str, pk_value, data: dict, column_mapping: Optional[dict]
+    ) -> None:
         long_strings = {
             key: value for key, value in data.items()
             if isinstance(value, str) and len(value.encode('utf-8')) > 4000
@@ -946,7 +956,7 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             exec_params = list(converted_params) if converted_params else []
 
             # Create cursor variables for output
-            for i, col in enumerate(returning_columns):
+            for col in returning_columns:
                 col_lower = col.lower() if isinstance(col, str) else str(col).lower()
                 # Determine appropriate type based on column name/type
                 if col_lower == 'id':
@@ -962,7 +972,11 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
                 exec_params.append(out_var)
 
             if getattr(self.config, 'log_queries', False):
-                self.log(logging.DEBUG, f"RETURNING INTO params (async): {len(exec_params)} ({len(converted_params) if converted_params else 0} input + {len(out_vars)} output)")
+                self.log(
+                    logging.DEBUG,
+                    f"RETURNING INTO params (async): {len(exec_params)} "
+                    f"({len(converted_params) if converted_params else 0} input + {len(out_vars)} output)"
+                )
 
             # Execute the SQL with input params and output variables
             self._set_input_sizes_for_params(cursor, exec_params)

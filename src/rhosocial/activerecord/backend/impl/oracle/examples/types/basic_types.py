@@ -46,7 +46,6 @@ print("-" * 40)
 from rhosocial.activerecord.backend.impl.oracle.types import (
     OracleRowID,
     OracleURowID,
-    parse_rowid,
 )
 
 rowid = OracleRowID("AAASdqAAEAAAAInAAA")
@@ -77,12 +76,10 @@ print("-" * 40)
 
 from rhosocial.activerecord.backend.impl.oracle.types import (
     SDOGeometry,
-    SDOPoint,
-    SDOGeometryType,
 )
 
 point = SDOGeometry.point(10.0, 20.0)
-print(f"Point geometry:")
+print("Point geometry:")
 print(f"  GTYPE: {point.sdo_gtype}")
 print(f"  Type: {point.geometry_type.name}")
 print(f"  Dimension: {point.dimension}")
@@ -91,7 +88,7 @@ print(f"  SQL constructor: {point.to_constructor_sql()}")
 polygon = SDOGeometry.polygon([
     (0, 0), (10, 0), (10, 10), (0, 10), (0, 0)
 ])
-print(f"\nPolygon geometry:")
+print("\nPolygon geometry:")
 print(f"  GTYPE: {polygon.sdo_gtype}")
 print(f"  Type: {polygon.geometry_type.name}")
 print(f"  Ordinates count: {len(polygon.sdo_ordinates)}")

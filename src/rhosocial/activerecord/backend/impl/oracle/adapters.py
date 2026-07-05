@@ -15,9 +15,11 @@ Oracle has some unique type handling requirements:
 """
 
 import json
+import uuid
 from datetime import datetime, date, time
 from decimal import Decimal
-from typing import Any, Dict, Optional, Tuple, Type, Set, Union, get_origin, get_args
+from enum import Enum
+from typing import Any, Dict, Optional, Type, Union, get_origin, get_args
 
 from rhosocial.activerecord.backend.type_adapter import BaseSQLTypeAdapter
 
@@ -314,6 +316,107 @@ class OracleVectorAdapter(BaseSQLTypeAdapter):
         return value
 
 
+class OracleUUIDAdapter(BaseSQLTypeAdapter):
+    """Adapter for converting between Python ``uuid.UUID`` and Oracle CHAR(36)/VARCHAR2(36).
+
+    Oracle has no native UUID type. The conventional storage format is a 36-character
+    hyphenated string in a CHAR(36) or VARCHAR2(36) column. Callers may also pass a
+    ``storage_format='bytes'`` option to use RAW(16) instead (16-byte big-endian form,
+    suitable for storing the UUID's integer value).
+    """
+
+    def __init__(self):
+        super().__init__()
+        self._register_type(uuid.UUID, str)
+        self._register_type(uuid.UUID, bytes)
+
+    def _do_to_database(
+        self,
+        value: Any,
+        target_type: Type,
+        options: Optional[Dict[str, Any]],
+    ) -> Any:
+        if not isinstance(value, uuid.UUID):
+            value = uuid.UUID(str(value))
+        if target_type is bytes:
+            return value.bytes
+        return str(value)
+
+    def _do_from_database(
+        self,
+        value: Any,
+        target_type: Type,
+        options: Optional[Dict[str, Any]],
+    ) -> Any:
+        if isinstance(value, uuid.UUID):
+            return value
+        if isinstance(value, (bytes, bytearray)):
+            return uuid.UUID(bytes=bytes(value))
+        return uuid.UUID(str(value))
+
+    def _on_none_from_database(self, target_type: Type, **kwargs) -> Any:
+        return None
+
+
+class OracleEnumAdapter(BaseSQLTypeAdapter):
+    """Adapter for converting between Python ``enum.Enum`` and Oracle VARCHAR2.
+
+    Oracle has no native ENUM type. Enums are conventionally modeled as a
+    VARCHAR2 column with a CHECK constraint listing the allowed values.
+
+    Storage policy:
+      - ``'name'``  (default): store ``enum_member.name`` (e.g. ``'ACTIVE'``)
+      - ``'value'``:           store ``enum_member.value`` (must be str/int)
+
+    On read, the adapter reconstructs the enum by name first, then by value.
+    """
+
+    def __init__(self, storage: str = 'name'):
+        super().__init__()
+        if storage not in ('name', 'value'):
+            raise ValueError(
+                f"OracleEnumAdapter storage must be 'name' or 'value', got {storage!r}"
+            )
+        self._storage = storage
+        self._register_type(Enum, str)
+        self._register_type(Enum, object)
+
+    def _do_to_database(
+        self,
+        value: Any,
+        target_type: Type,
+        options: Optional[Dict[str, Any]],
+    ) -> Any:
+        if not isinstance(value, Enum):
+            return value
+        if target_type is int and isinstance(value.value, int):
+            return value.value
+        return value.name if self._storage == 'name' else value.value
+
+    def _do_from_database(
+        self,
+        value: Any,
+        target_type: Type,
+        options: Optional[Dict[str, Any]],
+    ) -> Any:
+        if isinstance(value, Enum) or value is None:
+            return value
+        original_type = options.get('original_type') if options else target_type
+        if not (isinstance(original_type, type) and issubclass(original_type, Enum)):
+            return value
+        try:
+            return original_type[value]
+        except KeyError:
+            pass
+        try:
+            return original_type(value)
+        except (ValueError, KeyError):
+            return value
+
+    def _on_none_from_database(self, target_type: Type, **kwargs) -> Any:
+        return None
+
+
 class OracleStringAdapter(BaseSQLTypeAdapter):
     """Adapter for Oracle string types.
 
@@ -357,6 +460,8 @@ oracle_adapters = [
     OracleJSONAdapter,
     OracleBytesAdapter,
     OracleStringAdapter,
+    OracleUUIDAdapter,
+    OracleEnumAdapter,
     OracleIntervalAdapter,
     OracleRowIDAdapter,
     OracleXMLAdapter,

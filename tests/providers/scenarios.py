@@ -69,8 +69,8 @@ def _load_scenarios_from_config():
         for scenario_name, config in config_data['scenarios'].items():
             register_scenario(scenario_name, config)
             
-    except ImportError:
-        raise ImportError("PyYAML is required to load Oracle scenario configuration files")
+    except ImportError as e:
+        raise ImportError("PyYAML is required to load Oracle scenario configuration files") from e
 
 
 def _register_default_scenarios():

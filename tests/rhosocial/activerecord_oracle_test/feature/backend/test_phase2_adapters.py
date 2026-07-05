@@ -165,16 +165,162 @@ class TestAdapterList:
     def test_oracle_adapters_list(self):
         """Test that all adapters are in the list."""
         from rhosocial.activerecord.backend.impl.oracle.adapters import oracle_adapters
-        
-        assert len(oracle_adapters) == 13
+
+        assert len(oracle_adapters) == 15
         adapter_names = [a.__name__ for a in oracle_adapters]
-        
+
         assert 'OracleBooleanAdapter' in adapter_names
         assert 'OracleIntervalAdapter' in adapter_names
         assert 'OracleRowIDAdapter' in adapter_names
         assert 'OracleXMLAdapter' in adapter_names
         assert 'OracleSDOGeometryAdapter' in adapter_names
         assert 'OracleVectorAdapter' in adapter_names
+        assert 'OracleUUIDAdapter' in adapter_names
+        assert 'OracleEnumAdapter' in adapter_names
+
+
+class TestUUIDAdapter:
+    """Tests for OracleUUIDAdapter."""
+
+    def test_adapter_imports(self):
+        """Test that the UUID adapter can be imported."""
+        from rhosocial.activerecord.backend.impl.oracle.adapters import OracleUUIDAdapter
+        assert OracleUUIDAdapter is not None
+
+    def test_to_database_string(self):
+        """Test UUID -> str conversion (CHAR(36) storage)."""
+        import uuid
+        from rhosocial.activerecord.backend.impl.oracle.adapters import OracleUUIDAdapter
+
+        adapter = OracleUUIDAdapter()
+        u = uuid.UUID('a1b2c3d4-e5f6-7890-1234-567890abcdef')
+        assert adapter.to_database(u, str) == 'a1b2c3d4-e5f6-7890-1234-567890abcdef'
+
+    def test_to_database_bytes(self):
+        """Test UUID -> bytes conversion (RAW(16) storage)."""
+        import uuid
+        from rhosocial.activerecord.backend.impl.oracle.adapters import OracleUUIDAdapter
+
+        adapter = OracleUUIDAdapter()
+        u = uuid.UUID('a1b2c3d4-e5f6-7890-1234-567890abcdef')
+        raw = adapter.to_database(u, bytes)
+        assert isinstance(raw, (bytes, bytearray))
+        assert len(raw) == 16
+
+    def test_from_database_str(self):
+        """Test str -> UUID reconstruction."""
+        import uuid
+        from rhosocial.activerecord.backend.impl.oracle.adapters import OracleUUIDAdapter
+
+        adapter = OracleUUIDAdapter()
+        reconstructed = adapter.from_database(
+            'a1b2c3d4-e5f6-7890-1234-567890abcdef', uuid.UUID
+        )
+        assert reconstructed == uuid.UUID('a1b2c3d4-e5f6-7890-1234-567890abcdef')
+
+    def test_from_database_bytes(self):
+        """Test bytes -> UUID reconstruction."""
+        import uuid
+        from rhosocial.activerecord.backend.impl.oracle.adapters import OracleUUIDAdapter
+
+        adapter = OracleUUIDAdapter()
+        raw = uuid.UUID('a1b2c3d4-e5f6-7890-1234-567890abcdef').bytes
+        reconstructed = adapter.from_database(raw, uuid.UUID)
+        assert reconstructed == uuid.UUID('a1b2c3d4-e5f6-7890-1234-567890abcdef')
+
+    def test_from_database_invalid_string(self):
+        """Test that invalid UUID string raises ValueError."""
+        import uuid
+        from rhosocial.activerecord.backend.impl.oracle.adapters import OracleUUIDAdapter
+
+        adapter = OracleUUIDAdapter()
+        with pytest.raises(ValueError):
+            adapter.from_database('not-a-uuid', uuid.UUID)
+
+    def test_supported_types(self):
+        """Test that the UUID adapter registers uuid.UUID."""
+        import uuid
+        from rhosocial.activerecord.backend.impl.oracle.adapters import OracleUUIDAdapter
+
+        adapter = OracleUUIDAdapter()
+        supported = adapter.supported_types
+        assert uuid.UUID in supported
+        assert str in supported[uuid.UUID]
+        assert bytes in supported[uuid.UUID]
+
+
+class TestEnumAdapter:
+    """Tests for OracleEnumAdapter."""
+
+    def test_adapter_imports(self):
+        """Test that the Enum adapter can be imported."""
+        from rhosocial.activerecord.backend.impl.oracle.adapters import OracleEnumAdapter
+        assert OracleEnumAdapter is not None
+
+    def test_to_database_name(self):
+        """Test Enum -> name (default storage)."""
+        from enum import Enum
+        from rhosocial.activerecord.backend.impl.oracle.adapters import OracleEnumAdapter
+
+        class Status(Enum):
+            ACTIVE = 'active'
+            INACTIVE = 'inactive'
+
+        adapter = OracleEnumAdapter()
+        assert adapter.to_database(Status.ACTIVE, str) == 'ACTIVE'
+
+    def test_to_database_value(self):
+        """Test Enum -> value storage."""
+        from enum import Enum
+        from rhosocial.activerecord.backend.impl.oracle.adapters import OracleEnumAdapter
+
+        class Status(Enum):
+            ACTIVE = 'active'
+            INACTIVE = 'inactive'
+
+        adapter = OracleEnumAdapter(storage='value')
+        assert adapter.to_database(Status.ACTIVE, str) == 'active'
+
+    def test_from_database_by_name(self):
+        """Test name -> Enum reconstruction."""
+        from enum import Enum
+        from rhosocial.activerecord.backend.impl.oracle.adapters import OracleEnumAdapter
+
+        class Status(Enum):
+            ACTIVE = 'active'
+            INACTIVE = 'inactive'
+
+        adapter = OracleEnumAdapter()
+        result = adapter.from_database('ACTIVE', Status,
+                                        options={'original_type': Status})
+        assert result is Status.ACTIVE
+
+    def test_from_database_by_value(self):
+        """Test value -> Enum reconstruction (fallback)."""
+        from enum import Enum
+        from rhosocial.activerecord.backend.impl.oracle.adapters import OracleEnumAdapter
+
+        class Status(Enum):
+            ACTIVE = 'active'
+            INACTIVE = 'inactive'
+
+        adapter = OracleEnumAdapter(storage='value')
+        result = adapter.from_database('active', Status,
+                                        options={'original_type': Status})
+        assert result is Status.ACTIVE
+
+    def test_invalid_storage_raises(self):
+        """Test invalid storage policy raises ValueError."""
+        from rhosocial.activerecord.backend.impl.oracle.adapters import OracleEnumAdapter
+        with pytest.raises(ValueError):
+            OracleEnumAdapter(storage='invalid')
+
+    def test_to_database_non_enum_passthrough(self):
+        """Test that non-Enum values pass through unchanged."""
+        from rhosocial.activerecord.backend.impl.oracle.adapters import OracleEnumAdapter
+
+        adapter = OracleEnumAdapter()
+        assert adapter.to_database('plain string', str) == 'plain string'
 
 
 if __name__ == "__main__":

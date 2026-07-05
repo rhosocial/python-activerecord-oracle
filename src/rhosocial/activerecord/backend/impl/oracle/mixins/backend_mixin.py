@@ -4,7 +4,7 @@
 import logging
 from datetime import date, datetime, time
 from decimal import Decimal
-from typing import Any, Dict, Tuple, Type
+from typing import Dict, Tuple, Type
 
 from rhosocial.activerecord.backend.type_adapter import SQLTypeAdapter
 
@@ -166,7 +166,6 @@ class OracleBackendMixin:
             DeadlockError,
             IntegrityError,
             OperationalError,
-            QueryError,
         )
 
         error_msg = str(error)

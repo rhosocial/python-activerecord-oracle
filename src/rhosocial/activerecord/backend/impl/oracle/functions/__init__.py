@@ -1,4 +1,4 @@
-# functions/__init__.py
+# src/rhosocial/activerecord/backend/impl/oracle/functions/__init__.py
 """
 Oracle-specific SQL function factories.
 
@@ -19,24 +19,7 @@ Version Requirements:
 - LISTAGG: Oracle 11g R2+
 """
 
-from typing import Union, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from rhosocial.activerecord.backend.dialect import SQLDialectBase
-    from rhosocial.activerecord.backend.expression import bases
-
-
-def _convert_to_expression(dialect: "SQLDialectBase", expr: Union[str, "bases.BaseExpression"],
-                           handle_numeric_literals: bool = True) -> "bases.BaseExpression":
-    """Helper function to convert an input value to an appropriate BaseExpression."""
-    from rhosocial.activerecord.backend.expression import bases, core
-    if isinstance(expr, bases.BaseExpression):
-        return expr
-    elif handle_numeric_literals and isinstance(expr, (int, float)):
-        return core.Literal(dialect, expr)
-    else:
-        return core.Column(dialect, expr)
-
+from ._convert import _convert_to_expression
 
 # Import all function modules
 from .json import (
@@ -71,7 +54,7 @@ from .analytic import (
 )
 
 from .conversion import (
-    to_number, cast_expr, to_binary_double, to_binary_float
+    to_number, to_binary_double, to_binary_float
 )
 
 __all__ = [
@@ -95,5 +78,5 @@ __all__ = [
     # Analytic functions
     "listagg", "percentile_cont", "percentile_disc",
     # Conversion functions
-    "to_number", "cast_expr", "to_binary_double", "to_binary_float",
+    "to_number", "to_binary_double", "to_binary_float",
 ]

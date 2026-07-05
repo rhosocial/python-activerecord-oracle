@@ -335,7 +335,8 @@ class TestFunctionsPackage:
     def test_import_conversion_functions(self):
         """Test conversion function imports."""
         from rhosocial.activerecord.backend.impl.oracle.functions import (
-            to_number, cast_expr
+            to_number, to_binary_double, to_binary_float
         )
         assert callable(to_number)
-        assert callable(cast_expr)
+        assert callable(to_binary_double)
+        assert callable(to_binary_float)

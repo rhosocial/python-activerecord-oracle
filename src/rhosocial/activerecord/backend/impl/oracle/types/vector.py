@@ -7,7 +7,7 @@ native support for vector similarity search and operations.
 """
 
 from dataclasses import dataclass
-from typing import List, Union
+from typing import List
 import struct
 import json
 

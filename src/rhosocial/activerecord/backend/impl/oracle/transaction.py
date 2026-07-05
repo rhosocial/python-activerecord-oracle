@@ -1,7 +1,6 @@
 # src/rhosocial/activerecord/backend/impl/oracle/transaction.py
 """Oracle synchronous transaction manager implementation."""
 import logging
-from typing import Optional
 
 from rhosocial.activerecord.backend.errors import TransactionError
 from rhosocial.activerecord.backend.transaction import (

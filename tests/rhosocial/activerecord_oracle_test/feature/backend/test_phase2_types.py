@@ -6,8 +6,6 @@ Tests all Oracle-specific type adapters to ensure proper conversion
 between Python and Oracle types.
 """
 
-import pytest
-from datetime import timedelta
 
 
 class TestIntervalAdapter:
@@ -340,5 +338,5 @@ class TestAdaptersList:
         """Test that expected number of adapters are defined."""
         from rhosocial.activerecord.backend.impl.oracle.adapters import oracle_adapters
         # Should have: Boolean, DateTime, Date, Time, Decimal, JSON, Bytes,
-        # String, Interval, RowID, XML, SDOGeometry, Vector = 13 adapters
-        assert len(oracle_adapters) == 13
+        # String, UUID, Enum, Interval, RowID, XML, SDOGeometry, Vector = 15 adapters
+        assert len(oracle_adapters) == 15

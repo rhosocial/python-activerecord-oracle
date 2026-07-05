@@ -16,7 +16,6 @@ ROWID format: OOOOOO.FFF.BBBBBB.RRR
 
 from dataclasses import dataclass
 import re
-from typing import Optional
 
 
 @dataclass(frozen=True)

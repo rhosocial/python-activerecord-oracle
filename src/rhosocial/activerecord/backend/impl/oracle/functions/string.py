@@ -1,4 +1,4 @@
-# functions/string.py
+# src/rhosocial/activerecord/backend/impl/oracle/functions/string.py
 """
 Oracle string and regex function factories.
 """
@@ -6,7 +6,6 @@ Oracle string and regex function factories.
 from typing import Union, Optional, Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from rhosocial.activerecord.backend.dialect import SQLDialectBase
     from rhosocial.activerecord.backend.expression import bases, core
     from ..dialect import OracleDialect
 
@@ -29,7 +28,7 @@ def decode_expr(dialect: "OracleDialect",
         A FunctionCall instance representing DECODE
     """
     from rhosocial.activerecord.backend.expression import core
-    from . import _convert_to_expression
+    from ._convert import _convert_to_expression
     args = [_convert_to_expression(dialect, expr)]
     for val in search_result_pairs:
         args.append(core.Literal(dialect, val))
@@ -62,7 +61,7 @@ def regexp_substr(dialect: "OracleDialect",
     Version: Oracle 10g+
     """
     from rhosocial.activerecord.backend.expression import core
-    from . import _convert_to_expression
+    from ._convert import _convert_to_expression
     source_expr = _convert_to_expression(dialect, source)
     pattern_expr = core.Literal(dialect, pattern)
     position_expr = core.Literal(dialect, position)
@@ -101,7 +100,7 @@ def regexp_instr(dialect: "OracleDialect",
     Version: Oracle 10g+
     """
     from rhosocial.activerecord.backend.expression import core
-    from . import _convert_to_expression
+    from ._convert import _convert_to_expression
     source_expr = _convert_to_expression(dialect, source)
     pattern_expr = core.Literal(dialect, pattern)
     position_expr = core.Literal(dialect, position)
@@ -135,7 +134,7 @@ def regexp_like(dialect: "OracleDialect",
     Version: Oracle 10g+
     """
     from rhosocial.activerecord.backend.expression import core
-    from . import _convert_to_expression
+    from ._convert import _convert_to_expression
     source_expr = _convert_to_expression(dialect, source)
     pattern_expr = core.Literal(dialect, pattern)
     if match_param:
@@ -170,7 +169,7 @@ def regexp_replace(dialect: "OracleDialect",
     Version: Oracle 10g+
     """
     from rhosocial.activerecord.backend.expression import core
-    from . import _convert_to_expression
+    from ._convert import _convert_to_expression
     source_expr = _convert_to_expression(dialect, source)
     pattern_expr = core.Literal(dialect, pattern)
     replace_expr = core.Literal(dialect, replace)
@@ -206,7 +205,7 @@ def regexp_count(dialect: "OracleDialect",
     Version: Oracle 11g+
     """
     from rhosocial.activerecord.backend.expression import core
-    from . import _convert_to_expression
+    from ._convert import _convert_to_expression
     source_expr = _convert_to_expression(dialect, source)
     pattern_expr = core.Literal(dialect, pattern)
     position_expr = core.Literal(dialect, position)

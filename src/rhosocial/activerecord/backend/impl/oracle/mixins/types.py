@@ -20,11 +20,15 @@ from rhosocial.activerecord.backend.expression.types import (
     FloatType,
     IntegerType,
     JsonType,
+    JsonBType,
     RealType,
     SmallIntType,
     TextType,
     TimeType,
+    TimeTzType,
     TimestampType,
+    TimestampTzType,
+    TinyIntType,
     VarCharType,
     DataType,
     CustomType,
@@ -182,6 +186,36 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
     def format_data_type_oracle_blob(self, data_type: OracleBlobType) -> Tuple[str, tuple]:
         return "BLOB", ()
 
+    # --- Oracle core-comparable type handlers ---
+    # These mirror MySQL/Postgres equivalents so that callers passing a core
+    # DataType (e.g. TinyIntType, TimeTzType, JsonBType, TimestampTzType)
+    # get an Oracle-specific rendering instead of falling back to the base
+    # class' default SQL (which is often MySQL-flavored or undefined).
+
+    @DDLTypeMixin.handles(TinyIntType)
+    def format_data_type_tinyint(self, data_type: TinyIntType) -> Tuple[str, tuple]:
+        # Oracle has no native TINYINT; mapped to NUMBER(3).
+        return "NUMBER(3)", ()
+
+    @DDLTypeMixin.handles(TimeTzType)
+    def format_data_type_timetz(self, data_type: TimeTzType) -> Tuple[str, tuple]:
+        # Oracle supports TIMESTAMP WITH TIME ZONE; precision optional.
+        return (f"TIMESTAMP({data_type.precision}) WITH TIME ZONE"
+                if getattr(data_type, 'precision', None) is not None
+                else "TIMESTAMP WITH TIME ZONE"), ()
+
+    @DDLTypeMixin.handles(TimestampTzType)
+    def format_data_type_timestamptz(self, data_type: TimestampTzType) -> Tuple[str, tuple]:
+        return (f"TIMESTAMP({data_type.precision}) WITH TIME ZONE"
+                if getattr(data_type, 'precision', None) is not None
+                else "TIMESTAMP WITH TIME ZONE"), ()
+
+    @DDLTypeMixin.handles(JsonBType)
+    def format_data_type_jsonb(self, data_type: JsonBType) -> Tuple[str, tuple]:
+        # Oracle has no JSONB binary JSON; 21c+ uses native JSON, otherwise CLOB.
+        # We render as CLOB (best-effort round-trip on all 12c+ versions).
+        return "CLOB", ()
+
     # --- Parsing ---
 
     _ORACLE_NUMBER_TYPES = re.compile(r"^(?:NUMBER|FLOAT|BINARY_FLOAT|BINARY_DOUBLE)\b", re.IGNORECASE)
@@ -260,9 +294,16 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
 
         if self._ORACLE_DATE_TYPES.match(upper):
             if "TIMESTAMP" in upper:
+                with_tz = "WITH TIME ZONE" in upper or "WITH LOCAL TIME ZONE" in upper
                 nums = re.findall(r"\d+", stripped)
                 precision = int(nums[0]) if nums else None
+                if with_tz:
+                    return TimestampTzType(precision)
                 return TimestampType(precision)
+            if "INTERVAL" in upper:
+                # INTERVAL YEAR TO MONTH / DAY TO SECOND - approximated as TEXT
+                # until a typed IntervalType lands in the core expression layer.
+                return TextType()
             return DateType()
 
         if self._ORACLE_XML_TYPES.match(upper):

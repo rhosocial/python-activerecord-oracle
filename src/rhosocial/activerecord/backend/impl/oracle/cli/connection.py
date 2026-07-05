@@ -3,7 +3,6 @@
 
 import os
 
-from .output import RICH_AVAILABLE
 
 
 def add_connection_args(parser):

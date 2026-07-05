@@ -32,30 +32,30 @@ dialect = OracleDialect(version=(19, 0, 0))
 
 root_expr = ConnectByRootExpression(column="employee_id")
 sql, params = root_expr.to_sql(dialect)
-print(f"CONNECT_BY_ROOT expression:")
+print("CONNECT_BY_ROOT expression:")
 print(f"  SQL: {sql}")
 print(f"  Params: {params}")
 
 path_expr = SysConnectByPathExpression(column="name", separator="/")
 sql, params = path_expr.to_sql(dialect)
-print(f"\nSYS_CONNECT_BY_PATH expression:")
+print("\nSYS_CONNECT_BY_PATH expression:")
 print(f"  SQL: {sql}")
 print(f"  Params: {params}")
 
 prior_expr = PriorExpression(column="manager_id")
 sql, params = prior_expr.to_sql(dialect)
-print(f"\nPRIOR expression:")
+print("\nPRIOR expression:")
 print(f"  SQL: {sql}")
 print(f"  Params: {params}")
 
 level_expr = LevelExpression()
 sql, params = level_expr.to_sql(dialect)
-print(f"\nLEVEL pseudo-column:")
+print("\nLEVEL pseudo-column:")
 print(f"  SQL: {sql}")
 
 is_leaf = ConnectByIsLeafExpression()
 sql, params = is_leaf.to_sql(dialect)
-print(f"\nCONNECT_BY_ISLEAF:")
+print("\nCONNECT_BY_ISLEAF:")
 print(f"  SQL: {sql}")
 
 print("\n" + "-" * 40)
@@ -74,7 +74,7 @@ pivot = PivotExpression(
     values=["Jan", "Feb", "Mar"]
 )
 sql, params = pivot.to_sql(dialect)
-print(f"PIVOT expression:")
+print("PIVOT expression:")
 print(f"  SQL: {sql}")
 print(f"  Params: {params}")
 
@@ -85,7 +85,7 @@ unpivot = UnpivotExpression(
     include_nulls=True
 )
 sql, params = unpivot.to_sql(dialect)
-print(f"\nUNPIVOT expression:")
+print("\nUNPIVOT expression:")
 print(f"  SQL: {sql}")
 print(f"  Params: {params}")
 
@@ -104,7 +104,7 @@ from rhosocial.activerecord.backend.impl.oracle.expression import (
 
 single_hint = OracleHintExpression(hints=[index_hint("users", "idx_name")])
 sql, params = single_hint.to_sql(dialect)
-print(f"Single hint:")
+print("Single hint:")
 print(f"  SQL: {sql}")
 
 multi_hint = OracleHintExpression(hints=[
@@ -112,10 +112,10 @@ multi_hint = OracleHintExpression(hints=[
     parallel_hint("users", 4),
 ])
 sql, params = multi_hint.to_sql(dialect)
-print(f"\nMultiple hints:")
+print("\nMultiple hints:")
 print(f"  SQL: {sql}")
 
-print(f"\nHint factory functions:")
+print("\nHint factory functions:")
 print(f"  index_hint('users', 'idx'): {index_hint('users', 'idx')}")
 print(f"  parallel_hint('users', 4): {parallel_hint('users', 4)}")
 print(f"  leading_hint('users', 'orders'): {leading_hint('users', 'orders')}")
@@ -129,22 +129,22 @@ from rhosocial.activerecord.backend.impl.oracle.expression import OracleForUpdat
 
 basic_lock = OracleForUpdateExpression()
 sql, params = basic_lock.to_sql(dialect)
-print(f"Basic FOR UPDATE:")
+print("Basic FOR UPDATE:")
 print(f"  SQL: {sql}")
 
 nowait_lock = OracleForUpdateExpression(nowait=True)
 sql, params = nowait_lock.to_sql(dialect)
-print(f"\nFOR UPDATE NOWAIT:")
+print("\nFOR UPDATE NOWAIT:")
 print(f"  SQL: {sql}")
 
 wait_lock = OracleForUpdateExpression(wait_seconds=10)
 sql, params = wait_lock.to_sql(dialect)
-print(f"\nFOR UPDATE WAIT 10:")
+print("\nFOR UPDATE WAIT 10:")
 print(f"  SQL: {sql}")
 
 skip_lock = OracleForUpdateExpression(skip_locked=True)
 sql, params = skip_lock.to_sql(dialect)
-print(f"\nFOR UPDATE SKIP LOCKED:")
+print("\nFOR UPDATE SKIP LOCKED:")
 print(f"  SQL: {sql}")
 
 col_lock = OracleForUpdateExpression(
@@ -152,7 +152,7 @@ col_lock = OracleForUpdateExpression(
     nowait=True
 )
 sql, params = col_lock.to_sql(dialect)
-print(f"\nFOR UPDATE OF columns NOWAIT:")
+print("\nFOR UPDATE OF columns NOWAIT:")
 print(f"  SQL: {sql}")
 
 print("\n" + "-" * 40)
@@ -166,17 +166,17 @@ from rhosocial.activerecord.backend.impl.oracle.expression import (
 
 lock_table = OracleLockTableExpression(table="users", mode="EXCLUSIVE")
 sql, params = lock_table.to_sql(dialect)
-print(f"LOCK TABLE exclusive:")
+print("LOCK TABLE exclusive:")
 print(f"  SQL: {sql}")
 
 lock_table_share = OracleLockTableExpression(
     table="accounts", mode="SHARE", nowait=True
 )
 sql, params = lock_table_share.to_sql(dialect)
-print(f"\nLOCK TABLE share NOWAIT:")
+print("\nLOCK TABLE share NOWAIT:")
 print(f"  SQL: {sql}")
 
-print(f"\nFactory functions:")
+print("\nFactory functions:")
 basic_for_update = for_update()
 sql, params = basic_for_update.to_sql(dialect)
 print(f"  for_update(): {sql}")

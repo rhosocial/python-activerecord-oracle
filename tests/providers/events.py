@@ -2,7 +2,6 @@
 from typing import Type
 from rhosocial.activerecord.model import ActiveRecord
 from rhosocial.activerecord.testsuite.feature.events.interfaces import IEventsProvider
-from .scenarios import get_scenario
 
 
 class EventsProvider(IEventsProvider):

@@ -131,8 +131,7 @@ class TestOracleSplitPartition:
         sql, params = e.to_sql()
         assert sql == (
             "ALTER TABLE ORDERS SPLIT PARTITION P_MAX AT (200) INTO "
-            "(PARTITION P2 VALUES LESS THAN (200), "
-            "PARTITION P_MAX VALUES LESS THAN (MAXVALUE))"
+            "(PARTITION P2, PARTITION P_MAX)"
         )
         assert params == ()
 
@@ -188,7 +187,7 @@ class TestOracleMergePartitions:
         sql, params = e.to_sql()
         assert sql == (
             "ALTER TABLE ORDERS MERGE PARTITIONS P1, P2 INTO "
-            "PARTITION P12 VALUES LESS THAN (200)"
+            "PARTITION P12"
         )
         assert params == ()
 

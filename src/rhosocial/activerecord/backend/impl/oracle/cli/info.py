@@ -8,7 +8,7 @@ falling back to --version flag when no connection is available.
 import argparse
 import json
 import logging
-from typing import Any, Dict, Tuple
+from typing import Dict, Tuple
 
 from .connection import add_connection_args, add_version_arg, resolve_connection_config_from_args
 from .output import create_provider, RICH_AVAILABLE

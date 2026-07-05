@@ -96,10 +96,12 @@ class OraclePartitionLifecycleMixin:
         part_sql = self.format_identifier(expr.partition_name)
         at_parts = [self.format_partition_boundary_value(v) for v in expr.at_values]
         at_sql = ", ".join(at_parts)
-        new_parts = [
-            self.format_partition_definition(np, strategy="RANGE")[0]
-            for np in expr.new_partitions
-        ]
+        # In the INTO partition list, Oracle does NOT accept a VALUES clause
+        # for SPLIT PARTITION (ORA-14020). Only the partition name (and
+        # optional physical attributes like TABLESPACE) are allowed; the
+        # split boundary is solely determined by the AT (...) expression.
+        new_parts = [f"PARTITION {self.format_identifier(np.name)}"
+                     for np in expr.new_partitions]
         new_sql = ", ".join(new_parts)
         return (
             f"ALTER TABLE {table_sql} SPLIT PARTITION {part_sql} "
@@ -122,9 +124,15 @@ class OraclePartitionLifecycleMixin:
             )
         table_sql = self.format_identifier(expr.table)
         names_sql = ", ".join(self.format_identifier(n) for n in expr.partition_names)
-        into_sql, _ = self.format_partition_definition(expr.into_partition, strategy="RANGE")
+        # In Oracle MERGE PARTITIONS, the INTO clause only accepts the
+        # resulting partition name (and optional physical attributes); it
+        # must NOT include a VALUES LESS THAN clause (ORA-14020). The merged
+        # partition inherits its upper bound from the higher of the two
+        # source partitions.
+        into_name = self.format_identifier(expr.into_partition.name)
         return (
-            f"ALTER TABLE {table_sql} MERGE PARTITIONS {names_sql} INTO {into_sql}",
+            f"ALTER TABLE {table_sql} MERGE PARTITIONS {names_sql} "
+            f"INTO PARTITION {into_name}",
             (),
         )
 

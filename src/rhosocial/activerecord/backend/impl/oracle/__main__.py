@@ -46,11 +46,11 @@ def parse_args():
 
 
 # Backward-compatible re-exports for existing tests
-from .cli.connection import resolve_connection_config_from_args
-from .cli.info import parse_version
-from .cli.output import create_provider as get_provider, RICH_AVAILABLE
-from .cli.introspect import INTROSPECT_TYPES, _serialize_for_output
-from .cli.status import STATUS_TYPES, _format_size
+from .cli.connection import resolve_connection_config_from_args  # noqa: F401
+from .cli.info import parse_version  # noqa: F401
+from .cli.output import create_provider as get_provider, RICH_AVAILABLE  # noqa: F401
+from .cli.introspect import INTROSPECT_TYPES, _serialize_for_output  # noqa: F401
+from .cli.status import STATUS_TYPES, _format_size  # noqa: F401
 
 from .cli.info import handle as _info_handle
 

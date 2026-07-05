@@ -40,6 +40,15 @@ from .adapters import (
     OracleDecimalAdapter,
     OracleJSONAdapter,
     OracleBytesAdapter,
+    OracleStringAdapter,
+    OracleUUIDAdapter,
+    OracleEnumAdapter,
+    OracleIntervalAdapter,
+    OracleRowIDAdapter,
+    OracleXMLAdapter,
+    OracleSDOGeometryAdapter,
+    OracleVectorAdapter,
+    oracle_adapters,
 )
 
 from .explain import OracleExplainResult, OracleExplainRow
@@ -99,6 +108,15 @@ __all__ = [
     "OracleDecimalAdapter",
     "OracleJSONAdapter",
     "OracleBytesAdapter",
+    "OracleStringAdapter",
+    "OracleUUIDAdapter",
+    "OracleEnumAdapter",
+    "OracleIntervalAdapter",
+    "OracleRowIDAdapter",
+    "OracleXMLAdapter",
+    "OracleSDOGeometryAdapter",
+    "OracleVectorAdapter",
+    "oracle_adapters",
 
     # EXPLAIN
     "OracleExplainResult",

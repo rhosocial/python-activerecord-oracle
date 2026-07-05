@@ -1,14 +1,76 @@
 # src/rhosocial/activerecord/backend/impl/oracle/mixins/__init__.py
-from .transaction import OracleTransactionMixin
+"""Oracle dialect mixin classes.
+
+This package aggregates Oracle-specific mixins that, combined with the
+core framework mixins, provide the full Oracle dialect surface area.
+"""
+
 from .backend_mixin import OracleBackendMixin
+from .collation import OracleCollationMixin
+from .column import OracleModifyColumnMixin
 from .concurrency import OracleConcurrencyMixin
-from .types import OracleTypeSupportMixin
+from .datetime_op import OracleDateTimeMixin
+from .ddl import OracleDDLMixin
+from .dml import OracleDMLOperationMixin
+from .expression import OracleExpressionMixin
+from .features import OracleFeaturesMixin
+from .functions import OracleFunctionFormatMixin
+from .hierarchical import OracleHierarchicalMixin
+from .hint import OracleHintMixin
+from .identifier import OracleIdentifierMixin
+from .index import OracleIndexMixin
+from .json import OracleJSONFunctionMixin
+from .locking import OracleLockingMixin
+from .optimizer_hint import OracleOptimizerHintMixin
+from .pagination import OraclePaginationMixin
 from .partition import OraclePartitionMixin
+from .partition_lifecycle import OraclePartitionLifecycleMixin
+from .pivot import OraclePivotMixin
+from .schema import OracleSchemaMixin
+from .sequence import OracleSequenceMixin
+from .set_operation import OracleSetOperationMixin
+from .spatial import OracleSpatialMixin
+from .table import OracleTableMixin
+from .table_op import OracleTableCapabilityMixin
+from .transaction import OracleTransactionMixin
+from .trigger import OracleTriggerMixin
+from .truncate import OracleTruncateMixin
+from .types import OracleTypeSupportMixin
+from .vector import OracleVectorMixin
+from .view import OracleViewMixin
 
 __all__ = [
-    "OracleTransactionMixin",
     "OracleBackendMixin",
+    "OracleCollationMixin",
+    "OracleDateTimeMixin",
+    "OracleDDLMixin",
+    "OracleExpressionMixin",
+    "OracleFeaturesMixin",
+    "OracleFunctionFormatMixin",
+    "OracleHierarchicalMixin",
+    "OracleHintMixin",
+    "OracleIdentifierMixin",
+    "OracleIndexMixin",
+    "OracleJSONFunctionMixin",
+    "OracleLockingMixin",
+    "OracleModifyColumnMixin",
     "OracleConcurrencyMixin",
-    "OracleTypeSupportMixin",
+    "OracleDMLOperationMixin",
+    "OracleOptimizerHintMixin",
+    "OraclePaginationMixin",
     "OraclePartitionMixin",
+    "OraclePartitionLifecycleMixin",
+    "OraclePivotMixin",
+    "OracleSchemaMixin",
+    "OracleSequenceMixin",
+    "OracleSetOperationMixin",
+    "OracleSpatialMixin",
+    "OracleTableMixin",
+    "OracleTableCapabilityMixin",
+    "OracleTransactionMixin",
+    "OracleTriggerMixin",
+    "OracleTruncateMixin",
+    "OracleTypeSupportMixin",
+    "OracleVectorMixin",
+    "OracleViewMixin",
 ]

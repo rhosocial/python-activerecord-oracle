@@ -482,6 +482,15 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
                 f"Query executed, affected {cursor.rowcount} rows, duration={duration:.3f}s"
             )
 
+            # Apply auto-commit semantics consistent with the core
+            # ExecutionMixin contract (line 118 of base/execution.py).
+            # Without this, INSERT/UPDATE/DELETE issued outside explicit
+            # transactions against `pool.connection()` contexts would
+            # never be persisted to other connection-scoped reads,
+            # leading to data visibility bugs (see testsuite
+            # basic/connection/test_active_record_crud.py).
+            self._handle_auto_commit_if_needed()
+
             return result
 
         except OracleIntegrityError as e:
@@ -731,8 +740,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         Oracle requires RETURNING ... INTO syntax with output bind variables.
         This method uses the Expression-Dialect pattern to generate proper Oracle SQL.
         """
-        from rhosocial.activerecord.backend.result import QueryResult
-        from rhosocial.activerecord.backend.base.operations import SQLOperationsMixin, _is_sql_expression
+        from rhosocial.activerecord.backend.base.operations import _is_sql_expression
         from rhosocial.activerecord.backend.expression import InsertExpression, Literal
         from rhosocial.activerecord.backend.expression.statements import ValuesSource, ReturningClause
         from rhosocial.activerecord.backend.expression import Column as ExprColumn
@@ -959,7 +967,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
             exec_params = list(converted_params) if converted_params else []
 
             # Create cursor variables for output
-            for i, col in enumerate(returning_columns):
+            for col in returning_columns:
                 col_lower = col.lower() if isinstance(col, str) else str(col).lower()
                 # Determine appropriate type based on column name/type
                 if col_lower == 'id':
@@ -975,7 +983,11 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
                 exec_params.append(out_var)
 
             if getattr(self.config, 'log_queries', False):
-                self.log(logging.DEBUG, f"RETURNING INTO params: {len(exec_params)} ({len(converted_params) if converted_params else 0} input + {len(out_vars)} output)")
+                self.log(
+                    logging.DEBUG,
+                    f"RETURNING INTO params: {len(exec_params)} "
+                    f"({len(converted_params) if converted_params else 0} input + {len(out_vars)} output)"
+                )
 
             # Execute the SQL with input params and output variables
             self._set_input_sizes_for_params(cursor, exec_params)

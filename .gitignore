@@ -129,13 +129,14 @@ celerybeat.pid
 
 # Environments
 .env
-.venv
 .venv*
 env/
 venv/
 ENV/
 env.bak/
 venv.bak/
+**.local.yml
+**.local.yaml
 
 # Spyder project settings
 .spyderproject
@@ -162,20 +163,59 @@ dmypy.json
 cython_debug/
 
 # PyCharm
-#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
-#  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
+#  JetBrains specific template is maintained in a separate JetBrains.gitignore that
+#  can be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-#.idea/
+.idea/
 
 # Ruff stuff:
 .ruff_cache/
 
+# mypy cache
+.mypy_cache/
+
 # PyPI configuration file
 .pypirc
 
-# Project specific
-.claude/plan/
+# macOS
+**.DS_Store
+
+# Examples - but allow specific docs examples to be tracked
+examples/
+!docs/examples/
+!src/**/examples/
+
+# Configuration files - to prevent accidental commit of sensitive information
+oracle_config.yaml
+oracle_config.yml
+oracle_config.toml
+oracle_config.template.yaml
+oracle_config.template.yml
+oracle_config.template.toml
+local_oracle_config.yaml
+local_oracle_config.yml
+local_oracle_config.toml
+local_oracle_config.example.yaml
+local_oracle_config.example.yml
+local_oracle_config.example.toml
+**/.rhosocial/oracle_config.yaml
+**/.rhosocial/oracle_config.yml
+**/.rhosocial/oracle_config.toml
+
+# Default config file - users should copy config.example.toml/config.example.yaml to config.toml for local use
+config.toml
+config.yaml
+config.yml
+local_config.toml
+local_config.yaml
+local_config.yml
+
+# Oracle scenario config files
+tests/config/oracle_scenarios.yaml
+tests/config/oracle_scenarios.yml
+
+# Claude Code temporary files (local only)
 .claude/tmp/
-tests/config/
-test_connection.py
+.claude/plans/
+.claude/plan/

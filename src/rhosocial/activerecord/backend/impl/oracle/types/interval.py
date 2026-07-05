@@ -12,7 +12,6 @@ durations between two datetime values.
 
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Union
 import re
 
 
