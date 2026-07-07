@@ -6,3 +6,5 @@ This file imports the generic tests from the testsuite package and makes them
 discoverable by pytest in this project's test run.
 """
 from rhosocial.activerecord.testsuite.feature.query.test_special_queries import *
+from rhosocial.activerecord.testsuite.feature.query.test_special_queries_async import *  # noqa: F403
+

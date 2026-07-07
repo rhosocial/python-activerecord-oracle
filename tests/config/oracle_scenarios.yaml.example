@@ -1,0 +1,30 @@
+# Oracle Test Scenarios Configuration
+# Copy this file and modify for your environment
+
+scenarios:
+  # Default Oracle Free / XE scenario
+  oracle_free:
+    host: localhost
+    port: 1521
+    service_name: FREEPDB1
+    username: test_user
+    password: test_password
+    database: test_db
+
+  # Oracle 19c scenario
+  oracle_19c:
+    host: localhost
+    port: 1521
+    service_name: ORCLPDB1
+    username: test_user
+    password: test_password
+    database: test_db
+
+  # Oracle 12c scenario
+  oracle_12c:
+    host: localhost
+    port: 1521
+    service_name: ORCLPDB1
+    username: test_user
+    password: test_password
+    database: test_db
