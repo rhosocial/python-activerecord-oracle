@@ -159,6 +159,13 @@ class OracleFeaturesMixin:
     def get_upsert_syntax_type(self) -> str:
         return "MERGE"
 
+    def supports_on_conflict_clause(self) -> bool:
+        """Oracle has no ON CONFLICT clause form; upsert is expressed via MERGE."""
+        return False
+
+    def supports_multiple_on_conflict_clauses(self) -> bool:
+        return False
+
     # --- LATERAL ------------------------------------------------------
     def supports_lateral_join(self) -> bool:
         return self.version >= (12, 0, 0)
