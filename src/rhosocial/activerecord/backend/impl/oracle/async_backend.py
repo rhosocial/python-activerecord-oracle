@@ -33,6 +33,7 @@ from .config import OracleConnectionConfig
 from .dialect import OracleDialect
 from .async_transaction import AsyncOracleTransactionManager
 from .mixins import OracleBackendMixin
+from .backend import _is_numeric_python_type
 
 
 class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStorageBackend):
@@ -630,15 +631,14 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
 
                 if options.returning_columns:
                     for col in options.returning_columns:
-                        col_lower = col.lower() if isinstance(col, str) else str(col).lower()
-                        if col_lower == 'id':
-                            out_var = cursor.var(int)
-                        elif col_lower in ('created_at', 'updated_at'):
+                        col_key = col if isinstance(col, str) else str(col)
+                        col_lower = col_key.lower()
+                        if col_lower in ('created_at', 'updated_at'):
                             out_var = cursor.var(oracledb.DB_TYPE_TIMESTAMP_TZ)
                         elif col_lower in ('time_val',):
                             out_var = cursor.var(oracledb.DB_TYPE_VARCHAR)
                         else:
-                            out_var = cursor.var(oracledb.DB_TYPE_VARCHAR)
+                            out_var = await self._make_out_var_for_column_async(cursor, col_key)
                         out_vars.append(out_var)
                         exec_params.append(out_var)
 
@@ -781,10 +781,14 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
                 row_data[field_key] = options.data[data_key]
             result.data = [row_data]
         elif options.returning_columns:
-            result = await self._execute_with_returning_into(
-                sql, params, options.returning_columns,
-                options.column_adapters, options.column_mapping
-            )
+            self._current_returning_table = options.table
+            try:
+                result = await self._execute_with_returning_into(
+                    sql, params, options.returning_columns,
+                    options.column_adapters, options.column_mapping
+                )
+            finally:
+                self._current_returning_table = None
         else:
             result = await self.execute(sql, params, options=exec_options)
 
@@ -839,10 +843,14 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
 
         # Handle RETURNING INTO clause
         if options.returning_columns:
-            return await self._execute_with_returning_into(
-                sql, params, options.returning_columns,
-                options.column_adapters, options.column_mapping
-            )
+            self._current_returning_table = options.table
+            try:
+                return await self._execute_with_returning_into(
+                    sql, params, options.returning_columns,
+                    options.column_adapters, options.column_mapping
+                )
+            finally:
+                self._current_returning_table = None
 
         # Standard execution without RETURNING
         exec_options = ExecutionOptions(
@@ -887,10 +895,14 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
 
         # Handle RETURNING INTO clause
         if options.returning_columns:
-            return await self._execute_with_returning_into(
-                sql, params, options.returning_columns,
-                options.column_adapters, options.column_mapping
-            )
+            self._current_returning_table = options.table
+            try:
+                return await self._execute_with_returning_into(
+                    sql, params, options.returning_columns,
+                    options.column_adapters, options.column_mapping
+                )
+            finally:
+                self._current_returning_table = None
 
         # Standard execution without RETURNING
         exec_options = ExecutionOptions(
@@ -957,17 +969,15 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
 
             # Create cursor variables for output
             for col in returning_columns:
-                col_lower = col.lower() if isinstance(col, str) else str(col).lower()
-                # Determine appropriate type based on column name/type
-                if col_lower == 'id':
-                    out_var = cursor.var(int)
-                elif col_lower in ('created_at', 'updated_at'):
+                col_key = col if isinstance(col, str) else str(col)
+                col_lower = col_key.lower()
+                if col_lower in ('created_at', 'updated_at'):
                     # Use DB_TYPE_TIMESTAMP_TZ to preserve microseconds and timezone
                     out_var = cursor.var(oracledb.DB_TYPE_TIMESTAMP_TZ)
                 elif col_lower in ('time_val',):
                     out_var = cursor.var(oracledb.DB_TYPE_VARCHAR)
                 else:
-                    out_var = cursor.var(oracledb.DB_TYPE_VARCHAR)
+                    out_var = await self._make_out_var_for_column_async(cursor, col_key)
                 out_vars.append(out_var)
                 exec_params.append(out_var)
 
@@ -1016,3 +1026,61 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         finally:
             if cursor:
                 cursor.close()
+
+    async def _make_out_var_for_column_async(self, cursor, column_name: str):
+        """Async version of :meth:`OracleBackend._make_out_var_for_column`.
+
+        Looks up the column in the currently-executing RETURNING INTO target
+        table (set via ``_current_returning_table`` by ``insert``/``update``
+        /``delete``/``bulk_insert``) and returns a ``cursor.var`` of the
+        matching ``oracledb.DB_TYPE_*``.  Falls back to VARCHAR for unknown
+        columns.
+        """
+        table_name = getattr(self, "_current_returning_table", None)
+        data_type = await self._lookup_oracle_data_type_async(table_name, column_name) if table_name else None
+        if data_type:
+            if "NUMBER" in data_type and "VARCHAR" not in data_type:
+                return cursor.var(int)
+            if "DATE" in data_type or "TIMESTAMP" in data_type:
+                return cursor.var(oracledb.DB_TYPE_TIMESTAMP_TZ)
+            if "CLOB" in data_type:
+                return cursor.var(oracledb.DB_TYPE_CLOB)
+            if "BLOB" in data_type:
+                return cursor.var(oracledb.DB_TYPE_BLOB)
+            if "RAW" in data_type:
+                return cursor.var(oracledb.DB_TYPE_RAW)
+        return cursor.var(oracledb.DB_TYPE_VARCHAR)
+
+    async def _lookup_oracle_data_type_async(self, table_name: str, column_name: str) -> Optional[str]:
+        """Async version of :meth:`OracleBackend._lookup_oracle_data_type`."""
+        cache_attr = "_oracle_data_type_cache"
+        cache = getattr(self, cache_attr, None)
+        if cache is None:
+            cache = {}
+            setattr(self, cache_attr, cache)
+        key = (str(table_name).upper(), str(column_name).upper())
+        if key in cache:
+            return cache[key]
+        if not self._connection:
+            try:
+                await self.connect()
+            except Exception:
+                return None
+        try:
+            cur = self._connection.cursor()
+            try:
+                await cur.execute(
+                    "SELECT DATA_TYPE FROM USER_TAB_COLUMNS "
+                    "WHERE TABLE_NAME = :1 AND COLUMN_NAME = :2",
+                    [key[0], key[1]],
+                )
+                row = await cur.fetchone()
+                data_type = row[0].upper() if row and row[0] else None
+                cache[key] = data_type
+                return data_type
+            finally:
+                cur.close()
+        except Exception as e:
+            self.log(logging.WARNING, f"Failed to introspect column {key[0]}.{key[1]}: {e}")
+            cache[key] = None
+            return None

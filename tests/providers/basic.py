@@ -370,7 +370,7 @@ class BasicSyncProvider(BasicProviderBase, IBasicSyncProvider, WorkerTestProtoco
         backend = model_class.__backend__
         self._drop_table_sync(backend, table_name)
         schema_sql = self._load_oracle_schema(f"{table_name}.sql")
-        backend.execute(schema_sql, options=self._ddl_options())
+        backend.executescript(schema_sql)
 
     def _initialize_model_schema(self, model_class: Type[ActiveRecord], table_name: str) -> None:
         self._reset_table_sync(model_class, table_name)
@@ -549,7 +549,7 @@ class BasicAsyncProvider(BasicProviderBase, IBasicAsyncProvider):
         backend = model_class.__backend__
         await self._drop_table_async(backend, table_name)
         schema_sql = self._load_oracle_schema(f"{table_name}.sql")
-        await backend.execute(schema_sql, options=self._ddl_options())
+        await backend.executescript(schema_sql)
 
     async def _initialize_async_model_schema(self, model_class: Type[ActiveRecord], table_name: str) -> None:
         await self._reset_table_async(model_class, table_name)

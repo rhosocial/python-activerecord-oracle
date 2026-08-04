@@ -44,13 +44,13 @@ class AsyncOracleTransactionManager(OracleTransactionMixin, AsyncTransactionMana
             if self._isolation_level == IsolationLevel.SERIALIZABLE:
                 cursor = self._connection.cursor()
                 await cursor.execute("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
-                await cursor.close()
+                cursor.close()
 
             # Handle transaction mode (READ_ONLY vs READ_WRITE)
             if self._transaction_mode == TransactionMode.READ_ONLY:
                 cursor = self._connection.cursor()
                 await cursor.execute("SET TRANSACTION READ ONLY")
-                await cursor.close()
+                cursor.close()
             # READ_WRITE is the default, no need to set explicitly
 
             self._state = TransactionState.ACTIVE
@@ -96,7 +96,7 @@ class AsyncOracleTransactionManager(OracleTransactionMixin, AsyncTransactionMana
         try:
             cursor = self._connection.cursor()
             await cursor.execute(f"SAVEPOINT {name}")
-            await cursor.close()
+            cursor.close()
             self.log(logging.DEBUG, f"Created savepoint (async): {name}")
         except Exception as e:
             error_msg = f"Failed to create savepoint {name}: {str(e)}"
@@ -114,7 +114,7 @@ class AsyncOracleTransactionManager(OracleTransactionMixin, AsyncTransactionMana
         try:
             cursor = self._connection.cursor()
             await cursor.execute(f"ROLLBACK TO SAVEPOINT {name}")
-            await cursor.close()
+            cursor.close()
             self.log(logging.DEBUG, f"Rolled back to savepoint (async): {name}")
         except Exception as e:
             error_msg = f"Failed to rollback to savepoint {name}: {str(e)}"

@@ -8,7 +8,7 @@ specific behaviors and SQL dialect.
 """
 import datetime
 import logging
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Type
 
 import oracledb
 from oracledb.exceptions import (
@@ -34,6 +34,27 @@ from .config import OracleConnectionConfig
 from .dialect import OracleDialect
 from .transaction import OracleTransactionManager
 from .mixins import OracleBackendMixin, OracleConcurrencyMixin
+
+
+def _is_numeric_python_type(python_type: Optional[Type]) -> bool:
+    """Return True for Python types that map cleanly to a numeric Oracle column."""
+    if python_type is None:
+        return False
+    try:
+        from uuid import UUID
+    except ImportError:
+        UUID = None
+    if UUID is not None and python_type is UUID:
+        return False
+    try:
+        from decimal import Decimal
+        if python_type is Decimal:
+            return True
+    except ImportError:
+        pass
+    if python_type in (int, float, bool):
+        return True
+    return False
 
 
 class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBackendMixin, StorageBackend):
@@ -798,10 +819,14 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
                 row_data[field_key] = options.data[data_key]
             result.data = [row_data]
         elif options.returning_columns:
-            result = self._execute_with_returning_into(
-                sql, params, options.returning_columns,
-                options.column_adapters, options.column_mapping
-            )
+            self._current_returning_table = options.table
+            try:
+                result = self._execute_with_returning_into(
+                    sql, params, options.returning_columns,
+                    options.column_adapters, options.column_mapping
+                )
+            finally:
+                self._current_returning_table = None
         else:
             result = self.execute(sql, params, options=exec_options)
 
@@ -850,10 +875,14 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
 
         # Handle RETURNING INTO clause
         if options.returning_columns:
-            return self._execute_with_returning_into(
-                sql, params, options.returning_columns,
-                options.column_adapters, options.column_mapping
-            )
+            self._current_returning_table = options.table
+            try:
+                return self._execute_with_returning_into(
+                    sql, params, options.returning_columns,
+                    options.column_adapters, options.column_mapping
+                )
+            finally:
+                self._current_returning_table = None
 
         # Standard execution without RETURNING
         exec_options = ExecutionOptions(
@@ -898,10 +927,14 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
 
         # Handle RETURNING INTO clause
         if options.returning_columns:
-            return self._execute_with_returning_into(
-                sql, params, options.returning_columns,
-                options.column_adapters, options.column_mapping
-            )
+            self._current_returning_table = options.table
+            try:
+                return self._execute_with_returning_into(
+                    sql, params, options.returning_columns,
+                    options.column_adapters, options.column_mapping
+                )
+            finally:
+                self._current_returning_table = None
 
         # Standard execution without RETURNING
         exec_options = ExecutionOptions(
@@ -968,17 +1001,20 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
 
             # Create cursor variables for output
             for col in returning_columns:
-                col_lower = col.lower() if isinstance(col, str) else str(col).lower()
-                # Determine appropriate type based on column name/type
-                if col_lower == 'id':
-                    out_var = cursor.var(int)
-                elif col_lower in ('created_at', 'updated_at'):
+                col_key = col if isinstance(col, str) else str(col)
+                col_lower = col_key.lower()
+                # Determine appropriate output variable type.  The deciding factor
+                # is the actual Oracle DATA_TYPE for the column (introspected via
+                # ``_lookup_oracle_data_type``), not the model-side python type:
+                # the same model can be bound to different Oracle column types
+                # depending on the schema file.
+                if col_lower in ('created_at', 'updated_at'):
                     # Use DB_TYPE_TIMESTAMP_TZ to preserve microseconds and timezone
                     out_var = cursor.var(oracledb.DB_TYPE_TIMESTAMP_TZ)
                 elif col_lower in ('time_val',):
                     out_var = cursor.var(oracledb.DB_TYPE_VARCHAR)
                 else:
-                    out_var = cursor.var(oracledb.DB_TYPE_VARCHAR)
+                    out_var = self._make_out_var_for_column(cursor, col_key)
                 out_vars.append(out_var)
                 exec_params.append(out_var)
 
@@ -1027,3 +1063,67 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         finally:
             if cursor:
                 cursor.close()
+
+    def _make_out_var_for_column(self, cursor, column_name: str):
+        """Create an Oracle ``cursor.var`` of the proper DB_TYPE for ``column_name``.
+
+        Looks up the column in the currently-executing RETURNING INTO target
+        table (set via ``_current_returning_table`` by ``insert``/``update``
+        /``delete``/``bulk_insert``) and returns a ``cursor.var`` of the
+        matching ``oracledb.DB_TYPE_*``.  Falls back to VARCHAR for unknown
+        columns.
+        """
+        table_name = getattr(self, "_current_returning_table", None)
+        data_type = self._lookup_oracle_data_type(table_name, column_name) if table_name else None
+        if data_type:
+            if "NUMBER" in data_type and "VARCHAR" not in data_type:
+                return cursor.var(int)
+            if "DATE" in data_type or "TIMESTAMP" in data_type:
+                return cursor.var(oracledb.DB_TYPE_TIMESTAMP_TZ)
+            if "CLOB" in data_type:
+                return cursor.var(oracledb.DB_TYPE_CLOB)
+            if "BLOB" in data_type:
+                return cursor.var(oracledb.DB_TYPE_BLOB)
+            if "RAW" in data_type:
+                return cursor.var(oracledb.DB_TYPE_RAW)
+        return cursor.var(oracledb.DB_TYPE_VARCHAR)
+
+    def _lookup_oracle_data_type(self, table_name: str, column_name: str) -> Optional[str]:
+        """Return the Oracle DATA_TYPE for ``column_name`` in ``table_name``.
+
+        Uses a per-backend in-memory cache.  Returns ``None`` if the column
+        cannot be introspected (for instance the table has not been created
+        yet).  Called from :meth:`_make_out_var_for_column` to pick the
+        proper ``oracledb.DB_TYPE_*`` for RETURNING INTO bind variables.
+        """
+        cache_attr = "_oracle_data_type_cache"
+        cache = getattr(self, cache_attr, None)
+        if cache is None:
+            cache = {}
+            setattr(self, cache_attr, cache)
+        key = (str(table_name).upper(), str(column_name).upper())
+        if key in cache:
+            return cache[key]
+        if not self._connection:
+            try:
+                self.connect()
+            except Exception:
+                return None
+        try:
+            cur = self._connection.cursor()
+            try:
+                cur.execute(
+                    "SELECT DATA_TYPE FROM USER_TAB_COLUMNS "
+                    "WHERE TABLE_NAME = :1 AND COLUMN_NAME = :2",
+                    [key[0], key[1]],
+                )
+                row = cur.fetchone()
+                data_type = row[0].upper() if row and row[0] else None
+                cache[key] = data_type
+                return data_type
+            finally:
+                cur.close()
+        except Exception as e:
+            self.log(logging.WARNING, f"Failed to introspect column {key[0]}.{key[1]}: {e}")
+            cache[key] = None
+            return None
