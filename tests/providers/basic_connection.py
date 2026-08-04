@@ -67,32 +67,26 @@ class BasicConnectionProvider(IBasicConnectionProvider):
     def _create_test_table(self, backend):
         """Create the test_users table."""
         try:
-            backend.execute(
-                _DROP_TABLE_BLOCK,
-                options=ExecutionOptions(stmt_type=StatementType.DDL),
-            )
+            # Oracle thin driver rejects anonymous-PL/SQL blocks via
+            # cursor.execute(); delegates to executescript which splits on
+            # ``;`` and runs each statement individually.
+            backend.executescript(_DROP_TABLE_BLOCK)
         except Exception:
             pass
 
-        backend.execute(
-            _CREATE_TABLE_SQL,
-            options=ExecutionOptions(stmt_type=StatementType.DDL),
-        )
+        backend.executescript(_CREATE_TABLE_SQL)
 
     async def _create_test_table_async(self, backend):
         """Create the test_users table asynchronously."""
         try:
-            await backend.execute(
-                _DROP_TABLE_BLOCK,
-                options=ExecutionOptions(stmt_type=StatementType.DDL),
-            )
+            # Oracle thin driver rejects anonymous-PL/SQL blocks via
+            # cursor.execute(); delegates to executescript which splits on
+            # ``;`` and runs each statement individually.
+            await backend.executescript(_DROP_TABLE_BLOCK)
         except Exception:
             pass
 
-        await backend.execute(
-            _CREATE_TABLE_SQL,
-            options=ExecutionOptions(stmt_type=StatementType.DDL),
-        )
+        await backend.executescript(_CREATE_TABLE_SQL)
 
     def setup_sync_pool_and_model(self, scenario_name: str) -> Tuple[BackendPool, Type[ActiveRecord]]:
         """Setup sync connection pool and model for context tests."""

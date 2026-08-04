@@ -140,21 +140,24 @@ class CrudBenchmarkProvider:
 
     def _initialize_schema(self, backend):
         options = ExecutionOptions(stmt_type=StatementType.DDL)
-        backend.execute(
+        # Oracle thin driver rejects anonymous-PL/SQL blocks via
+        # cursor.execute(); delegates to executescript which splits on
+        # ``;`` and runs each statement individually.
+        backend.executescript(
             "BEGIN EXECUTE IMMEDIATE 'DROP TABLE benchmark_users PURGE'; "
             "EXCEPTION WHEN OTHERS THEN NULL; END;",
-            options=options,
         )
-        backend.execute(self._schema_sql(), options=options)
+        backend.executescript(self._schema_sql())
 
     async def _initialize_schema_async(self, backend):
         options = ExecutionOptions(stmt_type=StatementType.DDL)
-        await backend.execute(
+        # See _initialize_schema above; the async Oracle thin driver has the
+        # same multi-statement constraint.
+        await backend.executescript(
             "BEGIN EXECUTE IMMEDIATE 'DROP TABLE benchmark_users PURGE'; "
             "EXCEPTION WHEN OTHERS THEN NULL; END;",
-            options=options,
         )
-        await backend.execute(self._schema_sql(), options=options)
+        await backend.executescript(self._schema_sql())
 
     def _schema_sql(self):
         return """

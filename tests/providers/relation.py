@@ -168,8 +168,13 @@ class RelationSyncProvider(RelationProviderBase, IRelationSyncProvider):
         self._sync_relation_boundary_setup = False
 
     def _execute_script(self, backend, sql: str):
-        cursor = backend.execute(sql, options=self._ddl_options())
-        return cursor
+        # Oracle thin driver doesn't accept multi-statement or anonymous-PL/SQL
+        # blocks via cursor.execute(); it only takes a single SQL statement.
+        # ``backend.executescript`` splits the input by ``;`` and runs each
+        # statement individually, so it handles both multi-statement DDL and
+        # BEGIN/END blocks alike.
+        backend.executescript(sql)
+        return None
 
     def _setup_employee_department(self, scenario_name):
         backend_class, config = get_scenario(scenario_name)
@@ -340,7 +345,10 @@ class RelationAsyncProvider(RelationProviderBase, IRelationAsyncProvider):
         self._async_relation_boundary_setup = False
 
     async def _execute_script_async(self, backend, sql: str):
-        await backend.execute(sql, options=self._ddl_options())
+        # Oracle thin driver rejects multi-statement and anonymous-PL/SQL
+        # blocks in cursor.execute(); delegate to executescript which splits
+        # on ``;`` and runs each statement individually.
+        await backend.executescript(sql)
 
     def _configure_async_model_without_connection(self, model_class, config, backend=None):
         from rhosocial.activerecord.backend.impl.oracle import AsyncOracleBackend
