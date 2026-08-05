@@ -8,6 +8,7 @@ specific behaviors and SQL dialect.
 """
 import datetime
 import logging
+import re
 from typing import List, Optional, Tuple, Type
 
 import oracledb
@@ -627,17 +628,155 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
                     return False
             return False
 
+    # Compiled regex used by ``_split_sql_script`` to detect block-introducing
+    # and block-terminating keywords at word boundaries outside string/comment
+    # contexts.  Covers anonymous PL/SQL blocks (BEGIN ... END; / DECLARE ... END;)
+    # as well as nested control-flow blocks (IF, LOOP, CASE, FOR, WHILE).
+    _BLOCK_TOKEN_RE = re.compile(
+        r'\b(BEGIN|DECLARE|END|IF|LOOP|CASE|FOR|WHILE)\b',
+        re.IGNORECASE,
+    )
+
+    @classmethod
+    def _split_sql_script(cls, sql: str) -> List[str]:
+        """Split a multi-statement Oracle SQL script into executable units.
+
+        Oracle thin driver ``cursor.execute()`` accepts only one statement at
+        a time.  Naive ``split(';')`` mangles anonymous PL/SQL blocks such as
+        ``BEGIN EXECUTE IMMEDIATE '...'; EXCEPTION WHEN OTHERS THEN NULL; END;``
+        because the inner ``;`` after ``EXECUTE IMMEDIATE`` and inside the
+        ``EXCEPTION`` block are not statement terminators.
+
+        This state machine respects:
+          * Single-quoted string literals (``'...''...'``) where ``;`` is data
+          * Double-quoted identifiers (``"NAME"``) where ``;`` is data
+          * Line comments (``-- ...``) and block comments (``/* ... */``)
+          * Nested PL/SQL block keywords (BEGIN / DECLARE / END / IF / LOOP /
+            CASE / FOR / WHILE) tracked at identifier boundaries
+
+        Top-level ``;`` outside a block terminates a statement.  Inside a
+        block, ``;`` is part of the block body.  The trailing ``;`` is stripped
+        from plain SQL DDL/DML (which oracledb rejects with ORA-00922 if
+        present) but is preserved for PL/SQL blocks (which require ``END;``).
+        """
+        statements: List[str] = []
+        n = len(sql)
+        i = 0
+        depth = 0
+        in_squote = False
+        in_dquote = False
+        in_line_cmt = False
+        in_block_cmt = False
+        last_stmt_start = 0
+        while i < n:
+            c = sql[i]
+            nxt = sql[i + 1] if i + 1 < n else ''
+
+            # Skip while inside string/comment
+            if in_line_cmt:
+                if c == '\n':
+                    in_line_cmt = False
+                i += 1
+                continue
+            if in_block_cmt:
+                if c == '*' and nxt == '/':
+                    in_block_cmt = False
+                    i += 2
+                    continue
+                i += 1
+                continue
+            if in_squote:
+                if c == "'":
+                    if nxt == "'":
+                        i += 2
+                        continue
+                    in_squote = False
+                i += 1
+                continue
+            if in_dquote:
+                if c == '"':
+                    if nxt == '"':
+                        i += 2
+                        continue
+                    in_dquote = False
+                i += 1
+                continue
+
+            # State transitions: enter quote/comment
+            if c == "'":
+                in_squote = True
+                i += 1
+                continue
+            elif c == '"':
+                in_dquote = True
+                i += 1
+                continue
+            elif c == '-' and nxt == '-':
+                in_line_cmt = True
+                i += 2
+                continue
+            elif c == '/' and nxt == '*':
+                in_block_cmt = True
+                i += 2
+                continue
+            elif c == ';':
+                if depth == 0:
+                    stmt = sql[last_stmt_start:i + 1].strip()
+                    if stmt:
+                        # Strip trailing semicolon for plain SQL DDL/DML;
+                        # preserve it for PL/SQL blocks (BEGIN ... END;).
+                        head = stmt.lstrip().upper()
+                        if head.startswith("BEGIN ") or head.startswith("DECLARE "):
+                            statements.append(stmt)
+                        else:
+                            statements.append(stmt[:-1].rstrip())
+                    last_stmt_start = i + 1
+                i += 1
+                continue
+
+            # Identifier start outside quotes/comments: look for block keywords
+            if c.isalpha():
+                prev = sql[i - 1] if i > 0 else ''
+                if i == 0 or not (prev.isalnum() or prev == '_'):
+                    m = cls._BLOCK_TOKEN_RE.match(sql, i)
+                    if m:
+                        tok = m.group(1).upper()
+                        if tok in ("BEGIN", "DECLARE", "IF", "LOOP", "CASE", "FOR", "WHILE"):
+                            depth += 1
+                        elif tok == "END":
+                            if depth > 0:
+                                depth -= 1
+                        i = m.end()
+                        continue
+            i += 1
+        rest = sql[last_stmt_start:].strip()
+        if rest:
+            statements.append(rest)
+        return statements
+
     def executescript(self, sql_script: str) -> None:
-        """Execute a multi-statement SQL script."""
+        """Execute a multi-statement SQL script.
+
+        Oracle thin driver ``cursor.execute()`` accepts only a single statement
+        per call.  This method splits the script with a state-machine-aware
+        splitter (see ``_split_sql_script``) that respects string literals,
+        comments and nested PL/SQL blocks (``BEGIN ... END;``), then runs each
+        atomic statement individually.
+
+        Each statement is wrapped so DDL errors (e.g. ``DROP TABLE`` of a
+        non-existent table) do not abort the whole script: the caller's schema
+        script already wraps DDL in anonymous PL/SQL exception handlers for
+        that reason.  Plain PL/SQL blocks are executed as-is; plain SQL
+        statements have their trailing ``;`` stripped to meet oracledb's
+        single-statement requirement.
+        """
         self.log(logging.INFO, "Executing SQL script.")
         start_time = datetime.datetime.now()
 
         if not self._connection:
             self.connect()
 
-        # Oracle doesn't have a direct multi-statement execute
-        # Split by semicolons and execute each statement
-        statements = [stmt.strip() for stmt in sql_script.split(';') if stmt.strip()]
+        statements = self._split_sql_script(sql_script)
 
         cursor = None
         try:
