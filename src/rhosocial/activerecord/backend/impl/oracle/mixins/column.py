@@ -1,8 +1,12 @@
 # src/rhosocial/activerecord/backend/impl/oracle/mixins/column.py
-from typing import Tuple, TYPE_CHECKING
+from typing import Tuple, Union, TYPE_CHECKING
+
+from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 
 if TYPE_CHECKING:
     from rhosocial.activerecord.backend.expression.statements.ddl_alter import (
+        AddColumn,
+        DropColumn,
         ModifyColumn,
     )
 
@@ -15,7 +19,23 @@ class OracleModifyColumnMixin:
     for removals. There is no direct equivalent of MySQL's ``CHANGE COLUMN``
     (which renames + redefines in a single clause), and positional ``ADD COLUMN``
     is not honored — new columns are always appended to the end of the row.
+
+    Oracle (<= 19c) does **not** support the vendor extensions
+    ``ADD COLUMN IF NOT EXISTS``, ``DROP COLUMN IF EXISTS`` or
+    ``DROP CONSTRAINT IF EXISTS`` (table-level ``IF EXISTS`` only
+    arrives in 19.28+). Requesting any of these modifiers raises
+    ``UnsupportedFeatureError``; applications should pre-check
+    ``USER_TAB_COLUMNS`` / ``USER_CONSTRAINTS`` instead.
     """
+
+    def supports_add_column_if_not_exists(self) -> bool:
+        return False
+
+    def supports_drop_column_if_exists(self) -> bool:
+        return False
+
+    def supports_drop_constraint_if_exists(self) -> bool:
+        return False
 
     def supports_modify_column(self) -> bool:
         return True
@@ -57,7 +77,57 @@ class OracleModifyColumnMixin:
         sql = f"RENAME COLUMN {self.format_identifier(old_name)} TO {self.format_identifier(new_name)}"
         return sql, ()
 
-    def format_drop_column_action(self, col_name: str) -> Tuple[str, tuple]:
-        """Format DROP COLUMN action for ALTER TABLE."""
+    def format_drop_column_action(
+        self, action_or_col_name: Union["DropColumn", str]
+    ) -> Tuple[str, tuple]:
+        """Format DROP COLUMN action for ALTER TABLE.
+
+        Oracle does not support ``DROP COLUMN IF EXISTS``. The plain form
+        is ``DROP COLUMN <col>``; the method accepts both the ``DropColumn``
+        action object (new interface) and a bare column name (legacy
+        signature) for backward compatibility.
+        """
+        if hasattr(action_or_col_name, "if_exists") and action_or_col_name.if_exists is True:
+            raise UnsupportedFeatureError(
+                self.name,
+                "ALTER TABLE DROP COLUMN IF EXISTS",
+                "Oracle does not support IF EXISTS on DROP COLUMN. "
+                "Pre-check USER_TAB_COLUMNS.",
+            )
+        if isinstance(action_or_col_name, str):
+            col_name = action_or_col_name
+        else:
+            col_name = action_or_col_name.column_name
         sql = f"DROP COLUMN {self.format_identifier(col_name)}"
         return sql, ()
+
+    def format_add_column_action(self, action: "AddColumn") -> Tuple[str, tuple]:
+        """Format ADD COLUMN action for ALTER TABLE.
+
+        Oracle does not support ``ADD COLUMN IF NOT EXISTS``. Guard the
+        modifier and delegate the plain form to the base implementation
+        (``ADD COLUMN <col>``, which Oracle accepts).
+        """
+        if getattr(action, "if_not_exists", None):
+            raise UnsupportedFeatureError(
+                self.name,
+                "ALTER TABLE ADD COLUMN IF NOT EXISTS",
+                "Oracle does not support IF NOT EXISTS on ADD COLUMN. "
+                "Pre-check USER_TAB_COLUMNS.",
+            )
+        return super().format_add_column_action(action)
+
+    def format_drop_table_constraint_action(self, action) -> Tuple[str, tuple]:
+        """Format DROP CONSTRAINT action for ALTER TABLE.
+
+        Oracle does not support ``DROP CONSTRAINT IF EXISTS``. Guard the
+        modifier and delegate the plain form to the base implementation.
+        """
+        if getattr(action, "if_exists", None):
+            raise UnsupportedFeatureError(
+                self.name,
+                "ALTER TABLE DROP CONSTRAINT IF EXISTS",
+                "Oracle does not support IF EXISTS on DROP CONSTRAINT. "
+                "Pre-check USER_CONSTRAINTS.",
+            )
+        return super().format_drop_table_constraint_action(action)
