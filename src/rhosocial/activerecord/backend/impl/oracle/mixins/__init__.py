@@ -8,12 +8,15 @@ core framework mixins, provide the full Oracle dialect surface area.
 from .backend_mixin import OracleBackendMixin
 from .collation import OracleCollationMixin
 from .column import OracleModifyColumnMixin
+from .comment import OracleCommentMixin
 from .concurrency import OracleConcurrencyMixin
+from .database_link import OracleDatabaseLinkMixin
 from .datetime_op import OracleDateTimeMixin
 from .ddl import OracleDDLMixin
 from .dml import OracleDMLOperationMixin
 from .expression import OracleExpressionMixin
 from .features import OracleFeaturesMixin
+from .flashback import OracleFlashbackMixin
 from .functions import OracleFunctionFormatMixin
 from .hierarchical import OracleHierarchicalMixin
 from .hint import OracleHintMixin
@@ -31,6 +34,7 @@ from .schema import OracleSchemaMixin
 from .sequence import OracleSequenceMixin
 from .set_operation import OracleSetOperationMixin
 from .spatial import OracleSpatialMixin
+from .synonym import OracleSynonymMixin
 from .table import OracleTableMixin
 from .table_op import OracleTableCapabilityMixin
 from .transaction import OracleTransactionMixin
@@ -56,8 +60,11 @@ __all__ = [
     "OracleLockingMixin",
     "OracleMaterializedViewMixin",
     "OracleModifyColumnMixin",
+    "OracleCommentMixin",
     "OracleConcurrencyMixin",
+    "OracleDatabaseLinkMixin",
     "OracleDMLOperationMixin",
+    "OracleFlashbackMixin",
     "OracleOptimizerHintMixin",
     "OraclePaginationMixin",
     "OraclePartitionMixin",
@@ -67,6 +74,7 @@ __all__ = [
     "OracleSequenceMixin",
     "OracleSetOperationMixin",
     "OracleSpatialMixin",
+    "OracleSynonymMixin",
     "OracleTableMixin",
     "OracleTableCapabilityMixin",
     "OracleTransactionMixin",

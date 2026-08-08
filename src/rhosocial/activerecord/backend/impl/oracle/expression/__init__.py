@@ -39,6 +39,24 @@ from .materialized_view import (
     OracleCreateMaterializedViewLogExpression,
     OracleDropMaterializedViewExpression,
 )
+from .comment import (
+    OracleCommentObjectType, OracleCommentExpression,
+)
+from .flashback import (
+    OracleAsOfMode, OracleVersionsBetweenMode,
+    OracleAsOfClause, OracleVersionsBetweenClause,
+    OracleFlashbackTableExpression,
+    OraclePurgeObjectType, OraclePurgeExpression,
+)
+from .alter_table import (
+    OracleSetUnusedColumnsAction, OracleDropUnusedColumnsAction,
+    OracleMoveTableAction, OracleShrinkSpaceAction,
+    OracleReadOnlyAction, OracleRowMovementAction,
+)
+from .ddl import (
+    OracleCreateSynonymExpression, OracleDropSynonymExpression,
+    OracleCreateDatabaseLinkExpression, OracleDropDatabaseLinkExpression,
+)
 
 __all__ = [
 # Hierarchical query expressions
@@ -70,4 +88,18 @@ __all__ = [
     'OracleCreateMaterializedViewExpression',
     'OracleCreateMaterializedViewLogExpression',
     'OracleDropMaterializedViewExpression',
+    # COMMENT ON expressions
+    'OracleCommentObjectType', 'OracleCommentExpression',
+    # FLASHBACK family expressions
+    'OracleAsOfMode', 'OracleVersionsBetweenMode',
+    'OracleAsOfClause', 'OracleVersionsBetweenClause',
+    'OracleFlashbackTableExpression',
+    'OraclePurgeObjectType', 'OraclePurgeExpression',
+    # ALTER TABLE table-level clause actions
+    'OracleSetUnusedColumnsAction', 'OracleDropUnusedColumnsAction',
+    'OracleMoveTableAction', 'OracleShrinkSpaceAction',
+    'OracleReadOnlyAction', 'OracleRowMovementAction',
+    # SYNONYM / DATABASE LINK expressions
+    'OracleCreateSynonymExpression', 'OracleDropSynonymExpression',
+    'OracleCreateDatabaseLinkExpression', 'OracleDropDatabaseLinkExpression',
 ]

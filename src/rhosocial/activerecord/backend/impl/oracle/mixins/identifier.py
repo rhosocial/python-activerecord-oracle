@@ -32,17 +32,37 @@ class OracleIdentifierMixin:
     def format_table(
         self, table_name: str, alias: Optional[str] = None,
         schema_name: Optional[str] = None,
+        dblink: Optional[str] = None,
+        flashback: Optional[Any] = None,
     ) -> Tuple[str, Tuple]:
-        """Format table reference for Oracle."""
+        """Format table reference for Oracle.
+
+        Args:
+            table_name: the table name.
+            alias: optional table alias.
+            schema_name: optional schema qualifier.
+            dblink: optional database link name appended as ``@dblink`` to
+                reference a remote table.
+            flashback: optional flashback clause (an ``OracleAsOfClause`` /
+                ``OracleVersionsBetweenClause`` or any object exposing
+                ``to_sql()``) appended after the table reference.
+        """
         if schema_name:
             table_sql = f"{self.format_identifier(schema_name)}.{self.format_identifier(table_name)}"
         elif table_name.lower().endswith("_cte"):
             table_sql = table_name
         else:
             table_sql = self.format_identifier(table_name)
+        table_params: Tuple = ()
+        if dblink:
+            table_sql = f"{table_sql}@{self.format_identifier(dblink)}"
+        if flashback is not None:
+            flash_sql, flash_params = flashback.to_sql()
+            table_sql = f"{table_sql} {flash_sql}"
+            table_params = tuple(flash_params)
         if alias:
-            return f"{table_sql} {self.format_identifier(alias)}", ()
-        return table_sql, ()
+            return f"{table_sql} {self.format_identifier(alias)}", table_params
+        return table_sql, table_params
 
     def format_cte(
         self,
