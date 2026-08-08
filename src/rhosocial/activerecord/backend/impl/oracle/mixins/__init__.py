@@ -21,6 +21,7 @@ from .identifier import OracleIdentifierMixin
 from .index import OracleIndexMixin
 from .json import OracleJSONFunctionMixin
 from .locking import OracleLockingMixin
+from .materialized_view import OracleMaterializedViewMixin
 from .optimizer_hint import OracleOptimizerHintMixin
 from .pagination import OraclePaginationMixin
 from .partition import OraclePartitionMixin
@@ -53,6 +54,7 @@ __all__ = [
     "OracleIndexMixin",
     "OracleJSONFunctionMixin",
     "OracleLockingMixin",
+    "OracleMaterializedViewMixin",
     "OracleModifyColumnMixin",
     "OracleConcurrencyMixin",
     "OracleDMLOperationMixin",

@@ -28,6 +28,17 @@ from .locking import (
     OracleForUpdateExpression, OracleLockTableExpression,
     for_update, for_update_nowait, for_update_wait, for_update_skip_locked,
 )
+from .sequence import (
+    OracleSequenceValueMode, OracleSequenceValueExpression,
+    OracleCreateSequenceExpression, OracleDropSequenceExpression,
+)
+from .materialized_view import (
+    MaterializedViewRefreshMethod, MaterializedViewRefreshTrigger,
+    MaterializedViewBuildMode,
+    OracleCreateMaterializedViewExpression,
+    OracleCreateMaterializedViewLogExpression,
+    OracleDropMaterializedViewExpression,
+)
 
 __all__ = [
 # Hierarchical query expressions
@@ -50,4 +61,13 @@ __all__ = [
     # Locking expressions
     'OracleForUpdateExpression', 'OracleLockTableExpression',
     'for_update', 'for_update_nowait', 'for_update_wait', 'for_update_skip_locked',
+    # Sequence expressions
+    'OracleSequenceValueMode', 'OracleSequenceValueExpression',
+    'OracleCreateSequenceExpression', 'OracleDropSequenceExpression',
+    # Materialized view expressions
+    'MaterializedViewRefreshMethod', 'MaterializedViewRefreshTrigger',
+    'MaterializedViewBuildMode',
+    'OracleCreateMaterializedViewExpression',
+    'OracleCreateMaterializedViewLogExpression',
+    'OracleDropMaterializedViewExpression',
 ]
