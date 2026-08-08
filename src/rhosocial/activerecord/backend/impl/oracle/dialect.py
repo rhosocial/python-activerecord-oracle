@@ -88,6 +88,7 @@ from rhosocial.activerecord.backend.dialect.mixins import (
     GraphTableMixin,
 )
 from .mixins import (
+    OracleAnalyzeMixin,
     OracleCollationMixin,
     OracleCommentMixin,
     OracleDatabaseLinkMixin,
@@ -111,6 +112,7 @@ from .mixins import (
     OraclePartitionMixin,
     OraclePartitionLifecycleMixin,
     OraclePivotMixin,
+    OracleRoutineMixin,
     OracleSchemaMixin,
     OracleSequenceMixin,
     OracleSetOperationMixin,
@@ -137,6 +139,7 @@ class OracleDialect(
     # Oracle-specific overrides – listed BEFORE the generic mixins they
     # override so that MRO resolves to the Oracle version first.
     # ================================================================
+    OracleAnalyzeMixin,
     OracleCollationMixin,
     OracleDDLMixin,
     OracleCommentMixin,
@@ -160,6 +163,7 @@ class OracleDialect(
     OraclePartitionMixin,
     OraclePartitionLifecycleMixin,
     OraclePivotMixin,
+    OracleRoutineMixin,
     OracleSchemaMixin,
     OracleSequenceMixin,
     OracleSetOperationMixin,

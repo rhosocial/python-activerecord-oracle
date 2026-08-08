@@ -9,6 +9,16 @@ from .database_link import (
     OracleCreateDatabaseLinkExpression,
     OracleDropDatabaseLinkExpression,
 )
+from .routine import (
+    OracleCreateFunctionExpression,
+    OracleCreatePackageBodyExpression,
+    OracleCreatePackageExpression,
+    OracleCreateProcedureExpression,
+    OracleDropRoutineExpression,
+    OracleDropRoutineObjectType,
+    OracleRoutineParameter,
+    OracleRoutineParameterMode,
+)
 from .synonym import (
     OracleCreateSynonymExpression,
     OracleDropSynonymExpression,
@@ -19,4 +29,12 @@ __all__ = [
     "OracleDropSynonymExpression",
     "OracleCreateDatabaseLinkExpression",
     "OracleDropDatabaseLinkExpression",
+    "OracleRoutineParameterMode",
+    "OracleRoutineParameter",
+    "OracleCreateProcedureExpression",
+    "OracleCreateFunctionExpression",
+    "OracleCreatePackageExpression",
+    "OracleCreatePackageBodyExpression",
+    "OracleDropRoutineObjectType",
+    "OracleDropRoutineExpression",
 ]

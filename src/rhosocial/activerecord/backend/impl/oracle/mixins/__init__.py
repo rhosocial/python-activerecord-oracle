@@ -5,6 +5,7 @@ This package aggregates Oracle-specific mixins that, combined with the
 core framework mixins, provide the full Oracle dialect surface area.
 """
 
+from .analyze import OracleAnalyzeMixin
 from .backend_mixin import OracleBackendMixin
 from .collation import OracleCollationMixin
 from .column import OracleModifyColumnMixin
@@ -30,6 +31,7 @@ from .pagination import OraclePaginationMixin
 from .partition import OraclePartitionMixin
 from .partition_lifecycle import OraclePartitionLifecycleMixin
 from .pivot import OraclePivotMixin
+from .routine import OracleRoutineMixin
 from .schema import OracleSchemaMixin
 from .sequence import OracleSequenceMixin
 from .set_operation import OracleSetOperationMixin
@@ -45,6 +47,7 @@ from .vector import OracleVectorMixin
 from .view import OracleViewMixin
 
 __all__ = [
+    "OracleAnalyzeMixin",
     "OracleBackendMixin",
     "OracleCollationMixin",
     "OracleDateTimeMixin",
@@ -70,6 +73,7 @@ __all__ = [
     "OraclePartitionMixin",
     "OraclePartitionLifecycleMixin",
     "OraclePivotMixin",
+    "OracleRoutineMixin",
     "OracleSchemaMixin",
     "OracleSequenceMixin",
     "OracleSetOperationMixin",

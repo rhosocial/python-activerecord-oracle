@@ -56,6 +56,13 @@ from .alter_table import (
 from .ddl import (
     OracleCreateSynonymExpression, OracleDropSynonymExpression,
     OracleCreateDatabaseLinkExpression, OracleDropDatabaseLinkExpression,
+    OracleRoutineParameterMode, OracleRoutineParameter,
+    OracleCreateProcedureExpression, OracleCreateFunctionExpression,
+    OracleCreatePackageExpression, OracleCreatePackageBodyExpression,
+    OracleDropRoutineObjectType, OracleDropRoutineExpression,
+)
+from .analyze import (
+    OracleAnalyzeMode, OracleAnalyzeExpression,
 )
 
 __all__ = [
@@ -102,4 +109,11 @@ __all__ = [
     # SYNONYM / DATABASE LINK expressions
     'OracleCreateSynonymExpression', 'OracleDropSynonymExpression',
     'OracleCreateDatabaseLinkExpression', 'OracleDropDatabaseLinkExpression',
+    # PL/SQL routine and package expressions
+    'OracleRoutineParameterMode', 'OracleRoutineParameter',
+    'OracleCreateProcedureExpression', 'OracleCreateFunctionExpression',
+    'OracleCreatePackageExpression', 'OracleCreatePackageBodyExpression',
+    'OracleDropRoutineObjectType', 'OracleDropRoutineExpression',
+    # ANALYZE TABLE expressions
+    'OracleAnalyzeMode', 'OracleAnalyzeExpression',
 ]
