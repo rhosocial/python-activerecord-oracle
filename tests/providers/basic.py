@@ -330,6 +330,19 @@ class BasicProviderBase:
     def get_yes_no_adapter(self) -> "BaseSQLTypeAdapter":
         return YesOrNoBooleanAdapter()
 
+    def get_dialect(self, scenario_name: str = "default"):
+        """Return a bare Oracle dialect instance.
+
+        Used by the ``feature/basic/ddl`` subtopic (expression/dialect
+        contract). Oracle (<= 19c) does not support any of the three
+        ``IF [NOT] EXISTS`` modifiers, so the ``supports_*`` switches all
+        report ``False`` and modifier tests are skipped via
+        ``@requires_protocol``.
+        """
+        from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
+
+        return OracleDialect()
+
     def _track_backend(self, backend_instance, collection: List) -> None:
         if backend_instance not in collection:
             collection.append(backend_instance)
@@ -532,6 +545,10 @@ class BasicAsyncProvider(BasicProviderBase, IBasicAsyncProvider):
     def __init__(self):
         super().__init__()
         self._active_async_backends: List = []
+
+    async def get_dialect(self, scenario_name: str = "default"):
+        """Async mirror of ``BasicProviderBase.get_dialect``."""
+        return super().get_dialect(scenario_name)
 
     # -- DDL helpers ----------------------------------------------------
 
