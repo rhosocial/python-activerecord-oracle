@@ -7,7 +7,7 @@ CREATE TABLE type_tests (
     float_field BINARY_FLOAT DEFAULT 3.14 NOT NULL,
     decimal_field BINARY_DOUBLE DEFAULT 10.99 NOT NULL,
     bool_field NUMBER(1) DEFAULT 1 NOT NULL,
-    datetime_field VARCHAR2(4000) NOT NULL,
+    datetime_field TIMESTAMP(6) WITH TIME ZONE NOT NULL,
     json_field VARCHAR2(4000),
     nullable_field VARCHAR2(255)
 )

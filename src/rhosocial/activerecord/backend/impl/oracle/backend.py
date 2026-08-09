@@ -165,6 +165,15 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
             if "ORA-00001" in error_msg:  # Unique constraint violation
                 self.log(logging.ERROR, f"Unique constraint violation: {error_msg}")
                 raise IntegrityError(f"Unique constraint violation: {error_msg}")
+            elif "ORA-01400" in error_msg:  # NOT NULL constraint violation (INSERT/UPDATE)
+                self.log(logging.ERROR, f"Not-null constraint violation: {error_msg}")
+                # Normalize to include the cross-backend keyword phrase so that
+                # tests and callers that pattern-match the message (e.g. the
+                # testsuite's type_adapter tests probing for "cannot be null"
+                # / "NOT NULL constraint failed" / "violates not-null
+                # constraint") match uniformly across SQLite, MySQL, PostgreSQL
+                # and Oracle.
+                raise IntegrityError(f"cannot be null: {error_msg}")
             elif "ORA-02291" in error_msg:  # Foreign key constraint violation
                 self.log(logging.ERROR, f"Foreign key constraint violation: {error_msg}")
                 raise IntegrityError(f"Foreign key constraint violation: {error_msg}")
@@ -193,8 +202,30 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
             raise error
 
     def connect(self):
-        """Establish connection to Oracle database."""
+        """Establish connection to Oracle database.
+
+        Idempotent: if the backend already holds an open connection, the
+        existing connection is closed before opening a new one. Without this
+        guard, repeated ``connect()`` calls would silently drop the reference
+        to the previous ``oracledb.Connection`` object, leaving the database
+        session orphaned on the server and contributing to dispatcher/session
+        exhaustion (ORA-12516 / DPY-6005) during long test runs.
+        """
         try:
+            if self._connection is not None:
+                # Already connected — close the previous session first so the
+                # server-side dispatcher slot is released before we consume a
+                # new one.
+                try:
+                    self.log(
+                        logging.DEBUG,
+                        "connect() called on an already-open backend; "
+                        "closing previous connection first.",
+                    )
+                    self.disconnect()
+                except Exception as e:
+                    self.log(logging.WARNING, f"Error closing previous connection: {e}")
+
             # Build DSN
             dsn = self.config.get_dsn() if hasattr(self.config, 'get_dsn') else None
             if not dsn:
@@ -517,7 +548,10 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
 
         except OracleIntegrityError as e:
             self.log(logging.ERROR, f"Integrity error: {str(e)}")
-            raise IntegrityError(str(e)) from e
+            error_msg = str(e)
+            if "ORA-01400" in error_msg:
+                raise IntegrityError(f"cannot be null: {error_msg}") from e
+            raise IntegrityError(error_msg) from e
         except OracleDatabaseError as e:
             error_msg = str(e)
             if "ORA-00060" in error_msg:
@@ -878,7 +912,10 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
 
         except OracleIntegrityError as e:
             self.log(logging.ERROR, f"Integrity error in bulk insert: {str(e)}")
-            raise IntegrityError(str(e)) from e
+            error_msg = str(e)
+            if "ORA-01400" in error_msg:
+                raise IntegrityError(f"cannot be null: {error_msg}") from e
+            raise IntegrityError(error_msg) from e
         except OracleDatabaseError as e:
             error_msg = str(e)
             if "ORA-00060" in error_msg:
@@ -962,7 +999,8 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
             try:
                 result = self._execute_with_returning_into(
                     sql, params, options.returning_columns,
-                    options.column_adapters, options.column_mapping
+                    options.column_adapters, options.column_mapping,
+                    is_insert=True,
                 )
             finally:
                 self._current_returning_table = None
@@ -1018,7 +1056,8 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
             try:
                 return self._execute_with_returning_into(
                     sql, params, options.returning_columns,
-                    options.column_adapters, options.column_mapping
+                    options.column_adapters, options.column_mapping,
+                    is_insert=False,
                 )
             finally:
                 self._current_returning_table = None
@@ -1070,7 +1109,8 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
             try:
                 return self._execute_with_returning_into(
                     sql, params, options.returning_columns,
-                    options.column_adapters, options.column_mapping
+                    options.column_adapters, options.column_mapping,
+                    is_insert=False,
                 )
             finally:
                 self._current_returning_table = None
@@ -1089,7 +1129,8 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         return result
 
     def _execute_with_returning_into(self, sql: str, params: tuple, returning_columns: list,
-                                       column_adapters=None, column_mapping=None) -> 'QueryResult':
+                                       column_adapters=None, column_mapping=None,
+                                       is_insert: bool = False) -> 'QueryResult':
         """
         Execute INSERT/UPDATE/DELETE with RETURNING INTO clause using Oracle's output variables.
 
@@ -1099,6 +1140,16 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         2. Converts all ? placeholders to Oracle :N format
         3. Creates output variables with cursor.var()
         4. Executes and retrieves returned values
+
+        Args:
+            is_insert: ``True`` when the executed statement is an INSERT. For
+                INSERTs, the Oracle thin client sometimes reports
+                ``cursor.rowcount == 0`` even though exactly one row was
+                inserted, so the affected-count is promoted to 1 in that
+                case. For UPDATE/DELETE, a rowcount of 0 must be preserved
+                verbatim — otherwise optimistic-locking (which inspects
+                ``affected_rows == 0`` to detect concurrent modification)
+                goes undetected.
         """
         from rhosocial.activerecord.backend.result import QueryResult
 
@@ -1187,7 +1238,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
             data = [row_data]
 
             result = QueryResult(
-                affected_rows=cursor.rowcount if cursor.rowcount > 0 else 1,
+                affected_rows=cursor.rowcount if cursor.rowcount > 0 or not is_insert else 1,
                 data=data,
                 duration=duration,
                 last_insert_id=None

@@ -80,6 +80,25 @@ jobs:
         run: |
           docker exec ${{ job.services.oracle.id }} sqlplus -L / as sysdba <<EOF
           alter system set local_listener='(ADDRESS=(PROTOCOL=TCP)(HOST=0.0.0.0)(PORT=1521))' scope=both;
+          -- Boost connection capacity so long-running pytest runs do not
+          -- exhaust the dispatcher / session pool (ORA-12516 / DPY-6005).
+          -- The default gvenzl/oracle-xe images ship with a single
+          -- dispatcher and 200 processes, which is too tight for the
+          -- python-activerecord-oracle worker tests that fan out several
+          -- concurrent backend pools per scenario.
+          alter system set processes=600 scope=spfile;
+          alter system set sessions=900 scope=spfile;
+          alter system set dispatchers='(PROTOCOL=TCP)(DISPATCHERS=4)' scope=both;
+          alter system register;
+          exit;
+          EOF
+          # Spfile-only changes (processes/sessions) require an instance
+          # restart for ``gvenzl/oracle-xe:*-slim``. Bounce the container so
+          # the boosted limits apply before the test run starts.
+          docker restart ${{ job.services.oracle.id }}
+          sleep 30
+          docker exec ${{ job.services.oracle.id }} sqlplus -L / as sysdba <<EOF
+          alter system set dispatchers='(PROTOCOL=TCP)(DISPATCHERS=4)' scope=both;
           alter system register;
           exit;
           EOF
@@ -191,6 +210,25 @@ jobs:
         run: |
           docker exec ${{ job.services.oracle.id }} sqlplus -L / as sysdba <<EOF
           alter system set local_listener='(ADDRESS=(PROTOCOL=TCP)(HOST=0.0.0.0)(PORT=1521))' scope=both;
+          -- Boost connection capacity so long-running pytest runs do not
+          -- exhaust the dispatcher / session pool (ORA-12516 / DPY-6005).
+          -- The default gvenzl/oracle-xe images ship with a single
+          -- dispatcher and 200 processes, which is too tight for the
+          -- python-activerecord-oracle worker tests that fan out several
+          -- concurrent backend pools per scenario.
+          alter system set processes=600 scope=spfile;
+          alter system set sessions=900 scope=spfile;
+          alter system set dispatchers='(PROTOCOL=TCP)(DISPATCHERS=4)' scope=both;
+          alter system register;
+          exit;
+          EOF
+          # Spfile-only changes (processes/sessions) require an instance
+          # restart for ``gvenzl/oracle-xe:*-slim``. Bounce the container so
+          # the boosted limits apply before the test run starts.
+          docker restart ${{ job.services.oracle.id }}
+          sleep 30
+          docker exec ${{ job.services.oracle.id }} sqlplus -L / as sysdba <<EOF
+          alter system set dispatchers='(PROTOCOL=TCP)(DISPATCHERS=4)' scope=both;
           alter system register;
           exit;
           EOF
@@ -301,6 +339,25 @@ jobs:
       - name: Ensure PDB service registered with listener
         run: |
           docker exec ${{ job.services.oracle.id }} sqlplus -L / as sysdba <<EOF
+          -- Boost connection capacity so long-running pytest runs do not
+          -- exhaust the dispatcher / session pool (ORA-12516 / DPY-6005).
+          -- The default gvenzl/oracle-free:23-slim image ships with a
+          -- single dispatcher and 200 processes, which is too tight for the
+          -- python-activerecord-oracle worker tests that fan out several
+          -- concurrent backend pools per scenario.
+          alter system set processes=600 scope=spfile;
+          alter system set sessions=900 scope=spfile;
+          alter system set dispatchers='(PROTOCOL=TCP)(DISPATCHERS=4)' scope=both;
+          alter system register;
+          exit;
+          EOF
+          # Spfile-only changes (processes/sessions) require an instance
+          # restart for ``gvenzl/oracle-free:23-slim``. Bounce the container
+          # so the boosted limits apply before the test run starts.
+          docker restart ${{ job.services.oracle.id }}
+          sleep 30
+          docker exec ${{ job.services.oracle.id }} sqlplus -L / as sysdba <<EOF
+          alter system set dispatchers='(PROTOCOL=TCP)(DISPATCHERS=4)' scope=both;
           alter system register;
           exit;
           EOF

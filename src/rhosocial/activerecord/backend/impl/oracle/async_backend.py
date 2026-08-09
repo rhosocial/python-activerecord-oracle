@@ -33,7 +33,7 @@ from .config import OracleConnectionConfig
 from .dialect import OracleDialect
 from .async_transaction import AsyncOracleTransactionManager
 from .mixins import OracleBackendMixin
-from .backend import _is_numeric_python_type
+from .backend import OracleBackend, _is_numeric_python_type
 
 
 class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStorageBackend):
@@ -127,6 +127,12 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             if "ORA-00001" in error_msg:  # Unique constraint violation
                 self.log(logging.ERROR, f"Unique constraint violation: {error_msg}")
                 raise IntegrityError(f"Unique constraint violation: {error_msg}")
+            elif "ORA-01400" in error_msg:  # NOT NULL constraint violation (INSERT/UPDATE)
+                self.log(logging.ERROR, f"Not-null constraint violation: {error_msg}")
+                # Normalize so cross-backend pattern-matching of the message
+                # (e.g. testsuite's "cannot be null" / "NOT NULL constraint
+                # failed" probes) matches on Oracle too.
+                raise IntegrityError(f"cannot be null: {error_msg}")
             elif "ORA-02291" in error_msg:  # Foreign key constraint violation
                 self.log(logging.ERROR, f"Foreign key constraint violation: {error_msg}")
                 raise IntegrityError(f"Foreign key constraint violation: {error_msg}")
@@ -155,8 +161,26 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             raise error
 
     async def connect(self):
-        """Establish async connection to Oracle database."""
+        """Establish async connection to Oracle database.
+
+        Idempotent: if the backend already holds an open connection, the
+        existing connection is closed before opening a new one. This avoids
+        orphaning server-side sessions (which contributed to ORA-12516 /
+        DPY-6005 dispatcher exhaustion during long test runs) when
+        ``connect()`` is invoked more than once on the same backend.
+        """
         try:
+            if self._connection is not None:
+                try:
+                    self.log(
+                        logging.DEBUG,
+                        "connect() called on an already-open async backend; "
+                        "closing previous connection first.",
+                    )
+                    await self.disconnect()
+                except Exception as e:
+                    self.log(logging.WARNING, f"Error closing previous connection: {e}")
+
             dsn = self.config.get_dsn() if hasattr(self.config, 'get_dsn') else None
             if not dsn:
                 dsn = f"{self.config.host}:{self.config.port}/{self.config.database}"
@@ -472,7 +496,10 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             return result
 
         except OracleIntegrityError as e:
-            raise IntegrityError(str(e)) from e
+            error_msg = str(e)
+            if "ORA-01400" in error_msg:
+                raise IntegrityError(f"cannot be null: {error_msg}") from e
+            raise IntegrityError(error_msg) from e
         except OracleDatabaseError as e:
             error_msg = str(e)
             if "ORA-00060" in error_msg:
@@ -568,13 +595,21 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             return False
 
     async def executescript(self, sql_script: str) -> None:
-        """Execute a multi-statement SQL script asynchronously."""
+        """Execute a multi-statement SQL script asynchronously.
+
+        Oracle thin driver ``cursor.execute()`` accepts only a single statement
+        per call.  This method delegates to the synchronous splitter
+        ``_split_sql_script`` (which respects string literals, comments and
+        nested PL/SQL blocks) so PL/SQL statements such as
+        ``BEGIN ... EXCEPTION ... END;`` are not mis-split into invalid
+        fragments the way a naive ``split(';')`` would.
+        """
         start_time = datetime.datetime.now()
 
         if not self._connection:
             await self.connect()
 
-        statements = [stmt.strip() for stmt in sql_script.split(';') if stmt.strip()]
+        statements = OracleBackend._split_sql_script(sql_script)
 
         cursor = None
         try:
@@ -674,7 +709,10 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
 
         except OracleIntegrityError as e:
             self.log(logging.ERROR, f"Integrity error in bulk insert: {str(e)}")
-            raise IntegrityError(str(e)) from e
+            error_msg = str(e)
+            if "ORA-01400" in error_msg:
+                raise IntegrityError(f"cannot be null: {error_msg}") from e
+            raise IntegrityError(error_msg) from e
         except OracleDatabaseError as e:
             error_msg = str(e)
             if "ORA-00060" in error_msg:
@@ -785,7 +823,8 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             try:
                 result = await self._execute_with_returning_into(
                     sql, params, options.returning_columns,
-                    options.column_adapters, options.column_mapping
+                    options.column_adapters, options.column_mapping,
+                    is_insert=True,
                 )
             finally:
                 self._current_returning_table = None
@@ -847,7 +886,8 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             try:
                 return await self._execute_with_returning_into(
                     sql, params, options.returning_columns,
-                    options.column_adapters, options.column_mapping
+                    options.column_adapters, options.column_mapping,
+                    is_insert=False,
                 )
             finally:
                 self._current_returning_table = None
@@ -899,7 +939,8 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             try:
                 return await self._execute_with_returning_into(
                     sql, params, options.returning_columns,
-                    options.column_adapters, options.column_mapping
+                    options.column_adapters, options.column_mapping,
+                    is_insert=False,
                 )
             finally:
                 self._current_returning_table = None
@@ -918,7 +959,8 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         return result
 
     async def _execute_with_returning_into(self, sql: str, params: tuple, returning_columns: list,
-                                            column_adapters=None, column_mapping=None) -> 'QueryResult':
+                                            column_adapters=None, column_mapping=None,
+                                            is_insert: bool = False) -> 'QueryResult':
         """
         Execute INSERT/UPDATE/DELETE with RETURNING INTO clause using Oracle's output variables.
 
@@ -928,6 +970,13 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         2. Converts all ? placeholders to Oracle :N format
         3. Creates output variables with cursor.var()
         4. Executes and retrieves returned values
+
+        Args:
+            is_insert: ``True`` when the executed statement is an INSERT. See
+                the synchronous ``OracleBackend._execute_with_returning_into``
+                for the rationale — INSERT rowcount may report 0 and is
+                promoted to 1; UPDATE/DELETE preserve a 0 rowcount so
+                optimistic-lock detection still works.
         """
         from rhosocial.activerecord.backend.result import QueryResult
 
@@ -1011,7 +1060,7 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             data = [row_data]
 
             result = QueryResult(
-                affected_rows=cursor.rowcount if cursor.rowcount > 0 else 1,
+                affected_rows=cursor.rowcount if cursor.rowcount > 0 or not is_insert else 1,
                 data=data,
                 duration=duration,
                 last_insert_id=None
