@@ -25,6 +25,9 @@ from rhosocial.activerecord.testsuite.feature.query.fixtures.models import (  # 
     MappedUser as MappedUserBase,
     MappedPost as MappedPostBase,
     MappedComment as MappedCommentBase,
+    AsyncMappedUser as AsyncMappedUserBase,
+    AsyncMappedPost as AsyncMappedPostBase,
+    AsyncMappedComment as AsyncMappedCommentBase,
 )
 from rhosocial.activerecord.testsuite.feature.query.fixtures.cte_models import Node  # noqa: E402
 from rhosocial.activerecord.testsuite.feature.query.fixtures.extended_models import (  # noqa: E402
@@ -464,13 +467,8 @@ class QueryAsyncProvider(QueryProviderBase, IQueryAsyncProvider):
     async def setup_mapped_models(
         self, scenario_name: str
     ) -> Tuple[Type[ActiveRecord], Type[ActiveRecord], Type[ActiveRecord]]:
-        from rhosocial.activerecord.testsuite.feature.query.fixtures.async_models import (
-            AsyncMappedUser,
-            AsyncMappedPost,
-            AsyncMappedComment,
-        )
         return await self._setup_multiple_models_async(
-            [(AsyncMappedUser, "users"), (AsyncMappedPost, "posts"), (AsyncMappedComment, "comments")], scenario_name
+            [(AsyncMappedUserBase, "users"), (AsyncMappedPostBase, "posts"), (AsyncMappedCommentBase, "comments")], scenario_name
         )
 
     async def setup_profile_fixtures(
