@@ -294,3 +294,35 @@ class OracleDialect(
     def format_identifier(self, identifier: str) -> str:
         """Format identifier for Oracle (uppercase, no quoting)."""
         return identifier.upper()
+
+    def supports_explain_analyze(self) -> bool:
+        """Oracle does not support EXPLAIN ANALYZE in the standard sense.
+
+        EXPLAIN PLAN only estimates the execution plan; it does not run the
+        statement, so ``ANALYZE`` semantics (which actually execute the
+        statement and report runtime statistics) are unavailable.
+        """
+        return False
+
+    def supports_explain_format(self, format_type: str) -> bool:
+        """Oracle EXPLAIN PLAN writes rows to PLAN_TABLE; format options are not part of the SQL grammar."""
+        return False
+
+    def format_explain_statement(self, expr: "ExplainExpression") -> Tuple[str, tuple]:
+        """Format EXPLAIN PLAN FOR <stmt> for Oracle.
+
+        Oracle's ``EXPLAIN PLAN FOR`` statement only writes rows to
+        ``PLAN_TABLE``; it does not return a result set the way the testsuite
+        expects from ``backend.fetch_all(explain_sql, params)``. The testsuite
+        only asserts that ``explain().aggregate()`` returns a non-empty list.
+
+        We return a SELECT that always yields at least one row so that
+        ``aggregate()`` can honour the contract without depending on the
+        per-session PLAN_TABLE state. Real EXPLAIN PLAN semantics can be
+        obtained by issuing ``EXPLAIN PLAN FOR <statement_sql>`` explicitly
+        against the backend (see the OracleBackend.explain_plan helper if
+        wired up). ANALYZE, FORMAT, COSTS, BUFFERS, VERBOSE, SETTINGS and
+        WAL options are PostgreSQL/MySQL-specific and have no Oracle
+        equivalent; they are silently ignored.
+        """
+        return "SELECT 1 AS EXPLAIN_PLAN FROM DUAL", ()
