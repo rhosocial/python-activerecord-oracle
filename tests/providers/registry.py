@@ -63,3 +63,13 @@ provider_registry.register(
     "benchmark.transaction.ITransactionBenchmarkProvider",
     TransactionBenchmarkProvider,
 )
+
+# Register BasicConnectionProvider under the transaction-specific key as
+# well so the testsuite's transaction/conftest.py can resolve it via its
+# dedicated provider branch.  This avoids the fallback path that some
+# CI environments have observed to produce an AsyncOracleBackend instead
+# of a sync OracleBackend (run 31414867272).
+provider_registry.register(
+    "feature.basic.transaction.ITransactionBasicProvider",
+    BasicConnectionProvider,
+)
