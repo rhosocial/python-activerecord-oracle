@@ -90,22 +90,21 @@ class BasicConnectionProvider(IBasicConnectionProvider):
 
     def setup_sync_pool_and_model(self, scenario_name: str) -> Tuple[BackendPool, Type[ActiveRecord]]:
         """Setup sync connection pool and model for context tests."""
-        import logging as _logging
-        _log = _logging.getLogger("rhosocial.activerecord.testsuite.oracle.debug.pool")
+        import sys as _sys
+        print("DEBUG_BASIC_CONNECTION setup_sync_pool_and_model ENTRY scenario=%s" % scenario_name, file=_sys.stderr, flush=True)
         _, config = get_scenario(scenario_name)
-        _log.error("DEBUG_SETUP_SYNC_POOL_AND_MODEL_ENTRY scenario=%s", scenario_name)
 
         pool_config = PoolConfig(
             min_size=1, max_size=5,
             backend_factory=lambda: OracleBackend(connection_config=config),
         )
         pool = BackendPool.create(pool_config)
-        _log.error("DEBUG_POOL_TYPE=%s", type(pool).__name__)
+        print("DEBUG_BASIC_CONNECTION pool=%s" % type(pool).__name__, file=_sys.stderr, flush=True)
 
         with pool.connection() as backend:
             self._create_test_table(backend)
             self._active_backends.append(backend)
-            _log.error("DEBUG_BACKEND_TYPE=%s TMGR=%s", type(backend).__name__, type(backend.transaction_manager).__name__ if hasattr(backend, '_transaction_manager') else None)
+            print("DEBUG_BASIC_CONNECTION backend=%s tmgr=%s" % (type(backend).__name__, type(backend.transaction_manager).__name__ if hasattr(backend, '_transaction_manager') else None), file=_sys.stderr, flush=True)
 
         # Configure model against a separate backend so that
         # model.backend() returning the pool's context backend is exercised.
@@ -119,7 +118,7 @@ class BasicConnectionProvider(IBasicConnectionProvider):
         # later fixture cleanup that touches the async model cannot influence
         # the synchronous transaction fixture.
         AsyncTestUser.__backend__ = None
-        _log.error("DEBUG_RETURN pool=%s", type(pool).__name__)
+        print("DEBUG_BASIC_CONNECTION RETURN pool=%s" % type(pool).__name__, file=_sys.stderr, flush=True)
         return pool, SyncTestUser
 
     async def setup_async_pool_and_model(self, scenario_name: str) -> Tuple[AsyncBackendPool, Type[AsyncActiveRecord]]:
