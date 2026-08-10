@@ -91,23 +91,22 @@ class BasicConnectionProvider(IBasicConnectionProvider):
     def setup_sync_pool_and_model(self, scenario_name: str) -> Tuple[BackendPool, Type[ActiveRecord]]:
         """Setup sync connection pool and model for context tests."""
         import logging as _logging
-        _log = _logging.getLogger("oracle.debug.pool")
+        _log = _logging.getLogger("rhosocial.activerecord.testsuite.oracle.debug.pool")
+        import sys as _sys
+        print("=== setup_sync_pool_and_model ENTRY scenario=%s" % scenario_name, file=_sys.stderr, flush=True)
         _, config = get_scenario(scenario_name)
-        _log.warning("=== setup_sync_pool_and_model ENTRY scenario=%s", scenario_name)
-        _log.warning("=== self._active_backends has %d items: %s", len(self._active_backends), [type(b).__name__ for b in self._active_backends])
-        _log.warning("=== self._active_async_backends has %d items: %s", len(self._active_async_backends), [type(b).__name__ for b in self._active_async_backends])
 
         pool_config = PoolConfig(
             min_size=1, max_size=5,
             backend_factory=lambda: OracleBackend(connection_config=config),
         )
         pool = BackendPool.create(pool_config)
-        _log.warning("=== pool=%s", type(pool).__name__)
+        print("=== pool=%s" % type(pool).__name__, file=_sys.stderr, flush=True)
 
         with pool.connection() as backend:
             self._create_test_table(backend)
             self._active_backends.append(backend)
-            _log.warning("=== backend=%s tmgr=%s", type(backend).__name__, type(backend.transaction_manager).__name__ if hasattr(backend, '_transaction_manager') else None)
+            print("=== backend=%s tmgr=%s" % (type(backend).__name__, type(backend.transaction_manager).__name__ if hasattr(backend, '_transaction_manager') else None), file=_sys.stderr, flush=True)
 
         # Configure model against a separate backend so that
         # model.backend() returning the pool's context backend is exercised.
@@ -121,13 +120,12 @@ class BasicConnectionProvider(IBasicConnectionProvider):
         # later fixture cleanup that touches the async model cannot influence
         # the synchronous transaction fixture.
         AsyncTestUser.__backend__ = None
-        _log.warning("=== RETURN pool=%s SyncTestUser.__backend__=%s", type(pool).__name__, type(SyncTestUser.__backend__).__name__ if SyncTestUser.__backend__ else None)
-        # Print PoolContext current connection_backend state
+        print("=== RETURN pool=%s SyncTestUser.__backend__=%s" % (type(pool).__name__, type(SyncTestUser.__backend__).__name__ if SyncTestUser.__backend__ else None), file=_sys.stderr, flush=True)
         from rhosocial.activerecord.connection.pool import context as ctx
-        _log.warning("=== ctx sync tx=%s conn=%s", type(ctx.get_current_transaction_backend()).__name__ if ctx.get_current_transaction_backend() else None,
-                     type(ctx.get_current_connection_backend()).__name__ if ctx.get_current_connection_backend() else None)
-        _log.warning("=== ctx async tx=%s conn=%s", type(ctx.get_current_async_transaction_backend()).__name__ if ctx.get_current_async_transaction_backend() else None,
-                     type(ctx.get_current_async_connection_backend()).__name__ if ctx.get_current_async_connection_backend() else None)
+        print("=== ctx sync tx=%s conn=%s" % (type(ctx.get_current_transaction_backend()).__name__ if ctx.get_current_transaction_backend() else None,
+              type(ctx.get_current_connection_backend()).__name__ if ctx.get_current_connection_backend() else None), file=_sys.stderr, flush=True)
+        print("=== ctx async tx=%s conn=%s" % (type(ctx.get_current_async_transaction_backend()).__name__ if ctx.get_current_async_transaction_backend() else None,
+              type(ctx.get_current_async_connection_backend()).__name__ if ctx.get_current_async_connection_backend() else None), file=_sys.stderr, flush=True)
 
         return pool, SyncTestUser
 
