@@ -91,7 +91,9 @@ class BasicConnectionProvider(IBasicConnectionProvider):
     def setup_sync_pool_and_model(self, scenario_name: str) -> Tuple[BackendPool, Type[ActiveRecord]]:
         """Setup sync connection pool and model for context tests."""
         import sys as _sys
+        import traceback as _tb
         print("DEBUG_BASIC_CONNECTION setup_sync_pool_and_model ENTRY scenario=%s" % scenario_name, file=_sys.stderr, flush=True)
+        _tb.print_stack(file=_sys.stderr)
         _, config = get_scenario(scenario_name)
 
         pool_config = PoolConfig(
