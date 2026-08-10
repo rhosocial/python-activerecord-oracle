@@ -1,5 +1,6 @@
 pytest
 pytest-asyncio
+pytest-benchmark
 pytest-cov
 coverage>=7.0.0
 pyyaml>=6.0

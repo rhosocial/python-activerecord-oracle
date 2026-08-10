@@ -286,7 +286,22 @@ class QuerySyncProvider(QueryProviderBase, IQuerySyncProvider, WorkerTestProtoco
         if backend_instance not in self._active_backends:
             self._active_backends.append(backend_instance)
         self._drop_table_sync(backend_instance, "order_items")
-        schema_sql = self._load_oracle_schema("order_items.sql")
+        # The composite-PK ``OrderItem`` model is bound to a composite primary
+        # key on (order_id, product_id); the query-domain schema for the
+        # regular ``OrderItem`` model uses an auto-increment surrogate id
+        # instead, so load the composite_pk-specific schema file.
+        composite_schema_dir = os.path.join(
+            os.path.dirname(__file__),
+            "..",
+            "rhosocial",
+            "activerecord_oracle_test",
+            "feature",
+            "composite_pk",
+            "schema",
+        )
+        composite_schema_path = os.path.join(composite_schema_dir, "order_items.sql")
+        with open(composite_schema_path, "r", encoding="utf-8") as f:
+            schema_sql = f.read()
         backend_instance.execute(schema_sql, options=self._ddl_options())
         return CompositeOrderItemBase
 
@@ -487,7 +502,20 @@ class QueryAsyncProvider(QueryProviderBase, IQueryAsyncProvider):
         if backend_instance not in self._active_async_backends:
             self._active_async_backends.append(backend_instance)
         await self._drop_table_async(backend_instance, "order_items")
-        schema_sql = self._load_oracle_schema("order_items.sql")
+        # See sync ``setup_order_item_model``: the composite-PK model has its
+        # own schema file under ``feature/composite_pk/schema``.
+        composite_schema_dir = os.path.join(
+            os.path.dirname(__file__),
+            "..",
+            "rhosocial",
+            "activerecord_oracle_test",
+            "feature",
+            "composite_pk",
+            "schema",
+        )
+        composite_schema_path = os.path.join(composite_schema_dir, "order_items.sql")
+        with open(composite_schema_path, "r", encoding="utf-8") as f:
+            schema_sql = f.read()
         await backend_instance.execute(schema_sql, options=self._ddl_options())
         return AsyncCompositeOrderItemBase
 
