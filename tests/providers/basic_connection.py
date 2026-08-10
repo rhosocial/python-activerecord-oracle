@@ -107,6 +107,14 @@ class BasicConnectionProvider(IBasicConnectionProvider):
         SyncTestUser.configure(config, OracleBackend)
         self._active_backends.append(SyncTestUser.__backend__)
 
+        # Defensive: pytest-asyncio 1.4.0 in auto mode has been observed to
+        # leave ``AsyncTestUser.__backend__`` populated with an AsyncOracleBackend
+        # from a previous async test in the same module (which imports both
+        # sync and async tests). Forcing it to ``None`` guarantees that any
+        # later fixture cleanup that touches the async model cannot influence
+        # the synchronous transaction fixture.
+        AsyncTestUser.__backend__ = None
+
         return pool, SyncTestUser
 
     async def setup_async_pool_and_model(self, scenario_name: str) -> Tuple[AsyncBackendPool, Type[AsyncActiveRecord]]:

@@ -6,5 +6,5 @@ CREATE TABLE orders (
     status VARCHAR2(50) DEFAULT 'pending' NOT NULL,
     created_at TIMESTAMP,
     updated_at TIMESTAMP,
-    CONSTRAINT fk_orders_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    CONSTRAINT fk_orders_user FOREIGN KEY (user_id) REFERENCES users(id)
 )
