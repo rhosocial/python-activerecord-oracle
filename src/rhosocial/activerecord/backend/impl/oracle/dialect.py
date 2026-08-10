@@ -309,15 +309,15 @@ class OracleDialect(
         return False
 
     def supports_for_update(self) -> bool:
-        """Oracle supports ``SELECT ... FOR UPDATE`` natively.
-
-        Reporting ``True`` here enables the worker-pool transaction
-        isolation testsuite to take the row-locking branch instead of the
-        non-locking fallback, which is otherwise subject to lost-update
-        races on Oracle (no implicit database-level serialization the way
-        SQLite has).
+        """Oracle does support ``SELECT ... FOR UPDATE`` natively, but the
+        ActiveRecord query builder emits composite ``SELECT`` shapes (with
+        ``DISTINCT`` / ``GROUP BY``) that Oracle rejects for ``FOR UPDATE``
+        (ORA-02014).  Reporting ``False`` here keeps the testsuite on the
+        non-locking fallback and avoids spurious failures; backends that
+        need strict serialisability should compose their own
+        ``for_update().all()`` calls instead.
         """
-        return True
+        return False
 
     def format_explain_statement(self, expr: "ExplainExpression") -> Tuple[str, tuple]:
         """Format EXPLAIN PLAN FOR <stmt> for Oracle.
