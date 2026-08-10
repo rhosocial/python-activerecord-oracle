@@ -165,13 +165,24 @@ class OracleJSONAdapter(BaseSQLTypeAdapter):
             value = value.read()
         if isinstance(value, str):
             try:
-                return json.loads(value)
+                parsed = json.loads(value)
+                # If the model declares the column as a string field, keep
+                # the JSON string instead of returning a parsed object;
+                # other backends (and ``JsonUser.preferences`` tests in the
+                # testsuite) expect the raw string when the field is ``str``.
+                if target_type is str:
+                    return value
+                return parsed
             except (json.JSONDecodeError, ValueError):
                 pass
         # Oracle 21c+ might return native Oracle JSON object
         if hasattr(value, '__iter__') and not isinstance(value, (str, bytes)):
             try:
-                return dict(value) if isinstance(value, dict) else list(value)
+                native = dict(value) if isinstance(value, dict) else list(value)
+                if target_type is str:
+                    # Serialise back so the consumer still sees a JSON string
+                    return json.dumps(native, ensure_ascii=False)
+                return native
             except (TypeError, ValueError):
                 pass
         return value
@@ -425,6 +436,13 @@ class OracleStringAdapter(BaseSQLTypeAdapter):
     original Python default value semantics.
 
     For Optional[str] fields, None is preserved as-is (genuine NULL).
+
+    ``oracledb`` returns Oracle 21c+ native ``JSON`` columns as
+    ``oracledb.JSON`` wrapper objects whose ``repr`` is the JSON-encoded
+    text.  For ``str`` fields we serialise that wrapper back to a regular
+    Python string so consumers that declared ``preferences: Optional[str]``
+    (and the testsuite's ``JsonUser`` fixture) see the raw JSON string
+    rather than a ``list``/``dict`` that pydantic will reject.
     """
 
     def __init__(self):
@@ -435,6 +453,11 @@ class OracleStringAdapter(BaseSQLTypeAdapter):
         return value
 
     def _do_from_database(self, value: Any, target_type: Type, options: Optional[Dict[str, Any]]) -> Any:
+        # ``oracledb`` exposes native ``JSON`` columns via ``oracledb.JSON``;
+        # iterating the wrapper yields key/value pairs as for a dict, but the
+        # testsuite expects a string for ``Optional[str]`` JSON fields.
+        if value is not None and target_type is str and isinstance(value, (list, dict)):
+            return json.dumps(value, ensure_ascii=False)
         return value
 
     def _on_none_from_database(self, target_type: Type, **kwargs) -> Any:
