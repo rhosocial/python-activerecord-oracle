@@ -92,21 +92,20 @@ class BasicConnectionProvider(IBasicConnectionProvider):
         """Setup sync connection pool and model for context tests."""
         import logging as _logging
         _log = _logging.getLogger("rhosocial.activerecord.testsuite.oracle.debug.pool")
-        import sys as _sys
-        print("=== setup_sync_pool_and_model ENTRY scenario=%s" % scenario_name, file=_sys.stderr, flush=True)
         _, config = get_scenario(scenario_name)
+        _log.error("DEBUG_SETUP_SYNC_POOL_AND_MODEL_ENTRY scenario=%s", scenario_name)
 
         pool_config = PoolConfig(
             min_size=1, max_size=5,
             backend_factory=lambda: OracleBackend(connection_config=config),
         )
         pool = BackendPool.create(pool_config)
-        print("=== pool=%s" % type(pool).__name__, file=_sys.stderr, flush=True)
+        _log.error("DEBUG_POOL_TYPE=%s", type(pool).__name__)
 
         with pool.connection() as backend:
             self._create_test_table(backend)
             self._active_backends.append(backend)
-            print("=== backend=%s tmgr=%s" % (type(backend).__name__, type(backend.transaction_manager).__name__ if hasattr(backend, '_transaction_manager') else None), file=_sys.stderr, flush=True)
+            _log.error("DEBUG_BACKEND_TYPE=%s TMGR=%s", type(backend).__name__, type(backend.transaction_manager).__name__ if hasattr(backend, '_transaction_manager') else None)
 
         # Configure model against a separate backend so that
         # model.backend() returning the pool's context backend is exercised.
@@ -120,13 +119,7 @@ class BasicConnectionProvider(IBasicConnectionProvider):
         # later fixture cleanup that touches the async model cannot influence
         # the synchronous transaction fixture.
         AsyncTestUser.__backend__ = None
-        print("=== RETURN pool=%s SyncTestUser.__backend__=%s" % (type(pool).__name__, type(SyncTestUser.__backend__).__name__ if SyncTestUser.__backend__ else None), file=_sys.stderr, flush=True)
-        from rhosocial.activerecord.connection.pool import context as ctx
-        print("=== ctx sync tx=%s conn=%s" % (type(ctx.get_current_transaction_backend()).__name__ if ctx.get_current_transaction_backend() else None,
-              type(ctx.get_current_connection_backend()).__name__ if ctx.get_current_connection_backend() else None), file=_sys.stderr, flush=True)
-        print("=== ctx async tx=%s conn=%s" % (type(ctx.get_current_async_transaction_backend()).__name__ if ctx.get_current_async_transaction_backend() else None,
-              type(ctx.get_current_async_connection_backend()).__name__ if ctx.get_current_async_connection_backend() else None), file=_sys.stderr, flush=True)
-
+        _log.error("DEBUG_RETURN pool=%s", type(pool).__name__)
         return pool, SyncTestUser
 
     async def setup_async_pool_and_model(self, scenario_name: str) -> Tuple[AsyncBackendPool, Type[AsyncActiveRecord]]:
