@@ -308,6 +308,17 @@ class OracleDialect(
         """Oracle EXPLAIN PLAN writes rows to PLAN_TABLE; format options are not part of the SQL grammar."""
         return False
 
+    def supports_for_update(self) -> bool:
+        """Oracle supports ``SELECT ... FOR UPDATE`` natively.
+
+        Reporting ``True`` here enables the worker-pool transaction
+        isolation testsuite to take the row-locking branch instead of the
+        non-locking fallback, which is otherwise subject to lost-update
+        races on Oracle (no implicit database-level serialization the way
+        SQLite has).
+        """
+        return True
+
     def format_explain_statement(self, expr: "ExplainExpression") -> Tuple[str, tuple]:
         """Format EXPLAIN PLAN FOR <stmt> for Oracle.
 

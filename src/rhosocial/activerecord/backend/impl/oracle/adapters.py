@@ -134,18 +134,28 @@ class OracleTimeAdapter(BaseSQLTypeAdapter):
 
 
 class OracleDecimalAdapter(BaseSQLTypeAdapter):
-    """Adapter for converting between Python Decimal and Oracle NUMBER."""
+    """Adapter for converting between Python numeric types and Oracle NUMBER.
+
+    ``Decimal`` and ``float`` are both supported as the Python source type so
+    that model fields declared ``balance: float`` can round-trip through
+    ``NUMBER``/``NUMBER(10,2)`` columns.  ``float`` is the common ActiveRecord
+    declaration for monetary values; without registering it the column
+    has no adapter and the read path silently drops the value.
+    """
 
     def __init__(self):
         super().__init__()
         self._register_type(Decimal, float)
+        self._register_type(float, float)
 
     def _do_to_database(self, value: Any, target_type: Type, options: Optional[Dict[str, Any]]) -> Any:
         return float(value)
 
     def _do_from_database(self, value: Any, target_type: Type, options: Optional[Dict[str, Any]]) -> Any:
+        if isinstance(value, Decimal):
+            return float(value)
         if isinstance(value, (int, float)):
-            return Decimal(str(value))
+            return float(value)
         return value
 
 

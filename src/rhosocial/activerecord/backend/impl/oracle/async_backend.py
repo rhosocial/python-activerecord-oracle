@@ -231,6 +231,19 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             except OracleError as e:
                 self.log(logging.WARNING, f"Error during disconnection (ignored): {str(e)}")
 
+    async def _handle_auto_commit(self) -> None:
+        """Issue an explicit COMMIT on the connection when not in a transaction.
+
+        Mirror of the sync ``_handle_auto_commit``.  Without this, the
+        worker pool tests would silently roll back any DML they perform
+        when the worker's connection is closed at shutdown.
+        """
+        if self._connection is not None:
+            try:
+                await self._connection.commit()
+            except Exception:
+                pass
+
     async def _get_cursor(self):
         """Get an async database cursor."""
         if not self._connection:

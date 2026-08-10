@@ -74,6 +74,7 @@ class OracleBackendMixin:
             (date, str),
             (time, str),
             (Decimal, float),
+            (float, float),
             (dict, str),
             (list, str),
             (bytes, bytes),

@@ -292,6 +292,24 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
             except OracleError as e:
                 self.log(logging.WARNING, f"Error during disconnection (ignored): {str(e)}")
 
+    def _handle_auto_commit(self) -> None:
+        """Issue an explicit COMMIT on the connection when not in a transaction.
+
+        Oracle thin-mode connections start with autocommit disabled, so DML
+        statements without an enclosing transaction accumulate in the
+        session's transaction and are rolled back the moment the connection
+        is closed (e.g. when a Worker process exits).  Issuing ``COMMIT``
+        here mirrors the auto-commit contract used by other backends.
+        """
+        if self._connection is not None:
+            try:
+                self._connection.commit()
+            except Exception:
+                # Best-effort: never raise out of an implicit auto-commit
+                # hook.  Errors should propagate through the normal execute
+                # path instead.
+                pass
+
     def _get_cursor(self):
         """Get a database cursor, ensuring connection is active."""
         if not self._connection:
@@ -1245,6 +1263,12 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
             )
 
             self.log(logging.INFO, f"RETURNING INTO executed, duration={duration:.3f}s")
+            # Auto-commit DML when not in an enclosing transaction.  Without
+            # this, Oracle (which has autocommit disabled by default in the
+            # thin driver) would silently hold the row change in the session
+            # transaction until the connection is closed -- and even then the
+            # DML would be rolled back rather than committed.
+            self._handle_auto_commit_if_needed()
             return result
 
         except OracleError as e:
