@@ -36,7 +36,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "rhosocial-activerecord>=0.9.0,<2.0.0",
+    "rhosocial-activerecord>=1.0.0.dev0,<2.0.0",
     "oracledb>=3.4.2",
 ]
 
@@ -46,7 +46,7 @@ rhosocial-activerecord-oracle = "rhosocial.activerecord.backend.impl.oracle.__ma
 [project.optional-dependencies]
 # Development dependencies
 test = [
-    "rhosocial-activerecord[test]>=0.9.0,<2.0.0",
+    "rhosocial-activerecord[test]>=1.0.0.dev0,<2.0.0",
     "rhosocial-activerecord-testsuite",
     "fastapi>=0.110",
     "httpx>=0.27",
