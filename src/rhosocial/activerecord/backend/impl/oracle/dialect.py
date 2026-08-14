@@ -291,6 +291,14 @@ class OracleDialect(
         """Return the configured Oracle version tuple."""
         return self.version
 
+    def create_schema_differ(self):
+        """Return the Oracle schema differ for this dialect."""
+        from rhosocial.activerecord.backend.impl.oracle.schema.differ import (
+            OracleSchemaDiffer,
+        )
+
+        return OracleSchemaDiffer()
+
     def format_identifier(self, identifier: str) -> str:
         """Format identifier for Oracle (uppercase, no quoting)."""
         return identifier.upper()
