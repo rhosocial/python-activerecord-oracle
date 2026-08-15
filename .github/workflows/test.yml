@@ -1,25 +1,407 @@
 # .github/workflows/test.yml
-name: Python Test
+name: Python Test and Coverage with Oracle
 
 on:
   push:
     branches:
       - main
-      - "release/v**"
-      - "maint/**"
+      - 'release/v**'
+      - 'maint/**'
   pull_request:
     branches:
       - main
-      - "release/v**"
-      - "maint/**"
+      - 'release/v**'
+      - 'maint/**'
 
 permissions:
   contents: read
 
 jobs:
-  test:
-    name: Test Placeholder
+  test-oracle-18c:
+    name: Python 3.14 / Oracle 18c
     runs-on: ubuntu-latest
+
+    services:
+      oracle:
+        image: gvenzl/oracle-xe:18-slim
+        env:
+          ORACLE_PASSWORD: password
+          ORACLE_CHARACTERSET: AL32UTF8
+        ports:
+          - 1521:1521
+        options: >-
+          --health-cmd "healthcheck.sh"
+          --health-interval 30s
+          --health-timeout 60s
+          --health-retries 15
+
     steps:
-      - name: Success
-        run: echo "Oracle backend tests are disabled until implementation is ready."
+      - name: Check out the repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Install activerecord and testsuite from git
+        run: |
+          pip install rhosocial-activerecord==1.0.0.dev29
+          pip install rhosocial-activerecord-testsuite==1.0.0.dev16
+
+      - name: Wait for Oracle and test connectivity
+        run: |
+          python -c "
+          import sys, time, oracledb
+          max_retries = 30
+          for attempt in range(max_retries):
+              try:
+                  conn = oracledb.connect(
+                      user='system', password='password',
+                      dsn='localhost:1521/XEPDB1')
+                  conn.close()
+                  print('Oracle 18c connectivity OK')
+                  break
+              except Exception as e:
+                  if attempt < max_retries - 1:
+                      print(f'Retry {attempt+1}/{max_retries}: {e}')
+                      time.sleep(10)
+                  else:
+                      print(f'Failed: {e}')
+                      sys.exit(1)
+          "
+
+      - name: Ensure PDB service registered with listener
+        run: |
+          docker exec ${{ job.services.oracle.id }} sqlplus -L / as sysdba <<EOF
+          alter system set local_listener='(ADDRESS=(PROTOCOL=TCP)(HOST=0.0.0.0)(PORT=1521))' scope=both;
+          -- Boost connection capacity so long-running pytest runs do not
+          -- exhaust the dispatcher / session pool (ORA-12516 / DPY-6005).
+          -- The default gvenzl/oracle-xe images ship with a single
+          -- dispatcher and 200 processes, which is too tight for the
+          -- python-activerecord-oracle worker tests that fan out several
+          -- concurrent backend pools per scenario.
+          alter system set processes=600 scope=spfile;
+          alter system set sessions=900 scope=spfile;
+          alter system set dispatchers='(PROTOCOL=TCP)(DISPATCHERS=4)' scope=both;
+          alter system register;
+          exit;
+          EOF
+          # Spfile-only changes (processes/sessions) require an instance
+          # restart for ``gvenzl/oracle-xe:*-slim``. Bounce the container so
+          # the boosted limits apply before the test run starts.
+          docker restart ${{ job.services.oracle.id }}
+          sleep 30
+          docker exec ${{ job.services.oracle.id }} sqlplus -L / as sysdba <<EOF
+          alter system set dispatchers='(PROTOCOL=TCP)(DISPATCHERS=4)' scope=both;
+          alter system register;
+          exit;
+          EOF
+          sleep 5
+          python -c "
+          import oracledb
+          conn = oracledb.connect(
+              user='system', password='password',
+              dsn='localhost:1521/XEPDB1')
+          conn.close()
+          print('PDB service XEPDB1 registered OK')
+          "
+
+      - name: Create Oracle scenario config
+        run: |
+          cat > oracle_scenarios.yaml << EOF
+          scenarios:
+            oracle_18c:
+              host: localhost
+              port: 1521
+              username: system
+              password: password
+              service_name: XEPDB1
+              encoding: AL32UTF8
+          EOF
+          echo "ORACLE_SCENARIOS_CONFIG_PATH=$(pwd)/oracle_scenarios.yaml" >> $GITHUB_ENV
+
+      - name: Run tests
+        run: |
+          export PYTHONPATH=src
+          python -m pytest tests/ --tb=short
+
+      - name: Run tests with coverage
+        run: |
+          export PYTHONPATH=src
+          pip install coverage
+          coverage run --source=src -m pytest tests/ --tb=short
+          coverage xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          flags: unittests,python-3.14,oracle-18c
+          name: codecov-oracle-3.14-18c
+          fail_ci_if_error: false
+
+  test-oracle-21c:
+    name: Python 3.14 / Oracle 21c
+    runs-on: ubuntu-latest
+
+    services:
+      oracle:
+        image: gvenzl/oracle-xe:21-slim
+        env:
+          ORACLE_PASSWORD: password
+          ORACLE_CHARACTERSET: AL32UTF8
+        ports:
+          - 1521:1521
+        options: >-
+          --health-cmd "healthcheck.sh"
+          --health-interval 30s
+          --health-timeout 60s
+          --health-retries 15
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Install activerecord and testsuite from git
+        run: |
+          pip install rhosocial-activerecord==1.0.0.dev29
+          pip install rhosocial-activerecord-testsuite==1.0.0.dev16
+
+      - name: Wait for Oracle and test connectivity
+        run: |
+          python -c "
+          import sys, time, oracledb
+          max_retries = 30
+          for attempt in range(max_retries):
+              try:
+                  conn = oracledb.connect(
+                      user='system', password='password',
+                      dsn='localhost:1521/XEPDB1')
+                  conn.close()
+                  print('Oracle 21c connectivity OK')
+                  break
+              except Exception as e:
+                  if attempt < max_retries - 1:
+                      print(f'Retry {attempt+1}/{max_retries}: {e}')
+                      time.sleep(10)
+                  else:
+                      print(f'Failed: {e}')
+                      sys.exit(1)
+          "
+
+      - name: Ensure PDB service registered with listener
+        run: |
+          docker exec ${{ job.services.oracle.id }} sqlplus -L / as sysdba <<EOF
+          alter system set local_listener='(ADDRESS=(PROTOCOL=TCP)(HOST=0.0.0.0)(PORT=1521))' scope=both;
+          -- Boost connection capacity so long-running pytest runs do not
+          -- exhaust the dispatcher / session pool (ORA-12516 / DPY-6005).
+          -- The default gvenzl/oracle-xe images ship with a single
+          -- dispatcher and 200 processes, which is too tight for the
+          -- python-activerecord-oracle worker tests that fan out several
+          -- concurrent backend pools per scenario.
+          alter system set processes=600 scope=spfile;
+          alter system set sessions=900 scope=spfile;
+          alter system set dispatchers='(PROTOCOL=TCP)(DISPATCHERS=4)' scope=both;
+          alter system register;
+          exit;
+          EOF
+          # Spfile-only changes (processes/sessions) require an instance
+          # restart for ``gvenzl/oracle-xe:*-slim``. Bounce the container so
+          # the boosted limits apply before the test run starts.
+          docker restart ${{ job.services.oracle.id }}
+          sleep 30
+          docker exec ${{ job.services.oracle.id }} sqlplus -L / as sysdba <<EOF
+          alter system set dispatchers='(PROTOCOL=TCP)(DISPATCHERS=4)' scope=both;
+          alter system register;
+          exit;
+          EOF
+          sleep 5
+          python -c "
+          import oracledb
+          conn = oracledb.connect(
+              user='system', password='password',
+              dsn='localhost:1521/XEPDB1')
+          conn.close()
+          print('PDB service XEPDB1 registered OK')
+          "
+
+      - name: Create Oracle scenario config
+        run: |
+          cat > oracle_scenarios.yaml << EOF
+          scenarios:
+            oracle_21c:
+              host: localhost
+              port: 1521
+              username: system
+              password: password
+              service_name: XEPDB1
+              encoding: AL32UTF8
+          EOF
+          echo "ORACLE_SCENARIOS_CONFIG_PATH=$(pwd)/oracle_scenarios.yaml" >> $GITHUB_ENV
+
+      - name: Run tests
+        run: |
+          export PYTHONPATH=src
+          python -m pytest tests/ --tb=short
+
+      - name: Run tests with coverage
+        run: |
+          export PYTHONPATH=src
+          pip install coverage
+          coverage run --source=src -m pytest tests/ --tb=short
+          coverage xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          flags: unittests,python-3.14,oracle-21c
+          name: codecov-oracle-3.14-21c
+          fail_ci_if_error: false
+
+  test-oracle-23c:
+    name: Python 3.14 / Oracle 23c
+    runs-on: ubuntu-latest
+
+    services:
+      oracle:
+        image: gvenzl/oracle-free:23-slim
+        env:
+          ORACLE_PASSWORD: password
+          ORACLE_CHARACTERSET: AL32UTF8
+        ports:
+          - 1521:1521
+        options: >-
+          --health-cmd "healthcheck.sh"
+          --health-interval 30s
+          --health-timeout 60s
+          --health-retries 15
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Install activerecord and testsuite from git
+        run: |
+          pip install rhosocial-activerecord==1.0.0.dev29
+          pip install rhosocial-activerecord-testsuite==1.0.0.dev16
+
+      - name: Wait for Oracle and test connectivity
+        run: |
+          python -c "
+          import sys, time, oracledb
+          max_retries = 30
+          for attempt in range(max_retries):
+              try:
+                  conn = oracledb.connect(
+                      user='system', password='password',
+                      dsn='localhost:1521/FREEPDB1')
+                  conn.close()
+                  print('Oracle 23c connectivity OK')
+                  break
+              except Exception as e:
+                  if attempt < max_retries - 1:
+                      print(f'Retry {attempt+1}/{max_retries}: {e}')
+                      time.sleep(10)
+                  else:
+                      print(f'Failed: {e}')
+                      sys.exit(1)
+          "
+
+      - name: Ensure PDB service registered with listener
+        run: |
+          docker exec ${{ job.services.oracle.id }} sqlplus -L / as sysdba <<EOF
+          -- Boost connection capacity so long-running pytest runs do not
+          -- exhaust the dispatcher / session pool (ORA-12516 / DPY-6005).
+          -- The default gvenzl/oracle-free:23-slim image ships with a
+          -- single dispatcher and 200 processes, which is too tight for the
+          -- python-activerecord-oracle worker tests that fan out several
+          -- concurrent backend pools per scenario.
+          alter system set processes=600 scope=spfile;
+          alter system set sessions=900 scope=spfile;
+          alter system set dispatchers='(PROTOCOL=TCP)(DISPATCHERS=4)' scope=both;
+          alter system register;
+          exit;
+          EOF
+          # Spfile-only changes (processes/sessions) require an instance
+          # restart for ``gvenzl/oracle-free:23-slim``. Bounce the container
+          # so the boosted limits apply before the test run starts.
+          docker restart ${{ job.services.oracle.id }}
+          sleep 30
+          docker exec ${{ job.services.oracle.id }} sqlplus -L / as sysdba <<EOF
+          alter system set dispatchers='(PROTOCOL=TCP)(DISPATCHERS=4)' scope=both;
+          alter system register;
+          exit;
+          EOF
+          sleep 5
+          python -c "
+          import oracledb
+          conn = oracledb.connect(
+              user='system', password='password',
+              dsn='localhost:1521/FREEPDB1')
+          conn.close()
+          print('PDB service FREEPDB1 registered OK')
+          "
+
+      - name: Create Oracle scenario config
+        run: |
+          cat > oracle_scenarios.yaml << EOF
+          scenarios:
+            oracle_23c:
+              host: localhost
+              port: 1521
+              username: system
+              password: password
+              service_name: FREEPDB1
+              encoding: AL32UTF8
+          EOF
+          echo "ORACLE_SCENARIOS_CONFIG_PATH=$(pwd)/oracle_scenarios.yaml" >> $GITHUB_ENV
+
+      - name: Run tests
+        run: |
+          export PYTHONPATH=src
+          python -m pytest tests/ --tb=short
+
+      - name: Run tests with coverage
+        run: |
+          export PYTHONPATH=src
+          pip install coverage
+          coverage run --source=src -m pytest tests/ --tb=short
+          coverage xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          flags: unittests,python-3.14,oracle-23c
+          name: codecov-oracle-3.14-23c
+          fail_ci_if_error: false

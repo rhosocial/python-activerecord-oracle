@@ -49,8 +49,7 @@ class TestAsyncOracleBackendConnection:
         assert version is not None
         assert isinstance(version, tuple)
         assert len(version) >= 2
-        # Oracle Free should be version 23+
-        assert version[0] >= 23
+        assert version[0] >= 18
 
 
 class TestAsyncOracleBackendCRUD:

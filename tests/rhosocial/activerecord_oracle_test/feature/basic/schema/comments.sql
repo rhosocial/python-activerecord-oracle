@@ -8,9 +8,9 @@ CREATE TABLE comments (
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP,
     approved NUMBER(1) DEFAULT 0,
-    CONSTRAINT fk_comments_post FOREIGN KEY (postRef) REFERENCES posts(id) ON DELETE CASCADE,
+    CONSTRAINT fk_comments_post FOREIGN KEY (post_ref) REFERENCES posts(id) ON DELETE CASCADE,
     CONSTRAINT fk_comments_author FOREIGN KEY (author) REFERENCES users(id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_comments_post_ref ON comments(postRef);
+CREATE INDEX idx_comments_post_ref ON comments(post_ref);
 CREATE INDEX idx_comments_author ON comments(author);

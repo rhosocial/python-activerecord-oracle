@@ -5,7 +5,7 @@ CREATE TABLE type_adapter_tests (
     name VARCHAR2(255) NOT NULL,
     optional_name VARCHAR2(255),
     optional_age NUMBER,
-    last_login VARCHAR2(4000),
+    last_login TIMESTAMP(6) WITH TIME ZONE,
     is_premium NUMBER(1),
     unsupported_union VARCHAR2(255),
     custom_bool VARCHAR2(3),

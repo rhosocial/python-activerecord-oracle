@@ -17,7 +17,7 @@ CREATE TABLE type_cases (
     time_val VARCHAR2(20),
     timestamp_val TIMESTAMP WITH TIME ZONE,
     blob_val BLOB,
-    json_val JSON,
-    array_val JSON,
+    json_val CLOB CHECK (json_val IS JSON),
+    array_val CLOB CHECK (array_val IS JSON),
     is_active NUMBER(1)
-)
+) TABLESPACE USERS

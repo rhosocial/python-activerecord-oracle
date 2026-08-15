@@ -14,29 +14,140 @@ Architecture:
 - OracleBackend: Synchronous implementation using oracledb
 - AsyncOracleBackend: Asynchronous implementation using oracledb (thin mode)
 - Independent from ORM frameworks - uses only native drivers
+
+Subpackages:
+- explain: EXPLAIN result types
+- types: Oracle-specific type definitions
+- expression: Oracle-specific SQL expressions (including DDL DataType subclasses)
+- functions: Oracle function factories
+- mixins: Feature-specific mixin classes
+- schema: Schema differ support
 """
 
 from .backend import OracleBackend
 from .async_backend import AsyncOracleBackend
 from .config import OracleConnectionConfig
+from .collation import OracleCollation
 from .dialect import OracleDialect
 from .transaction import OracleTransactionManager
 from .async_transaction import AsyncOracleTransactionManager
 
-__all__ = [
-    # Synchronous Backend
-    'OracleBackend',
+from .adapters import (
+    OracleBooleanAdapter,
+    OracleDateTimeAdapter,
+    OracleDateAdapter,
+    OracleTimeAdapter,
+    OracleDecimalAdapter,
+    OracleJSONAdapter,
+    OracleBytesAdapter,
+    OracleStringAdapter,
+    OracleUUIDAdapter,
+    OracleEnumAdapter,
+    OracleIntervalAdapter,
+    OracleRowIDAdapter,
+    OracleXMLAdapter,
+    OracleSDOGeometryAdapter,
+    OracleVectorAdapter,
+    oracle_adapters,
+)
 
-    # Asynchronous Backend
-    'AsyncOracleBackend',
+from .explain import OracleExplainResult, OracleExplainRow
+
+from .mixins import (
+    OracleTransactionMixin,
+    OracleBackendMixin,
+    OracleConcurrencyMixin,
+    OracleTypeSupportMixin,
+)
+
+from .expression.types import (
+    OracleBigIntType,
+    OracleBlobType,
+    OracleCharType,
+    OracleClobType,
+    OracleIntegerType,
+    OracleLongRawType,
+    OracleLongType,
+    OracleNClobType,
+    OracleNVarChar2Type,
+    OracleRawType,
+    OracleSmallIntType,
+    OracleVarChar2Type,
+    OracleXmlType,
+)
+
+from .schema import OracleSchemaDiffer
+
+from .type_compatibility import (
+    DIRECT_COMPATIBLE_CASTS,
+    check_cast_compatibility,
+    get_compatible_types,
+)
+
+__all__ = [
+    # Backend classes
+    "OracleBackend",
+    "AsyncOracleBackend",
 
     # Configuration
-    'OracleConnectionConfig',
+    "OracleConnectionConfig",
 
-    # Dialect related
-    'OracleDialect',
+    # Dialect
+    "OracleDialect",
+    "OracleCollation",
 
-    # Transaction - Sync and Async
-    'OracleTransactionManager',
-    'AsyncOracleTransactionManager',
+    # Transaction management
+    "OracleTransactionManager",
+    "AsyncOracleTransactionManager",
+
+    # Type adapters
+    "OracleBooleanAdapter",
+    "OracleDateTimeAdapter",
+    "OracleDateAdapter",
+    "OracleTimeAdapter",
+    "OracleDecimalAdapter",
+    "OracleJSONAdapter",
+    "OracleBytesAdapter",
+    "OracleStringAdapter",
+    "OracleUUIDAdapter",
+    "OracleEnumAdapter",
+    "OracleIntervalAdapter",
+    "OracleRowIDAdapter",
+    "OracleXMLAdapter",
+    "OracleSDOGeometryAdapter",
+    "OracleVectorAdapter",
+    "oracle_adapters",
+
+    # EXPLAIN
+    "OracleExplainResult",
+    "OracleExplainRow",
+
+    # Mixins
+    "OracleTransactionMixin",
+    "OracleBackendMixin",
+    "OracleConcurrencyMixin",
+    "OracleTypeSupportMixin",
+
+    # DDL DataType subclasses
+    "OracleIntegerType",
+    "OracleSmallIntType",
+    "OracleBigIntType",
+    "OracleVarChar2Type",
+    "OracleNVarChar2Type",
+    "OracleCharType",
+    "OracleClobType",
+    "OracleNClobType",
+    "OracleLongType",
+    "OracleXmlType",
+    "OracleRawType",
+    "OracleLongRawType",
+    "OracleBlobType",
+
+    # Schema differ
+    "OracleSchemaDiffer",
+
+    # Type compatibility
+    "DIRECT_COMPATIBLE_CASTS",
+    "check_cast_compatibility",
+    "get_compatible_types",
 ]

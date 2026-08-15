@@ -1,3 +1,4 @@
+# tests/providers/registry.py
 """
 Test Provider Registry
 
@@ -6,12 +7,69 @@ The registry system allows the test suite to be decoupled from specific
 backend implementations, enabling the same tests to run against different
 database backends.
 """
+
 from rhosocial.activerecord.testsuite.core.registry import ProviderRegistry
-from .basic import BasicProvider
+from .basic import BasicSyncProvider, BasicAsyncProvider
+from .events import EventsSyncProvider, EventsAsyncProvider
+from .mixins import MixinsSyncProvider, MixinsAsyncProvider
+from .query import QuerySyncProvider, QueryAsyncProvider
+from .relation import RelationSyncProvider, RelationAsyncProvider
+from .basic_connection import BasicConnectionProvider
+from .query_connection import QueryConnectionProvider
+from .crud_benchmark import CrudBenchmarkProvider
+from .query_benchmark import QueryBenchmarkProvider
+from .mixin_benchmark import MixinBenchmarkProvider
+from .transaction_benchmark import TransactionBenchmarkProvider
 
 # Create a single, global instance of the ProviderRegistry.
 provider_registry = ProviderRegistry()
 
-# Register the concrete `BasicProvider` as the implementation for the
-# `feature.basic.IBasicProvider` interface defined in the testsuite.
-provider_registry.register("feature.basic.IBasicProvider", BasicProvider)
+# Register the concrete implementations as the providers for the
+# interfaces defined in the testsuite.
+provider_registry.register("feature.basic.IBasicProvider", BasicSyncProvider)
+provider_registry.register("feature.basic.IBasicSyncProvider", BasicSyncProvider)
+provider_registry.register("feature.basic.IBasicAsyncProvider", BasicAsyncProvider)
+
+provider_registry.register("feature.events.IEventsProvider", EventsSyncProvider)
+provider_registry.register("feature.events.IEventsSyncProvider", EventsSyncProvider)
+provider_registry.register("feature.events.IEventsAsyncProvider", EventsAsyncProvider)
+
+provider_registry.register("feature.mixins.IMixinsProvider", MixinsSyncProvider)
+provider_registry.register("feature.mixins.IMixinsSyncProvider", MixinsSyncProvider)
+provider_registry.register("feature.mixins.IMixinsAsyncProvider", MixinsAsyncProvider)
+
+provider_registry.register("feature.query.IQueryProvider", QuerySyncProvider)
+provider_registry.register("feature.query.IQuerySyncProvider", QuerySyncProvider)
+provider_registry.register("feature.query.IQueryAsyncProvider", QueryAsyncProvider)
+
+provider_registry.register("feature.relation.IRelationProvider", RelationSyncProvider)
+provider_registry.register("feature.relation.IRelationSyncProvider", RelationSyncProvider)
+provider_registry.register("feature.relation.IRelationAsyncProvider", RelationAsyncProvider)
+
+provider_registry.register(
+    "feature.basic.connection.IBasicConnectionProvider",
+    BasicConnectionProvider,
+)
+provider_registry.register(
+    "feature.query.connection.IQueryConnectionProvider",
+    QueryConnectionProvider,
+)
+
+# Register benchmark providers.
+provider_registry.register("benchmark.crud.ICrudBenchmarkProvider", CrudBenchmarkProvider)
+provider_registry.register("benchmark.query.IQueryBenchmarkProvider", QueryBenchmarkProvider)
+provider_registry.register("benchmark.mixin.IMixinBenchmarkProvider", MixinBenchmarkProvider)
+provider_registry.register(
+    "benchmark.transaction.ITransactionBenchmarkProvider",
+    TransactionBenchmarkProvider,
+)
+
+# Register BasicConnectionProvider under the transaction-specific key as
+# well so the testsuite's transaction/conftest.py can resolve it via its
+# dedicated provider branch.  This avoids the fallback path that some
+# CI environments have observed to produce an AsyncOracleBackend instead
+# of a sync OracleBackend (run 31414867272).
+provider_registry.register(
+    "feature.basic.transaction.ITransactionBasicProvider",
+    BasicConnectionProvider,
+)

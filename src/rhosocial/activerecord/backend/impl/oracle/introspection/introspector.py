@@ -49,6 +49,7 @@ from rhosocial.activerecord.backend.introspection.types import (
     TriggerInfo,
     IntrospectionScope,
 )
+from rhosocial.activerecord.backend.expression.types import DataType
 
 
 class OracleIntrospectorMixin(IntrospectorMixin):
@@ -362,6 +363,18 @@ class OracleIntrospectorMixin(IntrospectorMixin):
                 data_type_full = data_type
 
             col_name = row["COLUMN_NAME"]
+            # Parse the full type string into a structured DataType so that
+            # SchemaDiffer._columns_equivalent can use is_equivalent() instead
+            # of raw string comparison (core #108).
+            parsed_data_type: Optional[DataType] = None
+            try:
+                parsed_data_type = DataType.parse_data_type_str(
+                    self._backend.dialect, data_type_full
+                )
+            except Exception:
+                # Unparseable type strings fall back to None; the differ
+                # then degrades to data_type string comparison.
+                parsed_data_type = None
             columns.append(
                 ColumnInfo(
                     name=col_name,
@@ -370,6 +383,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
                     ordinal_position=row["COLUMN_ID"],
                     data_type=data_type.lower(),
                     data_type_full=data_type_full,
+                    parsed_data_type=parsed_data_type,
                     nullable=nullable,
                     default_value=row.get("DATA_DEFAULT"),
                     is_primary_key=col_name in pk_set,
