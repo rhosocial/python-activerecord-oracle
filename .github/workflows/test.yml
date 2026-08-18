@@ -130,13 +130,13 @@ jobs:
       - name: Run tests
         run: |
           export PYTHONPATH=src:tests
-          python -m pytest tests/ --tb=short -n 8 --dist=loadgroup -x
+          python -m pytest tests/ --tb=short -n auto --dist=loadgroup -x
 
       - name: Run tests with coverage
         run: |
           export PYTHONPATH=src:tests
           pip install coverage
-          coverage run --source=src -m pytest tests/ --tb=short -n 8 --dist=loadgroup
+          coverage run --source=src -m pytest tests/ --tb=short -n auto --dist=loadgroup
           coverage xml
 
       - name: Upload coverage to Codecov
@@ -260,13 +260,13 @@ jobs:
       - name: Run tests
         run: |
           export PYTHONPATH=src:tests
-          python -m pytest tests/ --tb=short -n 8 --dist=loadgroup -x
+          python -m pytest tests/ --tb=short -n auto --dist=loadgroup -x
 
       - name: Run tests with coverage
         run: |
           export PYTHONPATH=src:tests
           pip install coverage
-          coverage run --source=src -m pytest tests/ --tb=short -n 8 --dist=loadgroup
+          coverage run --source=src -m pytest tests/ --tb=short -n auto --dist=loadgroup
           coverage xml
 
       - name: Upload coverage to Codecov
