@@ -2,6 +2,7 @@ pytest
 pytest-asyncio
 pytest-benchmark
 pytest-cov
+pytest-xdist
 coverage>=7.0.0
 pyyaml>=6.0
 email-validator>=2.0.0

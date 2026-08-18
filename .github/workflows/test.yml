@@ -12,6 +12,7 @@ on:
       - main
       - 'release/v**'
       - 'maint/**'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -51,8 +52,8 @@ jobs:
 
       - name: Install activerecord and testsuite from git
         run: |
-          pip install rhosocial-activerecord==1.0.0.dev29
-          pip install rhosocial-activerecord-testsuite==1.0.0.dev16
+          pip install "rhosocial-activerecord @ git+https://github.com/rhosocial/python-activerecord.git@feature/parallel-testing"
+          pip install "rhosocial-activerecord-testsuite @ git+https://github.com/rhosocial/python-activerecord-testsuite.git@feature/parallel-testing"
 
       - name: Wait for Oracle and test connectivity
         run: |
@@ -128,14 +129,14 @@ jobs:
 
       - name: Run tests
         run: |
-          export PYTHONPATH=src
-          python -m pytest tests/ --tb=short
+          export PYTHONPATH=src:tests
+          python -m pytest tests/ --tb=short -n auto --dist=loadgroup -x
 
       - name: Run tests with coverage
         run: |
-          export PYTHONPATH=src
+          export PYTHONPATH=src:tests
           pip install coverage
-          coverage run --source=src -m pytest tests/ --tb=short
+          coverage run --source=src -m pytest tests/ --tb=short -n auto --dist=loadgroup
           coverage xml
 
       - name: Upload coverage to Codecov
@@ -181,8 +182,8 @@ jobs:
 
       - name: Install activerecord and testsuite from git
         run: |
-          pip install rhosocial-activerecord==1.0.0.dev29
-          pip install rhosocial-activerecord-testsuite==1.0.0.dev16
+          pip install "rhosocial-activerecord @ git+https://github.com/rhosocial/python-activerecord.git@feature/parallel-testing"
+          pip install "rhosocial-activerecord-testsuite @ git+https://github.com/rhosocial/python-activerecord-testsuite.git@feature/parallel-testing"
 
       - name: Wait for Oracle and test connectivity
         run: |
@@ -258,14 +259,14 @@ jobs:
 
       - name: Run tests
         run: |
-          export PYTHONPATH=src
-          python -m pytest tests/ --tb=short
+          export PYTHONPATH=src:tests
+          python -m pytest tests/ --tb=short -n auto --dist=loadgroup -x
 
       - name: Run tests with coverage
         run: |
-          export PYTHONPATH=src
+          export PYTHONPATH=src:tests
           pip install coverage
-          coverage run --source=src -m pytest tests/ --tb=short
+          coverage run --source=src -m pytest tests/ --tb=short -n auto --dist=loadgroup
           coverage xml
 
       - name: Upload coverage to Codecov
@@ -311,8 +312,8 @@ jobs:
 
       - name: Install activerecord and testsuite from git
         run: |
-          pip install rhosocial-activerecord==1.0.0.dev29
-          pip install rhosocial-activerecord-testsuite==1.0.0.dev16
+          pip install "rhosocial-activerecord @ git+https://github.com/rhosocial/python-activerecord.git@feature/parallel-testing"
+          pip install "rhosocial-activerecord-testsuite @ git+https://github.com/rhosocial/python-activerecord-testsuite.git@feature/parallel-testing"
 
       - name: Wait for Oracle and test connectivity
         run: |
@@ -387,14 +388,14 @@ jobs:
 
       - name: Run tests
         run: |
-          export PYTHONPATH=src
-          python -m pytest tests/ --tb=short
+          export PYTHONPATH=src:tests
+          python -m pytest tests/ --tb=short -n 2 --dist=loadgroup -x
 
       - name: Run tests with coverage
         run: |
-          export PYTHONPATH=src
+          export PYTHONPATH=src:tests
           pip install coverage
-          coverage run --source=src -m pytest tests/ --tb=short
+          coverage run --source=src -m pytest tests/ --tb=short -n 2 --dist=loadgroup
           coverage xml
 
       - name: Upload coverage to Codecov
