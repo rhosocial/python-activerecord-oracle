@@ -11,6 +11,7 @@ import sys
 
 from rhosocial.activerecord.backend.impl.oracle import OracleBackend, AsyncOracleBackend
 from rhosocial.activerecord.backend.errors import ConnectionError, QueryError
+from rhosocial.activerecord.backend.options import ExecutionOptions, StatementType
 
 from .connection import add_connection_args, resolve_connection_config_from_args
 from .output import create_provider, RICH_AVAILABLE
@@ -92,9 +93,15 @@ def handle(args):
             handler = RichHandler(rich_tracebacks=True, show_path=False, console=Console(stderr=True))
             logging.basicConfig(level=numeric_level, format="%(message)s", datefmt="[%X]", handlers=[handler])
         else:
-            logging.basicConfig(level=numeric_level, format="%(asctime)s - %(levelname)s - %(message)s", stream=sys.stderr)
+            logging.basicConfig(
+                level=numeric_level, format="%(asctime)s - %(levelname)s - %(message)s",
+                stream=sys.stderr,
+            )
     else:
-        logging.basicConfig(level=numeric_level, format="%(asctime)s - %(levelname)s - %(message)s", stream=sys.stderr)
+        logging.basicConfig(
+            level=numeric_level, format="%(asctime)s - %(levelname)s - %(message)s",
+            stream=sys.stderr,
+        )
 
     provider.display_greeting()
 
@@ -119,7 +126,7 @@ def handle(args):
     config = resolve_connection_config_from_args(args)
     kwargs = {"use_ascii": args.rich_ascii}
 
-    if args.use_async:
+    if args.is_async:
         backend = AsyncOracleBackend(connection_config=config)
         asyncio.run(_execute_query_async(sql_source, backend, provider, **kwargs))
     else:
@@ -132,7 +139,9 @@ def _execute_query_sync(sql_query: str, backend: OracleBackend, provider, **kwar
     try:
         backend.connect()
         provider.display_query(sql_query, is_async=False)
-        result = backend.execute(sql_query)
+        result = backend.execute(
+            sql_query, options=ExecutionOptions(stmt_type=StatementType.DQL)
+        )
 
         if not result:
             provider.display_no_result_object()
@@ -163,7 +172,9 @@ async def _execute_query_async(sql_query: str, backend: AsyncOracleBackend, prov
     try:
         await backend.connect()
         provider.display_query(sql_query, is_async=True)
-        result = await backend.execute(sql_query)
+        result = await backend.execute(
+            sql_query, options=ExecutionOptions(stmt_type=StatementType.DQL)
+        )
 
         if not result:
             provider.display_no_result_object()
