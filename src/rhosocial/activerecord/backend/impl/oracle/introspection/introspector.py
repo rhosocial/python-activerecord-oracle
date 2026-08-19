@@ -50,6 +50,10 @@ from rhosocial.activerecord.backend.introspection.types import (
     IntrospectionScope,
 )
 from rhosocial.activerecord.backend.expression.types import DataType
+from .status_introspector import (
+    SyncOracleStatusIntrospector,
+    AsyncOracleStatusIntrospector,
+)
 
 
 class OracleIntrospectorMixin(IntrospectorMixin):
@@ -531,6 +535,18 @@ class SyncOracleIntrospector(OracleIntrospectorMixin, SyncAbstractIntrospector):
 
     def __init__(self, backend: Any, executor: SyncIntrospectorExecutor) -> None:
         super().__init__(backend, executor)
+        self._status_instance: Optional[SyncOracleStatusIntrospector] = None
+
+    # ------------------------------------------------------------------ #
+    # status introspector
+    # ------------------------------------------------------------------ #
+
+    @property
+    def status(self) -> SyncOracleStatusIntrospector:
+        """Oracle status introspector (lazily created)."""
+        if self._status_instance is None:
+            self._status_instance = SyncOracleStatusIntrospector(self._backend)
+        return self._status_instance
 
     # ------------------------------------------------------------------ #
     # get_table_info override
@@ -596,6 +612,18 @@ class AsyncOracleIntrospector(OracleIntrospectorMixin, AsyncAbstractIntrospector
 
     def __init__(self, backend: Any, executor: AsyncIntrospectorExecutor) -> None:
         super().__init__(backend, executor)
+        self._status_instance: Optional[AsyncOracleStatusIntrospector] = None
+
+    # ------------------------------------------------------------------ #
+    # status introspector
+    # ------------------------------------------------------------------ #
+
+    @property
+    def status(self) -> AsyncOracleStatusIntrospector:
+        """Oracle status introspector (lazily created)."""
+        if self._status_instance is None:
+            self._status_instance = AsyncOracleStatusIntrospector(self._backend)
+        return self._status_instance
 
     # ------------------------------------------------------------------ #
     # get_table_info override
