@@ -79,6 +79,51 @@ def _register_oracle_specials():
         )
         return OracleSubpartitionClause(d, strategy=OracleSubpartitionStrategy.HASH, count=4)
 
+    def partition_clause(d):
+        from rhosocial.activerecord.backend.expression.core import Column
+        from rhosocial.activerecord.backend.impl.oracle.expression.partition import (
+            OraclePartitionClause,
+        )
+        return OraclePartitionClause(d, "RANGE", [Column(d, "id")])
+
+    def partition_by_range(d):
+        from rhosocial.activerecord.backend.expression.core import Column
+        from rhosocial.activerecord.backend.impl.oracle.expression.partition import (
+            OraclePartitionByRange,
+        )
+        return OraclePartitionByRange(d, [Column(d, "id")])
+
+    def partition_by_list(d):
+        from rhosocial.activerecord.backend.expression.core import Column
+        from rhosocial.activerecord.backend.impl.oracle.expression.partition import (
+            OraclePartitionByList,
+        )
+        return OraclePartitionByList(d, [Column(d, "id")])
+
+    def partition_by_hash(d):
+        from rhosocial.activerecord.backend.expression.core import Column
+        from rhosocial.activerecord.backend.impl.oracle.expression.partition import (
+            OraclePartitionByHash,
+        )
+        return OraclePartitionByHash(d, [Column(d, "id")], partitions_count=4)
+
+    def interval_partition_clause(d):
+        from rhosocial.activerecord.backend.expression.core import Column, Literal
+        from rhosocial.activerecord.backend.impl.oracle.expression.partition import (
+            OracleIntervalPartitionClause,
+            OraclePartitionDefinition,
+            OraclePartitionValue,
+        )
+        pdef = OraclePartitionDefinition(
+            name="p1", less_than=[OraclePartitionValue(d, 100)]
+        )
+        return OracleIntervalPartitionClause(
+            d,
+            [Column(d, "created_at")],
+            interval=Literal(d, "INTERVAL '1' MONTH"),
+            partitions=[pdef],
+        )
+
     def add_partition_expression(d):
         from rhosocial.activerecord.backend.impl.oracle.expression.partition_lifecycle import (
             OracleAddPartitionExpression,
@@ -132,6 +177,13 @@ def _register_oracle_specials():
     register_special_constructor("materialized_view.OracleCreateMaterializedViewLogExpression", materialized_view_log_expression)
     register_special_constructor("ddl.routine.OracleDropRoutineExpression", drop_routine_expression)
     register_special_constructor("partition.OracleSubpartitionClause", subpartition_clause)
+    register_special_constructor("partition.OraclePartitionClause", partition_clause)
+    register_special_constructor("partition.OraclePartitionByRange", partition_by_range)
+    register_special_constructor("partition.OraclePartitionByList", partition_by_list)
+    register_special_constructor("partition.OraclePartitionByHash", partition_by_hash)
+    register_special_constructor(
+        "partition.OracleIntervalPartitionClause", interval_partition_clause
+    )
     register_special_constructor("partition_lifecycle.OracleAddPartitionExpression", add_partition_expression)
     register_special_constructor("partition_lifecycle.OracleSplitPartitionExpression", split_partition_expression)
     register_special_constructor("partition_lifecycle.OracleMergePartitionsExpression", merge_partitions_expression)
