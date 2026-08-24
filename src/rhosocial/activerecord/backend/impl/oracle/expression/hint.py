@@ -1,4 +1,4 @@
-# expression/hint.py
+# src/rhosocial/activerecord/backend/impl/oracle/expression/hint.py
 """
 Oracle query hint expressions.
 
@@ -13,41 +13,50 @@ Note: Use hints sparingly and only when necessary.
       The optimizer usually makes good decisions.
 """
 
-from dataclasses import dataclass, field
-from typing import List, Tuple, Any
+from typing import List, Optional, TYPE_CHECKING
+
+from rhosocial.activerecord.backend.expression.bases import BaseExpression, SQLQueryAndParams
+
+if TYPE_CHECKING:  # pragma: no cover
+    from ..dialect import OracleDialect
 
 
-@dataclass
-class OracleHintExpression:
+class OracleHintExpression(BaseExpression):
     """Oracle query hints expression.
-    
+
     Query hints are embedded in comments after SELECT keyword.
     Multiple hints can be combined.
-    
+
     Example SQL:
         SELECT /*+ INDEX(users idx_name) PARALLEL(4) */ * FROM users
-    
+
     Example usage:
-        hint = OracleHintExpression(hints=["INDEX(users idx_name)", "PARALLEL(4)"])
+        hint = OracleHintExpression(dialect, hints=["INDEX(users idx_name)", "PARALLEL(4)"])
         # or using factory functions
-        hint = OracleHintExpression(hints=[index_hint("users", "idx_name"), parallel_hint("users", 4)])
-    
-    Attributes:
+        hint = OracleHintExpression(
+            dialect, hints=[index_hint("users", "idx_name"), parallel_hint("users", 4)]
+        )
+
+    Args:
+        dialect: the Oracle dialect instance.
         hints: List of hint strings
     """
-    hints: List[str] = field(default_factory=list)
-    
-    def to_sql(self, dialect) -> Tuple[str, List[Any]]:
+
+    def __init__(self, dialect: "OracleDialect", hints: Optional[List[str]] = None):
+        super().__init__(dialect)
+        self.hints = list(hints) if hints else []
+
+    def to_sql(self) -> SQLQueryAndParams:
         """Generate hint SQL."""
         if not self.hints:
-            return ("", [])
+            return ("", ())
         hints_str = " ".join(self.hints)
-        return (f"/*+ {hints_str} */", [])
-    
+        return (f"/*+ {hints_str} */", ())
+
     def __add__(self, other: 'OracleHintExpression') -> 'OracleHintExpression':
         """Combine two hint expressions."""
-        return OracleHintExpression(hints=self.hints + other.hints)
-    
+        return OracleHintExpression(self.dialect, hints=self.hints + other.hints)
+
     def __bool__(self) -> bool:
         """Return True if any hints are defined."""
         return bool(self.hints)
@@ -561,8 +570,12 @@ def no_result_cache_hint() -> str:
     return "NO_RESULT_CACHE"
 
 
-# Predefined hint sets for common use cases
-OPTIMAL_FIRST_ROWS = OracleHintExpression(hints=["FIRST_ROWS(100)"])
-OPTIMAL_THROUGHPUT = OracleHintExpression(hints=["ALL_ROWS"])
-PARALLEL_QUERY = OracleHintExpression(hints=["PARALLEL(4)"])
-GATHER_STATS = OracleHintExpression(hints=["GATHER_PLAN_STATISTICS"])
+# Predefined hint sets for common use cases.
+#
+# Since the concrete hint directives do not depend on the target dialect, these
+# helpers return plain hint strings that can be fed into OracleHintExpression
+# (which now requires a dialect at construction time).
+OPTIMAL_FIRST_ROWS_HINTS = ["FIRST_ROWS(100)"]
+OPTIMAL_THROUGHPUT_HINTS = ["ALL_ROWS"]
+PARALLEL_QUERY_HINTS = ["PARALLEL(4)"]
+GATHER_STATS_HINTS = ["GATHER_PLAN_STATISTICS"]

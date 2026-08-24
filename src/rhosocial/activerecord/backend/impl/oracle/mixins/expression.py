@@ -14,19 +14,19 @@ class OracleExpressionMixin:
     """Oracle-specific expression formatting that delegates to ``to_sql``."""
 
     def format_connect_by(self, expr) -> Tuple[str, List]:
-        return expr.to_sql(self)
+        return expr.to_sql()
 
     def format_pivot(self, expr) -> Tuple[str, List]:
-        return expr.to_sql(self)
+        return expr.to_sql()
 
     def format_unpivot(self, expr) -> Tuple[str, List]:
-        return expr.to_sql(self)
+        return expr.to_sql()
 
     def format_hint(self, expr) -> Tuple[str, List]:
-        return expr.to_sql(self)
+        return expr.to_sql()
 
     def format_for_update(self, expr) -> Tuple[str, List]:
-        return expr.to_sql(self)
+        return expr.to_sql()
 
     def format_query_statement(self, expr) -> Tuple[str, tuple]:
         """Oracle SELECT builder.
