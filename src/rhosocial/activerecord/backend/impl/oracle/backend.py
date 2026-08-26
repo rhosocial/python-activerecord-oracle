@@ -983,9 +983,10 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
             returning_clause = ReturningClause(self.dialect, returning_expressions)
 
         # Create InsertExpression and generate SQL
+        table_name = f"{options.schema_name}.{options.table}" if options.schema_name else options.table
         insert_expr = InsertExpression(
             dialect=self.dialect,
-            into=options.table,
+            into=table_name,
             source=values_source,
             columns=list(options.data.keys()),
             returning=returning_clause,
@@ -1058,9 +1059,10 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
             returning_clause = ReturningClause(self.dialect, returning_expressions)
 
         # Create UpdateExpression and generate SQL
+        table_name = f"{options.schema_name}.{options.table}" if options.schema_name else options.table
         update_expr = UpdateExpression(
             dialect=self.dialect,
-            table=options.table,
+            table=table_name,
             assignments=assignments,
             where=options.where,
             returning=returning_clause,
@@ -1112,9 +1114,10 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
             returning_clause = ReturningClause(self.dialect, returning_expressions)
 
         # Create DeleteExpression and generate SQL
+        table_name = f"{options.schema_name}.{options.table}" if options.schema_name else options.table
         delete_expr = DeleteExpression(
             dialect=self.dialect,
-            tables=options.table,
+            tables=table_name,
             where=options.where,
             returning=returning_clause,
         )

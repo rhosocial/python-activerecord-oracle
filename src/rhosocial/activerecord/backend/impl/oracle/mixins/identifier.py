@@ -18,11 +18,16 @@ class OracleIdentifierMixin:
         self, name: str, table: Optional[str] = None,
         alias: Optional[str] = None, schema_name: Optional[str] = None,
     ) -> Tuple[str, Tuple]:
-        """Format column reference for Oracle queries."""
-        if schema_name and table:
-            col_sql = f"{self.format_identifier(schema_name)}.{self.format_identifier(table)}.{name}"
-        elif table:
+        """Format column reference for Oracle queries.
+
+        Column references accept at most ``TABLE.COLUMN``: the schema is
+        implied by the statement target, and three-part references are
+        rejected with an "invalid identifier" error.
+        """
+        if table:
             col_sql = f"{self.format_identifier(table)}.{name}"
+        elif table is None and schema_name:
+            col_sql = f"{self.format_identifier(schema_name)}.{name}"
         else:
             col_sql = name
         if alias:
