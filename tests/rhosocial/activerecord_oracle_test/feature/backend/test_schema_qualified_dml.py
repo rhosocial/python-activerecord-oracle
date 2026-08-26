@@ -19,6 +19,10 @@ from rhosocial.activerecord.model import ActiveRecord
 from rhosocial.activerecord.backend.errors import DatabaseError
 from providers.scenarios import get_scenario_raw
 
+# Pin every test in this module to one xdist worker: the shared AR_*
+# schemas must not be dropped while another worker is mid-test.
+pytestmark = pytest.mark.xdist_group("oracle_schema_dml")
+
 SCHEMA_USERS = ("AR_CRM", "AR_SHOP")
 SCHEMA_USER_PASSWORD = "Rh0social#2026"
 
