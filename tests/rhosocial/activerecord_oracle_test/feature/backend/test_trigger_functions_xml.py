@@ -215,6 +215,18 @@ class TestJsonScalarFactories:
         exists = json_funcs.json_exists(dialect, "doc", "$.a")
         assert exists.to_sql() == ("JSON_EXISTS(doc, ?)", ("$.a",))
 
+    def test_json_value_with_returning_clause(self, dialect):
+        call = json_funcs.json_value(dialect, "doc", "$.a", "VARCHAR2(100)")
+        assert call.to_sql() == (
+            "JSON_VALUE(doc, ? RETURNING VARCHAR2(100))", ("$.a",),
+        )
+
+    def test_json_query_with_returning_clause(self, dialect):
+        call = json_funcs.json_query(dialect, "doc", "$.a[*]", "CLOB")
+        assert call.to_sql() == (
+            "JSON_QUERY(doc, ? RETURNING CLOB)", ("$.a[*]",),
+        )
+
 
 VALID_XML = '<root><name>John</name><item id="7">a</item></root>'
 

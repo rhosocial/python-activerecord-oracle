@@ -22,6 +22,10 @@ from rhosocial.activerecord.backend.impl.oracle.introspection.introspector impor
 from rhosocial.activerecord.backend.impl.oracle.introspection.status_introspector import (
     AsyncOracleStatusIntrospector, SyncOracleStatusIntrospector,
 )
+from rhosocial.activerecord.backend.expression.introspection import (
+    ForeignKeyExpression, IndexInfoExpression, TableListExpression,
+    TriggerListExpression, ViewListExpression,
+)
 from rhosocial.activerecord.backend.introspection.types import ColumnNullable
 from rhosocial.activerecord.model import ActiveRecord
 from rhosocial.activerecord.base.field_proxy import FieldProxy
@@ -98,32 +102,55 @@ class TestSqlBuilders:
         assert "'P'" in sql
         assert "'ORDERS'" in sql
 
-    def test_indexes_sql_joins_ind_columns(self):
-        insp, _, _ = make_sync_introspector()
-        sql = insp._build_indexes_sql("orders", "ar_shop").upper()
-        assert "ALL_INDEXES" in sql
-        assert "ALL_IND_COLUMNS" in sql
+    def test_dialect_table_list_query_scopes_owner(self):
+        dialect = OracleDialect(version=(23, 0, 0))
+        sql, params = dialect.format_table_list_query(
+            TableListExpression(dialect, schema="ar_shop",
+                                include_views=False)
+        )
+        assert "ALL_TABLES" in sql.upper() and "ALL_VIEWS" not in sql.upper()
+        assert "AR_SHOP" in [str(p) for p in params]
 
-    def test_foreign_keys_sql_filters_constraint_type_r(self):
-        insp, _, _ = make_sync_introspector()
-        sql = insp._build_foreign_keys_sql("orders", "ar_shop").upper()
-        assert "'R'" in sql
+        sql_all, _ = dialect.format_table_list_query(
+            TableListExpression(dialect)
+        )
+        assert "UNION ALL" in sql_all and "ALL_VIEWS" in sql_all.upper()
 
-    def test_tables_sql_owner_clause_only_with_schema(self):
-        insp, _, _ = make_sync_introspector()
-        assert "AND OWNER = 'AR_SHOP'" in insp._build_tables_sql("ar_shop").upper()
-        assert "AND OWNER =" not in insp._build_tables_sql(None).upper()
+    def test_dialect_index_and_fk_queries_join_constraints(self):
+        dialect = OracleDialect(version=(23, 0, 0))
+        idx_sql, idx_params = dialect.format_index_info_query(
+            IndexInfoExpression(dialect, "orders").schema("ar_shop")
+        )
+        assert "ALL_INDEXES" in idx_sql.upper()
+        assert "ALL_IND_COLUMNS" in idx_sql.upper()
+        assert [str(p) for p in idx_params] == ["AR_SHOP", "ORDERS"]
 
-    def test_views_and_triggers_sql_target_all_views(self):
-        insp, _, _ = make_sync_introspector()
-        assert "ALL_VIEWS" in insp._build_views_sql().upper()
-        assert "ALL_TRIGGERS" in insp._build_triggers_sql().upper()
+        fk_sql, fk_params = dialect.format_foreign_key_query(
+            ForeignKeyExpression(dialect, "orders").schema("ar_shop")
+        )
+        assert "'R'" in fk_sql
+        assert [str(p) for p in fk_params] == ["AR_SHOP", "ORDERS"]
+
+    def test_dialect_view_and_trigger_queries_target_dictionary(self):
+        dialect = OracleDialect(version=(23, 0, 0))
+        view_sql, view_params = dialect.format_view_list_query(
+            ViewListExpression(dialect, schema="ar_crm")
+        )
+        assert "ALL_VIEWS" in view_sql.upper()
+        assert [str(p) for p in view_params] == ["AR_CRM"]
+
+        trig_sql, trig_params = dialect.format_trigger_list_query(
+            TriggerListExpression(dialect, schema="ar_crm", table_name="customers")
+        )
+        assert "ALL_TRIGGERS" in trig_sql.upper()
+        assert [str(p) for p in trig_params] == ["AR_CRM", "CUSTOMERS"]
 
     def test_database_info_sql_reads_nls_parameters(self):
         insp, _, _ = make_sync_introspector()
-        sql = insp._build_database_info_sql()
+        sql, params = insp._build_database_info_sql()
         assert "NLS_CHARACTERSET" in sql.upper()
         assert "DUAL" in sql.upper()
+        assert params == ()
 
 
 COLUMN_ROWS = [
@@ -300,6 +327,30 @@ class TestLiveSchemaProbing:
         assert not name_col.is_primary_key and not name_col.is_auto_increment
         assert id_col.data_type_full == "NUMBER"
         assert name_col.data_type_full == "VARCHAR2(100)"
+
+    def test_list_tables_scoped_to_owner(self, provisioned):
+        insp = provisioned.introspector
+        crm_names = {t.name.upper() for t in insp.list_tables("AR_CRM")}
+        assert "CUSTOMERS" in crm_names
+        assert "ORDERS" not in crm_names
+
+    def test_get_table_info_assembles_columns_and_indexes(self, provisioned):
+        insp = provisioned.introspector
+        table = insp.get_table_info("CUSTOMERS", schema="AR_CRM")
+        assert table is not None
+        assert table.name == "CUSTOMERS"
+        assert [c.name for c in table.columns] == ["ID", "NAME"]
+        assert table.columns[0].is_primary_key
+        assert any(i.columns for i in table.indexes)
+        assert table.foreign_keys == []
+
+    def test_list_indexes_and_foreign_keys(self, provisioned):
+        insp = provisioned.introspector
+        indexes = insp.list_indexes("ORDERS", schema="AR_SHOP")
+        assert indexes and all(i.columns for i in indexes)
+        assert any(i.is_unique for i in indexes)
+        fks = insp.list_foreign_keys("ORDERS", schema="AR_SHOP")
+        assert fks == []
 
     def test_cross_schema_read_via_admin_connection(self, provisioned):
         customer = DeepCustomer(name="deep_probe")

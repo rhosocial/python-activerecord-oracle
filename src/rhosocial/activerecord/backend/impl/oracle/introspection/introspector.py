@@ -80,37 +80,19 @@ class OracleIntrospectorMixin(IntrospectorMixin):
     # SQL builders — Oracle data dictionary queries
     # ------------------------------------------------------------------ #
 
-    def _build_database_info_sql(self) -> str:
+    def _build_database_info_sql(self) -> tuple:
         """Build SQL to get database information."""
-        return """
+        return (
+            """
             SELECT
                 (SELECT value FROM v$nls_parameters WHERE parameter = 'NLS_CHARACTERSET') AS charset,
                 (SELECT value FROM v$nls_parameters WHERE parameter = 'NLS_NCHAR_CHARACTERSET') AS nchar_charset,
                 (SELECT value FROM v$nls_parameters WHERE parameter = 'NLS_LANGUAGE') AS language,
                 (SELECT value FROM v$nls_parameters WHERE parameter = 'NLS_TERRITORY') AS territory
             FROM dual
-        """
-
-    def _build_tables_sql(self, schema: Optional[str] = None) -> str:
-        """Build SQL to list tables."""
-        owner_clause = f"AND owner = '{schema.upper()}'" if schema else ""
-        return f"""
-            SELECT
-                table_name,
-                'BASE TABLE' AS table_type,
-                comments,
-                num_rows,
-                blocks * {self._get_block_size()} AS data_length,
-                last_analyzed
-            FROM all_tables t
-            LEFT JOIN all_tab_comments c ON t.table_name = c.table_name AND t.owner = c.owner
-            WHERE 1=1 {owner_clause}
-            ORDER BY table_name
-        """
-
-    def _get_block_size(self) -> int:
-        """Get default Oracle block size (8KB is typical)."""
-        return 8192
+        """,
+            (),
+        )
 
     def _build_columns_sql(self, table_name: str, schema: str) -> str:
         """Build SQL to get columns for a table."""
@@ -139,10 +121,6 @@ class OracleIntrospectorMixin(IntrospectorMixin):
                 char_col_decl_length,
                 global_stats,
                 user_stats,
-                avg_col_len,
-                char_length,
-                char_used,
-                v80_fmt_image,
                 data_upgraded,
                 avg_col_len,
                 char_length,
@@ -172,122 +150,6 @@ class OracleIntrospectorMixin(IntrospectorMixin):
               AND cons.owner = '{schema.upper()}'
               AND cons.constraint_type = 'P'
             ORDER BY cols.position
-        """
-
-    def _build_indexes_sql(self, table_name: str, schema: str) -> str:
-        """Build SQL to get indexes for a table."""
-        return f"""
-            SELECT
-                i.index_name,
-                i.index_type,
-                i.uniqueness,
-                i.compression,
-                i.prefix_length,
-                i.table_owner,
-                i.table_name,
-                i.table_type,
-                i.uniqueness,
-                i.status,
-                i.num_rows,
-                i.last_analyzed,
-                ic.column_name,
-                ic.column_position,
-                ic.descend
-            FROM all_indexes i
-            JOIN all_ind_columns ic ON i.index_name = ic.index_name
-                AND i.owner = ic.index_owner
-            WHERE i.table_name = '{table_name.upper()}'
-              AND i.table_owner = '{schema.upper()}'
-            ORDER BY i.index_name, ic.column_position
-        """
-
-    def _build_foreign_keys_sql(self, table_name: str, schema: str) -> str:
-        """Build SQL to get foreign keys for a table."""
-        return f"""
-            SELECT
-                cons.constraint_name,
-                cons.delete_rule,
-                ref_cons.table_name AS referenced_table_name,
-                cols.column_name,
-                ref_cols.column_name AS referenced_column_name,
-                cons.status
-            FROM all_constraints cons
-            JOIN all_cons_columns cols ON cons.constraint_name = cols.constraint_name
-                AND cons.owner = cols.owner
-            JOIN all_constraints ref_cons ON cons.r_constraint_name = ref_cons.constraint_name
-                AND cons.r_owner = ref_cons.owner
-            JOIN all_cons_columns ref_cols ON ref_cons.constraint_name = ref_cols.constraint_name
-                AND ref_cons.owner = ref_cols.owner
-                AND cols.position = ref_cols.position
-            WHERE cons.table_name = '{table_name.upper()}'
-              AND cons.owner = '{schema.upper()}'
-              AND cons.constraint_type = 'R'
-            ORDER BY cons.constraint_name, cols.position
-        """
-
-    def _build_views_sql(self, schema: Optional[str] = None) -> str:
-        """Build SQL to list views."""
-        owner_clause = f"AND owner = '{schema.upper()}'" if schema else ""
-        return f"""
-            SELECT
-                view_name,
-                text_length,
-                text,
-                text_vc,
-                type_text_length,
-                type_text,
-                oid_text_length,
-                oid_text,
-                view_type_owner,
-                view_type,
-                superview_owner,
-                superview_name,
-                subview_name,
-                editioning_view,
-                read_only,
-                container_map,
-                bequeath,
-                origin_con_id,
-                default_collation
-            FROM all_views
-            WHERE 1=1 {owner_clause}
-            ORDER BY view_name
-        """
-
-    def _build_view_info_sql(self, view_name: str, schema: str) -> str:
-        """Build SQL to get view info."""
-        return f"""
-            SELECT
-                view_name,
-                text_vc AS view_definition,
-                read_only,
-                editioning_view
-            FROM all_views
-            WHERE view_name = '{view_name.upper()}'
-              AND owner = '{schema.upper()}'
-        """
-
-    def _build_triggers_sql(self, schema: Optional[str] = None) -> str:
-        """Build SQL to list triggers."""
-        owner_clause = f"AND owner = '{schema.upper()}'" if schema else ""
-        return f"""
-            SELECT
-                trigger_name,
-                trigger_type,
-                triggering_event,
-                table_owner,
-                base_object_type,
-                table_name,
-                column_name,
-                referencing_names,
-                when_clause,
-                status,
-                description,
-                action_type,
-                trigger_body
-            FROM all_triggers
-            WHERE 1=1 {owner_clause}
-            ORDER BY trigger_name
         """
 
     # ------------------------------------------------------------------ #
