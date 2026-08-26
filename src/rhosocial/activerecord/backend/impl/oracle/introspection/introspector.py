@@ -144,20 +144,17 @@ class OracleIntrospectorMixin(IntrospectorMixin):
                 char_used,
                 v80_fmt_image,
                 data_upgraded,
-                hidden_column,
-                virtual_column,
-                segment_column_id,
-                internal_column_id,
+                avg_col_len,
+                char_length,
+                char_used,
+                v80_fmt_image,
                 histogram,
-                qualified_col_name,
-                user_generated,
                 default_on_null,
                 identity_column,
                 evaluation_edition,
                 unusable_before,
                 unusable_beginning,
-                collation,
-                collated_column_id
+                collation
             FROM all_tab_columns
             WHERE table_name = '{table_name.upper()}'
               AND owner = '{schema.upper()}'
@@ -410,11 +407,6 @@ class OracleIntrospectorMixin(IntrospectorMixin):
     ) -> List[IndexInfo]:
         index_type_map = {
             "NORMAL": IndexType.BTREE,
-            "BITMAP": IndexType.BITMAP,
-            "FUNCTION-BASED NORMAL": IndexType.FUNCTION,
-            "DOMAIN": IndexType.DOMAIN,
-            "IOT - TOP": IndexType.IOT,
-            "LOB": IndexType.LOB,
         }
         index_map: Dict[str, IndexInfo] = {}
         for row in rows:
@@ -422,14 +414,20 @@ class OracleIntrospectorMixin(IntrospectorMixin):
             if idx_name not in index_map:
                 idx_type_str = (row.get("INDEX_TYPE") or "NORMAL").upper()
                 uniqueness = row.get("UNIQUENESS", "NONUNIQUE")
+                extra: Dict[str, Any] = {"oracle_index_type": idx_type_str}
+                if idx_type_str == "BITMAP":
+                    extra["bitmap"] = True
+                elif idx_type_str.startswith("FUNCTION-BASED"):
+                    extra["function_based"] = True
                 index_map[idx_name] = IndexInfo(
                     name=idx_name,
                     table_name=table_name,
                     schema=schema,
                     is_unique=uniqueness == "UNIQUE",
                     is_primary=False,  # Primary keys have separate constraint
-                    index_type=index_type_map.get(idx_type_str, IndexType.BTREE),
+                    index_type=index_type_map.get(idx_type_str, IndexType.UNKNOWN),
                     columns=[],
+                    extra=extra,
                 )
             descend = row.get("DESCEND", "ASC")
             index_map[idx_name].columns.append(
@@ -591,13 +589,12 @@ class SyncOracleIntrospector(OracleIntrospectorMixin, SyncAbstractIntrospector):
 
         # Get primary key columns first
         pk_sql = self._build_primary_key_sql(table_name, target_schema)
-        pk_result = self._executor.execute(pk_sql)
-        primary_keys = [row.get("COLUMN_NAME") for row in pk_result.rows]
+        primary_keys = [row.get("COLUMN_NAME") for row in self._executor.execute(pk_sql)]
 
         # Get columns
         sql = self._build_columns_sql(table_name, target_schema)
-        result = self._executor.execute(sql)
-        columns = self._parse_columns(result.rows, table_name, target_schema, primary_keys)
+        rows = self._executor.execute(sql)
+        columns = self._parse_columns(rows, table_name, target_schema, primary_keys)
 
         self._set_cached(key, columns)
         return columns
@@ -668,13 +665,12 @@ class AsyncOracleIntrospector(OracleIntrospectorMixin, AsyncAbstractIntrospector
 
         # Get primary key columns first
         pk_sql = self._build_primary_key_sql(table_name, target_schema)
-        pk_result = await self._executor.execute(pk_sql)
-        primary_keys = [row.get("COLUMN_NAME") for row in pk_result.rows]
+        primary_keys = [row.get("COLUMN_NAME") for row in await self._executor.execute(pk_sql)]
 
         # Get columns
         sql = self._build_columns_sql(table_name, target_schema)
-        result = await self._executor.execute(sql)
-        columns = self._parse_columns(result.rows, table_name, target_schema, primary_keys)
+        rows = await self._executor.execute(sql)
+        columns = self._parse_columns(rows, table_name, target_schema, primary_keys)
 
         self._set_cached(key, columns)
         return columns

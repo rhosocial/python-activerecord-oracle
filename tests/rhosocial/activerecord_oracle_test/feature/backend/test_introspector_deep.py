@@ -22,6 +22,7 @@ from rhosocial.activerecord.backend.impl.oracle.introspection.introspector impor
 from rhosocial.activerecord.backend.impl.oracle.introspection.status_introspector import (
     AsyncOracleStatusIntrospector, SyncOracleStatusIntrospector,
 )
+from rhosocial.activerecord.backend.introspection.types import ColumnNullable
 from rhosocial.activerecord.model import ActiveRecord
 from rhosocial.activerecord.base.field_proxy import FieldProxy
 from providers.scenarios import get_scenario_raw
@@ -277,26 +278,28 @@ def fetch_all(backend, sql: str) -> List[Dict[str, Any]]:
 
 class TestLiveSchemaProbing:
     def test_tables_exist_per_owner(self, provisioned):
-        rows = fetch_all(
-            provisioned,
-            "SELECT owner, table_name FROM all_tables WHERE owner IN "
-            "('AR_CRM', 'AR_SHOP') ORDER BY owner, table_name",
-        )
-        found = {(r["owner"].upper(), r["table_name"].upper()) for r in rows}
-        assert ("AR_CRM", "CUSTOMERS") in found
-        assert ("AR_SHOP", "ORDERS") in found
+        insp = provisioned.introspector
+        crm_columns = insp.list_columns("CUSTOMERS", schema="AR_CRM")
+        shop_columns = insp.list_columns("ORDERS", schema="AR_SHOP")
+        assert [c.name for c in crm_columns] == ["ID", "NAME"]
+        assert [c.name for c in shop_columns] == ["ID", "CUSTOMER_ID", "AMOUNT"]
 
     def test_column_inventory_matches_ddl(self, provisioned):
-        rows = fetch_all(
-            provisioned,
-            "SELECT column_name, data_type, nullable FROM all_tab_columns "
-            "WHERE owner = 'AR_CRM' AND table_name = 'CUSTOMERS' "
-            "ORDER BY column_id",
-        )
-        assert [(r["column_name"], r["data_type"], r["nullable"])
-                for r in rows] == [
-            ("ID", "NUMBER", "N"), ("NAME", "VARCHAR2", "N"),
+        insp = provisioned.introspector
+        columns = insp.list_columns("CUSTOMERS", schema="AR_CRM")
+        assert [(c.name, c.data_type, c.nullable.value) for c in columns] == [
+            ("ID", "number", ColumnNullable.NOT_NULL.value),
+            ("NAME", "varchar2", ColumnNullable.NOT_NULL.value),
         ]
+
+    def test_list_columns_marks_identity_primary_key(self, provisioned):
+        insp = provisioned.introspector
+        columns = insp.list_columns("CUSTOMERS", schema="AR_CRM")
+        id_col, name_col = columns
+        assert id_col.is_primary_key and id_col.is_auto_increment
+        assert not name_col.is_primary_key and not name_col.is_auto_increment
+        assert id_col.data_type_full == "NUMBER"
+        assert name_col.data_type_full == "VARCHAR2(100)"
 
     def test_cross_schema_read_via_admin_connection(self, provisioned):
         customer = DeepCustomer(name="deep_probe")
