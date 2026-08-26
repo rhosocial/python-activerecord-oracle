@@ -598,9 +598,12 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         try:
             cursor = self._get_cursor()
 
+            # Convert ? placeholders to Oracle :N format (same as execute)
+            oracle_sql, _ = self._convert_placeholders_to_oracle(sql, ())
+
             affected_rows = 0
             for params in params_list:
-                cursor.execute(sql, params)
+                cursor.execute(oracle_sql, params)
                 affected_rows += cursor.rowcount
 
             duration = (datetime.datetime.now() - start_time).total_seconds()
@@ -1014,7 +1017,9 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
                 row_data[field_key] = options.data[data_key]
             result.data = [row_data]
         elif options.returning_columns:
-            self._current_returning_table = options.table
+            self._current_returning_table = (
+                f"{options.schema_name}.{options.table}" if options.schema_name else options.table
+            )
             try:
                 result = self._execute_with_returning_into(
                     sql, params, options.returning_columns,
@@ -1072,7 +1077,9 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
 
         # Handle RETURNING INTO clause
         if options.returning_columns:
-            self._current_returning_table = options.table
+            self._current_returning_table = (
+                f"{options.schema_name}.{options.table}" if options.schema_name else options.table
+            )
             try:
                 return self._execute_with_returning_into(
                     sql, params, options.returning_columns,
@@ -1126,7 +1133,9 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
 
         # Handle RETURNING INTO clause
         if options.returning_columns:
-            self._current_returning_table = options.table
+            self._current_returning_table = (
+                f"{options.schema_name}.{options.table}" if options.schema_name else options.table
+            )
             try:
                 return self._execute_with_returning_into(
                     sql, params, options.returning_columns,
@@ -1318,7 +1327,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         if cache is None:
             cache = {}
             setattr(self, cache_attr, cache)
-        key = (str(table_name).upper(), str(column_name).upper())
+        key = self._returning_lookup_key(table_name, column_name)
         if key in cache:
             return cache[key]
         if not self._connection:
@@ -1329,11 +1338,18 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         try:
             cur = self._connection.cursor()
             try:
-                cur.execute(
-                    "SELECT DATA_TYPE FROM USER_TAB_COLUMNS "
-                    "WHERE TABLE_NAME = :1 AND COLUMN_NAME = :2",
-                    [key[0], key[1]],
-                )
+                if key[0]:
+                    cur.execute(
+                        "SELECT DATA_TYPE FROM ALL_TAB_COLUMNS "
+                        "WHERE OWNER = :1 AND TABLE_NAME = :2 AND COLUMN_NAME = :3",
+                        [key[0], key[1], key[2]],
+                    )
+                else:
+                    cur.execute(
+                        "SELECT DATA_TYPE FROM USER_TAB_COLUMNS "
+                        "WHERE TABLE_NAME = :1 AND COLUMN_NAME = :2",
+                        [key[1], key[2]],
+                    )
                 row = cur.fetchone()
                 data_type = row[0].upper() if row and row[0] else None
                 cache[key] = data_type
@@ -1341,6 +1357,15 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
             finally:
                 cur.close()
         except Exception as e:
-            self.log(logging.WARNING, f"Failed to introspect column {key[0]}.{key[1]}: {e}")
+            self.log(logging.WARNING, f"Failed to introspect column {key[0]}.{key[1]}.{key[2]}: {e}")
             cache[key] = None
             return None
+
+    @staticmethod
+    def _returning_lookup_key(table_name: str, column_name: str) -> Tuple[str, str, str]:
+        """Split an optional ``SCHEMA.TABLE`` qualifier into a lookup key."""
+        raw_table = str(table_name)
+        owner = ""
+        if "." in raw_table:
+            owner, _, raw_table = raw_table.partition(".")
+        return owner.upper(), raw_table.upper(), str(column_name).upper()

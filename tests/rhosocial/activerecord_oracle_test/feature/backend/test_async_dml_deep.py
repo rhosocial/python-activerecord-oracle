@@ -139,6 +139,19 @@ class TestExecuteMany:
         )
         assert before == after
 
+    @pytest.mark.asyncio
+    async def test_qmark_placeholders_are_converted_in_batch(self, async_backend):
+        sql = f"INSERT INTO {BATCH_TABLE} (name) VALUES (?)"
+        params_list = [(f"qmark_{i}",) for i in range(3)]
+        result = await async_backend.execute_many(sql, params_list)
+        assert result.affected_rows == 3
+        count = await fetch_scalar(
+            async_backend,
+            f"SELECT COUNT(*) AS CNT FROM {BATCH_TABLE} "
+            f"WHERE name LIKE 'qmark_%'",
+        )
+        assert int(count) == 3
+
 
 class TestTransactionBoundaries:
     @pytest.mark.asyncio
@@ -198,14 +211,12 @@ class TestReturningIntoInsert:
 
         customer = AsyncCustomer(name="async_returning")
         await customer.save()
-        # NOTE: RETURNING INTO currently hands back the identity as a string
-        # (see coverage report); only presence is asserted here.
-        assert customer.id is not None
+        assert isinstance(customer.id, int)
         fetched = await AsyncCustomer.query().where(
             AsyncCustomer.c.id == customer.id
         ).one()
         assert fetched.name == "async_returning"
-        assert int(fetched.id) == int(customer.id)
+        assert fetched.id == customer.id
 
         await AsyncCustomer.query().where(
             AsyncCustomer.c.id == customer.id
