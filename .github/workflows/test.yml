@@ -135,9 +135,7 @@ jobs:
       - name: Run tests with coverage
         run: |
           export PYTHONPATH=src:tests
-          pip install coverage
-          coverage run --source=src -m pytest tests/ --tb=short -n auto --dist=loadgroup
-          coverage xml
+          python -m pytest tests/ --tb=short -n auto --dist=loadgroup --cov=src/rhosocial --cov-branch --cov-report=xml
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -146,7 +144,7 @@ jobs:
           files: ./coverage.xml
           flags: unittests,python-3.14,oracle-18c
           name: codecov-oracle-3.14-18c
-          fail_ci_if_error: false
+          fail_ci_if_error: true
 
   test-oracle-21c:
     name: Python 3.14 / Oracle 21c
@@ -265,9 +263,7 @@ jobs:
       - name: Run tests with coverage
         run: |
           export PYTHONPATH=src:tests
-          pip install coverage
-          coverage run --source=src -m pytest tests/ --tb=short -n auto --dist=loadgroup
-          coverage xml
+          python -m pytest tests/ --tb=short -n auto --dist=loadgroup --cov=src/rhosocial --cov-branch --cov-report=xml
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -276,7 +272,7 @@ jobs:
           files: ./coverage.xml
           flags: unittests,python-3.14,oracle-21c
           name: codecov-oracle-3.14-21c
-          fail_ci_if_error: false
+          fail_ci_if_error: true
 
   test-oracle-23c:
     name: Python 3.14 / Oracle 23c
@@ -394,9 +390,7 @@ jobs:
       - name: Run tests with coverage
         run: |
           export PYTHONPATH=src:tests
-          pip install coverage
-          coverage run --source=src -m pytest tests/ --tb=short -n 2 --dist=loadgroup
-          coverage xml
+          python -m pytest tests/ --tb=short -n 2 --dist=loadgroup --cov=src/rhosocial --cov-branch --cov-report=xml
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -405,4 +399,4 @@ jobs:
           files: ./coverage.xml
           flags: unittests,python-3.14,oracle-23c
           name: codecov-oracle-3.14-23c
-          fail_ci_if_error: false
+          fail_ci_if_error: true
