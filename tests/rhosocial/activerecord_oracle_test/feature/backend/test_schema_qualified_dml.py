@@ -16,7 +16,7 @@ from rhosocial.activerecord.backend.schema import StatementType
 from typing import Optional
 
 from rhosocial.activerecord.model import ActiveRecord
-from providers.scenarios import get_scenario
+from providers.scenarios import get_scenario_raw
 
 SCHEMA_USERS = ("AR_CRM", "AR_SHOP")
 SCHEMA_USER_PASSWORD = "Rh0social#2026"
@@ -84,11 +84,19 @@ def _cleanup(backend) -> None:
 
 @pytest.fixture(scope="module")
 def provisioned():
-    backend_class, config = get_scenario("oracle_23c")
+    from rhosocial.activerecord.backend.errors import DatabaseError
+
+    backend_class, config = get_scenario_raw("oracle_23c")
     SchemaCustomer.configure(config, backend_class)
     backend = SchemaCustomer.__backend__
-    backend.connect() if not backend._connection else None
-    _provision(backend)
+    if not backend._connection:
+        backend.connect()
+    try:
+        _provision(backend)
+    except DatabaseError as exc:
+        if "ORA-01031" in str(exc):
+            pytest.skip("connected user lacks privileges to create schema users")
+        raise
 
     SchemaOrder.__connection_config__ = config
     SchemaOrder.__backend_class__ = backend_class
@@ -139,7 +147,7 @@ async def test_async_insert_is_scoped(provisioned):
         id: _Optional[int] = None
         name: str
 
-    _, config = get_scenario("oracle_23c")
+    _, config = get_scenario_raw("oracle_23c")
     backend = AsyncOracleBackend(connection_config=config)
     await backend.connect()
     try:
