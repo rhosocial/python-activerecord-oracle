@@ -307,9 +307,18 @@ class OracleDialect(
         Double-quoting ensures reserved words and special characters are
         safe.  Oracle folds unquoted identifiers to uppercase, so
         ``"IDENTIFIER"`` is semantically identical to bare ``IDENTIFIER``.
+
+        Dot-separated qualified paths (``schema.table``, ``dblink``-qualified
+        names) are quoted segment-by-segment so that each part is a distinct
+        Oracle identifier, e.g. ``AR_CRM.CUSTOMERS`` → ``"AR_CRM"."CUSTOMERS"``.
         """
         if not identifier:
             return '""'
+        if "." in identifier:
+            return ".".join(
+                f'"{part.replace(chr(34), chr(34) * 2).upper()}"'
+                for part in identifier.split(".")
+            )
         escaped = identifier.replace('"', '""')
         return f'"{escaped.upper()}"'
 
