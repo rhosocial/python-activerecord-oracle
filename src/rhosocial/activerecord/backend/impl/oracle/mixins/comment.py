@@ -33,9 +33,7 @@ class OracleCommentMixin:
                     "it requires Oracle 9i or later."
                 ),
             )
-        object_sql = ".".join(
-            self.format_identifier(part) for part in expr.object_name.split(".")
-        )
+        object_sql = self.format_identifier(expr.object_name)
         head = f"COMMENT ON {expr.object_type.value} {object_sql} IS"
         if expr.comment is None:
             return f"{head} NULL", ()

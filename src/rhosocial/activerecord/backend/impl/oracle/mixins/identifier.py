@@ -14,10 +14,28 @@ class OracleIdentifierMixin:
     """
 
     def format_identifier(self, identifier: str) -> str:
-        if not identifier:
-            return '""'
-        escaped = identifier.replace('"', '""')
-        return f'"{escaped.upper()}"'
+        """Format identifier for Oracle (uppercase, no quoting).
+
+        Oracle stores unquoted identifiers as uppercase. Global quoting is
+        avoided so generated SQL keeps the conventional unquoted form;
+        callers handling externally-sourced identifiers quote explicitly.
+        """
+        return identifier.upper()
+
+    @staticmethod
+    def _quote_identifier(identifier: str) -> str:
+        """Double-quote an Oracle identifier (uppercased) for safe embedding.
+
+        Used on externally-sourced identifiers (bulk DML columns/tables, LOB
+        write targets, COMMENT ON targets) where defense-in-depth quoting is
+        warranted. Dot-separated qualified paths are quoted segment-by-segment.
+        """
+        if "." in identifier:
+            return ".".join(
+                f'"{part.replace(chr(34), chr(34) * 2).upper()}"'
+                for part in identifier.split(".")
+            )
+        return f'"{identifier.replace(chr(34), chr(34) * 2).upper()}"'
 
     def format_column(
         self, name: str, table: Optional[str] = None,
@@ -30,11 +48,11 @@ class OracleIdentifierMixin:
         rejected with an "invalid identifier" error.
         """
         if table:
-            col_sql = f"{self.format_identifier(table)}.{self.format_identifier(name)}"
+            col_sql = f"{self.format_identifier(table)}.{name}"
         elif table is None and schema_name:
-            col_sql = f"{self.format_identifier(schema_name)}.{self.format_identifier(name)}"
+            col_sql = f"{self.format_identifier(schema_name)}.{name}"
         else:
-            col_sql = self.format_identifier(name)
+            col_sql = name
         if alias:
             return f"{col_sql} AS {self.format_identifier(alias)}", ()
         return col_sql, ()

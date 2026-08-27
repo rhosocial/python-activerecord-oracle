@@ -14,6 +14,21 @@ class OracleBackendMixin:
 
     _default_suggestions_cache = None
 
+    @staticmethod
+    def _quote_identifier(identifier: str) -> str:
+        """Double-quote an Oracle identifier (uppercased) for safe embedding.
+
+        Used on externally-sourced identifiers (bulk DML columns/tables, LOB
+        write targets) where defense-in-depth quoting is warranted. Dot-
+        separated qualified paths are quoted segment-by-segment.
+        """
+        if "." in identifier:
+            return ".".join(
+                f'"{part.replace(chr(34), chr(34) * 2).upper()}"'
+                for part in identifier.split(".")
+            )
+        return f'"{identifier.replace(chr(34), chr(34) * 2).upper()}"'
+
     def _register_oracle_adapters(self) -> None:
         from ..adapters import (
             OracleBooleanAdapter,

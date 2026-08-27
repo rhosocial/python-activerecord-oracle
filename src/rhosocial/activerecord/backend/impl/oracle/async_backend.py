@@ -759,8 +759,8 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             for key, value in long_strings.items():
                 column = reverse_mapping.get(key, key)
                 lob_var = cursor.var(oracledb.DB_TYPE_CLOB)
-                table_sql = self.dialect.format_identifier(table)
-                column_sql = self.dialect.format_identifier(column)
+                table_sql = self._quote_identifier(table)
+                column_sql = self._quote_identifier(column)
                 await cursor.execute(
                     f"UPDATE {table_sql} SET {column_sql} = EMPTY_CLOB() WHERE id = :1 RETURNING {column_sql} INTO :2",
                     [pk_value, lob_var],
