@@ -8,11 +8,16 @@ class OracleIdentifierMixin:
     """Oracle-specific identifier, column, and table reference formatting.
 
     Oracle stores unquoted identifiers as uppercase. This mixin provides
-    the formatters that uppercase identifiers when generating SQL.
+    formatters that uppercase and double-quote identifiers when generating
+    SQL. Quoted uppercase identifiers (``"USERS"``) are semantically
+    identical to unquoted ``USERS`` in Oracle.
     """
 
     def format_identifier(self, identifier: str) -> str:
-        return identifier.upper()
+        if not identifier:
+            return '""'
+        escaped = identifier.replace('"', '""')
+        return f'"{escaped.upper()}"'
 
     def format_column(
         self, name: str, table: Optional[str] = None,
@@ -25,11 +30,11 @@ class OracleIdentifierMixin:
         rejected with an "invalid identifier" error.
         """
         if table:
-            col_sql = f"{self.format_identifier(table)}.{name}"
+            col_sql = f"{self.format_identifier(table)}.{self.format_identifier(name)}"
         elif table is None and schema_name:
-            col_sql = f"{self.format_identifier(schema_name)}.{name}"
+            col_sql = f"{self.format_identifier(schema_name)}.{self.format_identifier(name)}"
         else:
-            col_sql = name
+            col_sql = self.format_identifier(name)
         if alias:
             return f"{col_sql} AS {self.format_identifier(alias)}", ()
         return col_sql, ()

@@ -302,8 +302,16 @@ class OracleDialect(
         return OracleSchemaDiffer()
 
     def format_identifier(self, identifier: str) -> str:
-        """Format identifier for Oracle (uppercase, no quoting)."""
-        return identifier.upper()
+        """Format identifier for Oracle (uppercase, double-quoted).
+
+        Double-quoting ensures reserved words and special characters are
+        safe.  Oracle folds unquoted identifiers to uppercase, so
+        ``"IDENTIFIER"`` is semantically identical to bare ``IDENTIFIER``.
+        """
+        if not identifier:
+            return '""'
+        escaped = identifier.replace('"', '""')
+        return f'"{escaped.upper()}"'
 
     def supports_explain_analyze(self) -> bool:
         """Oracle does not support EXPLAIN ANALYZE in the standard sense.

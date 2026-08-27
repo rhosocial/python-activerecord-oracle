@@ -2,9 +2,12 @@
 """
 Tests for Oracle dialect SQL injection security.
 
-Oracle stores unquoted identifiers as uppercase and format_identifier
-simply uppercases without adding quotes, so no quoting breakout is possible.
-These tests verify this behavior and the absence of injection vectors.
+Oracle stores unquoted identifiers as uppercase. ``format_identifier``
+uppercases and double-quotes identifiers (``"USERS"``), which is
+semantically identical to unquoted ``USERS`` in Oracle while also
+neutralising reserved words, special characters, and any embedded quote
+breakout attempts. These tests verify this behavior and the absence of
+injection vectors.
 """
 import pytest
 
@@ -18,49 +21,48 @@ def dialect():
 
 
 def test_format_identifier_normal(dialect):
-    """Normal identifier is uppercased."""
+    """Normal identifier is uppercased and quoted."""
     result = dialect.format_identifier("users")
-    assert result == "USERS"
+    assert result == '"USERS"'
 
 
 def test_format_identifier_already_upper(dialect):
-    """Already-uppercase identifier is unchanged."""
+    """Already-uppercase identifier is uppercased and quoted."""
     result = dialect.format_identifier("USERS")
-    assert result == "USERS"
+    assert result == '"USERS"'
 
 
 def test_format_identifier_mixed_case(dialect):
-    """Mixed-case identifier is uppercased."""
+    """Mixed-case identifier is uppercased and quoted."""
     result = dialect.format_identifier("UserOrders")
-    assert result == "USERORDERS"
+    assert result == '"USERORDERS"'
 
 
 def test_format_identifier_with_double_quote(dialect):
-    """Identifier with double-quote char is uppercased (no quoting breakout)."""
+    """Identifier with double-quote char is escaped and quoted."""
     result = dialect.format_identifier('table"name')
-    assert result == 'TABLE"NAME'
+    assert result == '"TABLE""NAME"'
 
 
 def test_format_identifier_injection_payload(dialect):
-    """Injection payload is uppercased — no breakout possible without quoting."""
+    """Injection payload is escaped inside quoted identifier — no breakout."""
     payload = 'users"; DROP TABLE users--'
     result = dialect.format_identifier(payload)
     assert '"' in result
-    assert result == 'USERS"; DROP TABLE USERS--'
+    assert result == '"USERS""; DROP TABLE USERS--"'
 
 
 def test_format_identifier_naive_vs_proper_safe(dialect):
-    """For safe input, naive identifier and format_identifier produce same usable result."""
+    """For safe input, quoted uppercase produces same usable result as naive."""
     names = ["users", "orders", "products", "table_1"]
     for name in names:
-        naive = name
         proper = dialect.format_identifier(name)
-        assert proper == naive.upper(), f"Mismatch for '{name}': naive={naive}, proper={proper}"
+        assert proper == f'"{name.upper()}"', f"Mismatch for '{name}': proper={proper}"
 
 
 def test_format_identifier_empty_string(dialect):
-    """Empty identifier returns empty string."""
-    assert dialect.format_identifier("") == ""
+    """Empty identifier returns double-quoted empty string."""
+    assert dialect.format_identifier("") == '""'
 
 
 def test_escape_sql_string_inherited(dialect):
@@ -96,5 +98,5 @@ def test_data_type_instance_rendered_via_dialect(dialect):
 
     col_def = ColumnDefinition(name="test_col", data_type=VarCharType(255))
     sql, params = dialect.format_column_definition(col_def)
-    assert sql == "TEST_COL VARCHAR2(255)"
+    assert sql == '"TEST_COL" VARCHAR2(255)'
     assert params == ()

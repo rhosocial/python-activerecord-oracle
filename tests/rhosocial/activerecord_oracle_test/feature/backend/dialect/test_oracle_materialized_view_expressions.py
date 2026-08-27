@@ -55,8 +55,8 @@ class TestOracleCreateMaterializedViewExpression:
             dialect, view_name="mv", query=build_query(dialect)
         )
         sql, params = expr.to_sql()
-        assert sql.startswith("CREATE MATERIALIZED VIEW MV")
-        assert sql.endswith("AS SELECT id, name FROM T")
+        assert sql.startswith('CREATE MATERIALIZED VIEW "MV"')
+        assert sql.endswith('AS SELECT "ID", "NAME" FROM "T"')
         assert params == ()
 
     def test_full_options(self, dialect):
@@ -73,9 +73,9 @@ class TestOracleCreateMaterializedViewExpression:
         )
         sql, params = expr.to_sql()
         assert sql == (
-            "CREATE MATERIALIZED VIEW MV (ID, NAME) TABLESPACE TS_DATA "
+            'CREATE MATERIALIZED VIEW "MV" ("ID", "NAME") TABLESPACE "TS_DATA" '
             "BUILD IMMEDIATE REFRESH FAST ON COMMIT ENABLE QUERY REWRITE "
-            "AS SELECT id, name FROM T"
+            'AS SELECT "ID", "NAME" FROM "T"'
         )
         assert params == ()
 
@@ -90,8 +90,8 @@ class TestOracleCreateMaterializedViewExpression:
         )
         sql, params = expr.to_sql()
         assert sql == (
-            "CREATE MATERIALIZED VIEW MV REFRESH COMPLETE ON DEMAND "
-            "DISABLE QUERY REWRITE AS SELECT id, name FROM T"
+            'CREATE MATERIALIZED VIEW "MV" REFRESH COMPLETE ON DEMAND '
+            'DISABLE QUERY REWRITE AS SELECT "ID", "NAME" FROM "T"'
         )
         assert params == ()
 
@@ -105,8 +105,8 @@ class TestOracleCreateMaterializedViewExpression:
         )
         sql, params = expr.to_sql()
         assert sql == (
-            "CREATE MATERIALIZED VIEW MV BUILD DEFERRED REFRESH FORCE "
-            "AS SELECT id, name FROM T"
+            'CREATE MATERIALIZED VIEW "MV" BUILD DEFERRED REFRESH FORCE '
+            'AS SELECT "ID", "NAME" FROM "T"'
         )
         assert params == ()
 
@@ -115,9 +115,9 @@ class TestOracleCreateMaterializedViewExpression:
             dialect, view_name="mv", query=build_query(dialect), with_data=False
         )
         sql, params = expr.to_sql()
-        assert sql.startswith("CREATE MATERIALIZED VIEW MV")
+        assert sql.startswith('CREATE MATERIALIZED VIEW "MV"')
         assert "BUILD DEFERRED" in sql
-        assert sql.endswith("AS SELECT id, name FROM T")
+        assert sql.endswith('AS SELECT "ID", "NAME" FROM "T"')
         assert params == ()
 
     def test_identifier_upper_cased(self, dialect):
@@ -125,7 +125,7 @@ class TestOracleCreateMaterializedViewExpression:
             dialect, view_name="Sales_MV", query=build_query(dialect)
         )
         sql, params = expr.to_sql()
-        assert sql.startswith("CREATE MATERIALIZED VIEW SALES_MV")
+        assert sql.startswith('CREATE MATERIALIZED VIEW "SALES_MV"')
         assert params == ()
 
     def test_invalid_query_type_rejected(self, dialect):
@@ -149,7 +149,7 @@ class TestOracleCreateMaterializedViewExpression:
             d23, view_name="mv", query=build_query(d23), if_not_exists=True
         )
         sql, params = expr.to_sql()
-        assert sql.startswith("CREATE MATERIALIZED VIEW IF NOT EXISTS MV")
+        assert sql.startswith('CREATE MATERIALIZED VIEW IF NOT EXISTS "MV"')
         assert params == ()
 
 
@@ -159,13 +159,13 @@ class TestOracleCreateMaterializedViewLogExpression:
             dialect, table="orders", with_primary_key=True
         )
         sql, params = expr.to_sql()
-        assert sql == "CREATE MATERIALIZED VIEW LOG ON ORDERS WITH PRIMARY KEY"
+        assert sql == 'CREATE MATERIALIZED VIEW LOG ON "ORDERS" WITH PRIMARY KEY'
         assert params == ()
 
     def test_with_rowid(self, dialect):
         expr = OracleCreateMaterializedViewLogExpression(dialect, table="orders", with_rowid=True)
         sql, params = expr.to_sql()
-        assert sql == "CREATE MATERIALIZED VIEW LOG ON ORDERS WITH ROWID"
+        assert sql == 'CREATE MATERIALIZED VIEW LOG ON "ORDERS" WITH ROWID'
         assert params == ()
 
     def test_with_both(self, dialect):
@@ -173,7 +173,7 @@ class TestOracleCreateMaterializedViewLogExpression:
             dialect, table="orders", with_rowid=True, with_primary_key=True
         )
         sql, params = expr.to_sql()
-        assert sql == "CREATE MATERIALIZED VIEW LOG ON ORDERS WITH ROWID, PRIMARY KEY"
+        assert sql == 'CREATE MATERIALIZED VIEW LOG ON "ORDERS" WITH ROWID, PRIMARY KEY'
         assert params == ()
 
     def test_with_clause_required(self, dialect):
@@ -189,13 +189,13 @@ class TestOracleDropMaterializedViewExpression:
     def test_basic_drop(self, dialect):
         expr = OracleDropMaterializedViewExpression(dialect, view_name="mv")
         sql, params = expr.to_sql()
-        assert sql == "DROP MATERIALIZED VIEW MV"
+        assert sql == 'DROP MATERIALIZED VIEW "MV"'
         assert params == ()
 
     def test_preserve_table(self, dialect):
         expr = OracleDropMaterializedViewExpression(dialect, view_name="mv", preserve_table=True)
         sql, params = expr.to_sql()
-        assert sql == "DROP MATERIALIZED VIEW MV PRESERVE TABLE"
+        assert sql == 'DROP MATERIALIZED VIEW "MV" PRESERVE TABLE'
         assert params == ()
 
     def test_if_exists_pre_23ai_raises(self, dialect):
@@ -207,7 +207,7 @@ class TestOracleDropMaterializedViewExpression:
         d23 = OracleDialect(version=(23, 0, 0))
         expr = OracleDropMaterializedViewExpression(d23, view_name="mv", if_exists=True)
         sql, params = expr.to_sql()
-        assert sql == "DROP MATERIALIZED VIEW IF EXISTS MV"
+        assert sql == 'DROP MATERIALIZED VIEW IF EXISTS "MV"'
         assert params == ()
 
     def test_empty_view_name_rejected(self, dialect):
@@ -239,4 +239,4 @@ class TestOracleMaterializedViewVersionBoundary:
     def test_at_9i_works(self):
         d9 = OracleDialect(version=(9, 0, 0))
         expr = OracleCreateMaterializedViewExpression(d9, view_name="mv", query=build_query(d9))
-        assert expr.to_sql()[0].startswith("CREATE MATERIALIZED VIEW MV")
+        assert expr.to_sql()[0].startswith('CREATE MATERIALIZED VIEW "MV"')

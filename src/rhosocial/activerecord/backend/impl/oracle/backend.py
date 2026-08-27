@@ -861,12 +861,17 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         if not self._connection:
             self.connect()
 
-        table_name = f"{options.schema_name}.{options.table}" if options.schema_name else options.table
-        columns_sql = ", ".join(options.columns)
+        table_name = (
+            f"{self.dialect.format_identifier(options.schema_name)}."
+            f"{self.dialect.format_identifier(options.table)}"
+            if options.schema_name
+            else self.dialect.format_identifier(options.table)
+        )
+        columns_sql = ", ".join(self.dialect.format_identifier(c) for c in options.columns)
         placeholders = ", ".join(["?"] * len(options.columns))
         sql = f"INSERT INTO {table_name} ({columns_sql}) VALUES ({placeholders})"
         if options.returning_columns:
-            returning_sql = ", ".join(options.returning_columns)
+            returning_sql = ", ".join(self.dialect.format_identifier(c) for c in options.returning_columns)
             into_placeholders = ", ".join(["?"] * len(options.returning_columns))
             sql = f"{sql} RETURNING {returning_sql} INTO {into_placeholders}"
 
