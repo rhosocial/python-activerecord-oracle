@@ -34,7 +34,7 @@ class TestOracleCommentExpression:
             dialect, OracleCommentObjectType.TABLE, "t", "用户表"
         )
         sql, params = expr.to_sql()
-        assert sql == 'COMMENT ON TABLE "T" IS \'用户表\''
+        assert sql == "COMMENT ON TABLE T IS '用户表'"
         assert params == ()
 
     def test_comment_on_column(self, dialect):
@@ -42,37 +42,37 @@ class TestOracleCommentExpression:
             dialect, OracleCommentObjectType.COLUMN, "t.c", "列注释"
         )
         sql, params = expr.to_sql()
-        assert sql == 'COMMENT ON COLUMN "T"."C" IS \'列注释\''
+        assert sql == "COMMENT ON COLUMN T.C IS '列注释'"
         assert params == ()
 
     def test_comment_on_view(self, dialect):
         expr = OracleCommentExpression(dialect, OracleCommentObjectType.VIEW, "v", "view")
         sql, params = expr.to_sql()
-        assert sql == 'COMMENT ON VIEW "V" IS \'view\''
+        assert sql == "COMMENT ON VIEW V IS 'view'"
         assert params == ()
 
     def test_comment_on_index(self, dialect):
         expr = OracleCommentExpression(dialect, OracleCommentObjectType.INDEX, "idx_t", "i")
         sql, params = expr.to_sql()
-        assert sql == 'COMMENT ON INDEX "IDX_T" IS \'i\''
+        assert sql == "COMMENT ON INDEX IDX_T IS 'i'"
         assert params == ()
 
     def test_comment_on_sequence(self, dialect):
         expr = OracleCommentExpression(dialect, OracleCommentObjectType.SEQUENCE, "seq", "s")
         sql, params = expr.to_sql()
-        assert sql == 'COMMENT ON SEQUENCE "SEQ" IS \'s\''
+        assert sql == "COMMENT ON SEQUENCE SEQ IS 's'"
         assert params == ()
 
     def test_comment_on_procedure(self, dialect):
         expr = OracleCommentExpression(dialect, OracleCommentObjectType.PROCEDURE, "p", "proc")
         sql, params = expr.to_sql()
-        assert sql == 'COMMENT ON PROCEDURE "P" IS \'proc\''
+        assert sql == "COMMENT ON PROCEDURE P IS 'proc'"
         assert params == ()
 
     def test_comment_on_package(self, dialect):
         expr = OracleCommentExpression(dialect, OracleCommentObjectType.PACKAGE, "pk", "pkg")
         sql, params = expr.to_sql()
-        assert sql == 'COMMENT ON PACKAGE "PK" IS \'pkg\''
+        assert sql == "COMMENT ON PACKAGE PK IS 'pkg'"
         assert params == ()
 
     def test_comment_on_materialized_view(self, dialect):
@@ -80,25 +80,25 @@ class TestOracleCommentExpression:
             dialect, OracleCommentObjectType.MATERIALIZED_VIEW, "mv", "mv"
         )
         sql, params = expr.to_sql()
-        assert sql == 'COMMENT ON MATERIALIZED VIEW "MV" IS \'mv\''
+        assert sql == "COMMENT ON MATERIALIZED VIEW MV IS 'mv'"
         assert params == ()
 
     def test_clear_comment_with_null(self, dialect):
         expr = OracleCommentExpression(dialect, OracleCommentObjectType.TABLE, "t")
         sql, params = expr.to_sql()
-        assert sql == 'COMMENT ON TABLE "T" IS NULL'
+        assert sql == "COMMENT ON TABLE T IS NULL"
         assert params == ()
 
     def test_apostrophe_escaped(self, dialect):
         expr = OracleCommentExpression(dialect, OracleCommentObjectType.TABLE, "t", "it's")
         sql, params = expr.to_sql()
-        assert sql == 'COMMENT ON TABLE "T" IS \'it\'\'s\''
+        assert sql == "COMMENT ON TABLE T IS 'it''s'"
         assert params == ()
 
     def test_identifier_upper_cased(self, dialect):
         expr = OracleCommentExpression(dialect, OracleCommentObjectType.TABLE, "My_Table", "x")
         sql, params = expr.to_sql()
-        assert sql == 'COMMENT ON TABLE "MY_TABLE" IS \'x\''
+        assert sql == "COMMENT ON TABLE MY_TABLE IS 'x'"
         assert params == ()
 
     def test_schema_qualified_column(self, dialect):
@@ -106,7 +106,7 @@ class TestOracleCommentExpression:
             dialect, OracleCommentObjectType.COLUMN, "scott.emp.sal", "工资"
         )
         sql, params = expr.to_sql()
-        assert sql == 'COMMENT ON COLUMN "SCOTT"."EMP"."SAL" IS \'工资\''
+        assert sql == "COMMENT ON COLUMN SCOTT.EMP.SAL IS '工资'"
         assert params == ()
 
     def test_invalid_object_type_rejected(self, dialect):
@@ -129,5 +129,5 @@ class TestOracleCommentVersionBoundary:
         d9 = OracleDialect(version=(9, 0, 0))
         expr = OracleCommentExpression(d9, OracleCommentObjectType.TABLE, "t", "x")
         sql, params = expr.to_sql()
-        assert sql == 'COMMENT ON TABLE "T" IS \'x\''
+        assert sql == "COMMENT ON TABLE T IS 'x'"
         assert params == ()

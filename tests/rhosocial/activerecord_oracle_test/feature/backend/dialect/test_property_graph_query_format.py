@@ -76,7 +76,7 @@ class TestPGQGraphEdgeFormat:
 
     def test_right(self, o23c_dialect: OracleDialect):
         e = GraphEdge(o23c_dialect, "e", "knows", GraphEdgeDirection.RIGHT)
-        assert e.to_sql()[0] == '-[e IS "KNOWS"]->'
+        assert e.to_sql()[0] == '-[e IS KNOWS]->'
 
     def test_anonymous(self, o23c_dialect: OracleDialect):
         e = GraphEdge(o23c_dialect, direction=GraphEdgeDirection.RIGHT)

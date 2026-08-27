@@ -43,7 +43,7 @@ class OracleRoutineMixin:
             parts = [self.format_identifier(param.name)]
             if param.mode is not None:
                 parts.append(param.mode.value)
-            parts.append(param.data_type.upper())
+            parts.append(self.format_identifier(param.data_type))
             rendered.append(" ".join(parts))
         return ", ".join(rendered)
 
@@ -90,7 +90,7 @@ class OracleRoutineMixin:
         if expr.parameters:
             parts.append(f"({self._format_parameters(expr.parameters)})")
         parts.append(expr.return_keyword)
-        parts.append(expr.return_type.upper())
+        parts.append(self.format_identifier(expr.return_type))
         parts.append(expr.keyword)
         parts.append(expr.body)
         return " ".join(parts), ()

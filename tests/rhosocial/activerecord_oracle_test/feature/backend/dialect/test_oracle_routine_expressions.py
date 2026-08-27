@@ -47,7 +47,7 @@ class TestOracleCreateProcedureExpression:
             parameters=[OracleRoutineParameter("x", "NUMBER", OracleRoutineParameterMode.IN)],
         )
         sql, params = expr.to_sql()
-        assert sql == 'CREATE OR REPLACE PROCEDURE "P" ("X" IN NUMBER) AS BEGIN NULL; END;'
+        assert sql == "CREATE OR REPLACE PROCEDURE P (X IN NUMBER) AS BEGIN NULL; END;"
         assert params == ()
 
     def test_without_or_replace(self, dialect):
@@ -55,7 +55,7 @@ class TestOracleCreateProcedureExpression:
             dialect, procedure_name="p", body="BEGIN NULL; END;", or_replace=False
         )
         sql, params = expr.to_sql()
-        assert sql == 'CREATE PROCEDURE "P" AS BEGIN NULL; END;'
+        assert sql == "CREATE PROCEDURE P AS BEGIN NULL; END;"
         assert params == ()
 
     def test_is_separator(self, dialect):
@@ -63,7 +63,7 @@ class TestOracleCreateProcedureExpression:
             dialect, procedure_name="p", body="BEGIN NULL; END;", keyword="IS"
         )
         sql, params = expr.to_sql()
-        assert sql == 'CREATE OR REPLACE PROCEDURE "P" IS BEGIN NULL; END;'
+        assert sql == "CREATE OR REPLACE PROCEDURE P IS BEGIN NULL; END;"
         assert params == ()
 
     def test_no_parameters_omits_parentheses(self, dialect):
@@ -71,7 +71,7 @@ class TestOracleCreateProcedureExpression:
             dialect, procedure_name="p", body="BEGIN NULL; END;"
         )
         sql, params = expr.to_sql()
-        assert sql == 'CREATE OR REPLACE PROCEDURE "P" AS BEGIN NULL; END;'
+        assert sql == "CREATE OR REPLACE PROCEDURE P AS BEGIN NULL; END;"
         assert params == ()
 
     def test_multiple_parameters(self, dialect):
@@ -87,8 +87,8 @@ class TestOracleCreateProcedureExpression:
         )
         sql, params = expr.to_sql()
         assert sql == (
-            'CREATE OR REPLACE PROCEDURE "P" ("X" NUMBER, "Y" OUT VARCHAR2(10), '
-            '"Z" IN OUT NUMBER) AS BEGIN NULL; END;'
+            "CREATE OR REPLACE PROCEDURE P (X NUMBER, Y OUT VARCHAR2(10), "
+            "Z IN OUT NUMBER) AS BEGIN NULL; END;"
         )
         assert params == ()
 
@@ -100,7 +100,7 @@ class TestOracleCreateProcedureExpression:
             parameters=[OracleRoutineParameter("in_x", "number")],
         )
         sql, params = expr.to_sql()
-        assert sql == 'CREATE OR REPLACE PROCEDURE "MY_PROC" ("IN_X" NUMBER) AS BEGIN NULL; END;'
+        assert sql == "CREATE OR REPLACE PROCEDURE MY_PROC (IN_X NUMBER) AS BEGIN NULL; END;"
         assert params == ()
 
     def test_body_passed_through_verbatim(self, dialect):
@@ -111,7 +111,7 @@ class TestOracleCreateProcedureExpression:
         )
         sql, params = expr.to_sql()
         assert sql == (
-            'CREATE OR REPLACE PROCEDURE "P" AS BEGIN dbms_output.put_line(x); END;'
+            "CREATE OR REPLACE PROCEDURE P AS BEGIN dbms_output.put_line(x); END;"
         )
         assert params == ()
 
@@ -154,7 +154,7 @@ class TestOracleCreateFunctionExpression:
             parameters=[OracleRoutineParameter("x", "NUMBER")],
         )
         sql, params = expr.to_sql()
-        assert sql == 'CREATE OR REPLACE FUNCTION "F" ("X" NUMBER) RETURN NUMBER AS BEGIN RETURN x + 1; END;'
+        assert sql == "CREATE OR REPLACE FUNCTION F (X NUMBER) RETURN NUMBER AS BEGIN RETURN x + 1; END;"
         assert params == ()
 
     def test_returns_keyword(self, dialect):
@@ -166,7 +166,7 @@ class TestOracleCreateFunctionExpression:
             return_keyword="RETURNS",
         )
         sql, params = expr.to_sql()
-        assert sql == 'CREATE OR REPLACE FUNCTION "F" RETURNS NUMBER AS BEGIN RETURN 1; END;'
+        assert sql == "CREATE OR REPLACE FUNCTION F RETURNS NUMBER AS BEGIN RETURN 1; END;"
         assert params == ()
 
     def test_without_or_replace(self, dialect):
@@ -178,7 +178,7 @@ class TestOracleCreateFunctionExpression:
             or_replace=False,
         )
         sql, params = expr.to_sql()
-        assert sql == 'CREATE FUNCTION "F" RETURN NUMBER AS BEGIN RETURN 1; END;'
+        assert sql == "CREATE FUNCTION F RETURN NUMBER AS BEGIN RETURN 1; END;"
         assert params == ()
 
     def test_is_separator(self, dialect):
@@ -190,7 +190,7 @@ class TestOracleCreateFunctionExpression:
             keyword="IS",
         )
         sql, params = expr.to_sql()
-        assert sql == 'CREATE OR REPLACE FUNCTION "F" RETURN NUMBER IS BEGIN RETURN 1; END;'
+        assert sql == "CREATE OR REPLACE FUNCTION F RETURN NUMBER IS BEGIN RETURN 1; END;"
         assert params == ()
 
     def test_empty_return_type_rejected(self, dialect):
@@ -215,7 +215,7 @@ class TestOracleCreatePackageExpression:
             body="PROCEDURE p (x NUMBER);",
         )
         sql, params = expr.to_sql()
-        assert sql == 'CREATE OR REPLACE PACKAGE "PK" AS PROCEDURE p (x NUMBER);'
+        assert sql == "CREATE OR REPLACE PACKAGE PK AS PROCEDURE p (x NUMBER);"
         assert params == ()
 
     def test_package_with_is(self, dialect):
@@ -223,7 +223,7 @@ class TestOracleCreatePackageExpression:
             dialect, package_name="pk", body="PROCEDURE p (x NUMBER);", keyword="IS"
         )
         sql, params = expr.to_sql()
-        assert sql == 'CREATE OR REPLACE PACKAGE "PK" IS PROCEDURE p (x NUMBER);'
+        assert sql == "CREATE OR REPLACE PACKAGE PK IS PROCEDURE p (x NUMBER);"
         assert params == ()
 
     def test_package_without_or_replace(self, dialect):
@@ -231,7 +231,7 @@ class TestOracleCreatePackageExpression:
             dialect, package_name="pk", body="PROCEDURE p (x NUMBER);", or_replace=False
         )
         sql, params = expr.to_sql()
-        assert sql == 'CREATE PACKAGE "PK" AS PROCEDURE p (x NUMBER);'
+        assert sql == "CREATE PACKAGE PK AS PROCEDURE p (x NUMBER);"
         assert params == ()
 
     def test_empty_package_name_rejected(self, dialect):
@@ -247,7 +247,7 @@ class TestOracleCreatePackageBodyExpression:
             body="PROCEDURE p (x NUMBER) AS BEGIN NULL; END p;",
         )
         sql, params = expr.to_sql()
-        assert sql == 'CREATE OR REPLACE PACKAGE BODY "PK" AS PROCEDURE p (x NUMBER) AS BEGIN NULL; END p;'
+        assert sql == "CREATE OR REPLACE PACKAGE BODY PK AS PROCEDURE p (x NUMBER) AS BEGIN NULL; END p;"
         assert params == ()
 
     def test_package_body_with_is(self, dialect):
@@ -258,7 +258,7 @@ class TestOracleCreatePackageBodyExpression:
             keyword="IS",
         )
         sql, params = expr.to_sql()
-        assert sql == 'CREATE OR REPLACE PACKAGE BODY "PK" IS PROCEDURE p (x NUMBER) AS BEGIN NULL; END p;'
+        assert sql == "CREATE OR REPLACE PACKAGE BODY PK IS PROCEDURE p (x NUMBER) AS BEGIN NULL; END p;"
         assert params == ()
 
     def test_package_body_without_or_replace(self, dialect):
@@ -267,7 +267,7 @@ class TestOracleCreatePackageBodyExpression:
             or_replace=False,
         )
         sql, params = expr.to_sql()
-        assert sql == 'CREATE PACKAGE BODY "PK" AS PROCEDURE p (x NUMBER) AS BEGIN NULL; END p;'
+        assert sql == "CREATE PACKAGE BODY PK AS PROCEDURE p (x NUMBER) AS BEGIN NULL; END p;"
         assert params == ()
 
 
@@ -277,7 +277,7 @@ class TestOracleDropRoutineExpression:
             dialect, OracleDropRoutineObjectType.PROCEDURE, "p"
         )
         sql, params = expr.to_sql()
-        assert sql == 'DROP PROCEDURE "P"'
+        assert sql == "DROP PROCEDURE P"
         assert params == ()
 
     def test_drop_function(self, dialect):
@@ -285,7 +285,7 @@ class TestOracleDropRoutineExpression:
             dialect, OracleDropRoutineObjectType.FUNCTION, "f"
         )
         sql, params = expr.to_sql()
-        assert sql == 'DROP FUNCTION "F"'
+        assert sql == "DROP FUNCTION F"
         assert params == ()
 
     def test_drop_package(self, dialect):
@@ -293,7 +293,7 @@ class TestOracleDropRoutineExpression:
             dialect, OracleDropRoutineObjectType.PACKAGE, "pk"
         )
         sql, params = expr.to_sql()
-        assert sql == 'DROP PACKAGE "PK"'
+        assert sql == "DROP PACKAGE PK"
         assert params == ()
 
     def test_drop_package_body(self, dialect):
@@ -301,7 +301,7 @@ class TestOracleDropRoutineExpression:
             dialect, OracleDropRoutineObjectType.PACKAGE_BODY, "pk"
         )
         sql, params = expr.to_sql()
-        assert sql == 'DROP PACKAGE BODY "PK"'
+        assert sql == "DROP PACKAGE BODY PK"
         assert params == ()
 
     def test_identifier_upper_cased(self, dialect):
@@ -309,7 +309,7 @@ class TestOracleDropRoutineExpression:
             dialect, OracleDropRoutineObjectType.PROCEDURE, "my_proc"
         )
         sql, params = expr.to_sql()
-        assert sql == 'DROP PROCEDURE "MY_PROC"'
+        assert sql == "DROP PROCEDURE MY_PROC"
         assert params == ()
 
     def test_invalid_object_type_rejected(self, dialect):
@@ -360,10 +360,10 @@ class TestOracleRoutineVersionBoundary:
         d9 = OracleDialect(version=(9, 0, 0))
         assert OracleCreateProcedureExpression(
             d9, procedure_name="p", body="BEGIN NULL; END;"
-        ).to_sql()[0] == 'CREATE OR REPLACE PROCEDURE "P" AS BEGIN NULL; END;'
+        ).to_sql()[0] == "CREATE OR REPLACE PROCEDURE P AS BEGIN NULL; END;"
         assert OracleCreateFunctionExpression(
             d9, function_name="f", return_type="NUMBER", body="BEGIN RETURN 1; END;"
-        ).to_sql()[0] == 'CREATE OR REPLACE FUNCTION "F" RETURN NUMBER AS BEGIN RETURN 1; END;'
+        ).to_sql()[0] == "CREATE OR REPLACE FUNCTION F RETURN NUMBER AS BEGIN RETURN 1; END;"
         assert OracleDropRoutineExpression(
             d9, OracleDropRoutineObjectType.PACKAGE_BODY, "pk"
-        ).to_sql()[0] == 'DROP PACKAGE BODY "PK"'
+        ).to_sql()[0] == "DROP PACKAGE BODY PK"

@@ -44,7 +44,7 @@ class TestOracleSequenceValueExpression:
     def test_nextval(self, dialect):
         expr = OracleSequenceValueExpression(dialect, "user_seq")
         sql, params = expr.to_sql()
-        assert sql == '"USER_SEQ".NEXTVAL'
+        assert sql == "USER_SEQ.NEXTVAL"
         assert params == ()
 
     def test_currval(self, dialect):
@@ -52,13 +52,13 @@ class TestOracleSequenceValueExpression:
             dialect, "user_seq", OracleSequenceValueMode.CURRVAL
         )
         sql, params = expr.to_sql()
-        assert sql == '"USER_SEQ".CURRVAL'
+        assert sql == "USER_SEQ.CURRVAL"
         assert params == ()
 
     def test_identifier_upper_cased(self, dialect):
         expr = OracleSequenceValueExpression(dialect, "My_Seq")
         sql, params = expr.to_sql()
-        assert sql == '"MY_SEQ".NEXTVAL'
+        assert sql == "MY_SEQ.NEXTVAL"
         assert params == ()
 
     def test_invalid_mode_rejected(self, dialect):
@@ -73,7 +73,7 @@ class TestOracleSequenceValueExpression:
         value = OracleSequenceValueExpression(dialect, "user_seq")
         query = QueryExpression(dialect, select=[value], from_=TableExpression(dialect, "dual"))
         sql, params = query.to_sql()
-        assert sql == 'SELECT "USER_SEQ".NEXTVAL FROM "DUAL"'
+        assert sql == "SELECT USER_SEQ.NEXTVAL FROM DUAL"
         assert params == ()
 
     def test_nextval_in_insert(self, dialect):
@@ -81,7 +81,7 @@ class TestOracleSequenceValueExpression:
         source = ValuesSource(dialect, values_list=[[value, Literal(dialect, "x")]])
         expr = InsertExpression(dialect, into="t", source=source, columns=["id", "name"])
         sql, params = expr.to_sql()
-        assert sql == 'INSERT INTO "T" ("ID", "NAME") VALUES ("USER_SEQ".NEXTVAL, ?)'
+        assert sql == "INSERT INTO T (ID, NAME) VALUES (USER_SEQ.NEXTVAL, ?)"
         assert params == ("x",)
 
 
@@ -99,7 +99,7 @@ class TestOracleCreateSequenceExpression:
         )
         sql, params = expr.to_sql()
         assert sql == (
-            'CREATE SEQUENCE "SEQ" START WITH 1 INCREMENT BY 1 '
+            "CREATE SEQUENCE SEQ START WITH 1 INCREMENT BY 1 "
             "MINVALUE 1 MAXVALUE 999999 CYCLE CACHE 20"
         )
         assert params == ()
@@ -107,7 +107,7 @@ class TestOracleCreateSequenceExpression:
     def test_minimal_omits_optional_clauses(self, dialect):
         expr = OracleCreateSequenceExpression(dialect, sequence_name="seq")
         sql, params = expr.to_sql()
-        assert sql == 'CREATE SEQUENCE "SEQ"'
+        assert sql == "CREATE SEQUENCE SEQ"
         assert params == ()
 
     def test_nocycle_nocache_noorder(self, dialect):
@@ -119,7 +119,7 @@ class TestOracleCreateSequenceExpression:
             order=False,
         )
         sql, params = expr.to_sql()
-        assert sql == 'CREATE SEQUENCE "SEQ" NOCYCLE NOCACHE NOORDER'
+        assert sql == "CREATE SEQUENCE SEQ NOCYCLE NOCACHE NOORDER"
         assert params == ()
 
     def test_order_and_cache(self, dialect):
@@ -127,13 +127,13 @@ class TestOracleCreateSequenceExpression:
             dialect, sequence_name="seq", order=True, cache=100
         )
         sql, params = expr.to_sql()
-        assert sql == 'CREATE SEQUENCE "SEQ" CACHE 100 ORDER'
+        assert sql == "CREATE SEQUENCE SEQ CACHE 100 ORDER"
         assert params == ()
 
     def test_core_create_sequence_expression(self, dialect):
         expr = CreateSequenceExpression(dialect, sequence_name="seq")
         sql, params = expr.to_sql()
-        assert sql == 'CREATE SEQUENCE "SEQ" NOCYCLE NOORDER'
+        assert sql == "CREATE SEQUENCE SEQ NOCYCLE NOORDER"
         assert params == ()
 
     def test_owned_by_unsupported(self, dialect):
@@ -150,7 +150,7 @@ class TestOracleCreateSequenceExpression:
         d23 = OracleDialect(version=(23, 0, 0))
         expr = OracleCreateSequenceExpression(d23, sequence_name="seq", if_not_exists=True)
         sql, params = expr.to_sql()
-        assert sql == 'CREATE SEQUENCE IF NOT EXISTS "SEQ"'
+        assert sql == "CREATE SEQUENCE IF NOT EXISTS SEQ"
         assert params == ()
 
     def test_negative_cache_rejected(self, dialect):
@@ -162,13 +162,13 @@ class TestOracleDropSequenceExpression:
     def test_basic_drop(self, dialect):
         expr = OracleDropSequenceExpression(dialect, sequence_name="seq")
         sql, params = expr.to_sql()
-        assert sql == 'DROP SEQUENCE "SEQ"'
+        assert sql == "DROP SEQUENCE SEQ"
         assert params == ()
 
     def test_core_drop_sequence_expression(self, dialect):
         expr = DropSequenceExpression(dialect, sequence_name="seq")
         sql, params = expr.to_sql()
-        assert sql == 'DROP SEQUENCE "SEQ"'
+        assert sql == "DROP SEQUENCE SEQ"
         assert params == ()
 
     def test_if_exists_pre_23ai_raises(self, dialect):
@@ -180,7 +180,7 @@ class TestOracleDropSequenceExpression:
         d23 = OracleDialect(version=(23, 0, 0))
         expr = OracleDropSequenceExpression(d23, sequence_name="seq", if_exists=True)
         sql, params = expr.to_sql()
-        assert sql == 'DROP SEQUENCE IF EXISTS "SEQ"'
+        assert sql == "DROP SEQUENCE IF EXISTS SEQ"
         assert params == ()
 
 
@@ -211,5 +211,5 @@ class TestOracleSequenceVersionBoundary:
 
     def test_at_9i_works(self):
         d9 = OracleDialect(version=(9, 0, 0))
-        assert OracleSequenceValueExpression(d9, "seq").to_sql()[0] == '"SEQ".NEXTVAL'
-        assert OracleCreateSequenceExpression(d9, "seq").to_sql()[0] == 'CREATE SEQUENCE "SEQ"'
+        assert OracleSequenceValueExpression(d9, "seq").to_sql()[0] == "SEQ.NEXTVAL"
+        assert OracleCreateSequenceExpression(d9, "seq").to_sql()[0] == "CREATE SEQUENCE SEQ"
