@@ -49,6 +49,16 @@ class OracleDDLMixin:
 
         parts.append(f"({', '.join(column_parts)})")
 
+        # TABLESPACE: expr.tablespace takes precedence; the structured
+        # TableOptions serves as the fallback (Oracle has no ENGINE/CHARSET).
+        tablespace = expr.tablespace
+        if not tablespace:
+            to = getattr(expr, "table_options", None)
+            if to is not None:
+                tablespace = getattr(to, "tablespace", None)
+        if tablespace:
+            parts.append(f"TABLESPACE {self.format_identifier(tablespace)}")
+
         if expr.partition is not None:
             partition_sql, partition_params = expr.partition.to_sql()
             if partition_sql:
@@ -96,6 +106,19 @@ class OracleDDLMixin:
                         constraint_parts.append(f"DEFAULT {constraint.default_value}")
             elif constraint.constraint_type == ColumnConstraintType.NULL:
                 constraint_parts.append("NULL")
+            elif constraint.constraint_type == ColumnConstraintType.COLLATE:
+                if constraint.collation:
+                    if self.version >= (12, 2, 0):
+                        constraint_parts.append(
+                            f"COLLATE {self.format_identifier(constraint.collation)}"
+                        )
+                    else:
+                        from rhosocial.activerecord.backend.dialect.exceptions import (
+                            UnsupportedFeatureError,
+                        )
+                        raise UnsupportedFeatureError(
+                            self.name, "column-level COLLATE (requires Oracle 12.2+)"
+                        )
 
             if constraint.is_auto_increment:
                 if self.version >= (12, 0, 0):

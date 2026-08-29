@@ -5,6 +5,7 @@ import logging
 from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Dict, Tuple, Type
+from uuid import UUID
 
 from rhosocial.activerecord.backend.type_adapter import SQLTypeAdapter
 
@@ -41,6 +42,7 @@ class OracleBackendMixin:
             OracleStringAdapter,
             OracleIntervalAdapter,
             OracleRowIDAdapter,
+            OracleUUIDAdapter,
             OracleXMLAdapter,
             OracleSDOGeometryAdapter,
             OracleVectorAdapter,
@@ -59,6 +61,7 @@ class OracleBackendMixin:
             OracleStringAdapter(),
             OracleIntervalAdapter(),
             OracleRowIDAdapter(),
+            OracleUUIDAdapter(),
         ]
 
         version = self._version if hasattr(self, '_version') and self._version else (23, 0, 0)
@@ -93,6 +96,7 @@ class OracleBackendMixin:
             (dict, str),
             (list, str),
             (bytes, bytes),
+            (UUID, bytes),
         ]
 
         for py_type, db_type in type_mappings:

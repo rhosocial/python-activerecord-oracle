@@ -43,7 +43,7 @@ from .table_op import OracleTableCapabilityMixin
 from .transaction import OracleTransactionMixin
 from .trigger import OracleTriggerMixin
 from .truncate import OracleTruncateMixin
-from .types import OracleTypeSupportMixin
+from .types import OracleTypeSupportMixin, OracleTypeSuggestionMixin
 from .vector import OracleVectorMixin
 from .view import OracleViewMixin
 
@@ -87,6 +87,7 @@ __all__ = [
     "OracleTriggerMixin",
     "OracleTruncateMixin",
     "OracleTypeSupportMixin",
+    "OracleTypeSuggestionMixin",
     "OracleVectorMixin",
     "OracleViewMixin",
 ]
