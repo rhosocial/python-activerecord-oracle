@@ -143,12 +143,12 @@ class TestExpressionModule:
         
         dialect = OracleDialect(version=(19, 0, 0))
         
-        root_expr = ConnectByRootExpression(column="employee_id")
-        sql, params = root_expr.to_sql(dialect)
+        root_expr = ConnectByRootExpression(dialect, column="employee_id")
+        sql, params = root_expr.to_sql()
         assert "CONNECT_BY_ROOT" in sql
         
-        lock = OracleForUpdateExpression(nowait=True)
-        sql, params = lock.to_sql(dialect)
+        lock = OracleForUpdateExpression(dialect, nowait=True)
+        sql, params = lock.to_sql()
         assert "NOWAIT" in sql
 
 

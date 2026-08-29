@@ -23,8 +23,11 @@ def add_connection_args(parser):
     )
     parser.add_argument(
         "--service",
+        "--database",
+        dest="service",
         default=os.getenv("ORACLE_SERVICE", "ORCL"),
-        help="Oracle service name (env: ORACLE_SERVICE, default: ORCL)",
+        help="Oracle service name (env: ORACLE_SERVICE, default: ORCL). "
+        "--database is an alias for --service.",
     )
     parser.add_argument(
         "--user",
@@ -37,8 +40,15 @@ def add_connection_args(parser):
         help="Database password (env: ORACLE_PASSWORD)",
     )
     parser.add_argument(
-        "--use-async",
+        "--ssl",
+        choices=["auto", "require", "verify-ca", "verify-full", "disabled"],
+        default="auto",
+        help="SSL mode (env: ORACLE_SSL, default: auto)",
+    )
+    parser.add_argument(
+        "--async",
         action="store_true",
+        dest="is_async",
         help="Use asynchronous backend",
     )
     parser.add_argument(

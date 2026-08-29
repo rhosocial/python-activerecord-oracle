@@ -180,7 +180,7 @@ class TestDialectExpressionFormatting:
         from rhosocial.activerecord.backend.impl.oracle.expression import ConnectByRootExpression
 
         dialect = OracleDialect(version=(19, 0, 0))
-        expr = ConnectByRootExpression(column="id")
+        expr = ConnectByRootExpression(dialect, column="id")
         
         sql, params = dialect.format_connect_by(expr)
         assert "CONNECT_BY_ROOT" in sql
@@ -192,6 +192,7 @@ class TestDialectExpressionFormatting:
 
         dialect = OracleDialect(version=(19, 0, 0))
         pivot = PivotExpression(
+            dialect,
             aggregate_function="SUM",
             value_column="amount",
             pivot_column="month",
@@ -208,7 +209,7 @@ class TestDialectExpressionFormatting:
         from rhosocial.activerecord.backend.impl.oracle.expression import OracleHintExpression
 
         dialect = OracleDialect(version=(19, 0, 0))
-        hint = OracleHintExpression(hints=["FULL(users)"])
+        hint = OracleHintExpression(dialect, hints=["FULL(users)"])
         
         sql, params = dialect.format_hint(hint)
         assert "/*+ FULL(users) */" in sql
@@ -219,7 +220,7 @@ class TestDialectExpressionFormatting:
         from rhosocial.activerecord.backend.impl.oracle.expression import OracleForUpdateExpression
 
         dialect = OracleDialect(version=(19, 0, 0))
-        lock = OracleForUpdateExpression(nowait=True)
+        lock = OracleForUpdateExpression(dialect, nowait=True)
         
         sql, params = dialect.format_for_update(lock)
         assert "FOR UPDATE" in sql

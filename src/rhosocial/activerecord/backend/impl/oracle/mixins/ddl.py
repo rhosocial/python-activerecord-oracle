@@ -79,7 +79,11 @@ class OracleDDLMixin:
             elif constraint.constraint_type == ColumnConstraintType.UNIQUE:
                 constraint_parts.append("UNIQUE")
             elif constraint.constraint_type == ColumnConstraintType.DEFAULT:
-                if constraint.default_value is not None:
+                if constraint.default_value is None:
+                    # An explicit DEFAULT constraint without a value means
+                    # DEFAULT NULL; it must not be silently dropped.
+                    constraint_parts.append("DEFAULT NULL")
+                else:
                     from rhosocial.activerecord.backend.expression import bases
                     if isinstance(constraint.default_value, bases.BaseExpression):
                         default_sql, default_params = constraint.default_value.to_sql()

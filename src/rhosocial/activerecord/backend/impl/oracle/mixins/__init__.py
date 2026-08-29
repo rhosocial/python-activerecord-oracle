@@ -23,6 +23,7 @@ from .hierarchical import OracleHierarchicalMixin
 from .hint import OracleHintMixin
 from .identifier import OracleIdentifierMixin
 from .index import OracleIndexMixin
+from .introspection import OracleIntrospectionMixin
 from .json import OracleJSONFunctionMixin
 from .locking import OracleLockingMixin
 from .materialized_view import OracleMaterializedViewMixin
@@ -59,6 +60,7 @@ __all__ = [
     "OracleHintMixin",
     "OracleIdentifierMixin",
     "OracleIndexMixin",
+    "OracleIntrospectionMixin",
     "OracleJSONFunctionMixin",
     "OracleLockingMixin",
     "OracleMaterializedViewMixin",

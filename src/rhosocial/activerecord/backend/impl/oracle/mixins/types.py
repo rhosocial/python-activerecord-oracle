@@ -235,6 +235,11 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
                 return FloatType(63)
             if upper.startswith("BINARY_DOUBLE"):
                 return DoubleType()
+            if upper.startswith("FLOAT"):
+                nums = re.findall(r"\d+", stripped)
+                if nums:
+                    return FloatType(int(nums[0]))
+                return FloatType()
             nums = re.findall(r"\d+", stripped)
             if len(nums) >= 2:
                 p, s = int(nums[0]), int(nums[1])

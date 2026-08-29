@@ -103,6 +103,7 @@ from .mixins import (
     OracleHintMixin,
     OracleIdentifierMixin,
     OracleIndexMixin,
+    OracleIntrospectionMixin,
     OracleJSONFunctionMixin,
     OracleLockingMixin,
     OracleModifyColumnMixin,
@@ -154,6 +155,7 @@ class OracleDialect(
     OracleHintMixin,
     OracleIdentifierMixin,
     OracleIndexMixin,
+    OracleIntrospectionMixin,
     OracleJSONFunctionMixin,
     OracleLockingMixin,
     OracleModifyColumnMixin,
@@ -300,7 +302,14 @@ class OracleDialect(
         return OracleSchemaDiffer()
 
     def format_identifier(self, identifier: str) -> str:
-        """Format identifier for Oracle (uppercase, no quoting)."""
+        """Format identifier for Oracle (uppercase, no quoting).
+
+        Oracle folds unquoted identifiers to uppercase, so uppercasing is
+        sufficient for the common case. Callers that need explicit quoting
+        (e.g. bulk DML on externally-sourced identifiers) must quote via a
+        dedicated helper, since global quoting would alter every generated
+        statement's appearance.
+        """
         return identifier.upper()
 
     def supports_explain_analyze(self) -> bool:

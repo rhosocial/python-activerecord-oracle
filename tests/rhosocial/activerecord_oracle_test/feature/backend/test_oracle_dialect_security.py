@@ -98,3 +98,42 @@ def test_data_type_instance_rendered_via_dialect(dialect):
     sql, params = dialect.format_column_definition(col_def)
     assert sql == "TEST_COL VARCHAR2(255)"
     assert params == ()
+
+
+# ── _quote_identifier escaping ────────────────────────────────────────
+
+
+def test_quote_identifier_dot_separated(dialect):
+    """Dot-separated paths are quoted segment-by-segment."""
+    result = dialect._quote_identifier("AR_CRM.CUSTOMERS")
+    assert result == '"AR_CRM"."CUSTOMERS"', f"dot path: {result}"
+
+
+def test_quote_identifier_single_segment(dialect):
+    """Single identifier is quoted as a whole."""
+    result = dialect._quote_identifier("customers")
+    assert result == '"CUSTOMERS"'
+
+
+def test_quote_identifier_embedded_quote(dialect):
+    """Embedded double-quote is escaped by doubling."""
+    result = dialect._quote_identifier('table"name')
+    assert result == '"TABLE""NAME"'
+
+
+def test_quote_identifier_empty(dialect):
+    """Empty identifier returns empty double-quotes."""
+    result = dialect._quote_identifier("")
+    assert result == '""'
+
+
+def test_quote_identifier_three_part(dialect):
+    """Three-part catalog.schema.table path is quoted segment-by-segment."""
+    result = dialect._quote_identifier("catalog.schema.table")
+    assert result == '"CATALOG"."SCHEMA"."TABLE"'
+
+
+def test_format_identifier_no_quoting(dialect):
+    """format_identifier returns uppercase only, no quotes (Oracle convention)."""
+    assert dialect.format_identifier("users") == "USERS"
+    assert dialect.format_identifier("AR_CRM.CUSTOMERS") == "AR_CRM.CUSTOMERS"
