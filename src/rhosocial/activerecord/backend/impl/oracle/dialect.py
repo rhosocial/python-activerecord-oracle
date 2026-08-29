@@ -125,6 +125,7 @@ from .mixins import (
     OracleTriggerMixin,
     OracleTruncateMixin,
     OracleTypeSupportMixin,
+    OracleTypeSuggestionMixin,
     OracleVectorMixin,
     OracleViewMixin,
 )
@@ -177,6 +178,7 @@ class OracleDialect(
     OracleTriggerMixin,
     OracleTruncateMixin,
     OracleTypeSupportMixin,
+    OracleTypeSuggestionMixin,
     OracleVectorMixin,
     OracleViewMixin,
     # ================================================================
