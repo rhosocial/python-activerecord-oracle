@@ -27,6 +27,8 @@ class OracleFunctionFormatMixin:
             return self._format_percentile_ordered_set(expr, filter_predicate)
         if fn_name == "JSON_TABLE":
             return self._format_json_table(expr)
+        if fn_name in ("JSON_VALUE", "JSON_QUERY"):
+            return self._format_json_scalar(expr)
 
         return super().format_function_call(expr, filter_predicate)
 
@@ -87,6 +89,25 @@ class OracleFunctionFormatMixin:
             func_sql += f" WITHIN GROUP (ORDER BY {within_group})"
 
         return self._finish_function_call(func_sql, all_params, expr, filter_predicate)
+
+    def _format_json_scalar(self, expr: "BaseExpression") -> Tuple[str, Tuple]:
+        all_params: List[Any] = []
+
+        args_sql: List[str] = []
+        for arg in expr.args:
+            sql_part, params_part = arg.to_sql()
+            args_sql.append(sql_part)
+            for p in params_part:
+                all_params.append(p)
+
+        func_sql = f"{expr.func_name.upper()}({', '.join(args_sql)}"
+        returning_type = getattr(expr, "_oracle_returning_type", None)
+        if returning_type is not None:
+            type_sql, _ = self.format_data_type(returning_type)
+            func_sql += f" RETURNING {type_sql}"
+        func_sql += ")"
+
+        return self._finish_function_call(func_sql, all_params, expr, None)
 
     def _format_json_table(self, expr: "BaseExpression") -> Tuple[str, Tuple]:
         all_params: List[Any] = []

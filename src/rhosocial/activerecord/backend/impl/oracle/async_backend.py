@@ -539,9 +539,12 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         try:
             cursor = await self._get_cursor()
 
+            # Convert ? placeholders to Oracle :N format (same as execute)
+            oracle_sql, _ = self._convert_placeholders_to_oracle(sql, ())
+
             affected_rows = 0
             for params in params_list:
-                await cursor.execute(sql, params)
+                await cursor.execute(oracle_sql, params)
                 affected_rows += cursor.rowcount
 
             duration = (datetime.datetime.now() - start_time).total_seconds()
@@ -756,8 +759,10 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             for key, value in long_strings.items():
                 column = reverse_mapping.get(key, key)
                 lob_var = cursor.var(oracledb.DB_TYPE_CLOB)
+                table_sql = self._quote_identifier(table)
+                column_sql = self._quote_identifier(column)
                 await cursor.execute(
-                    f"UPDATE {table} SET {column} = EMPTY_CLOB() WHERE id = :1 RETURNING {column} INTO :2",
+                    f"UPDATE {table_sql} SET {column_sql} = EMPTY_CLOB() WHERE id = :1 RETURNING {column_sql} INTO :2",
                     [pk_value, lob_var],
                 )
                 lob = lob_var.getvalue()
@@ -802,9 +807,10 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             returning_clause = ReturningClause(self.dialect, returning_expressions)
 
         # Create InsertExpression and generate SQL
+        table_name = f"{options.schema_name}.{options.table}" if options.schema_name else options.table
         insert_expr = InsertExpression(
             dialect=self.dialect,
-            into=options.table,
+            into=table_name,
             source=values_source,
             columns=list(options.data.keys()),
             returning=returning_clause,
@@ -832,7 +838,9 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
                 row_data[field_key] = options.data[data_key]
             result.data = [row_data]
         elif options.returning_columns:
-            self._current_returning_table = options.table
+            self._current_returning_table = (
+                f"{options.schema_name}.{options.table}" if options.schema_name else options.table
+            )
             try:
                 result = await self._execute_with_returning_into(
                     sql, params, options.returning_columns,
@@ -883,9 +891,10 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             returning_clause = ReturningClause(self.dialect, returning_expressions)
 
         # Create UpdateExpression and generate SQL
+        table_name = f"{options.schema_name}.{options.table}" if options.schema_name else options.table
         update_expr = UpdateExpression(
             dialect=self.dialect,
-            table=options.table,
+            table=table_name,
             assignments=assignments,
             where=options.where,
             returning=returning_clause,
@@ -895,7 +904,9 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
 
         # Handle RETURNING INTO clause
         if options.returning_columns:
-            self._current_returning_table = options.table
+            self._current_returning_table = (
+                f"{options.schema_name}.{options.table}" if options.schema_name else options.table
+            )
             try:
                 return await self._execute_with_returning_into(
                     sql, params, options.returning_columns,
@@ -937,9 +948,10 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             returning_clause = ReturningClause(self.dialect, returning_expressions)
 
         # Create DeleteExpression and generate SQL
+        table_name = f"{options.schema_name}.{options.table}" if options.schema_name else options.table
         delete_expr = DeleteExpression(
             dialect=self.dialect,
-            tables=options.table,
+            tables=table_name,
             where=options.where,
             returning=returning_clause,
         )
@@ -948,7 +960,9 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
 
         # Handle RETURNING INTO clause
         if options.returning_columns:
-            self._current_returning_table = options.table
+            self._current_returning_table = (
+                f"{options.schema_name}.{options.table}" if options.schema_name else options.table
+            )
             try:
                 return await self._execute_with_returning_into(
                     sql, params, options.returning_columns,
@@ -1113,6 +1127,16 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
                 return cursor.var(oracledb.DB_TYPE_RAW)
         return cursor.var(oracledb.DB_TYPE_VARCHAR)
 
+
+    @staticmethod
+    def _returning_lookup_key(table_name: str, column_name: str) -> Tuple[str, str, str]:
+        """Split an optional ``SCHEMA.TABLE`` qualifier into a lookup key."""
+        raw_table = str(table_name)
+        owner = ""
+        if "." in raw_table:
+            owner, _, raw_table = raw_table.partition(".")
+        return owner.upper(), raw_table.upper(), str(column_name).upper()
+
     async def _lookup_oracle_data_type_async(self, table_name: str, column_name: str) -> Optional[str]:
         """Async version of :meth:`OracleBackend._lookup_oracle_data_type`."""
         cache_attr = "_oracle_data_type_cache"
@@ -1120,7 +1144,7 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         if cache is None:
             cache = {}
             setattr(self, cache_attr, cache)
-        key = (str(table_name).upper(), str(column_name).upper())
+        key = self._returning_lookup_key(table_name, column_name)
         if key in cache:
             return cache[key]
         if not self._connection:
@@ -1131,11 +1155,18 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         try:
             cur = self._connection.cursor()
             try:
-                await cur.execute(
-                    "SELECT DATA_TYPE FROM USER_TAB_COLUMNS "
-                    "WHERE TABLE_NAME = :1 AND COLUMN_NAME = :2",
-                    [key[0], key[1]],
-                )
+                if key[0]:
+                    await cur.execute(
+                        "SELECT DATA_TYPE FROM ALL_TAB_COLUMNS "
+                        "WHERE OWNER = :1 AND TABLE_NAME = :2 AND COLUMN_NAME = :3",
+                        [key[0], key[1], key[2]],
+                    )
+                else:
+                    await cur.execute(
+                        "SELECT DATA_TYPE FROM USER_TAB_COLUMNS "
+                        "WHERE TABLE_NAME = :1 AND COLUMN_NAME = :2",
+                        [key[1], key[2]],
+                    )
                 row = await cur.fetchone()
                 data_type = row[0].upper() if row and row[0] else None
                 cache[key] = data_type
@@ -1143,6 +1174,6 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             finally:
                 cur.close()
         except Exception as e:
-            self.log(logging.WARNING, f"Failed to introspect column {key[0]}.{key[1]}: {e}")
+            self.log(logging.WARNING, f"Failed to introspect column {key[0]}.{key[1]}.{key[2]}: {e}")
             cache[key] = None
             return None

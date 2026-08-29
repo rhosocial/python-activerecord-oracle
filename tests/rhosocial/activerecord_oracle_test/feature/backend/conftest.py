@@ -67,6 +67,14 @@ def get_scenario(name: str) -> Tuple[Type[OracleBackend], OracleConnectionConfig
         else:
             raise ValueError("No scenarios registered")
     scenario_config = SCENARIO_MAP[name].copy()
+    # Apply the pooled schema user so parallel workers never share a schema.
+    from providers.pooling import resolve_database_name
+    from providers.scenarios import POOLED_USER_PASSWORD
+
+    pooled_db = resolve_database_name(name)
+    if pooled_db:
+        scenario_config["username"] = pooled_db
+        scenario_config["password"] = POOLED_USER_PASSWORD
     config = OracleConnectionConfig(**scenario_config)
     return OracleBackend, config
 

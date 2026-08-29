@@ -27,11 +27,11 @@ class TestHierarchicalExpressions:
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
         dialect = OracleDialect(version=(19, 0, 0))
-        expr = ConnectByRootExpression(column="employee_id")
-        sql, params = expr.to_sql(dialect)
+        expr = ConnectByRootExpression(dialect, column="employee_id")
+        sql, params = expr.to_sql()
         assert "CONNECT_BY_ROOT" in sql
         assert "EMPLOYEE_ID" in sql  # Oracle uppercase
-        assert params == []
+        assert params == ()
 
     def test_sys_connect_by_path(self):
         """Test SYS_CONNECT_BY_PATH expression."""
@@ -39,11 +39,11 @@ class TestHierarchicalExpressions:
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
         dialect = OracleDialect(version=(19, 0, 0))
-        expr = SysConnectByPathExpression(column="name", separator="/")
-        sql, params = expr.to_sql(dialect)
+        expr = SysConnectByPathExpression(dialect, column="name", separator="/")
+        sql, params = expr.to_sql()
         assert "SYS_CONNECT_BY_PATH" in sql
         assert "'/'" in sql
-        assert params == []
+        assert params == ()
 
     def test_level_expression(self):
         """Test LEVEL pseudo-column."""
@@ -51,10 +51,10 @@ class TestHierarchicalExpressions:
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
         dialect = OracleDialect(version=(19, 0, 0))
-        expr = LevelExpression()
-        sql, params = expr.to_sql(dialect)
+        expr = LevelExpression(dialect)
+        sql, params = expr.to_sql()
         assert sql == "LEVEL"
-        assert params == []
+        assert params == ()
 
     def test_connect_by_isleaf(self):
         """Test CONNECT_BY_ISLEAF pseudo-column."""
@@ -62,10 +62,10 @@ class TestHierarchicalExpressions:
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
         dialect = OracleDialect(version=(19, 0, 0))
-        expr = ConnectByIsLeafExpression()
-        sql, params = expr.to_sql(dialect)
+        expr = ConnectByIsLeafExpression(dialect)
+        sql, params = expr.to_sql()
         assert sql == "CONNECT_BY_ISLEAF"
-        assert params == []
+        assert params == ()
 
     def test_connect_by_iscycle(self):
         """Test CONNECT_BY_ISCYCLE pseudo-column."""
@@ -73,10 +73,10 @@ class TestHierarchicalExpressions:
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
         dialect = OracleDialect(version=(19, 0, 0))
-        expr = ConnectByIsCycleExpression()
-        sql, params = expr.to_sql(dialect)
+        expr = ConnectByIsCycleExpression(dialect)
+        sql, params = expr.to_sql()
         assert sql == "CONNECT_BY_ISCYCLE"
-        assert params == []
+        assert params == ()
 
     def test_prior_expression(self):
         """Test PRIOR expression."""
@@ -84,11 +84,11 @@ class TestHierarchicalExpressions:
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
         dialect = OracleDialect(version=(19, 0, 0))
-        expr = PriorExpression(column="employee_id")
-        sql, params = expr.to_sql(dialect)
+        expr = PriorExpression(dialect, column="employee_id")
+        sql, params = expr.to_sql()
         assert "PRIOR" in sql
         assert "EMPLOYEE_ID" in sql
-        assert params == []
+        assert params == ()
 
     def test_siblings_expression(self):
         """Test ORDER SIBLINGS BY expression."""
@@ -96,14 +96,14 @@ class TestHierarchicalExpressions:
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
         dialect = OracleDialect(version=(19, 0, 0))
-        expr = SiblingsExpression(columns=["name", "id"], ascending=[True, False])
-        sql, params = expr.to_sql(dialect)
+        expr = SiblingsExpression(dialect, columns=["name", "id"], ascending=[True, False])
+        sql, params = expr.to_sql()
         assert "ORDER SIBLINGS BY" in sql
         assert "NAME" in sql
         assert "ID" in sql
         assert "ASC" in sql
         assert "DESC" in sql
-        assert params == []
+        assert params == ()
 
 
 class TestPivotExpressions:
@@ -122,17 +122,18 @@ class TestPivotExpressions:
 
         dialect = OracleDialect(version=(19, 0, 0))
         pivot = PivotExpression(
+            dialect,
             aggregate_function="SUM",
             value_column="amount",
             pivot_column="month",
             values=["Jan", "Feb", "Mar"]
         )
-        sql, params = pivot.to_sql(dialect)
+        sql, params = pivot.to_sql()
         assert "PIVOT" in sql
         assert "SUM" in sql
         assert "AMOUNT" in sql  # Oracle uppercase
         assert "MONTH" in sql
-        assert params == []
+        assert params == ()
 
     def test_pivot_with_alias(self):
         """Test PIVOT with alias."""
@@ -141,13 +142,14 @@ class TestPivotExpressions:
 
         dialect = OracleDialect(version=(19, 0, 0))
         pivot = PivotExpression(
+            dialect,
             aggregate_function="COUNT",
             value_column="id",
             pivot_column="status",
             values=["A", "B"],
             alias="p"
         )
-        sql, params = pivot.to_sql(dialect)
+        sql, params = pivot.to_sql()
         assert "PIVOT" in sql
         assert "P" in sql.upper()  # Alias in uppercase
 
@@ -158,14 +160,15 @@ class TestPivotExpressions:
 
         dialect = OracleDialect(version=(19, 0, 0))
         unpivot = UnpivotExpression(
+            dialect,
             value_column="amount",
             pivot_column="month",
             columns=["jan_sales", "feb_sales", "mar_sales"]
         )
-        sql, params = unpivot.to_sql(dialect)
+        sql, params = unpivot.to_sql()
         assert "UNPIVOT" in sql
         assert "EXCLUDE NULLS" in sql
-        assert params == []
+        assert params == ()
 
     def test_unpivot_include_nulls(self):
         """Test UNPIVOT with INCLUDE NULLS."""
@@ -174,12 +177,13 @@ class TestPivotExpressions:
 
         dialect = OracleDialect(version=(19, 0, 0))
         unpivot = UnpivotExpression(
+            dialect,
             value_column="amount",
             pivot_column="month",
             columns=["jan_sales", "feb_sales"],
             include_nulls=True
         )
-        sql, params = unpivot.to_sql(dialect)
+        sql, params = unpivot.to_sql()
         assert "UNPIVOT" in sql
         assert "INCLUDE NULLS" in sql
 
@@ -200,10 +204,10 @@ class TestHintExpressions:
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
         dialect = OracleDialect(version=(19, 0, 0))
-        hint = OracleHintExpression(hints=["FULL(users)"])
-        sql, params = hint.to_sql(dialect)
+        hint = OracleHintExpression(dialect, hints=["FULL(users)"])
+        sql, params = hint.to_sql()
         assert sql == "/*+ FULL(users) */"
-        assert params == []
+        assert params == ()
 
     def test_multiple_hints(self):
         """Test multiple hints."""
@@ -212,9 +216,10 @@ class TestHintExpressions:
 
         dialect = OracleDialect(version=(19, 0, 0))
         hint = OracleHintExpression(
+            dialect,
             hints=["INDEX(users idx_name)", "PARALLEL(4)"]
         )
-        sql, params = hint.to_sql(dialect)
+        sql, params = hint.to_sql()
         assert "/*+" in sql
         assert "INDEX(users idx_name)" in sql
         assert "PARALLEL(4)" in sql
@@ -243,10 +248,10 @@ class TestHintExpressions:
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
         dialect = OracleDialect(version=(19, 0, 0))
-        hint = OracleHintExpression(hints=[])
-        sql, params = hint.to_sql(dialect)
+        hint = OracleHintExpression(dialect, hints=[])
+        sql, params = hint.to_sql()
         assert sql == ""
-        assert params == []
+        assert params == ()
 
     def test_hint_combination(self):
         """Test combining hints."""
@@ -254,10 +259,10 @@ class TestHintExpressions:
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
         dialect = OracleDialect(version=(19, 0, 0))
-        hint1 = OracleHintExpression(hints=["FULL(users)"])
-        hint2 = OracleHintExpression(hints=["PARALLEL(4)"])
+        hint1 = OracleHintExpression(dialect, hints=["FULL(users)"])
+        hint2 = OracleHintExpression(dialect, hints=["PARALLEL(4)"])
         combined = hint1 + hint2
-        sql, params = combined.to_sql(dialect)
+        sql, params = combined.to_sql()
         assert "FULL(users)" in sql
         assert "PARALLEL(4)" in sql
 
@@ -275,10 +280,10 @@ class TestLockingExpressions:
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
         dialect = OracleDialect(version=(19, 0, 0))
-        lock = OracleForUpdateExpression()
-        sql, params = lock.to_sql(dialect)
+        lock = OracleForUpdateExpression(dialect)
+        sql, params = lock.to_sql()
         assert sql == "FOR UPDATE"
-        assert params == []
+        assert params == ()
 
     def test_for_update_nowait(self):
         """Test FOR UPDATE NOWAIT."""
@@ -286,8 +291,8 @@ class TestLockingExpressions:
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
         dialect = OracleDialect(version=(19, 0, 0))
-        lock = OracleForUpdateExpression(nowait=True)
-        sql, params = lock.to_sql(dialect)
+        lock = OracleForUpdateExpression(dialect, nowait=True)
+        sql, params = lock.to_sql()
         assert "FOR UPDATE" in sql
         assert "NOWAIT" in sql
 
@@ -297,8 +302,8 @@ class TestLockingExpressions:
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
         dialect = OracleDialect(version=(19, 0, 0))
-        lock = OracleForUpdateExpression(wait_seconds=10)
-        sql, params = lock.to_sql(dialect)
+        lock = OracleForUpdateExpression(dialect, wait_seconds=10)
+        sql, params = lock.to_sql()
         assert "FOR UPDATE" in sql
         assert "WAIT 10" in sql
 
@@ -308,8 +313,8 @@ class TestLockingExpressions:
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
         dialect = OracleDialect(version=(19, 0, 0))
-        lock = OracleForUpdateExpression(skip_locked=True)
-        sql, params = lock.to_sql(dialect)
+        lock = OracleForUpdateExpression(dialect, skip_locked=True)
+        sql, params = lock.to_sql()
         assert "FOR UPDATE" in sql
         assert "SKIP LOCKED" in sql
 
@@ -319,8 +324,8 @@ class TestLockingExpressions:
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
         dialect = OracleDialect(version=(19, 0, 0))
-        lock = OracleForUpdateExpression(columns=["id", "name"])
-        sql, params = lock.to_sql(dialect)
+        lock = OracleForUpdateExpression(dialect, columns=["id", "name"])
+        sql, params = lock.to_sql()
         assert "FOR UPDATE" in sql
         assert "OF" in sql
         assert "ID" in sql
@@ -329,15 +334,17 @@ class TestLockingExpressions:
     def test_invalid_lock_options(self):
         """Test that invalid option combinations raise error."""
         from rhosocial.activerecord.backend.impl.oracle.expression import OracleForUpdateExpression
+        from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
+
+        dialect = OracleDialect(version=(19, 0, 0))
+        with pytest.raises(ValueError):
+            OracleForUpdateExpression(dialect, nowait=True, skip_locked=True)
 
         with pytest.raises(ValueError):
-            OracleForUpdateExpression(nowait=True, skip_locked=True)
+            OracleForUpdateExpression(dialect, nowait=True, wait_seconds=5)
 
         with pytest.raises(ValueError):
-            OracleForUpdateExpression(nowait=True, wait_seconds=5)
-
-        with pytest.raises(ValueError):
-            OracleForUpdateExpression(wait_seconds=5, skip_locked=True)
+            OracleForUpdateExpression(dialect, wait_seconds=5, skip_locked=True)
 
 
 class TestDialectSupport:
