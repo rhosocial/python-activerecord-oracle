@@ -21,7 +21,13 @@ class OracleDDLMixin:
     def format_create_table_statement(
         self, expr: "CreateTableExpression"
     ) -> Tuple[str, tuple]:
-        """Format CREATE TABLE statement for Oracle."""
+        """Format CREATE TABLE statement for Oracle.
+
+        Oracle has no ``CREATE TABLE IF NOT EXISTS`` syntax. When
+        ``if_not_exists`` is True, the statement is wrapped in an anonymous
+        PL/SQL block that checks ``user_tables`` and only executes the DDL
+        when the table does not exist, making creation idempotent.
+        """
         from rhosocial.activerecord.backend.expression.statements import (
             ColumnConstraintType,
             TableConstraintType,
@@ -65,7 +71,23 @@ class OracleDDLMixin:
                 parts.append(partition_sql.strip())
                 all_params.extend(partition_params)
 
-        return " ".join(parts), tuple(all_params)
+        statement = " ".join(parts)
+
+        if expr.if_not_exists and not expr.temporary and not all_params:
+            # Oracle has no IF NOT EXISTS for CREATE TABLE; guard with a
+            # user_tables existence check inside an anonymous block. The DDL
+            # is dynamic SQL, so any embedded single quotes must be doubled.
+            # Only applied when the statement carries no bind parameters.
+            embedded = statement.replace("'", "''")
+            table_upper = expr.table_name.upper()
+            statement = (
+                f"DECLARE v_cnt NUMBER; "
+                f"BEGIN SELECT COUNT(*) INTO v_cnt FROM user_tables "
+                f"WHERE table_name = '{table_upper}'; "
+                f"IF v_cnt = 0 THEN EXECUTE IMMEDIATE '{embedded}'; END IF; END;"
+            )
+
+        return statement, tuple(all_params)
 
     # ----------------------------------------------------------------
     # Private helpers
