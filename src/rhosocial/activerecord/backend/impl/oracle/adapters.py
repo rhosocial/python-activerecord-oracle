@@ -320,7 +320,6 @@ class OracleVectorAdapter(BaseSQLTypeAdapter):
         from .types import OracleVector
         self.OracleVector = OracleVector
         self._register_type(OracleVector, str)
-        self._register_type(list, str)
 
     def _do_to_database(self, value: Any, target_type: Type, options: Optional[Dict[str, Any]]) -> Any:
         if hasattr(value, 'to_string'):
