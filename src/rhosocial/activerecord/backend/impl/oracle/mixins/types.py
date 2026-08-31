@@ -235,70 +235,70 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
 
         if self._ORACLE_NUMBER_TYPES.match(upper):
             if upper.startswith("BINARY_FLOAT"):
-                return FloatType(63)
+                return FloatType(dialect=self, precision=63)
             if upper.startswith("BINARY_DOUBLE"):
-                return DoubleType()
+                return DoubleType(dialect=self)
             if upper.startswith("FLOAT"):
                 nums = re.findall(r"\d+", stripped)
                 if nums:
-                    return FloatType(int(nums[0]))
-                return FloatType()
+                    return FloatType(dialect=self, precision=int(nums[0]))
+                return FloatType(dialect=self)
             nums = re.findall(r"\d+", stripped)
             if len(nums) >= 2:
                 p, s = int(nums[0]), int(nums[1])
                 # NUMBER(10) -> INTEGER, NUMBER(5) -> SMALLINT, NUMBER(19) -> BIGINT
                 if s == 0 and p == 10:
-                    return OracleIntegerType()
+                    return OracleIntegerType(dialect=self)
                 if s == 0 and p == 5:
-                    return OracleSmallIntType()
+                    return OracleSmallIntType(dialect=self)
                 if s == 0 and p == 19:
-                    return OracleBigIntType()
-                return DecimalType(p, s)
+                    return OracleBigIntType(dialect=self)
+                return DecimalType(dialect=self, precision=p, scale=s)
             if len(nums) == 1:
                 p = int(nums[0])
                 if p == 10:
-                    return OracleIntegerType()
+                    return OracleIntegerType(dialect=self)
                 if p == 5:
-                    return OracleSmallIntType()
+                    return OracleSmallIntType(dialect=self)
                 if p == 19:
-                    return OracleBigIntType()
-                return DecimalType(p)
-            return DecimalType()
+                    return OracleBigIntType(dialect=self)
+                return DecimalType(dialect=self, precision=p)
+            return DecimalType(dialect=self)
 
         # BLOB types checked before string types so "LONG RAW" matches the
         # binary branch rather than being consumed by the "LONG" string rule.
         if self._ORACLE_BLOB_TYPES.match(upper):
             if "LONG RAW" in upper:
-                return OracleLongRawType()
+                return OracleLongRawType(dialect=self)
             if "RAW" in upper:
                 length_match = re.search(r"\((\d+)", stripped)
                 length = int(length_match.group(1)) if length_match else None
-                return OracleRawType(length or 2000)
-            return OracleBlobType()
+                return OracleRawType(dialect=self, length=length or 2000)
+            return OracleBlobType(dialect=self)
 
         if self._ORACLE_STRING_TYPES.match(upper):
             if "NCLOB" in upper:
-                return OracleNClobType()
+                return OracleNClobType(dialect=self)
             if "CLOB" in upper:
-                return OracleClobType()
+                return OracleClobType(dialect=self)
             if "NVARCHAR2" in upper:
                 length_match = re.search(r"\((\d+)", stripped)
                 length = int(length_match.group(1)) if length_match else None
-                return OracleNVarChar2Type(length or 2000)
+                return OracleNVarChar2Type(dialect=self, length=length or 2000)
             if "VARCHAR2" in upper:
                 length_match = re.search(r"\((\d+)", stripped)
                 length = int(length_match.group(1)) if length_match else None
-                return OracleVarChar2Type(length or 4000)
+                return OracleVarChar2Type(dialect=self, length=length or 4000)
             if "NCHAR" in upper:
                 length_match = re.search(r"\((\d+)", stripped)
                 length = int(length_match.group(1)) if length_match else None
-                return OracleCharType(length or 1)
+                return OracleCharType(dialect=self, length=length or 1)
             if upper.startswith("LONG"):
-                return OracleLongType()
+                return OracleLongType(dialect=self)
             # CHAR
             length_match = re.search(r"\((\d+)", stripped)
             length = int(length_match.group(1)) if length_match else None
-            return OracleCharType(length or 1)
+            return OracleCharType(dialect=self, length=length or 1)
 
         if self._ORACLE_DATE_TYPES.match(upper):
             if "TIMESTAMP" in upper:
@@ -306,18 +306,18 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
                 nums = re.findall(r"\d+", stripped)
                 precision = int(nums[0]) if nums else None
                 if with_tz:
-                    return TimestampTzType(precision)
-                return TimestampType(precision)
+                    return TimestampTzType(dialect=self, precision=precision)
+                return TimestampType(dialect=self, precision=precision)
             if "INTERVAL" in upper:
                 # INTERVAL YEAR TO MONTH / DAY TO SECOND - approximated as TEXT
                 # until a typed IntervalType lands in the core expression layer.
-                return TextType()
-            return DateType()
+                return TextType(dialect=self)
+            return DateType(dialect=self)
 
         if self._ORACLE_XML_TYPES.match(upper):
-            return OracleXmlType()
+            return OracleXmlType(dialect=self)
 
-        return CustomType(stripped)
+        return CustomType(dialect=self, raw=stripped)
 
 class OracleTypeSuggestionMixin(DDLTypeSuggestionMixin):
     """Oracle-native ``suggest_column_type()``.
@@ -356,20 +356,20 @@ class OracleTypeSuggestionMixin(DDLTypeSuggestionMixin):
             _enum.Enum: OracleVarChar2Type,
         }
         if python_type is _uuid.UUID:
-            return OracleRawType(16)
+            return OracleRawType(dialect=self, length=16)
         factory = mapping.get(python_type)
         if factory is not None:
             if python_type is _enum.Enum:
-                return OracleVarChar2Type(64)
+                return OracleVarChar2Type(dialect=self, length=64)
             if python_type is str:
-                return OracleVarChar2Type(255)
+                return OracleVarChar2Type(dialect=self, length=255)
             return factory()
 
         if python_type in (dict, list):
             if version is None:
                 return None
             if version >= (21, 0, 0):
-                return JsonType()
-            return OracleClobType()
+                return JsonType(dialect=self)
+            return OracleClobType(dialect=self)
 
         return super().suggest_column_type(python_type, version)

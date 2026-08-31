@@ -45,8 +45,8 @@ def create_users_table(dialect):
                     ),
                 ],
             ),
-            ColumnDefinition("name", OracleVarChar2Type(255)),
-            ColumnDefinition("email", OracleVarChar2Type(255)),
+            ColumnDefinition("name", OracleVarChar2Type(length=255)),
+            ColumnDefinition("email", OracleVarChar2Type(length=255)),
         ],
     )
 
@@ -72,7 +72,7 @@ def create_posts_table(dialect):
                     ),
                 ],
             ),
-            ColumnDefinition("title", OracleVarChar2Type(255)),
+            ColumnDefinition("title", OracleVarChar2Type(length=255)),
             ColumnDefinition("user_id", OracleIntegerType()),
         ],
     )
@@ -103,7 +103,7 @@ def create_custom_table(dialect, table_name: str = "custom_table"):
                     ),
                 ],
             ),
-            ColumnDefinition("value", OracleVarChar2Type(255)),
+            ColumnDefinition("value", OracleVarChar2Type(length=255)),
         ],
     )
 

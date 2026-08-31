@@ -94,7 +94,7 @@ def test_data_type_instance_rendered_via_dialect(dialect):
     from rhosocial.activerecord.backend.expression.statements import ColumnDefinition
     from rhosocial.activerecord.backend.expression.types import VarCharType
 
-    col_def = ColumnDefinition(name="test_col", data_type=VarCharType(255))
+    col_def = ColumnDefinition(name="test_col", data_type=VarCharType(length=255))
     sql, params = dialect.format_column_definition(col_def)
     assert sql == "TEST_COL VARCHAR2(255)"
     assert params == ()

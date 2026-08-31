@@ -123,7 +123,7 @@ def test_create_range_partitioned_table_real(oracle_backend_single):
                     ColumnConstraint(constraint_type=ColumnConstraintType.PRIMARY_KEY),
                 ]),
                 ColumnDefinition("AGE", IntegerType()),
-                ColumnDefinition("NAME", VarCharType(100)),
+                ColumnDefinition("NAME", VarCharType(length=100)),
             ],
             partition=partition,
         )
@@ -167,7 +167,7 @@ def test_create_list_partitioned_table_real(oracle_backend_single):
                 ColumnDefinition("ID", IntegerType(), constraints=[
                     ColumnConstraint(constraint_type=ColumnConstraintType.PRIMARY_KEY),
                 ]),
-                ColumnDefinition("REGION", VarCharType(20)),
+                ColumnDefinition("REGION", VarCharType(length=20)),
             ],
             partition=partition,
         )
@@ -206,7 +206,7 @@ def test_create_hash_partitioned_table_real(oracle_backend_single):
                 ColumnDefinition("ID", IntegerType(), constraints=[
                     ColumnConstraint(constraint_type=ColumnConstraintType.PRIMARY_KEY),
                 ]),
-                ColumnDefinition("NAME", VarCharType(100)),
+                ColumnDefinition("NAME", VarCharType(length=100)),
             ],
             partition=partition,
         )

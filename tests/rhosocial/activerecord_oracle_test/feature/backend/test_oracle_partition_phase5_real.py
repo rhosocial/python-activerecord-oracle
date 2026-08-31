@@ -363,7 +363,7 @@ def test_add_and_drop_partition_real(oracle_backend_single):
                 ColumnDefinition("ID", IntegerType(), constraints=[
                     ColumnConstraint(constraint_type=ColumnConstraintType.PRIMARY_KEY),
                 ]),
-                ColumnDefinition("NAME", VarCharType(100)),
+                ColumnDefinition("NAME", VarCharType(length=100)),
             ],
             partition=partition,
         )
