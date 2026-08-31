@@ -48,7 +48,7 @@ expr = CreateTableExpression(
             constraints=[
                 ColumnConstraint(constraint_type=ColumnConstraintType.PRIMARY_KEY, is_auto_increment=True),
             ]),
-        ColumnDefinition("EMAIL", VarCharType(255)),
+        ColumnDefinition("EMAIL", VarCharType(length=255)),
     ],
     indexes=[IndexDefinition("IDX_EMAIL", ["EMAIL"])],
 )

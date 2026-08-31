@@ -69,9 +69,9 @@ def social_graph_data(oracle_backend):
     people_cols = [
         ColumnDefinition("id", IntegerType(),
             constraints=[ColumnConstraint(ColumnConstraintType.PRIMARY_KEY)]),
-        ColumnDefinition("name", VarCharType(100)),
-        ColumnDefinition("email", VarCharType(200)),
-        ColumnDefinition("city", VarCharType(100)),
+        ColumnDefinition("name", VarCharType(length=100)),
+        ColumnDefinition("email", VarCharType(length=200)),
+        ColumnDefinition("city", VarCharType(length=100)),
     ]
     backend.execute(*CreateTableExpression(dialect, "people", people_cols).to_sql())
 
@@ -84,7 +84,7 @@ def social_graph_data(oracle_backend):
         ColumnDefinition("followed_id", IntegerType(),
             constraints=[ColumnConstraint(ColumnConstraintType.FOREIGN_KEY,
                                           foreign_key_reference=("people", ["id"]))]),
-        ColumnDefinition("since", VarCharType(20)),
+        ColumnDefinition("since", VarCharType(length=20)),
     ]
     backend.execute(*CreateTableExpression(dialect, "follows", follows_cols).to_sql())
 
@@ -94,8 +94,8 @@ def social_graph_data(oracle_backend):
         ColumnDefinition("author_id", IntegerType(),
             constraints=[ColumnConstraint(ColumnConstraintType.FOREIGN_KEY,
                                           foreign_key_reference=("people", ["id"]))]),
-        ColumnDefinition("content", VarCharType(500)),
-        ColumnDefinition("created_at", VarCharType(20)),
+        ColumnDefinition("content", VarCharType(length=500)),
+        ColumnDefinition("created_at", VarCharType(length=20)),
     ]
     backend.execute(*CreateTableExpression(dialect, "posts", posts_cols).to_sql())
 
@@ -108,7 +108,7 @@ def social_graph_data(oracle_backend):
         ColumnDefinition("post_id", IntegerType(),
             constraints=[ColumnConstraint(ColumnConstraintType.FOREIGN_KEY,
                                           foreign_key_reference=("posts", ["id"]))]),
-        ColumnDefinition("created_at", VarCharType(20)),
+        ColumnDefinition("created_at", VarCharType(length=20)),
     ]
     backend.execute(*CreateTableExpression(dialect, "likes", likes_cols).to_sql())
 
@@ -429,7 +429,7 @@ class TestAsyncOracleSocialGraph:
         people_cols = [
             ColumnDefinition("id", IntegerType(),
                 constraints=[ColumnConstraint(ColumnConstraintType.PRIMARY_KEY)]),
-            ColumnDefinition("name", VarCharType(100)),
+            ColumnDefinition("name", VarCharType(length=100)),
         ]
         await backend.execute(*CreateTableExpression(dialect, "people", people_cols).to_sql())
 

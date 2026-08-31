@@ -40,7 +40,7 @@ from rhosocial.activerecord.backend.expression.types import (
 # Integer variants
 # ---------------------------------------------------------------------------
 
-class OracleIntegerType(IntegerType, backend="oracle"):
+class OracleIntegerType(IntegerType):
     """Oracle ``INTEGER`` — mapped to ``NUMBER(10)``."""
 
     @classmethod
@@ -48,7 +48,7 @@ class OracleIntegerType(IntegerType, backend="oracle"):
         return {'IntegerType'}
 
 
-class OracleSmallIntType(SmallIntType, backend="oracle"):
+class OracleSmallIntType(SmallIntType):
     """Oracle ``SMALLINT`` — mapped to ``NUMBER(5)``."""
 
     @classmethod
@@ -56,7 +56,7 @@ class OracleSmallIntType(SmallIntType, backend="oracle"):
         return {'SmallIntType'}
 
 
-class OracleBigIntType(BigIntType, backend="oracle"):
+class OracleBigIntType(BigIntType):
     """Oracle ``BIGINT`` — mapped to ``NUMBER(19)``."""
 
     @classmethod
@@ -68,7 +68,7 @@ class OracleBigIntType(BigIntType, backend="oracle"):
 # Character string variants
 # ---------------------------------------------------------------------------
 
-class OracleVarChar2Type(VarCharType, backend="oracle"):
+class OracleVarChar2Type(VarCharType):
     """Oracle ``VARCHAR2(n)`` — variable-length byte/char string."""
 
     @classmethod
@@ -76,7 +76,7 @@ class OracleVarChar2Type(VarCharType, backend="oracle"):
         return {'VarCharType'}
 
 
-class OracleNVarChar2Type(VarCharType, backend="oracle"):
+class OracleNVarChar2Type(VarCharType):
     """Oracle ``NVARCHAR2(n)`` — Unicode variable-length string."""
 
     @classmethod
@@ -84,7 +84,7 @@ class OracleNVarChar2Type(VarCharType, backend="oracle"):
         return {'VarCharType'}
 
 
-class OracleCharType(VarCharType, backend="oracle"):
+class OracleCharType(VarCharType):
     """Oracle ``CHAR(n)`` — fixed-length string.
 
     Inherits from ``VarCharType`` to reuse the ``length`` parameter; the
@@ -100,7 +100,7 @@ class OracleCharType(VarCharType, backend="oracle"):
 # Large object / long string variants
 # ---------------------------------------------------------------------------
 
-class OracleClobType(TextType, backend="oracle"):
+class OracleClobType(TextType):
     """Oracle ``CLOB`` — character large object."""
 
     @classmethod
@@ -108,7 +108,7 @@ class OracleClobType(TextType, backend="oracle"):
         return {'TextType'}
 
 
-class OracleNClobType(TextType, backend="oracle"):
+class OracleNClobType(TextType):
     """Oracle ``NCLOB`` — national character large object."""
 
     @classmethod
@@ -116,7 +116,7 @@ class OracleNClobType(TextType, backend="oracle"):
         return {'TextType'}
 
 
-class OracleLongType(TextType, backend="oracle"):
+class OracleLongType(TextType):
     """Oracle ``LONG`` — deprecated large string (use CLOB)."""
 
     @classmethod
@@ -124,7 +124,7 @@ class OracleLongType(TextType, backend="oracle"):
         return {'TextType'}
 
 
-class OracleXmlType(TextType, backend="oracle"):
+class OracleXmlType(TextType):
     """Oracle ``XMLType`` — XML document storage."""
 
     @classmethod
@@ -136,12 +136,12 @@ class OracleXmlType(TextType, backend="oracle"):
 # Binary variants
 # ---------------------------------------------------------------------------
 
-class OracleRawType(BlobType, backend="oracle"):
+class OracleRawType(BlobType):
     """Oracle ``RAW(n)`` — variable-length binary."""
 
     length: Optional[int] = None
 
-    def __init__(self, length: Optional[int] = None, dialect=None):
+    def __init__(self, dialect=None, *, length: Optional[int] = None):
         super().__init__(dialect)
         self.length = length
 
@@ -158,7 +158,7 @@ class OracleRawType(BlobType, backend="oracle"):
         return {'BlobType'}
 
 
-class OracleLongRawType(BlobType, backend="oracle"):
+class OracleLongRawType(BlobType):
     """Oracle ``LONG RAW`` — deprecated large binary (use BLOB)."""
 
     @classmethod
@@ -166,7 +166,7 @@ class OracleLongRawType(BlobType, backend="oracle"):
         return {'BlobType'}
 
 
-class OracleBlobType(BlobType, backend="oracle"):
+class OracleBlobType(BlobType):
     """Oracle ``BLOB`` — binary large object."""
 
     @classmethod
