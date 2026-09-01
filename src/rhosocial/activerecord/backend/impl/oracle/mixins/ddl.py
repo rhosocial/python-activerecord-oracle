@@ -157,7 +157,7 @@ class OracleDDLMixin:
         if constraint_parts:
             parts.append(" ".join(constraint_parts))
 
-        return " ".join(parts), params
+        return " ".join(parts), tuple(params)
 
     def format_table_constraint(
         self,
@@ -188,4 +188,4 @@ class OracleDDLMixin:
                     f"FOREIGN KEY ({cols_str}) REFERENCES {ref_table} ({ref_cols_str})"
                 )
 
-        return " ".join(parts), params
+        return " ".join(parts), tuple(params)
