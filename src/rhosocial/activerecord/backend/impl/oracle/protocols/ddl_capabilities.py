@@ -14,7 +14,7 @@ from typing import Protocol
 class OracleDDLSupport(Protocol):
     """Auto-generated capability protocol (P7)."""
 
-    def format_column_definition_oracle(self, col_def: 'ColumnDefinition', ColumnConstraintType) -> Tuple[str, List[Any]]:
+    def format_column_definition(self, col_def: 'ColumnDefinition', constraint_type=None) -> Tuple[str, List[Any]]:
         ...  # pragma: no cover
-    def format_table_constraint_oracle(self, t_const: 'TableConstraint', TableConstraintType) -> Tuple[str, List[Any]]:
+    def format_table_constraint(self, t_const: 'TableConstraint', TableConstraintType) -> Tuple[str, List[Any]]:
         ...  # pragma: no cover

@@ -13,8 +13,8 @@ class OracleDDLMixin:
     """CREATE TABLE / column-def / table-constraint formatting for Oracle.
 
     Provides the ``format_create_table_statement`` entry point together
-    with the private helpers ``format_column_definition_oracle`` and
-    ``format_table_constraint_oracle`` that the dialect previously
+    with the private helpers ``format_column_definition`` and
+    ``format_table_constraint`` that the dialect previously
     inlined in its monolithic file.
     """
 
@@ -40,14 +40,14 @@ class OracleDDLMixin:
 
         column_parts: List[str] = []
         for col_def in expr.columns:
-            col_sql, col_params = self.format_column_definition_oracle(
+            col_sql, col_params = self.format_column_definition(
                 col_def, ColumnConstraintType
             )
             column_parts.append(col_sql)
             all_params.extend(col_params)
 
         for t_const in expr.table_constraints:
-            const_sql, const_params = self.format_table_constraint_oracle(
+            const_sql, const_params = self.format_table_constraint(
                 t_const, TableConstraintType
             )
             column_parts.append(const_sql)
@@ -92,11 +92,16 @@ class OracleDDLMixin:
     # ----------------------------------------------------------------
     # Private helpers
     # ----------------------------------------------------------------
-    def format_column_definition_oracle(
+    def format_column_definition(
         self,
         col_def: "ColumnDefinition",
-        ColumnConstraintType,
+        constraint_type=None,
     ) -> Tuple[str, List[Any]]:
+        from rhosocial.activerecord.backend.expression.statements.ddl_table import (
+            ColumnConstraintType,
+        )
+        if constraint_type is None:
+            constraint_type = ColumnConstraintType
         type_sql, type_params = col_def.data_type.to_sql(self)
         parts = [self.format_identifier(col_def.name), type_sql]
         params: List[Any] = list(type_params)
@@ -154,7 +159,7 @@ class OracleDDLMixin:
 
         return " ".join(parts), params
 
-    def format_table_constraint_oracle(
+    def format_table_constraint(
         self,
         t_const: "TableConstraint",
         TableConstraintType,
