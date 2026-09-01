@@ -22,13 +22,13 @@ class OracleFunctionFormatMixin:
         fn_name = getattr(expr, "func_name", "").upper()
 
         if fn_name == "LISTAGG":
-            return self._format_listagg(expr, filter_predicate)
+            return self.format_listagg(expr, filter_predicate)
         if fn_name in ("PERCENTILE_CONT", "PERCENTILE_DISC"):
-            return self._format_percentile_ordered_set(expr, filter_predicate)
+            return self.format_percentile_ordered_set(expr, filter_predicate)
         if fn_name == "JSON_TABLE":
-            return self._format_json_table(expr)
+            return self.format_json_table_expression(expr)
         if fn_name in ("JSON_VALUE", "JSON_QUERY"):
-            return self._format_json_scalar(expr)
+            return self.format_json_scalar(expr)
 
         return super().format_function_call(expr, filter_predicate)
 
@@ -36,7 +36,7 @@ class OracleFunctionFormatMixin:
     # Private helpers
     # ------------------------------------------------------------------
 
-    def _format_listagg(  # noqa: E301
+    def format_listagg(  # noqa: E301
         self,
         expr: "BaseExpression",
         filter_predicate: Optional["SQLPredicate"] = None,
@@ -65,7 +65,7 @@ class OracleFunctionFormatMixin:
 
         return self._finish_function_call(func_sql, all_params, expr, filter_predicate)
 
-    def _format_percentile_ordered_set(
+    def format_percentile_ordered_set(
         self,
         expr: "BaseExpression",
         filter_predicate: Optional["SQLPredicate"] = None,
@@ -90,7 +90,7 @@ class OracleFunctionFormatMixin:
 
         return self._finish_function_call(func_sql, all_params, expr, filter_predicate)
 
-    def _format_json_scalar(self, expr: "BaseExpression") -> Tuple[str, Tuple]:
+    def format_json_scalar(self, expr: "BaseExpression") -> Tuple[str, Tuple]:
         all_params: List[Any] = []
 
         args_sql: List[str] = []
@@ -109,7 +109,7 @@ class OracleFunctionFormatMixin:
 
         return self._finish_function_call(func_sql, all_params, expr, None)
 
-    def _format_json_table(self, expr: "BaseExpression") -> Tuple[str, Tuple]:
+    def format_json_table_expression(self, expr: "BaseExpression") -> Tuple[str, Tuple]:
         all_params: List[Any] = []
 
         args_sql: List[str] = []
