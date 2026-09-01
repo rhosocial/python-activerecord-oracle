@@ -188,6 +188,9 @@ class TestCLIInfoCommand:
         class MockArgs:
             host = "localhost"
             port = 1521
+            output = "table"
+            rich_ascii = False
+            verbose = 0
             service = "ORCL"
             user = "system"
             password = ""
@@ -217,6 +220,9 @@ class TestCLIInfoCommand:
         class MockArgs:
             host = "localhost"
             port = 1521
+            output = "table"
+            rich_ascii = False
+            verbose = 0
             service = "ORCL"
             user = "system"
             password = ""
@@ -387,6 +393,9 @@ class TestCLIInfoFeatures:
         class MockArgs:
             host = "localhost"
             port = 1521
+            output = "table"
+            rich_ascii = False
+            verbose = 0
             service = "ORCL"
             user = "system"
             password = ""
