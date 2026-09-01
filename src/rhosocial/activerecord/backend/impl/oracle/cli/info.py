@@ -390,9 +390,9 @@ def handle(args):
             version = parse_version(actual_version)
         else:
             version = (8, 0, 0)  # Default version
-        from rhosocial.activerecord.backend.impl.mysql.dialect import MySQLDialect
+        from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
-        dialect = MySQLDialect(version=version)
+        dialect = OracleDialect(version=version)
         version_display = f"{version[0]}.{version[1]}.{version[2]}"
 
     # Unified structure for JSON output
