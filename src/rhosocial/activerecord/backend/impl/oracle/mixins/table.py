@@ -9,10 +9,10 @@ class OracleTableMixin(object):
     and compression. It is intentionally a *capability/feature* mixin and
     does NOT duplicate the canonical CREATE TABLE formatters that already
     live on the dialect (``format_create_table_statement`` and
-    ``format_column_definition_oracle``); those remain the source of truth
+    ``format_column_definition``); those remain the source of truth
     for emitting full DDL, including partition clauses (rendered via
     ``expr.partition``) and table-level constraints (rendered via
-    ``format_table_constraint_oracle``).
+    ``format_table_constraint``).
 
     Oracle specifics captured here:
 
