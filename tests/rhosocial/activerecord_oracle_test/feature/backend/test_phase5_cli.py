@@ -201,6 +201,7 @@ class TestCLIInfoCommand:
             named_connection = None
             connection_params = []
 
+            database = None
         provider = JsonOutputProvider()
         info = handle_info(MockArgs(), provider)
 
@@ -233,6 +234,7 @@ class TestCLIInfoCommand:
             named_connection = None
             connection_params = []
 
+            database = None
         info = info_handle(MockArgs())
         assert info["database"]["type"] == "oracle"
 
@@ -406,6 +408,7 @@ class TestCLIInfoFeatures:
             named_connection = None
             connection_params = []
 
+            database = None
         provider = JsonOutputProvider()
         info = handle_info(MockArgs(), provider)
 
@@ -447,6 +450,7 @@ class TestCLIInfoFeatures:
             named_connection = None
             connection_params = []
 
+            database = None
         provider = JsonOutputProvider()
         info_19c = handle_info(MockArgs19c(), provider)
 
@@ -467,6 +471,7 @@ class TestCLIInfoFeatures:
             named_connection = None
             connection_params = []
 
+            database = None
         info_23ai = handle_info(MockArgs23ai(), provider)
 
         assert info_23ai["features"]["boolean_type"] is True
