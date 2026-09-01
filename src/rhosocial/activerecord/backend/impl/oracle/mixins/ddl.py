@@ -13,8 +13,8 @@ class OracleDDLMixin:
     """CREATE TABLE / column-def / table-constraint formatting for Oracle.
 
     Provides the ``format_create_table_statement`` entry point together
-    with the private helpers ``_format_column_definition_oracle`` and
-    ``_format_table_constraint_oracle`` that the dialect previously
+    with the private helpers ``format_column_definition_oracle`` and
+    ``format_table_constraint_oracle`` that the dialect previously
     inlined in its monolithic file.
     """
 
@@ -40,14 +40,14 @@ class OracleDDLMixin:
 
         column_parts: List[str] = []
         for col_def in expr.columns:
-            col_sql, col_params = self._format_column_definition_oracle(
+            col_sql, col_params = self.format_column_definition_oracle(
                 col_def, ColumnConstraintType
             )
             column_parts.append(col_sql)
             all_params.extend(col_params)
 
         for t_const in expr.table_constraints:
-            const_sql, const_params = self._format_table_constraint_oracle(
+            const_sql, const_params = self.format_table_constraint_oracle(
                 t_const, TableConstraintType
             )
             column_parts.append(const_sql)
@@ -92,7 +92,7 @@ class OracleDDLMixin:
     # ----------------------------------------------------------------
     # Private helpers
     # ----------------------------------------------------------------
-    def _format_column_definition_oracle(
+    def format_column_definition_oracle(
         self,
         col_def: "ColumnDefinition",
         ColumnConstraintType,
@@ -154,7 +154,7 @@ class OracleDDLMixin:
 
         return " ".join(parts), params
 
-    def _format_table_constraint_oracle(
+    def format_table_constraint_oracle(
         self,
         t_const: "TableConstraint",
         TableConstraintType,

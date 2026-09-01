@@ -221,11 +221,11 @@ class OraclePartitionMixin:
         # Legacy generic PartitionClause path (Phase 4 compatibility).
         method = expr.method.upper()
         if method == "RANGE":
-            return self._format_legacy_range(expr)
+            return self.format_legacy_range(expr)
         if method == "LIST":
-            return self._format_legacy_list(expr)
+            return self.format_legacy_list(expr)
         if method == "HASH":
-            return self._format_legacy_hash(expr)
+            return self.format_legacy_hash(expr)
         raise ValueError(
             f"Invalid Oracle partition method: {expr.method!r}. "
             "Supported: RANGE, LIST, HASH, INTERVAL, REFERENCE."
@@ -554,27 +554,27 @@ class OraclePartitionMixin:
     # ------------------------------------------------------------------
     # Legacy generic PartitionClause path (Phase 4 compatibility)
     # ------------------------------------------------------------------
-    def _format_legacy_range(self, expr: "PartitionClause") -> Tuple[str, tuple]:
+    def format_legacy_range(self, expr: "PartitionClause") -> Tuple[str, tuple]:
         """Legacy RANGE path reading ``expr.dialect_options['partitions']``."""
         key_sql = self.format_partition_keys(expr.keys)
         sql = f"PARTITION BY RANGE ({key_sql})"
         partitions = expr.dialect_options.get("partitions") or []
         if partitions:
-            parts = [self._format_legacy_range_definition(p) for p in partitions]
+            parts = [self.format_legacy_range_definition(p) for p in partitions]
             sql = f"{sql} ({', '.join(parts)})"
         return f" {sql}", ()
 
-    def _format_legacy_list(self, expr: "PartitionClause") -> Tuple[str, tuple]:
+    def format_legacy_list(self, expr: "PartitionClause") -> Tuple[str, tuple]:
         """Legacy LIST path reading ``expr.dialect_options['partitions']``."""
         key_sql = self.format_partition_keys(expr.keys)
         sql = f"PARTITION BY LIST ({key_sql})"
         partitions = expr.dialect_options.get("partitions") or []
         if partitions:
-            parts = [self._format_legacy_list_definition(p) for p in partitions]
+            parts = [self.format_legacy_list_definition(p) for p in partitions]
             sql = f"{sql} ({', '.join(parts)})"
         return f" {sql}", ()
 
-    def _format_legacy_hash(self, expr: "PartitionClause") -> Tuple[str, tuple]:
+    def format_legacy_hash(self, expr: "PartitionClause") -> Tuple[str, tuple]:
         """Legacy HASH path reading ``expr.dialect_options['partitions_count']``."""
         key_sql = self.format_partition_keys(expr.keys)
         sql = f"PARTITION BY HASH ({key_sql})"
@@ -592,7 +592,7 @@ class OraclePartitionMixin:
             sql = f"{sql} PARTITIONS {partitions_count}"
         return f" {sql}", ()
 
-    def _format_legacy_range_definition(self, partition: Any) -> str:
+    def format_legacy_range_definition(self, partition: Any) -> str:
         """Render a single legacy RANGE partition definition dict."""
         if not isinstance(partition, dict):
             raise TypeError(
@@ -615,7 +615,7 @@ class OraclePartitionMixin:
             f"VALUES LESS THAN ({', '.join(value_sql_parts)})"
         )
 
-    def _format_legacy_list_definition(self, partition: Any) -> str:
+    def format_legacy_list_definition(self, partition: Any) -> str:
         """Render a single legacy LIST partition definition dict."""
         if not isinstance(partition, dict):
             raise TypeError(

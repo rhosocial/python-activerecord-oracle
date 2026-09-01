@@ -144,7 +144,7 @@ class OracleDMLOperationMixin(object):
         Values may be plain SQL fragment strings or ``BaseExpression``
         objects (rendered with parameter binding).
         """
-        return self._format_multi_table_insert_statement(
+        return self.format_multi_table_insert_statement(
             "ALL", into_clauses, select_query,
             when_clauses=when_clauses, else_clause=else_clause,
             dialect_options=dialect_options,
@@ -165,13 +165,13 @@ class OracleDMLOperationMixin(object):
         ``FIRST`` keyword: only the first matching ``WHEN`` branch is
         evaluated per source row.
         """
-        return self._format_multi_table_insert_statement(
+        return self.format_multi_table_insert_statement(
             "FIRST", into_clauses, select_query,
             when_clauses=when_clauses, else_clause=else_clause,
             dialect_options=dialect_options,
         )
 
-    def _format_multi_table_insert_statement(
+    def format_multi_table_insert_statement(
         self,
         keyword: str,
         into_clauses: List[dict],
@@ -193,18 +193,18 @@ class OracleDMLOperationMixin(object):
         params: List[Any] = []
         parts = [f"INSERT {keyword}"]
         for spec in into_clauses:
-            parts.append(self._format_insert_into_spec(spec, params))
+            parts.append(self.format_insert_into_spec(spec, params))
         for spec in when_clauses or []:
             condition = spec.get("condition")
             cond_sql = self._render_insert_fragment(condition, params)
-            parts.append(f"WHEN {cond_sql} THEN {self._format_insert_into_spec(spec, params)}")
+            parts.append(f"WHEN {cond_sql} THEN {self.format_insert_into_spec(spec, params)}")
         if else_clause:
-            parts.append(f"ELSE {self._format_insert_into_spec(else_clause, params)}")
+            parts.append(f"ELSE {self.format_insert_into_spec(else_clause, params)}")
         if select_query:
             parts.append(select_query)
         return " ".join(parts), tuple(params)
 
-    def _format_insert_into_spec(self, spec: dict, params: List[Any]) -> str:
+    def format_insert_into_spec(self, spec: dict, params: List[Any]) -> str:
         table = spec["table"]
         columns = spec.get("columns") or ""
         values = spec.get("values") or ""

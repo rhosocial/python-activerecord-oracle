@@ -36,7 +36,7 @@ class OracleRoutineMixin:
     def supports_create_package_body(self) -> bool:
         return True
 
-    def _format_parameters(self, parameters) -> str:
+    def format_parameters(self, parameters) -> str:
         """Render formal parameters as a comma-separated declaration list."""
         rendered = []
         for param in parameters:
@@ -65,7 +65,7 @@ class OracleRoutineMixin:
         parts.append("PROCEDURE")
         parts.append(self.format_identifier(expr.procedure_name))
         if expr.parameters:
-            parts.append(f"({self._format_parameters(expr.parameters)})")
+            parts.append(f"({self.format_parameters(expr.parameters)})")
         parts.append(expr.keyword)
         parts.append(expr.body)
         return " ".join(parts), ()
@@ -88,7 +88,7 @@ class OracleRoutineMixin:
         parts.append("FUNCTION")
         parts.append(self.format_identifier(expr.function_name))
         if expr.parameters:
-            parts.append(f"({self._format_parameters(expr.parameters)})")
+            parts.append(f"({self.format_parameters(expr.parameters)})")
         parts.append(expr.return_keyword)
         parts.append(self.format_identifier(expr.return_type))
         parts.append(expr.keyword)

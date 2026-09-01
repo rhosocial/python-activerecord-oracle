@@ -32,7 +32,7 @@ class OracleFlashbackMixin:
         return True
 
     @staticmethod
-    def _format_flashback_value(value) -> Tuple[str, tuple]:
+    def format_flashback_value(value) -> Tuple[str, tuple]:
         """Render a flashback value as a SQL fragment.
 
         ``BaseExpression`` values are rendered through ``to_sql()``; plain
@@ -53,7 +53,7 @@ class OracleFlashbackMixin:
                     "query; it requires Oracle 10g or later."
                 ),
             )
-        value_sql, value_params = self._format_flashback_value(expr.value)
+        value_sql, value_params = self.format_flashback_value(expr.value)
         return f"AS OF {expr.mode.value} {value_sql}", value_params
 
     def format_versions_between_clause(
@@ -68,8 +68,8 @@ class OracleFlashbackMixin:
                     "query; it requires Oracle 10g or later."
                 ),
             )
-        low_sql, low_params = self._format_flashback_value(expr.low_value)
-        high_sql, high_params = self._format_flashback_value(expr.high_value)
+        low_sql, low_params = self.format_flashback_value(expr.low_value)
+        high_sql, high_params = self.format_flashback_value(expr.high_value)
         return (
             f"VERSIONS BETWEEN {expr.mode.value} {low_sql} AND {high_sql}",
             tuple(low_params) + tuple(high_params),
@@ -96,7 +96,7 @@ class OracleFlashbackMixin:
         elif expr.to_scn is not None:
             parts.append(f"TO SCN {expr.to_scn}")
         elif expr.to_timestamp is not None:
-            ts_sql, ts_params = self._format_flashback_value(expr.to_timestamp)
+            ts_sql, ts_params = self.format_flashback_value(expr.to_timestamp)
             parts.append(f"TO TIMESTAMP {ts_sql}")
             params = tuple(ts_params)
         if expr.enable_triggers:
