@@ -6,6 +6,7 @@ falling back to --version flag when no connection is available.
 """
 
 import argparse
+import inspect
 import json
 import logging
 from typing import Dict, Tuple
@@ -138,6 +139,7 @@ def handle(args):
             "fetch_first": dialect.version >= (12, 0, 0),
             "rownum": True,
         },
+        "protocols": {},
     }
 
     # Protocol family support probe (consistent with other backends)
@@ -351,75 +353,6 @@ def create_parser(subparsers):
     return parser
 
 
-def handle(args):
-    """Handle the info subcommand."""
-    create_provider(args.output, ascii_borders=args.rich_ascii)
-
-    # Track whether we're using actual database or defaults
-    is_connected = False
-    dialect = None
-    version_display = None
-
-    named_conn = getattr(args, "named_connection", None)
-    if named_conn or args.database:
-        try:
-            from rhosocial.activerecord.backend.impl.mysql import MySQLBackend
-
-            config = resolve_connection_config_from_args(args)
-            backend = MySQLBackend(connection_config=config)
-            backend.connect()
-            backend.introspect_and_adapt()
-
-            # Use the adapted dialect from backend
-            dialect = backend.dialect
-            version_tuple = backend.get_server_version()
-            if version_tuple:
-                version_display = f"{version_tuple[0]}.{version_tuple[1]}.{version_tuple[2]}"
-            is_connected = True
-
-            backend.disconnect()
-        except Exception as e:
-            logger.warning("Could not connect to database for introspection: %s", e)
-            logger.warning("Using default values for dialect information.")
-
-    # Create default dialect if not connected
-    if dialect is None:
-        # Parse version from command line or use default
-        actual_version = args.version
-        if actual_version:
-            version = parse_version(actual_version)
-        else:
-            version = (8, 0, 0)  # Default version
-        from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
-
-        dialect = OracleDialect(version=version)
-        version_display = f"{version[0]}.{version[1]}.{version[2]}"
-
-    # Unified structure for JSON output
-    info = {
-        "database": {
-            "type": "mysql",
-            "version": version_display,
-            "version_tuple": list(dialect.version),
-            "connected": is_connected,
-        },
-        "features": {},
-        "protocols": {},
-    }
-
-    # Build protocol support information
-    for group_name, protocols in PROTOCOL_FAMILY_GROUPS.items():
-        info["protocols"][group_name] = _build_protocol_info(dialect, group_name, protocols, args.verbose)
-
-    if args.output == "json" or not RICH_AVAILABLE:
-        print(json.dumps(info, indent=2))
-    else:
-        # Use legacy structure for rich display
-        info_legacy = {
-            "mysql": info["database"],
-            "protocols": info["protocols"],
-        }
-        _display_info_rich(info_legacy, args.verbose, version_display, is_connected)
 
 
 # ---------------------------------------------------------------------------
