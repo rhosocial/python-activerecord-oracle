@@ -37,14 +37,14 @@ class TestOracleSynonymCapabilities:
 
 class TestOracleCreateSynonymExpression:
     def test_private_synonym(self, dialect):
-        expr = OracleCreateSynonymExpression(dialect, synonym_name="s", table_name="t")
+        expr = OracleCreateSynonymExpression(dialect, synonym_name="s", table="t")
         sql, params = expr.to_sql()
         assert sql == "CREATE SYNONYM S FOR T"
         assert params == ()
 
     def test_schema_qualified_target(self, dialect):
         expr = OracleCreateSynonymExpression(
-            dialect, synonym_name="s", table_name="t", schema_name="scott"
+            dialect, synonym_name="s", table="t", schema_name="scott"
         )
         sql, params = expr.to_sql()
         assert sql == "CREATE SYNONYM S FOR SCOTT.T"
@@ -52,7 +52,7 @@ class TestOracleCreateSynonymExpression:
 
     def test_public_synonym(self, dialect):
         expr = OracleCreateSynonymExpression(
-            dialect, synonym_name="s", table_name="t", public=True
+            dialect, synonym_name="s", table="t", public=True
         )
         sql, params = expr.to_sql()
         assert sql == "CREATE PUBLIC SYNONYM S FOR T"
@@ -60,25 +60,25 @@ class TestOracleCreateSynonymExpression:
 
     def test_public_synonym_with_schema(self, dialect):
         expr = OracleCreateSynonymExpression(
-            dialect, synonym_name="s", table_name="emp", schema_name="hr", public=True
+            dialect, synonym_name="s", table="emp", schema_name="hr", public=True
         )
         sql, params = expr.to_sql()
         assert sql == "CREATE PUBLIC SYNONYM S FOR HR.EMP"
         assert params == ()
 
     def test_identifier_upper_cased(self, dialect):
-        expr = OracleCreateSynonymExpression(dialect, synonym_name="My_Syn", table_name="t")
+        expr = OracleCreateSynonymExpression(dialect, synonym_name="My_Syn", table="t")
         sql, params = expr.to_sql()
         assert sql == "CREATE SYNONYM MY_SYN FOR T"
         assert params == ()
 
     def test_empty_synonym_name_rejected(self, dialect):
         with pytest.raises(ValueError, match="synonym_name must be a non-empty string"):
-            OracleCreateSynonymExpression(dialect, synonym_name="  ", table_name="t")
+            OracleCreateSynonymExpression(dialect, synonym_name="  ", table="t")
 
     def test_empty_table_name_rejected(self, dialect):
-        with pytest.raises(ValueError, match="table_name must be a non-empty string"):
-            OracleCreateSynonymExpression(dialect, synonym_name="s", table_name="")
+        with pytest.raises(ValueError, match="table must be a non-empty string"):
+            OracleCreateSynonymExpression(dialect, synonym_name="s", table="")
 
 
 class TestOracleDropSynonymExpression:
@@ -214,7 +214,7 @@ class TestOracleDblinkTableReference:
 class TestOracleSynonymDatabaseLinkVersionBoundary:
     def test_create_synonym_below_9i_raises(self):
         d8 = OracleDialect(version=(8, 1, 0))
-        expr = OracleCreateSynonymExpression(d8, synonym_name="s", table_name="t")
+        expr = OracleCreateSynonymExpression(d8, synonym_name="s", table="t")
         with pytest.raises(UnsupportedFeatureError, match="CREATE SYNONYM"):
             expr.to_sql()
 
@@ -239,7 +239,7 @@ class TestOracleSynonymDatabaseLinkVersionBoundary:
     def test_at_9i_works(self):
         d9 = OracleDialect(version=(9, 0, 0))
         assert OracleCreateSynonymExpression(
-            d9, synonym_name="s", table_name="t"
+            d9, synonym_name="s", table="t"
         ).to_sql()[0] == "CREATE SYNONYM S FOR T"
         assert OracleCreateDatabaseLinkExpression(
             d9, link_name="dl"

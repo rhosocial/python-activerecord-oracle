@@ -140,7 +140,7 @@ class TestSqlBuilders:
         assert [str(p) for p in view_params] == ["AR_CRM"]
 
         trig_sql, trig_params = dialect.format_trigger_list_query(
-            TriggerListExpression(dialect, schema="ar_crm", table_name="customers")
+            TriggerListExpression(dialect, schema="ar_crm", table="customers")
         )
         assert "ALL_TRIGGERS" in trig_sql.upper()
         assert [str(p) for p in trig_params] == ["AR_CRM", "CUSTOMERS"]

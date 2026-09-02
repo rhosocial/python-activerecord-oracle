@@ -48,7 +48,7 @@ async def _table_exists(backend: AsyncOracleBackend, table: str) -> bool:
     """
     from rhosocial.activerecord.backend.options import ExecutionOptions, StatementType
     result = await backend.execute(
-        "SELECT 1 FROM user_tables WHERE table = ?",
+        "SELECT 1 FROM user_tables WHERE table_name = ?",
         (table.upper(),),
         options=ExecutionOptions(stmt_type=StatementType.DQL),
     )

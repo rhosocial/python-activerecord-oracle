@@ -25,7 +25,7 @@ def dialect() -> OracleDialect:
 
 def _trigger(dialect: OracleDialect, **kwargs) -> CreateTriggerExpression:
     defaults = dict(
-        trigger_name="trg", table_name="t",
+        trigger="trg", table="t",
         timing=TriggerTiming.BEFORE, events=[TriggerEvent.INSERT],
         function_name="proc", level=TriggerLevel.ROW,
     )
@@ -49,8 +49,8 @@ class TestTriggerCapabilities:
 
 class TestCreateTriggerFormatting:
     def test_row_trigger_with_call(self, dialect):
-        expr = _trigger(dialect, trigger_name="trg_audit",
-                        table_name="customers",
+        expr = _trigger(dialect, trigger="trg_audit",
+                        table="customers",
                         events=[TriggerEvent.INSERT, TriggerEvent.UPDATE],
                         function_name="audit_proc")
         sql, params = expr.to_sql()
@@ -59,7 +59,7 @@ class TestCreateTriggerFormatting:
         assert params == ()
 
     def test_update_of_columns(self, dialect):
-        expr = _trigger(dialect, table_name="orders",
+        expr = _trigger(dialect, table="orders",
                         events=[TriggerEvent.UPDATE], function_name="do_it",
                         update_columns=["status", "note"])
         sql, _ = expr.to_sql()
@@ -67,7 +67,7 @@ class TestCreateTriggerFormatting:
                        "UPDATE OF STATUS, NOTE ON ORDERS FOR EACH ROW CALL DO_IT")
 
     def test_instead_of_trigger_on_view(self, dialect):
-        expr = _trigger(dialect, trigger_name="TRG", table_name="v",
+        expr = _trigger(dialect, trigger="TRG", table="v",
                         timing=TriggerTiming.INSTEAD_OF,
                         events=[TriggerEvent.INSERT], function_name="p",
                         level=TriggerLevel.STATEMENT)

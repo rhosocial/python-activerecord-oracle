@@ -134,7 +134,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
                 unusable_beginning,
                 collation
             FROM all_tab_columns
-            WHERE table = '{table.upper()}'
+            WHERE table_name = '{table.upper()}'
               AND owner = '{schema.upper()}'
             ORDER BY column_id
         """
@@ -146,7 +146,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
             FROM all_constraints cons
             JOIN all_cons_columns cols ON cons.constraint_name = cols.constraint_name
                 AND cons.owner = cols.owner
-            WHERE cons.table = '{table.upper()}'
+            WHERE cons.table_name = '{table.upper()}'
               AND cons.owner = '{schema.upper()}'
               AND cons.constraint_type = 'P'
             ORDER BY cols.position
