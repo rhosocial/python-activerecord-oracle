@@ -654,10 +654,10 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         if not self._connection:
             await self.connect()
 
-        table_name = f"{options.schema_name}.{options.table}" if options.schema_name else options.table
+        table = f"{options.schema_name}.{options.table}" if options.schema_name else options.table
         columns_sql = ", ".join(options.columns)
         placeholders = ", ".join(["?"] * len(options.columns))
-        sql = f"INSERT INTO {table_name} ({columns_sql}) VALUES ({placeholders})"
+        sql = f"INSERT INTO {table} ({columns_sql}) VALUES ({placeholders})"
         if options.returning_columns:
             returning_sql = ", ".join(options.returning_columns)
             into_placeholders = ", ".join(["?"] * len(options.returning_columns))
@@ -807,10 +807,10 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             returning_clause = ReturningClause(self.dialect, returning_expressions)
 
         # Create InsertExpression and generate SQL
-        table_name = f"{options.schema_name}.{options.table}" if options.schema_name else options.table
+        table = f"{options.schema_name}.{options.table}" if options.schema_name else options.table
         insert_expr = InsertExpression(
             dialect=self.dialect,
-            into=table_name,
+            into=table,
             source=values_source,
             columns=list(options.data.keys()),
             returning=returning_clause,
@@ -891,10 +891,10 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             returning_clause = ReturningClause(self.dialect, returning_expressions)
 
         # Create UpdateExpression and generate SQL
-        table_name = f"{options.schema_name}.{options.table}" if options.schema_name else options.table
+        table = f"{options.schema_name}.{options.table}" if options.schema_name else options.table
         update_expr = UpdateExpression(
             dialect=self.dialect,
-            table=table_name,
+            table=table,
             assignments=assignments,
             where=options.where,
             returning=returning_clause,
@@ -948,10 +948,10 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             returning_clause = ReturningClause(self.dialect, returning_expressions)
 
         # Create DeleteExpression and generate SQL
-        table_name = f"{options.schema_name}.{options.table}" if options.schema_name else options.table
+        table = f"{options.schema_name}.{options.table}" if options.schema_name else options.table
         delete_expr = DeleteExpression(
             dialect=self.dialect,
-            tables=table_name,
+            tables=table,
             where=options.where,
             returning=returning_clause,
         )
@@ -1112,8 +1112,8 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         matching ``oracledb.DB_TYPE_*``.  Falls back to VARCHAR for unknown
         columns.
         """
-        table_name = getattr(self, "_current_returning_table", None)
-        data_type = await self._lookup_oracle_data_type_async(table_name, column_name) if table_name else None
+        table = getattr(self, "_current_returning_table", None)
+        data_type = await self._lookup_oracle_data_type_async(table, column_name) if table else None
         if data_type:
             if "NUMBER" in data_type and "VARCHAR" not in data_type:
                 return cursor.var(int)
@@ -1129,22 +1129,22 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
 
 
     @staticmethod
-    def _returning_lookup_key(table_name: str, column_name: str) -> Tuple[str, str, str]:
+    def _returning_lookup_key(table: str, column_name: str) -> Tuple[str, str, str]:
         """Split an optional ``SCHEMA.TABLE`` qualifier into a lookup key."""
-        raw_table = str(table_name)
+        raw_table = str(table)
         owner = ""
         if "." in raw_table:
             owner, _, raw_table = raw_table.partition(".")
         return owner.upper(), raw_table.upper(), str(column_name).upper()
 
-    async def _lookup_oracle_data_type_async(self, table_name: str, column_name: str) -> Optional[str]:
+    async def _lookup_oracle_data_type_async(self, table: str, column_name: str) -> Optional[str]:
         """Async version of :meth:`OracleBackend._lookup_oracle_data_type`."""
         cache_attr = "_oracle_data_type_cache"
         cache = getattr(self, cache_attr, None)
         if cache is None:
             cache = {}
             setattr(self, cache_attr, cache)
-        key = self._returning_lookup_key(table_name, column_name)
+        key = self._returning_lookup_key(table, column_name)
         if key in cache:
             return cache[key]
         if not self._connection:

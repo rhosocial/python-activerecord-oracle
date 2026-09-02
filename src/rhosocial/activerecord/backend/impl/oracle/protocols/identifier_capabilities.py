@@ -18,5 +18,5 @@ class OracleIdentifierSupport(Protocol):
         ...  # pragma: no cover
     def format_column(self, name: str, table: Optional[str]=None, alias: Optional[str]=None, schema_name: Optional[str]=None) -> Tuple[str, Tuple]:
         ...  # pragma: no cover
-    def format_table(self, table_name: str, alias: Optional[str]=None, schema_name: Optional[str]=None, dblink: Optional[str]=None, flashback: Optional[Any]=None) -> Tuple[str, Tuple]:
+    def format_table(self, table: str, alias: Optional[str]=None, schema_name: Optional[str]=None, dblink: Optional[str]=None, flashback: Optional[Any]=None) -> Tuple[str, Tuple]:
         ...  # pragma: no cover

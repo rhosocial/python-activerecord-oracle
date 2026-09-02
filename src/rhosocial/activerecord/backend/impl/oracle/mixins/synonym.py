@@ -46,10 +46,10 @@ class OracleSynonymMixin:
         if expr.schema_name:
             target = (
                 f"{self.format_identifier(expr.schema_name)}."
-                f"{self.format_identifier(expr.table_name)}"
+                f"{self.format_identifier(expr.table)}"
             )
         else:
-            target = self.format_identifier(expr.table_name)
+            target = self.format_identifier(expr.table)
         parts.append(target)
         return " ".join(parts), ()
 

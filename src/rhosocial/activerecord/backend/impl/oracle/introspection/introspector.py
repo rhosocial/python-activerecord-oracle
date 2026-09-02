@@ -94,7 +94,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
             (),
         )
 
-    def _build_columns_sql(self, table_name: str, schema: str) -> str:
+    def _build_columns_sql(self, table: str, schema: str) -> str:
         """Build SQL to get columns for a table."""
         return f"""
             SELECT
@@ -134,19 +134,19 @@ class OracleIntrospectorMixin(IntrospectorMixin):
                 unusable_beginning,
                 collation
             FROM all_tab_columns
-            WHERE table_name = '{table_name.upper()}'
+            WHERE table = '{table.upper()}'
               AND owner = '{schema.upper()}'
             ORDER BY column_id
         """
 
-    def _build_primary_key_sql(self, table_name: str, schema: str) -> str:
+    def _build_primary_key_sql(self, table: str, schema: str) -> str:
         """Build SQL to get primary key columns."""
         return f"""
             SELECT cols.column_name
             FROM all_constraints cons
             JOIN all_cons_columns cols ON cons.constraint_name = cols.constraint_name
                 AND cons.owner = cols.owner
-            WHERE cons.table_name = '{table_name.upper()}'
+            WHERE cons.table = '{table.upper()}'
               AND cons.owner = '{schema.upper()}'
               AND cons.constraint_type = 'P'
             ORDER BY cols.position
@@ -195,7 +195,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
     def _parse_columns(
         self,
         rows: List[Dict[str, Any]],
-        table_name: str,
+        table: str,
         schema: str,
         primary_keys: List[str] = None,
     ) -> List[ColumnInfo]:
@@ -241,7 +241,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
             columns.append(
                 ColumnInfo(
                     name=col_name,
-                    table_name=table_name,
+                    table_name=table,
                     schema=schema,
                     ordinal_position=row["COLUMN_ID"],
                     data_type=data_type.lower(),
@@ -264,7 +264,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
     def _parse_indexes(
         self,
         rows: List[Dict[str, Any]],
-        table_name: str,
+        table: str,
         schema: str,
     ) -> List[IndexInfo]:
         index_type_map = {
@@ -283,7 +283,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
                     extra["function_based"] = True
                 index_map[idx_name] = IndexInfo(
                     name=idx_name,
-                    table_name=table_name,
+                    table_name=table,
                     schema=schema,
                     is_unique=uniqueness == "UNIQUE",
                     is_primary=False,  # Primary keys have separate constraint
@@ -304,7 +304,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
     def _parse_foreign_keys(
         self,
         rows: List[Dict[str, Any]],
-        table_name: str,
+        table: str,
         schema: str,
     ) -> List[ForeignKeyInfo]:
         action_map = {
@@ -320,7 +320,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
                 delete_rule = (row.get("DELETE_RULE") or "NO ACTION").upper()
                 fk_map[fk_name] = ForeignKeyInfo(
                     name=fk_name,
-                    table_name=table_name,
+                    table_name=table,
                     schema=schema,
                     referenced_table=row.get("REFERENCED_TABLE_NAME", ""),
                     on_update=ReferentialAction.NO_ACTION,  # Oracle doesn't support ON UPDATE
@@ -413,50 +413,50 @@ class SyncOracleIntrospector(OracleIntrospectorMixin, SyncAbstractIntrospector):
     # ------------------------------------------------------------------ #
 
     def get_table_info(
-        self, table_name: str, schema: Optional[str] = None
+        self, table: str, schema: Optional[str] = None
     ) -> Optional[TableInfo]:
         key = self._make_cache_key(
-            IntrospectionScope.TABLE, table_name, schema=schema
+            IntrospectionScope.TABLE, table, schema=schema
         )
         cached = self._get_cached(key)
         if cached is not None:
             return cached
 
         tables = self.list_tables(schema)
-        table = next((t for t in tables if t.name == table_name.upper()), None)
-        if table is None:
+        found = next((t for t in tables if t.name == table.upper()), None)
+        if found is None:
             return None
 
-        table = copy.copy(table)
-        table.columns = self.list_columns(table_name, schema)
-        table.indexes = self.list_indexes(table_name, schema)
-        table.foreign_keys = self.list_foreign_keys(table_name, schema)
-        self._set_cached(key, table)
-        return table
+        info = copy.copy(found)
+        info.columns = self.list_columns(table, schema)
+        info.indexes = self.list_indexes(table, schema)
+        info.foreign_keys = self.list_foreign_keys(table, schema)
+        self._set_cached(key, info)
+        return info
 
     # ------------------------------------------------------------------ #
     # list_columns override to handle primary keys
     # ------------------------------------------------------------------ #
 
     def list_columns(
-        self, table_name: str, schema: Optional[str] = None
+        self, table: str, schema: Optional[str] = None
     ) -> List[ColumnInfo]:
         target_schema = schema if schema is not None else self._get_default_schema()
         key = self._make_cache_key(
-            IntrospectionScope.COLUMN, table_name, schema=target_schema
+            IntrospectionScope.COLUMN, table, schema=target_schema
         )
         cached = self._get_cached(key)
         if cached is not None:
             return cached
 
         # Get primary key columns first
-        pk_sql = self._build_primary_key_sql(table_name, target_schema)
+        pk_sql = self._build_primary_key_sql(table, target_schema)
         primary_keys = [row.get("COLUMN_NAME") for row in self._executor.execute(pk_sql)]
 
         # Get columns
-        sql = self._build_columns_sql(table_name, target_schema)
+        sql = self._build_columns_sql(table, target_schema)
         rows = self._executor.execute(sql)
-        columns = self._parse_columns(rows, table_name, target_schema, primary_keys)
+        columns = self._parse_columns(rows, table, target_schema, primary_keys)
 
         self._set_cached(key, columns)
         return columns
@@ -489,50 +489,50 @@ class AsyncOracleIntrospector(OracleIntrospectorMixin, AsyncAbstractIntrospector
     # ------------------------------------------------------------------ #
 
     async def get_table_info(
-        self, table_name: str, schema: Optional[str] = None
+        self, table: str, schema: Optional[str] = None
     ) -> Optional[TableInfo]:
         key = self._make_cache_key(
-            IntrospectionScope.TABLE, table_name, schema=schema
+            IntrospectionScope.TABLE, table, schema=schema
         )
         cached = self._get_cached(key)
         if cached is not None:
             return cached
 
         tables = await self.list_tables(schema)
-        table = next((t for t in tables if t.name == table_name.upper()), None)
-        if table is None:
+        found = next((t for t in tables if t.name == table.upper()), None)
+        if found is None:
             return None
 
-        table = copy.copy(table)
-        table.columns = await self.list_columns(table_name, schema)
-        table.indexes = await self.list_indexes(table_name, schema)
-        table.foreign_keys = await self.list_foreign_keys(table_name, schema)
-        self._set_cached(key, table)
-        return table
+        info = copy.copy(found)
+        info.columns = await self.list_columns(table, schema)
+        info.indexes = await self.list_indexes(table, schema)
+        info.foreign_keys = await self.list_foreign_keys(table, schema)
+        self._set_cached(key, info)
+        return info
 
     # ------------------------------------------------------------------ #
     # list_columns override to handle primary keys
     # ------------------------------------------------------------------ #
 
     async def list_columns(
-        self, table_name: str, schema: Optional[str] = None
+        self, table: str, schema: Optional[str] = None
     ) -> List[ColumnInfo]:
         target_schema = schema if schema is not None else self._get_default_schema()
         key = self._make_cache_key(
-            IntrospectionScope.COLUMN, table_name, schema=target_schema
+            IntrospectionScope.COLUMN, table, schema=target_schema
         )
         cached = self._get_cached(key)
         if cached is not None:
             return cached
 
         # Get primary key columns first
-        pk_sql = self._build_primary_key_sql(table_name, target_schema)
+        pk_sql = self._build_primary_key_sql(table, target_schema)
         primary_keys = [row.get("COLUMN_NAME") for row in await self._executor.execute(pk_sql)]
 
         # Get columns
-        sql = self._build_columns_sql(table_name, target_schema)
+        sql = self._build_columns_sql(table, target_schema)
         rows = await self._executor.execute(sql)
-        columns = self._parse_columns(rows, table_name, target_schema, primary_keys)
+        columns = self._parse_columns(rows, table, target_schema, primary_keys)
 
         self._set_cached(key, columns)
         return columns

@@ -9,5 +9,5 @@ class OracleTruncateMixin:
 
     def format_truncate_statement(self, expr) -> Tuple[str, tuple]:
         parts = ["TRUNCATE TABLE"]
-        parts.append(self.format_identifier(expr.table_name))
+        parts.append(self.format_identifier(expr.table))
         return (" ".join(parts), ())

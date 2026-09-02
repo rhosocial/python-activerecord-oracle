@@ -36,7 +36,7 @@ class OracleDDLMixin:
         parts = ["CREATE TABLE"]
         if expr.temporary:
             parts.append("GLOBAL TEMPORARY")
-        parts.append(self.format_identifier(expr.table_name))
+        parts.append(self.format_identifier(expr.table))
 
         column_parts: List[str] = []
         for col_def in expr.columns:
@@ -79,11 +79,11 @@ class OracleDDLMixin:
             # is dynamic SQL, so any embedded single quotes must be doubled.
             # Only applied when the statement carries no bind parameters.
             embedded = statement.replace("'", "''")
-            table_upper = expr.table_name.upper()
+            table_upper = expr.table.upper()
             statement = (
                 f"DECLARE v_cnt NUMBER; "
                 f"BEGIN SELECT COUNT(*) INTO v_cnt FROM user_tables "
-                f"WHERE table_name = '{table_upper}'; "
+                f"WHERE table = '{table_upper}'; "
                 f"IF v_cnt = 0 THEN EXECUTE IMMEDIATE '{embedded}'; END IF; END;"
             )
 

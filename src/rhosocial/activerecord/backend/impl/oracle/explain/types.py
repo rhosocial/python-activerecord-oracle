@@ -110,11 +110,11 @@ class OracleExplainRow:
             results.extend(child.find_operations(operation_type))
         return results
     
-    def find_table_accesses(self, table_name: str) -> List['OracleExplainRow']:
+    def find_table_accesses(self, table: str) -> List['OracleExplainRow']:
         """Find all table access operations for a specific table.
         
         Args:
-            table_name: The table name to search for
+            table: The table name to search for
             
         Returns:
             List of matching OracleExplainRow instances
@@ -122,10 +122,10 @@ class OracleExplainRow:
         results = []
         if (self.operation == "TABLE ACCESS" and 
             self.object_name and 
-            self.object_name.upper() == table_name.upper()):
+            self.object_name.upper() == table.upper()):
             results.append(self)
         for child in self.children:
-            results.extend(child.find_table_accesses(table_name))
+            results.extend(child.find_table_accesses(table))
         return results
     
     def to_dict(self) -> Dict[str, Any]:

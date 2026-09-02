@@ -861,7 +861,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         if not self._connection:
             self.connect()
 
-        table_name = (
+        table = (
             f"{self._quote_identifier(options.schema_name)}."
             f"{self._quote_identifier(options.table)}"
             if options.schema_name
@@ -869,7 +869,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         )
         columns_sql = ", ".join(self._quote_identifier(c) for c in options.columns)
         placeholders = ", ".join(["?"] * len(options.columns))
-        sql = f"INSERT INTO {table_name} ({columns_sql}) VALUES ({placeholders})"
+        sql = f"INSERT INTO {table} ({columns_sql}) VALUES ({placeholders})"
         if options.returning_columns:
             returning_sql = ", ".join(self._quote_identifier(c) for c in options.returning_columns)
             into_placeholders = ", ".join(["?"] * len(options.returning_columns))
@@ -991,10 +991,10 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
             returning_clause = ReturningClause(self.dialect, returning_expressions)
 
         # Create InsertExpression and generate SQL
-        table_name = f"{options.schema_name}.{options.table}" if options.schema_name else options.table
+        table = f"{options.schema_name}.{options.table}" if options.schema_name else options.table
         insert_expr = InsertExpression(
             dialect=self.dialect,
-            into=table_name,
+            into=table,
             source=values_source,
             columns=list(options.data.keys()),
             returning=returning_clause,
@@ -1069,10 +1069,10 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
             returning_clause = ReturningClause(self.dialect, returning_expressions)
 
         # Create UpdateExpression and generate SQL
-        table_name = f"{options.schema_name}.{options.table}" if options.schema_name else options.table
+        table = f"{options.schema_name}.{options.table}" if options.schema_name else options.table
         update_expr = UpdateExpression(
             dialect=self.dialect,
-            table=table_name,
+            table=table,
             assignments=assignments,
             where=options.where,
             returning=returning_clause,
@@ -1126,10 +1126,10 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
             returning_clause = ReturningClause(self.dialect, returning_expressions)
 
         # Create DeleteExpression and generate SQL
-        table_name = f"{options.schema_name}.{options.table}" if options.schema_name else options.table
+        table = f"{options.schema_name}.{options.table}" if options.schema_name else options.table
         delete_expr = DeleteExpression(
             dialect=self.dialect,
-            tables=table_name,
+            tables=table,
             where=options.where,
             returning=returning_clause,
         )
@@ -1304,8 +1304,8 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         matching ``oracledb.DB_TYPE_*``.  Falls back to VARCHAR for unknown
         columns.
         """
-        table_name = getattr(self, "_current_returning_table", None)
-        data_type = self._lookup_oracle_data_type(table_name, column_name) if table_name else None
+        table = getattr(self, "_current_returning_table", None)
+        data_type = self._lookup_oracle_data_type(table, column_name) if table else None
         if data_type:
             if "NUMBER" in data_type and "VARCHAR" not in data_type:
                 return cursor.var(int)
@@ -1319,8 +1319,8 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
                 return cursor.var(oracledb.DB_TYPE_RAW)
         return cursor.var(oracledb.DB_TYPE_VARCHAR)
 
-    def _lookup_oracle_data_type(self, table_name: str, column_name: str) -> Optional[str]:
-        """Return the Oracle DATA_TYPE for ``column_name`` in ``table_name``.
+    def _lookup_oracle_data_type(self, table: str, column_name: str) -> Optional[str]:
+        """Return the Oracle DATA_TYPE for ``column_name`` in ``table``.
 
         Uses a per-backend in-memory cache.  Returns ``None`` if the column
         cannot be introspected (for instance the table has not been created
@@ -1332,7 +1332,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         if cache is None:
             cache = {}
             setattr(self, cache_attr, cache)
-        key = self._returning_lookup_key(table_name, column_name)
+        key = self._returning_lookup_key(table, column_name)
         if key in cache:
             return cache[key]
         if not self._connection:
@@ -1367,9 +1367,9 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
             return None
 
     @staticmethod
-    def _returning_lookup_key(table_name: str, column_name: str) -> Tuple[str, str, str]:
+    def _returning_lookup_key(table: str, column_name: str) -> Tuple[str, str, str]:
         """Split an optional ``SCHEMA.TABLE`` qualifier into a lookup key."""
-        raw_table = str(table_name)
+        raw_table = str(table)
         owner = ""
         if "." in raw_table:
             owner, _, raw_table = raw_table.partition(".")

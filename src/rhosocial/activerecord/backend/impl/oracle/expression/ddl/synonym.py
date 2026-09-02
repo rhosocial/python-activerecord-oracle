@@ -28,21 +28,21 @@ class OracleCreateSynonymExpression(BaseExpression):
     Args:
         dialect: the Oracle dialect instance.
         synonym_name: name of the synonym to create.
-        table_name: name of the object the synonym points to.
+        table: name of the object the synonym points to.
         schema_name: optional schema qualifier of the target object.
         public: create a PUBLIC synonym (shared by all users) instead of a
             private one.
         dialect_options: reserved for future dialect-specific options.
 
     Raises:
-        ValueError: if ``synonym_name`` or ``table_name`` is empty.
+        ValueError: if ``synonym_name`` or ``table`` is empty.
     """
 
     def __init__(
         self,
         dialect: "OracleDialect",
         synonym_name: str,
-        table_name: str,
+        table: str,
         schema_name: Optional[str] = None,
         public: bool = False,
         *,
@@ -51,10 +51,10 @@ class OracleCreateSynonymExpression(BaseExpression):
         super().__init__(dialect)
         if not isinstance(synonym_name, str) or not synonym_name.strip():
             raise ValueError("synonym_name must be a non-empty string")
-        if not isinstance(table_name, str) or not table_name.strip():
-            raise ValueError("table_name must be a non-empty string")
+        if not isinstance(table, str) or not table.strip():
+            raise ValueError("table must be a non-empty string")
         self.synonym_name = synonym_name
-        self.table_name = table_name
+        self.table = table
         self.schema_name = schema_name
         self.public = bool(public)
         self.dialect_options = dialect_options or {}

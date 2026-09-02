@@ -144,7 +144,7 @@ class OracleModifyColumnMixin:
         MOVE`` with a double space.
         """
         all_params: List = []
-        parts = [f"ALTER TABLE {self.format_identifier(expr.table_name)}"]
+        parts = [f"ALTER TABLE {self.format_identifier(expr.table)}"]
         action_parts = []
         for action in expr.actions:
             action_part, action_params = action.to_sql()

@@ -123,11 +123,11 @@ class OracleIntrospectionMixin:
         parts: List[str] = []
         if want_tables:
             parts.append(
-                "SELECT t.table_name AS TABLE_NAME, 'BASE TABLE' AS TABLE_TYPE, "
+                "SELECT t.table AS TABLE_NAME, 'BASE TABLE' AS TABLE_TYPE, "
                 "c.comments AS COMMENTS, t.num_rows AS NUM_ROWS, "
                 "t.blocks * 8192 AS DATA_LENGTH, t.last_analyzed AS LAST_ANALYZED "
                 "FROM all_tables t LEFT JOIN all_tab_comments c "
-                "ON t.table_name = c.table_name AND t.owner = c.owner "
+                "ON t.table = c.table AND t.owner = c.owner "
                 f"{owner_where}"
             )
         if want_views:
@@ -148,7 +148,7 @@ class OracleIntrospectionMixin:
     def format_column_info_query(self, expr: "ColumnInfoExpression") -> Tuple[str, tuple]:
         """Format column information query."""
         params = expr.get_params()
-        table_name = params.get("table_name", "")
+        table = params.get("table", "")
         schema = params.get("schema", "")
         sql = (
             "SELECT column_name AS COLUMN_NAME, data_type AS DATA_TYPE, "
@@ -158,37 +158,37 @@ class OracleIntrospectionMixin:
             "char_length AS CHAR_LENGTH, data_length AS DATA_LENGTH, "
             "character_set_name AS CHARACTER_SET_NAME "
             "FROM all_tab_columns "
-            "WHERE owner = :1 AND table_name = :2 "
+            "WHERE owner = :1 AND table = :2 "
             "ORDER BY column_id"
         )
-        return sql, (str(schema).upper(), str(table_name).upper())
+        return sql, (str(schema).upper(), str(table).upper())
 
     def format_index_info_query(self, expr: "IndexInfoExpression") -> Tuple[str, tuple]:
         """Format index information query."""
         params = expr.get_params()
-        table_name = params.get("table_name", "")
+        table = params.get("table", "")
         schema = params.get("schema", "")
         sql = (
-            "SELECT i.index_name AS INDEX_NAME, i.index_type AS INDEX_TYPE, "
+            "SELECT i.index AS INDEX_NAME, i.index_type AS INDEX_TYPE, "
             "i.uniqueness AS UNIQUENESS, ic.column_name AS COLUMN_NAME, "
             "ic.column_position AS COLUMN_POSITION, ic.descend AS DESCEND "
             "FROM all_indexes i "
-            "JOIN all_ind_columns ic ON i.index_name = ic.index_name "
+            "JOIN all_ind_columns ic ON i.index = ic.index "
             "AND i.owner = ic.index_owner "
-            "WHERE i.table_owner = :1 AND i.table_name = :2 "
-            "ORDER BY i.index_name, ic.column_position"
+            "WHERE i.table_owner = :1 AND i.table = :2 "
+            "ORDER BY i.index, ic.column_position"
         )
-        return sql, (str(schema).upper(), str(table_name).upper())
+        return sql, (str(schema).upper(), str(table).upper())
 
     def format_foreign_key_query(self, expr: "ForeignKeyExpression") -> Tuple[str, tuple]:
         """Format foreign key information query."""
         params = expr.get_params()
-        table_name = params.get("table_name", "")
+        table = params.get("table", "")
         schema = params.get("schema", "")
         sql = (
             "SELECT cons.constraint_name AS CONSTRAINT_NAME, "
             "cons.delete_rule AS DELETE_RULE, "
-            "ref_cons.table_name AS REFERENCED_TABLE_NAME, "
+            "ref_cons.table AS REFERENCED_TABLE_NAME, "
             "cols.column_name AS COLUMN_NAME, "
             "ref_cols.column_name AS REFERENCED_COLUMN_NAME "
             "FROM all_constraints cons "
@@ -198,10 +198,10 @@ class OracleIntrospectionMixin:
             "AND cons.r_owner = ref_cons.owner "
             "JOIN all_cons_columns ref_cols ON ref_cons.constraint_name = ref_cols.constraint_name "
             "AND ref_cons.owner = ref_cols.owner AND cols.position = ref_cols.position "
-            "WHERE cons.owner = :1 AND cons.table_name = :2 AND cons.constraint_type = 'R' "
+            "WHERE cons.owner = :1 AND cons.table = :2 AND cons.constraint_type = 'R' "
             "ORDER BY cons.constraint_name, cols.position"
         )
-        return sql, (str(schema).upper(), str(table_name).upper())
+        return sql, (str(schema).upper(), str(table).upper())
 
     def format_view_list_query(self, expr: "ViewListExpression") -> Tuple[str, tuple]:
         """Format view list query."""
@@ -234,16 +234,16 @@ class OracleIntrospectionMixin:
         """Format trigger list query."""
         params = expr.get_params()
         schema = params.get("schema") or ""
-        table_name = params.get("table_name")
+        table = params.get("table")
         conditions, sql_params, next_bind = self._owner_conditions(schema, 1)
-        if table_name:
-            conditions.append(f"table_name = :{next_bind}")
-            sql_params.append(str(table_name).upper())
+        if table:
+            conditions.append(f"table = :{next_bind}")
+            sql_params.append(str(table).upper())
         where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
         sql = (
-            "SELECT trigger_name AS TRIGGER_NAME, trigger_type AS TRIGGER_TYPE, "
-            "triggering_event AS TRIGGERING_EVENT, table_name AS TABLE_NAME, "
+            "SELECT trigger AS TRIGGER_NAME, trigger_type AS TRIGGER_TYPE, "
+            "triggering_event AS TRIGGERING_EVENT, table AS TABLE_NAME, "
             "trigger_body AS TRIGGER_BODY "
-            f"FROM all_triggers {where} ORDER BY trigger_name"
+            f"FROM all_triggers {where} ORDER BY trigger"
         )
         return sql, tuple(sql_params)

@@ -40,16 +40,16 @@ _EXPRESSIONS_FQN = (
 )
 
 
-async def _table_exists(backend: AsyncOracleBackend, table_name: str) -> bool:
-    """Return True if ``table_name`` exists in the current schema.
+async def _table_exists(backend: AsyncOracleBackend, table: str) -> bool:
+    """Return True if ``table`` exists in the current schema.
 
     Oracle's dialect does not yet implement the introspection ``table list``
     query, so we check ``USER_TABLES`` directly with a bound parameter.
     """
     from rhosocial.activerecord.backend.options import ExecutionOptions, StatementType
     result = await backend.execute(
-        "SELECT 1 FROM user_tables WHERE table_name = ?",
-        (table_name.upper(),),
+        "SELECT 1 FROM user_tables WHERE table = ?",
+        (table.upper(),),
         options=ExecutionOptions(stmt_type=StatementType.DQL),
     )
     return bool(getattr(result, "data", None))

@@ -50,23 +50,23 @@ class V002CreatePostsAsync(AsyncNamedMigration):
 class V003CreateCustomTableAsync(AsyncNamedMigration):
     """Create a table with a user-specified name (async).
 
-    Accepts a ``table_name`` parameter (default ``custom_table``).
+    Accepts a ``table`` parameter (default ``custom_table``).
     Usage::
 
-        named-migration ... V003CreateCustomTableAsync --param table_name=my_config --async
+        named-migration ... V003CreateCustomTableAsync --param table=my_config --async
     """
 
     version = "v003_create_custom_table"
-    table_name: str = "custom_table"
+    table: str = "custom_table"
 
     async def up(self, ctx: AsyncMigrationContext) -> None:
         await ctx.execute(
             f"{_EXPRESSIONS_MODULE}.create_custom_table",
-            {"table_name": self.table_name},
+            {"table": self.table},
         )
 
     async def down(self, ctx: AsyncMigrationContext) -> None:
         await ctx.execute(
             f"{_EXPRESSIONS_MODULE}.drop_custom_table",
-            {"table_name": self.table_name},
+            {"table": self.table},
         )

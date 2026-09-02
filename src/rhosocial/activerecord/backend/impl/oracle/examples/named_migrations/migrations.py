@@ -49,25 +49,25 @@ class V002CreatePosts(NamedMigration):
 class V003CreateCustomTable(NamedMigration):
     """Create a table with a user-specified name.
 
-    Accepts a ``table_name`` parameter (default ``custom_table``).
+    Accepts a ``table`` parameter (default ``custom_table``).
     Usage::
 
-        named-migration ... V003CreateCustomTable --param table_name=my_config
+        named-migration ... V003CreateCustomTable --param table=my_config
     """
 
     version = "v003_create_custom_table"
-    table_name: str = "custom_table"
+    table: str = "custom_table"
 
     def up(self, ctx: MigrationContext) -> None:
         ctx.execute(
             "rhosocial.activerecord.backend.impl.oracle.examples.named_migrations"
             ".expressions.create_custom_table",
-            {"table_name": self.table_name},
+            {"table": self.table},
         )
 
     def down(self, ctx: MigrationContext) -> None:
         ctx.execute(
             "rhosocial.activerecord.backend.impl.oracle.examples.named_migrations"
             ".expressions.drop_custom_table",
-            {"table_name": self.table_name},
+            {"table": self.table},
         )

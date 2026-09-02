@@ -22,7 +22,7 @@ class OracleTriggerSupport(Protocol):
         ...  # pragma: no cover
     def supports_trigger_body_plsql(self) -> bool:
         ...  # pragma: no cover
-    def format_disable_trigger_statement(self, trigger_name, table_name=None) -> Tuple[str, tuple]:
+    def format_disable_trigger_statement(self, trigger, table=None) -> Tuple[str, tuple]:
         ...  # pragma: no cover
-    def format_enable_trigger_statement(self, trigger_name, table_name=None) -> Tuple[str, tuple]:
+    def format_enable_trigger_statement(self, trigger, table=None) -> Tuple[str, tuple]:
         ...  # pragma: no cover

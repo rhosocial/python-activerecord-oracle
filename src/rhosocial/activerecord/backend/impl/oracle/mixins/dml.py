@@ -50,7 +50,7 @@ class OracleDMLOperationMixin(object):
     def supports_insert_first(self) -> bool:
         return True
 
-    def format_merge_statement(self, target_table: str, source_query: str,
+    def format_merge_statement(self, target: str, source_query: str,
                                match_condition: str, update_setters: str,
                                insert_columns: str, insert_values: str,
                                *,
@@ -62,7 +62,7 @@ class OracleDMLOperationMixin(object):
 
         Composes caller-supplied SQL fragments into the canonical pattern:
 
-            MERGE INTO target_table t
+            MERGE INTO target t
             USING (source_query) s
             ON (match_condition)
             WHEN MATCHED THEN UPDATE SET ...
@@ -71,7 +71,7 @@ class OracleDMLOperationMixin(object):
             LOG ERRORS INTO err$_t REJECT LIMIT 25   -- 10g DML error logging
 
         Args:
-            target_table: formatted target table reference.
+            target: formatted target table reference.
             source_query: formatted source (sub)query.
             match_condition: formatted ON match condition.
             update_setters: formatted ``SET col = value`` fragment.
@@ -104,7 +104,7 @@ class OracleDMLOperationMixin(object):
                     "logging; it requires Oracle 10g or later."
                 ),
             )
-        parts = [f"MERGE INTO {target_table} t"]
+        parts = [f"MERGE INTO {target} t"]
         parts.append(f"USING ({source_query}) s")
         parts.append(f"ON ({match_condition})")
         if update_setters:

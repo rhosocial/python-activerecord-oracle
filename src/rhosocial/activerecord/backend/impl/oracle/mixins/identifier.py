@@ -58,7 +58,7 @@ class OracleIdentifierMixin:
         return col_sql, ()
 
     def format_table(
-        self, table_name: str, alias: Optional[str] = None,
+        self, table: str, alias: Optional[str] = None,
         schema_name: Optional[str] = None,
         dblink: Optional[str] = None,
         flashback: Optional[Any] = None,
@@ -66,7 +66,7 @@ class OracleIdentifierMixin:
         """Format table reference for Oracle.
 
         Args:
-            table_name: the table name.
+            table: the table name.
             alias: optional table alias.
             schema_name: optional schema qualifier.
             dblink: optional database link name appended as ``@dblink`` to
@@ -76,11 +76,11 @@ class OracleIdentifierMixin:
                 ``to_sql()``) appended after the table reference.
         """
         if schema_name:
-            table_sql = f"{self.format_identifier(schema_name)}.{self.format_identifier(table_name)}"
-        elif table_name.lower().endswith("_cte"):
-            table_sql = table_name
+            table_sql = f"{self.format_identifier(schema_name)}.{self.format_identifier(table)}"
+        elif table.lower().endswith("_cte"):
+            table_sql = table
         else:
-            table_sql = self.format_identifier(table_name)
+            table_sql = self.format_identifier(table)
         table_params: Tuple = ()
         if dblink:
             table_sql = f"{table_sql}@{self.format_identifier(dblink)}"
