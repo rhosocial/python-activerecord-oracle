@@ -228,7 +228,7 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
 
         if self._ORACLE_NUMBER_TYPES.match(upper):
             if upper.startswith("BINARY_FLOAT"):
-                return FloatType(dialect=self, precision=63)
+                return FloatType(dialect=self)
             if upper.startswith("BINARY_DOUBLE"):
                 return DoubleType(dialect=self)
             if upper.startswith("FLOAT"):
