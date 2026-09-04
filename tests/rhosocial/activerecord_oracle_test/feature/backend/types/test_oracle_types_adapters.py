@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/test_oracle_types_adapters.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/types/test_oracle_types_adapters.py
 """Offline formatting tests for Oracle type rendering (mixins/types.py) and
 the Python↔Oracle value adapters (adapters.py).
 
