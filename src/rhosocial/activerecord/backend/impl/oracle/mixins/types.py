@@ -23,7 +23,6 @@ from rhosocial.activerecord.backend.expression.types import (
     FloatType,
     IntegerType,
     JsonType,
-    JsonBType,
     RealType,
     SmallIntType,
     TextType,
@@ -191,7 +190,7 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
 
     # --- Oracle core-comparable type handlers ---
     # These mirror MySQL/Postgres equivalents so that callers passing a core
-    # DataType (e.g. TinyIntType, TimeTzType, JsonBType, TimestampTzType)
+    # DataType (e.g. TinyIntType, TimeTzType, TimestampTzType)
     # get an Oracle-specific rendering instead of falling back to the base
     # class' default SQL (which is often MySQL-flavored or undefined).
 
@@ -212,12 +211,6 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
         return (f"TIMESTAMP({data_type.precision}) WITH TIME ZONE"
                 if getattr(data_type, 'precision', None) is not None
                 else "TIMESTAMP WITH TIME ZONE"), ()
-
-    @DDLTypeMixin.handles(JsonBType)
-    def format_data_type_jsonb(self, data_type: JsonBType) -> Tuple[str, tuple]:
-        # Oracle has no JSONB binary JSON; 21c+ uses native JSON, otherwise CLOB.
-        # We render as CLOB (best-effort round-trip on all 12c+ versions).
-        return "CLOB", ()
 
     # --- Parsing ---
 
