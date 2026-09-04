@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/test_phase5_cli.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/cli/test_phase5_cli.py
 """Tests for Phase 5 CLI tool.
 
 Tests the command-line interface functionality for Oracle backend.

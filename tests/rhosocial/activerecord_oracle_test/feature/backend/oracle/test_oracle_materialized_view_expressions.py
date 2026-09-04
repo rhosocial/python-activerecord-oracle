@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/dialect/test_oracle_materialized_view_expressions.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/oracle/test_oracle_materialized_view_expressions.py
 """Tests for Oracle materialized view expressions.
 
 Covers ``CREATE MATERIALIZED VIEW`` (REFRESH / QUERY REWRITE / BUILD

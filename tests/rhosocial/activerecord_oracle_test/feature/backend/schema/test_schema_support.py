@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/test_schema_support.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/schema/test_schema_support.py
 """Tests for the SchemaSupport capability declared on the Oracle dialect.
 
 Oracle namespaces objects per user schema, so schema-qualified names work and

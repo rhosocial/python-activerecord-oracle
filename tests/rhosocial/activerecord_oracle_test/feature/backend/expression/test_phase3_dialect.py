@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/test_phase3_dialect.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/expression/test_phase3_dialect.py
 """
 Tests for Phase 3 dialect enhancements.
 

@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/test_oracle_partition_phase4.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/oracle/partition/test_oracle_partition_phase4.py
 """Phase 4 tests for Oracle generic table partitioning (RANGE/LIST/HASH).
 
 Covers:

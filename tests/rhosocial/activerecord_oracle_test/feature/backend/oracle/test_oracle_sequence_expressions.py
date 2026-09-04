@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/dialect/test_oracle_sequence_expressions.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/oracle/test_oracle_sequence_expressions.py
 """Tests for Oracle sequence expressions.
 
 Covers the Oracle-specific ``seq.NEXTVAL`` / ``seq.CURRVAL`` value

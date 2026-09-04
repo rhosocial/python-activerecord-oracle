@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/dialect/test_oracle_flashback_expressions.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/oracle/test_oracle_flashback_expressions.py
 """Tests for Oracle FLASHBACK family expressions.
 
 Covers the ``AS OF`` / ``VERSIONS BETWEEN`` flashback query clauses, their

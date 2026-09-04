@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/test_schema_qualified_dml.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/dml/test_schema_qualified_dml.py
 """Standalone schema-qualified DML round-trip (no testsuite dependency).
 
 Mirrors the provider fixtures used by the cross_schema suite: two user

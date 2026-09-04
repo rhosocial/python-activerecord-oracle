@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/test_sqlxml_support.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/oracle/test_sqlxml_support.py
 """Tests for Oracle SQL/XML standard support."""
 
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect

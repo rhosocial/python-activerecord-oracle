@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/test_oracle_partition_phase5a.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/oracle/partition/test_oracle_partition_phase5a.py
 """Phase 5 sub-phase A tests: backend-specific partition expressions.
 
 Verifies that the backend-specific ``OraclePartitionByRange`` /

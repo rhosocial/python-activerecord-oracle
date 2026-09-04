@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/dialect/test_oracle_alter_table_clauses.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/oracle/test_oracle_alter_table_clauses.py
 """Tests for Oracle ALTER TABLE table-level clause actions.
 
 Covers ``SET UNUSED``, ``DROP UNUSED COLUMNS``, ``MOVE``, ``SHRINK SPACE

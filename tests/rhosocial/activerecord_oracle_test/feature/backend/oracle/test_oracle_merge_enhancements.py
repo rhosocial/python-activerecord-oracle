@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/dialect/test_oracle_merge_enhancements.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/oracle/test_oracle_merge_enhancements.py
 """Tests for Oracle MERGE statement enhancements.
 
 Covers the ``OracleDMLOperationMixin.format_merge_statement`` extensions:

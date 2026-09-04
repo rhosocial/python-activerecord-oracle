@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/test_phase2_adapters.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/types/test_phase2_adapters.py
 """
 Tests for Phase 2 type adapters.
 

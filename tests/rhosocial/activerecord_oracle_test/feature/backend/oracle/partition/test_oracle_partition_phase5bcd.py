@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/test_oracle_partition_phase5bcd.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/oracle/partition/test_oracle_partition_phase5bcd.py
 """Phase 5 sub-phases B/C/D tests: INTERVAL / REFERENCE / COMPOSITE.
 
 Verifies expression construction (SQL shape + parameter order) and

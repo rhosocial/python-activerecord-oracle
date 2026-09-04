@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/dialect/test_oracle_routine_expressions.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/oracle/test_oracle_routine_expressions.py
 """Tests for Oracle PL/SQL routine and package DDL expressions.
 
 Covers ``CREATE [OR REPLACE] PROCEDURE`` / ``FUNCTION`` / ``PACKAGE`` /

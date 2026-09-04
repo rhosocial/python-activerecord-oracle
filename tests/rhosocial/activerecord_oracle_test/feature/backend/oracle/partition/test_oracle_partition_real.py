@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/test_oracle_partition_real.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/oracle/partition/test_oracle_partition_real.py
 """Real Oracle scenario tests for Phase 4 generic partitioning.
 
 Builds partitioned tables through Expression/Dialect (no raw SQL string

@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/dialect/test_oracle_comment_expressions.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/oracle/test_oracle_comment_expressions.py
 """Tests for Oracle COMMENT ON expressions.
 
 Covers the ``COMMENT ON {TABLE|COLUMN|VIEW|INDEX|SEQUENCE|PROCEDURE|...}

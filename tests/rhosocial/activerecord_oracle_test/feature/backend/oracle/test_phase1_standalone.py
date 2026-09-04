@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/test_phase1_standalone.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/oracle/test_phase1_standalone.py
 """
 Standalone tests for Phase 1 directory restructuring.
 Does not require database connection or test providers.

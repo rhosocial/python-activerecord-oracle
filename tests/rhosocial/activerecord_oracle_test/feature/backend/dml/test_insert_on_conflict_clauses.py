@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/dialect/test_insert_on_conflict_clauses.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/dml/test_insert_on_conflict_clauses.py
 """Tests for Oracle ON CONFLICT clause capability.
 
 Oracle expresses upsert via MERGE, not the ON CONFLICT clause form.

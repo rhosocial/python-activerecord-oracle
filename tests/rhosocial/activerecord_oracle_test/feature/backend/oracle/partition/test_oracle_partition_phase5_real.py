@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/test_oracle_partition_phase5_real.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/oracle/partition/test_oracle_partition_phase5_real.py
 """Real Oracle scenario tests for Phase 5 partition strategies.
 
 Builds INTERVAL / REFERENCE / COMPOSITE partitioned tables and exercises

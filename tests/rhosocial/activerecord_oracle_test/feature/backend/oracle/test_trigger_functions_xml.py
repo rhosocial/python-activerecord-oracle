@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/test_trigger_functions_xml.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/oracle/test_trigger_functions_xml.py
 """Offline snapshot tests for Oracle trigger DDL (mixins/trigger.py),
 function-call formatting (mixins/functions.py + functions/*) and the
 XMLType helper (types/xml.py).

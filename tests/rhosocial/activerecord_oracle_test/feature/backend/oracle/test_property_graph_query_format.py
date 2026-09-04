@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/dialect/test_pgq_format.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/oracle/test_property_graph_query_format.py
 """
 Tests for Oracle PGQ dialect version gating and SQL formatting.
 

@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/dialect/test_drop_table_cascade.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/ddl/test_drop_table_cascade.py
 """Tests for DROP TABLE rendering on Oracle.
 
 Oracle uses the backend-specific ``CASCADE CONSTRAINTS`` form (narrower than

@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/test_oracle_dialect_security.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/oracle/test_oracle_dialect_security.py
 """
 Tests for Oracle dialect SQL injection security.
 

@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/test_oracle_partition_phase5e.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/oracle/partition/test_oracle_partition_phase5e.py
 """Phase 5 sub-phase E tests: partition maintenance statements.
 
 Verifies expression construction (SQL shape + parameter order) and

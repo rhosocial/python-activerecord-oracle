@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/test_crud_backend.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/dml/test_crud_backend.py
 """
 Basic CRUD tests for Oracle backend.
 """

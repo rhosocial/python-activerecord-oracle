@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/test_introspector_deep.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/introspection/test_introspector_deep.py
 """Deep coverage for introspection/introspector.py.
 
 Offline half: the SQL builders and pure-Python ``_parse_*`` helpers are

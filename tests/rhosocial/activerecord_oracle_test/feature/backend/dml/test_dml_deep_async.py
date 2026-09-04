@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/test_async_dml_deep.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/dml/test_dml_deep_async.py
 """Async backend DML depth: execute_many batches, transaction boundaries,
 and the asynchronous RETURNING INTO insert path.
 

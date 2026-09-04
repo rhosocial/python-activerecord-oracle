@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/dialect/test_oracle_insert_all_expressions.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/oracle/test_oracle_insert_all_expressions.py
 """Tests for Oracle INSERT ALL / FIRST multi-table insert formatters.
 
 Covers the ``OracleDMLOperationMixin`` ``format_insert_all_statement`` and

@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/dialect/test_oracle_synonym_database_link_expressions.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/oracle/test_oracle_synonym_database_link_expressions.py
 """Tests for Oracle SYNONYM and DATABASE LINK expressions.
 
 Covers ``CREATE [PUBLIC] SYNONYM`` / ``DROP [PUBLIC] SYNONYM``,

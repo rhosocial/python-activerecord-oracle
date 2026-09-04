@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/dialect/test_auto_increment_ddl.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/ddl/test_auto_increment_ddl.py
 """Regression tests for DDL compilation of auto-increment, standard types,
 boolean defaults, and timestamps.
 

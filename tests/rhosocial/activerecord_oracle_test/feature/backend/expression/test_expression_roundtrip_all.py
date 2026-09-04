@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/test_expression_roundtrip_all.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/expression/test_expression_roundtrip_all.py
 import pytest
 
 from rhosocial.activerecord.testsuite.utils.expression import (

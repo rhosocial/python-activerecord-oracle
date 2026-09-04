@@ -303,6 +303,51 @@ class OracleDialect(
 
         return OracleSchemaDiffer()
 
+    # CreateTableExpressionDiffSupport capability hooks.
+    # Defined on the dialect class itself (not on a mixin): SQLDialectBase
+    # inherits CreateTableExpressionDiffMixin directly, so the generic
+    # defaults sit earlier in the MRO than any Oracle mixin and would
+    # shadow mixin-level overrides.
+    def _supports_alter_column_type(self) -> bool:
+        """Oracle redefines a column in place via ``ALTER TABLE t MODIFY
+        (col TYPE [constraints])`` — see
+        ``OracleModifyColumnMixin.format_modify_column_action``, which the
+        core ``ModifyColumn`` action dispatches to. Type changes therefore
+        stay on the alter path instead of a rebuild.
+        """
+        return True
+
+    def alter_column_type_action(self, old_col, new_col):
+        """Build the in-place action for a column type change: a core
+        ``ModifyColumn`` carrying the full new column definition, rendered
+        as ``MODIFY (col TYPE ...)``."""
+        from rhosocial.activerecord.backend.expression.statements.ddl_alter import (
+            ModifyColumn,
+        )
+
+        return ModifyColumn(self, new_col)
+
+    def _supports_alter_column_properties(self) -> bool:
+        """Oracle has no standalone ``ALTER COLUMN SET DEFAULT`` /
+        ``SET NOT NULL`` syntax: defaults and nullability are merged into
+        the ``MODIFY`` clause (``MODIFY (col DEFAULT x)`` /
+        ``MODIFY (col NOT NULL)``). The generic diff property operations
+        (``SET DEFAULT``, ``DROP NOT NULL``, ...) render via
+        ``ALTER COLUMN ...``, which Oracle rejects, so property-only
+        changes route to a rebuild plan. (A MODIFY-based renderer for the
+        property operations is possible future work.)
+        """
+        return False
+
+    def _supports_alter_table_index_actions(self) -> bool:
+        """Oracle has no ``ALTER TABLE ADD/DROP INDEX``: indexes are
+        managed with ``CREATE INDEX`` / ``DROP INDEX`` statements, so
+        ``AddIndex`` / ``DropIndex`` alter-table actions cannot be
+        rendered. Index changes route to a rebuild plan (the recreated
+        table carries the new index set).
+        """
+        return False
+
     def format_identifier(self, identifier: str) -> str:
         """Format identifier for Oracle (uppercase, no quoting).
 

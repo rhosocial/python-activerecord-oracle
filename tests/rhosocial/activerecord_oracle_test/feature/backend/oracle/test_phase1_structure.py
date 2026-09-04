@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/test_phase1_structure.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/oracle/test_phase1_structure.py
 """
 Tests for Phase 1 directory restructuring.
 

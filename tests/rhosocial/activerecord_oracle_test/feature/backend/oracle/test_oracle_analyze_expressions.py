@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/dialect/test_oracle_analyze_expressions.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/oracle/test_oracle_analyze_expressions.py
 """Tests for Oracle ANALYZE TABLE expressions.
 
 Covers ``ANALYZE TABLE t COMPUTE STATISTICS`` / ``ESTIMATE STATISTICS

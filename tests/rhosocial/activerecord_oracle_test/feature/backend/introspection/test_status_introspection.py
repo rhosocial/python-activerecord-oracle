@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/test_status_introspection.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/introspection/test_status_introspection.py
 """Live-server coverage for the Oracle status introspector.
 
 The ``.introspector.status`` surface (overview, configuration, performance,
