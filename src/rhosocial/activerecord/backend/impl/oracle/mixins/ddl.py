@@ -79,7 +79,7 @@ class OracleDDLMixin:
             # is dynamic SQL, so any embedded single quotes must be doubled.
             # Only applied when the statement carries no bind parameters.
             embedded = statement.replace("'", "''")
-            table_upper = expr.table.upper()
+            table_upper = expr.table.name.upper()
             statement = (
                 f"DECLARE v_cnt NUMBER; "
                 f"BEGIN SELECT COUNT(*) INTO v_cnt FROM user_tables "
