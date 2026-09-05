@@ -8,4 +8,5 @@ Oracle DML integration: backend CRUD basics, a standalone schema-qualified DML r
 - `test_crud_backend_async.py` — async connection + CRUD (sync twin: `test_crud_backend.py`)
 - `test_schema_qualified_dml.py` — schema-qualified DML round trip
 - `test_dml_deep_async.py` — execute_many batches, transaction boundaries, RETURNING INTO (sync twin `test_dml_deep.py`: not yet present — Tier-2 fill)
+- `test_execute_many.py` — synchronous execute_many: total affected rows, empty noop, `?`→`:N` placeholder conversion
 - `test_insert_on_conflict_clauses.py` — MERGE-based upsert capability
