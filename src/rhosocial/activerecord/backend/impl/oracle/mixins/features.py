@@ -150,7 +150,10 @@ class OracleFeaturesMixin:
 
     # --- QUALIFY ------------------------------------------------------
     def supports_qualify_clause(self) -> bool:
-        return False
+        # QUALIFY was introduced in Oracle AI Database 26ai (RU 23.26.0,
+        # the 26th quarterly update of the 23c code line). Earlier releases
+        # must filter analytic results via a subquery or CTE instead.
+        return self.version >= (23, 26, 0)
 
     # --- UPSERT -------------------------------------------------------
     def supports_upsert(self) -> bool:
