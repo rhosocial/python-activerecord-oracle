@@ -13,16 +13,20 @@ from rhosocial.activerecord.backend.dialect.mixins import (
 from rhosocial.activerecord.backend.dialect.protocols import DDLTypeSupport
 from rhosocial.activerecord.backend.expression.types import (
     BigIntType,
+    BinaryType,
     BlobType,
     BooleanType,
     CharType,
+    CidrType,
     DateType,
     DateTimeType,
     DecimalType,
     DoubleType,
     FloatType,
+    InetType,
     IntegerType,
     JsonType,
+    MacAddrType,
     RealType,
     SmallIntType,
     TextType,
@@ -31,6 +35,8 @@ from rhosocial.activerecord.backend.expression.types import (
     TimestampType,
     TimestampTzType,
     TinyIntType,
+    UUIDType,
+    VarBinaryType,
     VarCharType,
     DataType,
     CustomType,
@@ -129,6 +135,35 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
     @DDLTypeMixin.handles(JsonType)
     def format_data_type_json(self, data_type: JsonType) -> Tuple[str, tuple]:
         return "VARCHAR2(4000)", ()
+
+    @DDLTypeMixin.handles(UUIDType)
+    def format_data_type_uuid(self, data_type: UUIDType) -> Tuple[str, tuple]:
+        # Oracle stores UUIDs as VARCHAR2(36) by default: the string adapter and
+        # string-form UUID query parameters both round-trip correctly. RAW(16)
+        # is compact but requires column-aware query parameter adaptation (a
+        # framework feature not yet present), so it is opt-in only via
+        # UseSqlType(BinaryType(16), UUIDType()).
+        return "VARCHAR2(36)", ()
+
+    @DDLTypeMixin.handles(InetType)
+    def format_data_type_inet(self, data_type: InetType) -> Tuple[str, tuple]:
+        return "VARCHAR2(45)", ()
+
+    @DDLTypeMixin.handles(CidrType)
+    def format_data_type_cidr(self, data_type: CidrType) -> Tuple[str, tuple]:
+        return "VARCHAR2(45)", ()
+
+    @DDLTypeMixin.handles(MacAddrType)
+    def format_data_type_mac_addr(self, data_type: MacAddrType) -> Tuple[str, tuple]:
+        return "RAW(6)", ()
+
+    @DDLTypeMixin.handles(BinaryType)
+    def format_data_type_binary(self, data_type: BinaryType) -> Tuple[str, tuple]:
+        return f"RAW({data_type.length})", ()
+
+    @DDLTypeMixin.handles(VarBinaryType)
+    def format_data_type_var_binary(self, data_type: VarBinaryType) -> Tuple[str, tuple]:
+        return f"RAW({data_type.length})", ()
 
     # --- Oracle-specific type formatters ---
     # These give precise round-trip rendering for Oracle-only types so that
@@ -315,13 +350,14 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
 class OracleTypeSuggestionMixin(DDLTypeSuggestionMixin):
     """Oracle-native ``suggest_column_type()``.
 
-    Oracle has no native UUID type, so UUIDs default to ``OracleRawType(16)``
-    (compact binary storage) matching the ``OracleUUIDAdapter`` bytes path —
-    the same convention as MySQL/MariaDB ``BINARY(16)``.
+    Oracle has no native UUID type, so UUIDs default to ``UUIDType`` rendered
+    as ``RAW(16)`` (compact binary storage) matching the ``OracleUUIDAdapter``
+    bytes path — the same convention as MySQL/MariaDB ``BINARY(16)``.
 
-    ``dict``/``list`` are version-gated: native JSON requires Oracle 21c+
-    (``JsonType``); older servers fall back to ``OracleClobType`` (CLOB, no
-    size limit). Version-unknown returns ``None`` (no guessing).
+    ``dict``/``list``/``set``/``tuple`` are version-gated: native JSON
+    requires Oracle 21c+ (``JsonType``); older servers fall back to
+    ``OracleClobType`` (CLOB, no size limit). Version-unknown returns
+    ``None`` (no guessing).
     """
 
     def suggest_column_type(
@@ -330,6 +366,7 @@ class OracleTypeSuggestionMixin(DDLTypeSuggestionMixin):
         import datetime as _dt
         import decimal as _dec
         import enum as _enum
+        import ipaddress as _ip
         import uuid as _uuid
 
         if version is None:
@@ -345,11 +382,13 @@ class OracleTypeSuggestionMixin(DDLTypeSuggestionMixin):
             _dt.date: DateType,
             _dt.time: TimeType,
             _dec.Decimal: DecimalType,
-            _uuid.UUID: OracleRawType,
+            _uuid.UUID: UUIDType,
             _enum.Enum: OracleVarChar2Type,
+            _ip.IPv4Address: InetType,
+            _ip.IPv6Address: InetType,
+            _ip.IPv4Network: CidrType,
+            _ip.IPv6Network: CidrType,
         }
-        if python_type is _uuid.UUID:
-            return OracleRawType(dialect=self, length=16)
         factory = mapping.get(python_type)
         if factory is not None:
             if python_type is _enum.Enum:
@@ -358,7 +397,7 @@ class OracleTypeSuggestionMixin(DDLTypeSuggestionMixin):
                 return OracleVarChar2Type(dialect=self, length=255)
             return factory()
 
-        if python_type in (dict, list):
+        if python_type in (dict, list, set, frozenset, tuple):
             if version is None:
                 return None
             if version >= (21, 0, 0):

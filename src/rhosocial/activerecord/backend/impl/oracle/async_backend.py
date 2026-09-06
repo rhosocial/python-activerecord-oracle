@@ -336,6 +336,8 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
                 elif isinstance(param, (dict, list)):
                     converted.append(json.dumps(param))
                 elif isinstance(param, UUID):
+                    # UUID defaults to VARCHAR2(36) (36-char string) per the
+                    # derived-DDL suggestion; RAW(16) storage is opt-in.
                     converted.append(str(param))
                 elif isinstance(param, Decimal):
                     converted.append(float(param))
