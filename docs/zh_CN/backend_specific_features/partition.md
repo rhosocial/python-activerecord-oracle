@@ -16,6 +16,35 @@ Oracle 支持表分区用于大表。
 
 ## 创建分区
 
+### 声明式分区 Spec（模型级）
+
+Oracle 分区可在模型上通过后端定义的 Spec 声明；Oracle 方言在
+`generate_create_table(dialect)` 时认领，其他后端自动忽略：
+
+```python
+from rhosocial.activerecord.backend.impl.oracle.ddl_spec import (
+    OracleRangePartition, OraclePartitionDefinitionSpec, OraclePartitionBound,
+    OracleIntervalPartition,
+)
+
+class Orders(ActiveRecord):
+    __table_partition__ = [
+        OracleRangePartition("created_at", [
+            OraclePartitionDefinitionSpec("p2026", less_than=[OraclePartitionBound(2027)]),
+            OraclePartitionDefinitionSpec("p_max", less_than=[OraclePartitionBound("MAXVALUE")]),
+        ]),
+        # 间隔分区：OracleIntervalPartition.monthly/.yearly/.daily
+        OracleIntervalPartition.monthly("created_at"),
+    ]
+
+expr = Orders.generate_create_table(dialect)
+```
+
+间隔表达式由 `OracleIntervalFunctionExpression` 构造（`NUMTOYMINTERVAL` /
+`NUMTODSINTERVAL`，内联渲染——Oracle DDL 不接受绑定变量）。序列列默认值使用
+`OracleSequenceDefault(column, sequence)`。下方表达式层路径仍完全支持，
+作为逃生舱保留。
+
 ```sql
 -- RANGE 分区
 CREATE TABLE orders (
