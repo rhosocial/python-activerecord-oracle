@@ -6,6 +6,7 @@ without any per-dialect string mappings. A concrete server version is supplied
 so the dialect renders offline (no DB connection needed).
 """
 
+from rhosocial.activerecord.base import UseSqlType
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.examples.ddl_types import TypedUser
 
@@ -34,6 +35,6 @@ def test_oracle_typed_user_ddl_columns():
 
 
 def test_oracle_typed_user_no_per_dialect_string_keys():
-    for _field_name, marker in TypedUser.__table_field_sql_types__.items():
+    for marker in [m for f in TypedUser.model_fields.values() for m in f.metadata if isinstance(m, UseSqlType)]:
         assert not hasattr(marker, "dialect_types")
         assert marker.data_type is not None

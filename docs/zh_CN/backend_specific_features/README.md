@@ -12,6 +12,7 @@
 - [EXPLAIN](explain.md): 查询执行计划分析（Oracle 特定语法）
 - [内省](introspection.md): 数据库元数据查询和模式检查
 - [分区](partition.md): 表分区（Oracle 特定，可选）
+- [DDL 特征 Spec](ddl_spec.md)：Oracle 方言认领的声明式 DDL Spec
 
 ## 功能亮点
 

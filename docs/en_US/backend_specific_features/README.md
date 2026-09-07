@@ -12,6 +12,7 @@ When you encounter a feature in this section, check whether it is a backend-spec
 - [EXPLAIN](explain.md): Query execution plan analysis (Oracle-specific syntax)
 - [Introspection](introspection.md): Database metadata queries and schema inspection
 - [Partitioning](partition.md): Table partitioning (Oracle-specific, optional)
+- [DDL Feature Specs](ddl_spec.md): declarative DDL Specs claimed by the Oracle dialect
 
 ## Feature Highlights
 
