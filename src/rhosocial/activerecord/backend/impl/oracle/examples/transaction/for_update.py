@@ -68,7 +68,7 @@ with backend.transaction():
         "UPDATE lock_demo SET amount = :1 WHERE id = :2",
         (150.00, 1), options=ExecutionOptions(stmt_type=StatementType.UPDATE),
     )
-    print(f"  Updated amount to 150.00")
+    print("  Updated amount to 150.00")
 
 print("\n[2] FOR UPDATE NOWAIT")
 try:

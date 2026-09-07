@@ -461,6 +461,27 @@ class OraclePartitionMixin:
             f"got {type(expr).__name__}"
         )
 
+    def format_interval_function(self, expr: "OracleIntervalFunctionExpression") -> Tuple[str, tuple]:
+        """Format an interval-partitioning function expression inline.
+
+        Renders ``NUMTOYMINTERVAL(n, 'UNIT')`` / ``NUMTODSINTERVAL(n, 'UNIT')``
+        with the amount and unit as inline literals (Oracle DDL does not
+        accept bind variables), so the parameters tuple is always empty.
+
+        Returns:
+            Tuple of (function SQL string, empty parameters tuple).
+        """
+        from ..expression.partition import OracleIntervalFunctionExpression
+
+        if not isinstance(expr, OracleIntervalFunctionExpression):
+            raise TypeError(
+                "expr must be an OracleIntervalFunctionExpression, "
+                f"got {type(expr).__name__}"
+            )
+        amount_sql = self.render_partition_literal(expr.amount)
+        unit_sql = self.render_partition_literal(expr.unit)
+        return f"{expr.func}({amount_sql}, {unit_sql})", ()
+
     # ------------------------------------------------------------------
     # Shared helpers (public, no leading underscore per architecture rules)
     # ------------------------------------------------------------------

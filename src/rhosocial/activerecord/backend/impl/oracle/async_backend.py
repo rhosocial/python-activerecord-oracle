@@ -33,7 +33,7 @@ from .config import OracleConnectionConfig
 from .dialect import OracleDialect
 from .async_transaction import AsyncOracleTransactionManager
 from .mixins import OracleBackendMixin
-from .backend import OracleBackend, _is_numeric_python_type
+from .backend import OracleBackend
 
 
 class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStorageBackend):

@@ -43,7 +43,7 @@ try:
         )
     """, options=DDL)
 except Exception as e:
-    print(f"\nSDO_GEOMETRY type not available on this instance.")
+    print("\nSDO_GEOMETRY type not available on this instance.")
     print(f"Error: {e}")
     print("Oracle Spatial option is required for SDO_GEOMETRY.")
     backend.disconnect()

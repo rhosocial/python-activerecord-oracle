@@ -2,7 +2,7 @@
 """Oracle JSON function factories."""
 
 import re
-from typing import Union, Optional, Any, TYPE_CHECKING
+from typing import Union, Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from rhosocial.activerecord.backend.expression import bases

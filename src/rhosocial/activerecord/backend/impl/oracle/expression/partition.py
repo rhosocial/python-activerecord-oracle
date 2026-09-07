@@ -91,6 +91,53 @@ class OraclePartitionMaxValue(BaseExpression):
         return self.dialect.format_partition_value(self)
 
 
+class OracleIntervalFunctionExpression(BaseExpression):
+    """Oracle interval-partitioning function expression (``NUMTOYMINTERVAL`` /
+    ``NUMTODSINTERVAL``) rendered inline.
+
+    Oracle DDL does not accept bind variables, so the function arguments are
+    rendered as safely-escaped inline literals by the dialect formatter.
+    Arguments flow through the Expression/Dialect layer so escaping stays
+    centralized.
+
+    Args:
+        dialect: the Oracle dialect instance.
+        func: interval function name; ``NUMTOYMINTERVAL`` (year/month) or
+            ``NUMTODSINTERVAL`` (day/second).
+        amount: numeric literal for the interval quantity.
+        unit: interval unit string (e.g. ``"MONTH"``, ``"SECOND"``).
+
+    Raises:
+        ValueError: if ``func`` is not a supported interval function, or
+            ``amount`` is not a finite number, or ``unit`` is empty.
+    """
+
+    _FUNCTIONS = ("NUMTOYMINTERVAL", "NUMTODSINTERVAL")
+
+    def __init__(self, dialect: "OracleDialect", func: str, amount: Any, unit: str):
+        super().__init__(dialect)
+        func = (func or "").upper()
+        if func not in self._FUNCTIONS:
+            raise ValueError(
+                f"interval function must be one of {self._FUNCTIONS}, got {func!r}"
+            )
+        if isinstance(amount, bool) or not isinstance(amount, (int, float, Decimal)):
+            raise TypeError(
+                "interval amount must be a finite number, "
+                f"got {type(amount).__name__}"
+            )
+        if isinstance(amount, float) and not isfinite(amount):
+            raise ValueError("interval amount float must be finite")
+        if not isinstance(unit, str) or not unit.strip():
+            raise ValueError("interval unit must be a non-empty string")
+        self.func = func
+        self.amount = amount
+        self.unit = unit.strip().upper()
+
+    def to_sql(self) -> SQLQueryAndParams:
+        return self.dialect.format_interval_function(self)
+
+
 class OraclePartitionValue(BaseExpression):
     """Literal value used in Oracle partition boundary definitions.
 

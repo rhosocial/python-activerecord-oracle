@@ -1,7 +1,7 @@
 # src/rhosocial/activerecord/backend/impl/oracle/mixins/set_operation.py
 """Oracle set-operation formatting mixin."""
 
-from typing import List, Optional, Tuple
+from typing import Optional, Tuple
 
 
 class OracleSetOperationMixin:

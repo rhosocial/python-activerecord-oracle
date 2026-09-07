@@ -30,6 +30,7 @@ from .materialized_view import OracleMaterializedViewMixin
 from .optimizer_hint import OracleOptimizerHintMixin
 from .pagination import OraclePaginationMixin
 from .partition import OraclePartitionMixin
+from .ddl_spec import OracleDDLSpecMixin
 from .partition_lifecycle import OraclePartitionLifecycleMixin
 from .pivot import OraclePivotMixin
 from .routine import OracleRoutineMixin
@@ -73,6 +74,7 @@ __all__ = [
     "OracleOptimizerHintMixin",
     "OraclePaginationMixin",
     "OraclePartitionMixin",
+    "OracleDDLSpecMixin",
     "OraclePartitionLifecycleMixin",
     "OraclePivotMixin",
     "OracleRoutineMixin",

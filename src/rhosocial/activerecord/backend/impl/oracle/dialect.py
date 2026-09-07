@@ -5,7 +5,7 @@ Assembles the full Oracle dialect surface by composing generic mixins
 (provided by the core framework) together with Oracle-specific mixins
 that override version-gated capability checks and syntax formatters.
 """
-from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
+from typing import Optional, Tuple, TYPE_CHECKING
 
 from rhosocial.activerecord.backend.dialect.base import SQLDialectBase
 from rhosocial.activerecord.backend.dialect.protocols import (
@@ -59,7 +59,6 @@ from rhosocial.activerecord.backend.dialect.mixins import (
     ArrayMixin,
     ExplainMixin,
     GraphMixin,
-    GraphTableMixin,
     LockingMixin,
     MergeMixin,
     OrderedSetAggregationMixin,
@@ -128,6 +127,7 @@ from .mixins import (
     OracleTypeSuggestionMixin,
     OracleVectorMixin,
     OracleViewMixin,
+    OracleDDLSpecMixin,
 )
 from .protocols.partition import OraclePartitionSupport
 
@@ -181,6 +181,8 @@ class OracleDialect(
     OracleTypeSuggestionMixin,
     OracleVectorMixin,
     OracleViewMixin,
+    # DDL feature-spec claiming (partition / sequence Specs)
+    OracleDDLSpecMixin,
     # ================================================================
     # Generic fallback mixins – defaults that Oracle-specific mixins
     # above can override.

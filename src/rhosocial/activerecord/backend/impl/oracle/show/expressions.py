@@ -14,7 +14,7 @@ Bound-parameter placeholders use Oracle's native colon prefix (":1", ":name"),
 as emitted by the dialect mixin.
 """
 
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 
 from rhosocial.activerecord.backend.expression.bases import (
     BaseExpression,

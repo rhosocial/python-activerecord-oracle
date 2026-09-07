@@ -7,7 +7,7 @@ the capability contract.  Regenerate via scripts/p7_generate_protocols.py
 when mixins gain new public rendering methods.
 """
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Tuple
 
 from typing import Protocol
 

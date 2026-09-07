@@ -12,7 +12,6 @@ Oracle Version Support: 12c+
 
 import os
 
-import re
 
 from rhosocial.activerecord.backend.expression import InsertExpression, ValuesSource, TableExpression
 from rhosocial.activerecord.backend.expression.core import Literal
