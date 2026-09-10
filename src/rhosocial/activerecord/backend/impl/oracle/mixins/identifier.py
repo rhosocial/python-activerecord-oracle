@@ -82,7 +82,7 @@ class OracleIdentifierMixin:
         """
         if schema_name:
             table_sql = f"{self.format_identifier(schema_name)}.{self.format_identifier(table_name)}"
-        elif table_name.lower().endswith("_cte"):
+        elif isinstance(table_name, str) and table_name.lower().endswith("_cte"):
             table_sql = table_name
         else:
             table_sql = self.format_identifier(table_name)
