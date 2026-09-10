@@ -303,7 +303,7 @@ class OracleDialect(
 
         return OracleSchemaDiffer()
 
-    def format_identifier(self, identifier: str) -> str:
+    def format_identifier(self, identifier) -> str:
         """Format identifier for Oracle (uppercase, no quoting).
 
         Oracle folds unquoted identifiers to uppercase, so uppercasing is
@@ -312,7 +312,13 @@ class OracleDialect(
         dedicated helper, since global quoting would alter every generated
         statement's appearance.
         """
-        return identifier.upper()
+        if isinstance(identifier, str):
+            return identifier.upper()
+        # Handle expression objects like TableExpression
+        name = getattr(identifier, 'name', None)
+        if name is not None:
+            return str(name).upper()
+        return str(identifier).upper()
 
     def supports_explain_analyze(self) -> bool:
         """Oracle does not support EXPLAIN ANALYZE in the standard sense.
