@@ -80,8 +80,10 @@ class OracleAddPartitionExpression(_OraclePartitionMaintenanceExpression):
             )
         self.partition = partition
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self.dialect.format_add_partition_statement(self)
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_add_partition_statement"
 
 
 class OracleDropPartitionExpression(_OraclePartitionMaintenanceExpression):
@@ -111,8 +113,10 @@ class OracleDropPartitionExpression(_OraclePartitionMaintenanceExpression):
         self.partition_name = partition_name
         self.update_indexes = bool(update_indexes)
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self.dialect.format_drop_partition_statement(self)
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_drop_partition_statement"
 
 
 class OracleSplitPartitionExpression(_OraclePartitionMaintenanceExpression):
@@ -164,8 +168,10 @@ class OracleSplitPartitionExpression(_OraclePartitionMaintenanceExpression):
         self.at_values = list(at_values)
         self.new_partitions = list(new_partitions)
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self.dialect.format_split_partition_statement(self)
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_split_partition_statement"
 
 
 class OracleMergePartitionsExpression(_OraclePartitionMaintenanceExpression):
@@ -208,8 +214,10 @@ class OracleMergePartitionsExpression(_OraclePartitionMaintenanceExpression):
         self.partition_names = list(partition_names)
         self.into_partition = into_partition
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self.dialect.format_merge_partitions_statement(self)
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_merge_partitions_statement"
 
 
 class OracleExchangePartitionExpression(_OraclePartitionMaintenanceExpression):
@@ -250,8 +258,10 @@ class OracleExchangePartitionExpression(_OraclePartitionMaintenanceExpression):
         self.including_indexes = bool(including_indexes)
         self.with_validation = bool(with_validation)
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self.dialect.format_exchange_partition_statement(self)
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_exchange_partition_statement"
 
 
 class OracleMovePartitionExpression(_OraclePartitionMaintenanceExpression):
@@ -287,8 +297,10 @@ class OracleMovePartitionExpression(_OraclePartitionMaintenanceExpression):
         self.partition_name = partition_name
         self.tablespace_name = tablespace_name
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self.dialect.format_move_partition_statement(self)
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_move_partition_statement"
 
 
 class OracleTruncatePartitionExpression(_OraclePartitionMaintenanceExpression):
@@ -319,5 +331,7 @@ class OracleTruncatePartitionExpression(_OraclePartitionMaintenanceExpression):
         self.partition_name = partition_name
         self.update_indexes = bool(update_indexes)
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self.dialect.format_truncate_partition_statement(self)
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_truncate_partition_statement"

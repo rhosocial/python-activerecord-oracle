@@ -111,8 +111,10 @@ class OracleCreateMaterializedViewExpression(BaseExpression):
         self.query_rewrite = query_rewrite
         self.dialect_options = dialect_options or {}
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self.dialect.format_create_materialized_view_statement(self)
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_create_materialized_view_statement"
 
 
 class OracleCreateMaterializedViewLogExpression(BaseExpression):
@@ -151,8 +153,10 @@ class OracleCreateMaterializedViewLogExpression(BaseExpression):
         self.with_primary_key = bool(with_primary_key)
         self.dialect_options = dialect_options or {}
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self.dialect.format_create_materialized_view_log_statement(self)
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_create_materialized_view_log_statement"
 
 
 class OracleDropMaterializedViewExpression(BaseExpression):
@@ -187,5 +191,7 @@ class OracleDropMaterializedViewExpression(BaseExpression):
         self.preserve_table = bool(preserve_table)
         self.dialect_options = dialect_options or {}
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self.dialect.format_drop_materialized_view_statement(self)
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_drop_materialized_view_statement"

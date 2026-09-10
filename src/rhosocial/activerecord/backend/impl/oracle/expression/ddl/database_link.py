@@ -69,8 +69,10 @@ class OracleCreateDatabaseLinkExpression(BaseExpression):
         self.shared = bool(shared)
         self.dialect_options = dialect_options or {}
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self.dialect.format_create_database_link_statement(self)
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_create_database_link_statement"
 
 
 class OracleDropDatabaseLinkExpression(BaseExpression):
@@ -101,5 +103,7 @@ class OracleDropDatabaseLinkExpression(BaseExpression):
         self.public = bool(public)
         self.dialect_options = dialect_options or {}
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self.dialect.format_drop_database_link_statement(self)
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_drop_database_link_statement"

@@ -81,8 +81,10 @@ class OracleAsOfClause(BaseExpression):
         self.value = value
         self.dialect_options = dialect_options or {}
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self.dialect.format_as_of_clause(self)
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_as_of_clause"
 
 
 class OracleVersionsBetweenClause(BaseExpression):
@@ -122,8 +124,10 @@ class OracleVersionsBetweenClause(BaseExpression):
         self.high_value = high_value
         self.dialect_options = dialect_options or {}
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self.dialect.format_versions_between_clause(self)
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_versions_between_clause"
 
 
 class OracleFlashbackTableExpression(BaseExpression):
@@ -193,8 +197,10 @@ class OracleFlashbackTableExpression(BaseExpression):
         self.disable_triggers = bool(disable_triggers)
         self.dialect_options = dialect_options or {}
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self.dialect.format_flashback_table_statement(self)
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_flashback_table_statement"
 
 
 class OraclePurgeObjectType(Enum):
@@ -248,5 +254,7 @@ class OraclePurgeExpression(BaseExpression):
         self.object_name = object_name
         self.dialect_options = dialect_options or {}
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self.dialect.format_purge_statement(self)
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_purge_statement"

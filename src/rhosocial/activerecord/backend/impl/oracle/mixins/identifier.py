@@ -37,20 +37,25 @@ class OracleIdentifierMixin:
             )
         return f'"{identifier.replace(chr(34), chr(34) * 2).upper()}"'
 
-    def format_column(
-        self, name: str, table: Optional[str] = None,
-        alias: Optional[str] = None, schema_name: Optional[str] = None,
-    ) -> Tuple[str, Tuple]:
-        """Format column reference for Oracle queries.
+    def format_column(self, expr) -> Tuple[str, Tuple]:
+        """Format a :class:`~...expression.core.Column`.
 
-        Column references accept at most ``TABLE.COLUMN``: the schema is
-        implied by the statement target, and three-part references are
-        rejected with an "invalid identifier" error.
+        The dialect decides how to handle ``schema_name`` based on backend
+        rules, then applies the alias (per SQL standard output order:
+        expression, alias).
         """
-        if table:
+        name = expr.name
+        table = getattr(expr, 'table', None)
+        alias = getattr(expr, 'alias', None)
+        schema_name = getattr(expr, 'schema_name', None)
+
+        if schema_name and table:
+            col_sql = (
+                f"{self.format_identifier(schema_name)}."
+                f"{self.format_identifier(table)}.{name}"
+            )
+        elif table:
             col_sql = f"{self.format_identifier(table)}.{name}"
-        elif table is None and schema_name:
-            col_sql = f"{self.format_identifier(schema_name)}.{name}"
         else:
             col_sql = name
         if alias:
