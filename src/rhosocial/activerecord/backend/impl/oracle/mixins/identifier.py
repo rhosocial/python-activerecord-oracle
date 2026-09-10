@@ -13,14 +13,20 @@ class OracleIdentifierMixin:
     identical to unquoted ``USERS`` in Oracle.
     """
 
-    def format_identifier(self, identifier: str) -> str:
+    def format_identifier(self, identifier) -> str:
         """Format identifier for Oracle (uppercase, no quoting).
 
         Oracle stores unquoted identifiers as uppercase. Global quoting is
         avoided so generated SQL keeps the conventional unquoted form;
         callers handling externally-sourced identifiers quote explicitly.
         """
-        return identifier.upper()
+        if isinstance(identifier, str):
+            return identifier.upper()
+        # Handle expression objects like TableExpression
+        name = getattr(identifier, 'name', None)
+        if name is not None:
+            return str(name).upper()
+        return str(identifier).upper()
 
     @staticmethod
     def _quote_identifier(identifier: str) -> str:
