@@ -22,7 +22,7 @@ from rhosocial.activerecord.backend.expression import (
 )
 from rhosocial.activerecord.backend.expression.types import IntegerType, VarCharType
 from rhosocial.activerecord.backend.expression.query_parts import (
-    WhereClause, OrderByClause, GroupByHavingClause, JoinExpression,
+    WhereClause, OrderByClause, GroupByHavingClause, JoinClause,
 )
 from rhosocial.activerecord.backend.expression.core import Column, TableExpression
 
@@ -348,7 +348,7 @@ class TestOracleSocialGraph:
 
         people = TableExpression(dialect, "people", alias="p")
         condition = Column(dialect, "follower", "g") == Column(dialect, "name", "p")
-        join = JoinExpression(dialect,
+        join = JoinClause(dialect,
             left_table=gt,
             right_table=people,
             join_type="INNER JOIN",
