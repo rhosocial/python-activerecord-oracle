@@ -342,13 +342,16 @@ class TestOraclePartitionClauseErrors:
         d = _dialect()
         # Build a PartitionClause with a valid strategy then mutate method
         # to an unsupported value to exercise the dispatch default branch.
+        # (Rendering via to_sql() re-instantiates the expression and would
+        # reject the mutated method at construction; the formatter is called
+        # directly to exercise its dispatch.)
         clause = PartitionClause(
             d, PartitionStrategy.HASH, [Column(d, "id")],
             dialect_options={"partitions_count": 2},
         )
         clause.method = "INTERVAL"
         with pytest.raises(ValueError, match="Invalid Oracle partition method"):
-            clause.to_sql()
+            d.format_partition_clause(clause)
 
     def test_range_partition_definition_wrong_type(self):
         d = _dialect()

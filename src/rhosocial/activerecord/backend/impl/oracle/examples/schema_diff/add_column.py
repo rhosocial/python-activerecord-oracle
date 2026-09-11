@@ -43,12 +43,12 @@ backend.execute(sql, params)
 # Baseline table: ID, NAME, EMAIL
 expr = CreateTableExpression(
     dialect=dialect, table="USERS", columns=[
-        ColumnDefinition("ID", IntegerType(),
+        ColumnDefinition(dialect, "ID", IntegerType(dialect),
             constraints=[
-                ColumnConstraint(constraint_type=ColumnConstraintType.PRIMARY_KEY, is_auto_increment=True),
+                ColumnConstraint(dialect, constraint_type=ColumnConstraintType.PRIMARY_KEY, is_auto_increment=True),
             ]),
-        ColumnDefinition("NAME", VarCharType(length=100)),
-        ColumnDefinition("EMAIL", VarCharType(length=255)),
+        ColumnDefinition(dialect, "NAME", VarCharType(length=100, dialect=dialect)),
+        ColumnDefinition(dialect, "EMAIL", VarCharType(length=255, dialect=dialect)),
     ]
 )
 sql, params = expr.to_sql()
@@ -71,7 +71,7 @@ builder = SyncSchemaSnapshotBuilder(backend.introspector, dialect)
 snapshot_before = builder.build()
 
 # Add `AGE` column. Oracle appends at the end (no AFTER support).
-add_col = AddColumn(dialect, ColumnDefinition("AGE", IntegerType()))
+add_col = AddColumn(dialect, ColumnDefinition(dialect, "AGE", IntegerType(dialect)))
 alter_expr = AlterTableExpression(dialect, "USERS", [add_col])
 sql, params = alter_expr.to_sql()
 backend.execute(sql, params)

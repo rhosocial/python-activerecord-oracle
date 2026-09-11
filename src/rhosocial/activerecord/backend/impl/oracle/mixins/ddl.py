@@ -102,7 +102,7 @@ class OracleDDLMixin:
         )
         if constraint_type is None:
             constraint_type = ColumnConstraintType
-        type_sql, type_params = col_def.data_type.to_sql(self)
+        type_sql, type_params = col_def.data_type.to_sql()
         parts = [self.format_identifier(col_def.name), type_sql]
         params: List[Any] = list(type_params)
         constraint_parts: List[str] = []

@@ -45,11 +45,11 @@ backend.execute(sql, params)
 
 expr = CreateTableExpression(
     dialect=dialect, table="USERS", columns=[
-        ColumnDefinition("ID", IntegerType(),
+        ColumnDefinition(dialect, "ID", IntegerType(dialect),
             constraints=[
-                ColumnConstraint(constraint_type=ColumnConstraintType.PRIMARY_KEY, is_auto_increment=True),
+                ColumnConstraint(dialect, constraint_type=ColumnConstraintType.PRIMARY_KEY, is_auto_increment=True),
             ]),
-        ColumnDefinition("NAME", VarCharType(length=100)),
+        ColumnDefinition(dialect, "NAME", VarCharType(length=100, dialect=dialect)),
     ]
 )
 sql, params = expr.to_sql()

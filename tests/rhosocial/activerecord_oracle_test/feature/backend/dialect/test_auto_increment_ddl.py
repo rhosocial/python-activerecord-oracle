@@ -26,22 +26,22 @@ def dialect():
     return OracleDialect(version=(19, 0, 0))
 
 
-def _pk():
-    return [ColumnConstraint(ColumnConstraintType.PRIMARY_KEY, is_auto_increment=True)]
+def _pk(dialect):
+    return [ColumnConstraint(dialect, ColumnConstraintType.PRIMARY_KEY, is_auto_increment=True)]
 
 
 def _build_table(dialect):
     return CreateTableExpression(
         dialect=dialect, table="test_tbl",
         columns=[
-            ColumnDefinition("id", IntegerType(), constraints=_pk()),
-            ColumnDefinition("name", TextType(),
-                constraints=[ColumnConstraint(ColumnConstraintType.NOT_NULL)]),
-            ColumnDefinition("flag", BooleanType(),
-                constraints=[ColumnConstraint(ColumnConstraintType.NOT_NULL),
-                             ColumnConstraint(ColumnConstraintType.DEFAULT, default_value=True)]),
-            ColumnDefinition("code", VarCharType(length=16)),
-            ColumnDefinition("created_at", TimestampType()),
+            ColumnDefinition(dialect, "id", IntegerType(dialect), constraints=_pk(dialect)),
+            ColumnDefinition(dialect, "name", TextType(dialect),
+                constraints=[ColumnConstraint(dialect, ColumnConstraintType.NOT_NULL)]),
+            ColumnDefinition(dialect, "flag", BooleanType(dialect),
+                constraints=[ColumnConstraint(dialect, ColumnConstraintType.NOT_NULL),
+                             ColumnConstraint(dialect, ColumnConstraintType.DEFAULT, default_value=True)]),
+            ColumnDefinition(dialect, "code", VarCharType(16, dialect=dialect)),
+            ColumnDefinition(dialect, "created_at", TimestampType(dialect=dialect)),
         ],
     )
 
@@ -62,10 +62,10 @@ class TestAutoIncrementDDL:
         expr = CreateTableExpression(
             dialect=dialect, table="bool_test",
             columns=[
-                ColumnDefinition("id", IntegerType(), constraints=_pk()),
-                ColumnDefinition("flag", BooleanType(),
-                    constraints=[ColumnConstraint(ColumnConstraintType.NOT_NULL),
-                                 ColumnConstraint(ColumnConstraintType.DEFAULT, default_value=True)]),
+                ColumnDefinition(dialect, "id", IntegerType(dialect), constraints=_pk(dialect)),
+                ColumnDefinition(dialect, "flag", BooleanType(dialect),
+                    constraints=[ColumnConstraint(dialect, ColumnConstraintType.NOT_NULL),
+                                 ColumnConstraint(dialect, ColumnConstraintType.DEFAULT, default_value=True)]),
             ],
         )
         sql, _ = dialect.format_create_table_statement(expr)
@@ -75,8 +75,8 @@ class TestAutoIncrementDDL:
         expr = CreateTableExpression(
             dialect=dialect, table="ts_test",
             columns=[
-                ColumnDefinition("id", IntegerType(), constraints=_pk()),
-                ColumnDefinition("created_at", TimestampType()),
+                ColumnDefinition(dialect, "id", IntegerType(dialect), constraints=_pk(dialect)),
+                ColumnDefinition(dialect, "created_at", TimestampType(dialect=dialect)),
             ],
         )
         sql, _ = dialect.format_create_table_statement(expr)
