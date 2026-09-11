@@ -14,23 +14,19 @@ if TYPE_CHECKING:
 class OracleFunctionFormatMixin:
     """Oracle-specific function and expression formatters."""
 
-    def format_function_call(
-        self,
-        expr: "BaseExpression",
-        filter_predicate: Optional["SQLPredicate"] = None,
-    ) -> Tuple[str, Tuple]:
+    def format_function_call(self, expr: "BaseExpression") -> Tuple[str, Tuple]:
         fn_name = getattr(expr, "func_name", "").upper()
 
         if fn_name == "LISTAGG":
-            return self.format_listagg(expr, filter_predicate)
+            return self.format_listagg(expr)
         if fn_name in ("PERCENTILE_CONT", "PERCENTILE_DISC"):
-            return self.format_percentile_ordered_set(expr, filter_predicate)
+            return self.format_percentile_ordered_set(expr)
         if fn_name == "JSON_TABLE":
             return self.format_json_table_expression(expr)
         if fn_name in ("JSON_VALUE", "JSON_QUERY"):
             return self.format_json_scalar(expr)
 
-        return super().format_function_call(expr, filter_predicate)
+        return super().format_function_call(expr)
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -63,13 +59,9 @@ class OracleFunctionFormatMixin:
             if on_overflow:
                 func_sql += f" ON OVERFLOW {on_overflow}"
 
-        return self._finish_function_call(func_sql, all_params, expr, filter_predicate)
+        return self._finish_function_call(func_sql, all_params, expr)
 
-    def format_percentile_ordered_set(
-        self,
-        expr: "BaseExpression",
-        filter_predicate: Optional["SQLPredicate"] = None,
-    ) -> Tuple[str, Tuple]:
+    def format_percentile_ordered_set(self, expr: "BaseExpression") -> Tuple[str, Tuple]:
         fn_name = expr.func_name.upper()
         all_params: List[Any] = []
         distinct = "DISTINCT " if getattr(expr, "is_distinct", False) else ""
@@ -88,7 +80,7 @@ class OracleFunctionFormatMixin:
         if within_group:
             func_sql += f" WITHIN GROUP (ORDER BY {within_group})"
 
-        return self._finish_function_call(func_sql, all_params, expr, filter_predicate)
+        return self._finish_function_call(func_sql, all_params, expr)
 
     def format_json_scalar(self, expr: "BaseExpression") -> Tuple[str, Tuple]:
         all_params: List[Any] = []
@@ -107,7 +99,7 @@ class OracleFunctionFormatMixin:
             func_sql += f" RETURNING {type_sql}"
         func_sql += ")"
 
-        return self._finish_function_call(func_sql, all_params, expr, None)
+        return self._finish_function_call(func_sql, all_params, expr)
 
     def format_json_table_expression(self, expr: "BaseExpression") -> Tuple[str, Tuple]:
         all_params: List[Any] = []
@@ -128,15 +120,15 @@ class OracleFunctionFormatMixin:
         else:
             func_sql += ")"
 
-        return self._finish_function_call(func_sql, all_params, expr, None)
+        return self._finish_function_call(func_sql, all_params, expr)
 
     def _finish_function_call(
         self,
         func_sql: str,
         all_params: List[Any],
         expr: "BaseExpression",
-        filter_predicate: Optional["SQLPredicate"] = None,
     ) -> Tuple[str, Tuple]:
+        filter_predicate = getattr(expr, "filter_predicate", None)
         if filter_predicate:
             filter_sql, filter_params = filter_predicate.to_sql()
             func_sql += f" FILTER (WHERE {filter_sql})"

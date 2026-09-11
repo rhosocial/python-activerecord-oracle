@@ -14,11 +14,11 @@ from typing import Protocol
 class OracleFunctionFormatSupport(Protocol):
     """Auto-generated capability protocol (P7)."""
 
-    def format_function_call(self, expr: 'BaseExpression', filter_predicate: Optional['SQLPredicate']=None) -> Tuple[str, Tuple]:
+    def format_function_call(self, expr: 'BaseExpression') -> Tuple[str, Tuple]:
         ...  # pragma: no cover
-    def format_listagg(self, expr: 'BaseExpression', filter_predicate: Optional['SQLPredicate']=None) -> Tuple[str, Tuple]:
+    def format_listagg(self, expr: 'BaseExpression') -> Tuple[str, Tuple]:
         ...  # pragma: no cover
-    def format_percentile_ordered_set(self, expr: 'BaseExpression', filter_predicate: Optional['SQLPredicate']=None) -> Tuple[str, Tuple]:
+    def format_percentile_ordered_set(self, expr: 'BaseExpression') -> Tuple[str, Tuple]:
         ...  # pragma: no cover
     def format_json_scalar(self, expr: 'BaseExpression') -> Tuple[str, Tuple]:
         ...  # pragma: no cover
