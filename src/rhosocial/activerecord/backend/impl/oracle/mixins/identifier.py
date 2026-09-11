@@ -77,7 +77,8 @@ class OracleIdentifierMixin:
         """Format table reference for Oracle.
 
         Args:
-            table_name: the table name.
+            table_name: the table name, or a TableExpression object (extracted
+                automatically via ``name`` / ``schema_name`` / ``alias``).
             alias: optional table alias.
             schema_name: optional schema qualifier.
             dblink: optional database link name appended as ``@dblink`` to
@@ -86,6 +87,20 @@ class OracleIdentifierMixin:
                 ``OracleVersionsBetweenClause`` or any object exposing
                 ``to_sql()``) appended after the table reference.
         """
+        # Handle TableExpression objects passed by BaseExpression.to_sql()
+        from rhosocial.activerecord.backend.expression.core import TableExpression
+        if isinstance(table_name, TableExpression):
+            te = table_name
+            table_name = te.name
+            if schema_name is None:
+                schema_name = getattr(te, 'schema_name', None)
+            if alias is None:
+                alias = getattr(te, 'alias', None)
+            if dblink is None:
+                dblink = getattr(te, 'dblink', None)
+            if flashback is None:
+                flashback = getattr(te, 'flashback', None)
+
         if schema_name:
             table_sql = f"{self.format_identifier(schema_name)}.{self.format_identifier(table_name)}"
         elif isinstance(table_name, str) and table_name.lower().endswith("_cte"):
