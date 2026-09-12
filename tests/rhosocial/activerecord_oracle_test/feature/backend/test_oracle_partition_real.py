@@ -123,7 +123,7 @@ def test_create_range_partitioned_table_real(oracle_backend_single):
                     ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
                 ]),
                 ColumnDefinition(d, "AGE", IntegerType(d)),
-                ColumnDefinition(d, "NAME", VarCharType(100, dialect=d)),
+                ColumnDefinition(d, "NAME", VarCharType(length=100, dialect=d)),
             ],
             partition=partition,
         )
