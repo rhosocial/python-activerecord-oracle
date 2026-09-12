@@ -74,7 +74,9 @@ def pytest_collection_modifyitems(config, items):
     skip_marker = pytest.mark.skip(reason=_SKIP_REASON)
     count = 0
     for item in items:
-        if item.name in _ORACLE_18C_SKIP_TEST_NAMES:
+        # item.name includes parametrize suffix, e.g. "test_foo[oracle_18c]"
+        if any(item.name == skip_name or item.name.startswith(skip_name + "[")
+               for skip_name in _ORACLE_18C_SKIP_TEST_NAMES):
             item.add_marker(skip_marker)
             count += 1
     print(f"[conftest] Marked {count} tests as skip for Oracle 18c", file=sys.stderr)
