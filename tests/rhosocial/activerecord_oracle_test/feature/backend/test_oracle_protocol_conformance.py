@@ -50,12 +50,14 @@ ORACLE_PROTOCOLS = [
     dialect_protocols.AdvancedGroupingSupport,
     dialect_protocols.AlterTableModifierSupport,
     dialect_protocols.ArraySupport,
+    dialect_protocols.AutoIncrementSupport,
     dialect_protocols.CTESupport,
     dialect_protocols.CollationSupport,
     dialect_protocols.ConstraintSupport,
     dialect_protocols.DDLTypeSupport,
     dialect_protocols.ExplainSupport,
     dialect_protocols.FilterClauseSupport,
+    dialect_protocols.GeneratedColumnSupport,
     dialect_protocols.GraphSupport,
     dialect_protocols.GraphTableSupport,
     dialect_protocols.IndexSupport,
@@ -125,14 +127,6 @@ ORACLE_NOT_IMPLEMENTED = [
     # Oracle has no ILIKE operator; case-insensitive matching goes through
     # UPPER()/LOWER() + LIKE (documented in the ILIKESupport protocol docstring).
     dialect_protocols.ILIKESupport,
-    # --- Known gaps (feature exists, generic protocol not yet declared) ---
-    # TODO: Oracle supports IDENTITY columns since 12c (and legacy sequences);
-    # compose the auto-increment DDL mixin and move to ORACLE_PROTOCOLS.
-    dialect_protocols.AutoIncrementSupport,
-    # TODO: Oracle supports virtual (and since 12c also stored-ish) generated
-    # columns; implement the generated-column mixin overrides and move to
-    # ORACLE_PROTOCOLS.
-    dialect_protocols.GeneratedColumnSupport,
 ]
 
 

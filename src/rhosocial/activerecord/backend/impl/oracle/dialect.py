@@ -344,6 +344,18 @@ class OracleDialect(
         """
         return False
 
+    def supports_auto_increment(self) -> bool:
+        return self.version >= (12, 0, 0)
+
+    def supports_generated_columns(self) -> bool:
+        return self.version >= (11, 0, 0)
+
+    def supports_stored_generated_columns(self) -> bool:
+        return self.supports_generated_columns()
+
+    def supports_virtual_generated_columns(self) -> bool:
+        return self.supports_generated_columns()
+
     def format_explain_statement(self, expr: "ExplainExpression") -> Tuple[str, tuple]:
         """Format EXPLAIN PLAN FOR <stmt> for Oracle.
 
