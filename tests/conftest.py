@@ -56,7 +56,10 @@ def _has_oracle_18c_scenario() -> bool:
 
 def pytest_collection_modifyitems(config, items):
     """Skip supplementary-plane Unicode tests on Oracle 18c."""
-    if not _has_oracle_18c_scenario():
+    has_18c = _has_oracle_18c_scenario()
+    print(f"[conftest] _has_oracle_18c_scenario() = {has_18c}, "
+          f"ORACLE_SCENARIOS_CONFIG_PATH={os.getenv('ORACLE_SCENARIOS_CONFIG_PATH')}")
+    if not has_18c:
         return
 
     skip_reason = (
@@ -65,9 +68,12 @@ def pytest_collection_modifyitems(config, items):
     )
     skip_marker = pytest.mark.skip(reason=skip_reason)
 
+    skipped = []
     for item in items:
         if item.name in _ORACLE_18C_SKIP_TEST_NAMES:
             item.add_marker(skip_marker)
+            skipped.append(item.name)
+    print(f"[conftest] Marked {len(skipped)} tests as skip: {skipped}")
 
 
 @pytest.fixture(scope="session", autouse=True)
