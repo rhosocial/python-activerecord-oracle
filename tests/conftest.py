@@ -16,47 +16,57 @@ os.environ.setdefault(
     'providers.registry:provider_registry'
 )
 
-# --- Oracle 18c Unicode limitation handling ---
+
+# --- Oracle 18c skip configuration ---
 #
 # Oracle 18c's AL32UTF8 charset cannot round-trip supplementary-plane
-# characters (U+10000+, e.g. most emoji).  The testsuite's full Unicode
-# round-trip tests exercise these characters, so they must be skipped on
-# Oracle 18c.  Oracle 21c+ handles supplementary characters correctly.
-#
-# The skip is done here (backend-side) rather than in the shared testsuite,
-# keeping the testsuite backend-agnostic.
+# characters (U+10000+, e.g. most emoji).  The testsuite provides both
+# full-Unicode tests and BMP-only tests.  On Oracle 18c we skip the
+# full-Unicode tests and keep only the BMP-only tests.
 
-# Test IDs that exercise supplementary-plane Unicode characters.
-_ORACLE_18C_SKIP_TESTS = {
+_ORACLE_18C_SKIP_TEST_NAMES = frozenset({
     "test_unicode_multilingual_content_round_trip",
     "test_unicode_emoji_burst_truncated_in_summary",
-}
+    "test_unicode_json_fixture_json_field_round_trip",
+})
 
 
-def _is_oracle_18c(config):
-    """Check if any active scenario targets Oracle 18c."""
-    from providers.scenarios import SCENARIO_MAP
-    for name in SCENARIO_MAP:
-        if "18c" in name or "18" in name.split("_")[-1]:
-            return True
-    return False
+def _has_oracle_18c_scenario() -> bool:
+    """Check scenario config file directly for Oracle 18c.
+
+    We read the YAML config ourselves instead of relying on SCENARIO_MAP,
+    because the providers package has no __init__.py and scenarios.py's
+    module-level registration may not have executed yet at conftest time.
+    """
+    import yaml
+
+    config_path = os.getenv("ORACLE_SCENARIOS_CONFIG_PATH")
+    if not config_path:
+        config_path = os.path.join(os.path.dirname(__file__), "config", "oracle_scenarios.yaml")
+    if not config_path or not os.path.exists(config_path):
+        return False
+    try:
+        with open(config_path) as f:
+            data = yaml.safe_load(f)
+        scenarios = data.get("scenarios", {}) or {}
+        return any("18c" in name for name in scenarios)
+    except Exception:
+        return False
 
 
 def pytest_collection_modifyitems(config, items):
     """Skip supplementary-plane Unicode tests on Oracle 18c."""
-    if not _is_oracle_18c(config):
+    if not _has_oracle_18c_scenario():
         return
 
-    skip_marker = pytest.mark.skip(
-        reason=(
-            "Oracle 18c's AL32UTF8 charset does not fully support "
-            "supplementary-plane emoji (e.g. U+1F950) introduced in "
-            "Unicode 10.0+; round-trip corruption expected. "
-            "Oracle 21c+ handles these correctly."
-        )
+    skip_reason = (
+        "Oracle 18c AL32UTF8 cannot round-trip supplementary-plane characters "
+        "(U+10000+). BMP-only tests cover Oracle 18c's usable charset."
     )
+    skip_marker = pytest.mark.skip(reason=skip_reason)
+
     for item in items:
-        if item.name in _ORACLE_18C_SKIP_TESTS:
+        if item.name in _ORACLE_18C_SKIP_TEST_NAMES:
             item.add_marker(skip_marker)
 
 
