@@ -165,7 +165,7 @@ class TestOracleFunctionFormatMixin:
     def test_cast_types_wrap_result(self, dialect):
         func = core.FunctionCall(dialect, "MAX", core.Column(dialect, "v"))
         func = func.cast("CLOB")
-        assert dialect.format_function_call(func) == ("CAST(MAX(v) AS CLOB)", ())
+        assert func.to_sql() == ("CAST(MAX(v) AS CLOB)", ())
 
 
 class TestStringFunctionFactories:
