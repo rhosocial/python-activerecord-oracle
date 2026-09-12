@@ -40,7 +40,7 @@ def _build_table(dialect):
             ColumnDefinition(dialect, "flag", BooleanType(dialect),
                 constraints=[ColumnConstraint(dialect, ColumnConstraintType.NOT_NULL),
                              ColumnConstraint(dialect, ColumnConstraintType.DEFAULT, default_value=True)]),
-            ColumnDefinition(dialect, "code", VarCharType(16, dialect=dialect)),
+            ColumnDefinition(dialect, "code", VarCharType(length=16, dialect=dialect)),
             ColumnDefinition(dialect, "created_at", TimestampType(dialect=dialect)),
         ],
     )
