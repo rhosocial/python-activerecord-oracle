@@ -1,7 +1,7 @@
 # src/rhosocial/activerecord/backend/impl/oracle/mixins/set_operation.py
 """Oracle set-operation formatting mixin."""
 
-from typing import List, Optional, Tuple
+from typing import Tuple
 
 
 class OracleSetOperationMixin:
@@ -33,26 +33,7 @@ class OracleSetOperationMixin:
     def supports_set_operation_for_update(self) -> bool:
         return False
 
-    def format_set_operation_expression(
-        self,
-        left,
-        right,
-        operation: str,
-        alias: Optional[str],
-        all_: bool,
-        order_by_clause=None,
-        limit_offset_clause=None,
-        for_update_clause=None,
-    ) -> Tuple[str, Tuple]:
-        if operation.upper() == "EXCEPT":
-            operation = "MINUS"
-        return super().format_set_operation_expression(
-            left,
-            right,
-            operation,
-            alias,
-            all_,
-            order_by_clause,
-            limit_offset_clause,
-            for_update_clause,
-        )
+    def format_set_operation_expression(self, expr) -> Tuple[str, Tuple]:
+        if expr.operation.upper() == "EXCEPT":
+            expr.operation = "MINUS"
+        return super().format_set_operation_expression(expr)
