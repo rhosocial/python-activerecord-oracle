@@ -5,21 +5,20 @@ Root pytest configuration file for the rhosocial-activerecord-oracle package.
 Configures the environment for the testsuite to find backend-specific implementations.
 """
 import os
+import sys
 import pytest
 
-# Set the environment variable for provider registry BEFORE importing providers,
-# so that the registry module can find it.
+# Set the environment variable for provider registry BEFORE importing providers.
 os.environ.setdefault(
     'TESTSUITE_PROVIDER_REGISTRY',
     'providers.registry:provider_registry'
 )
 
 # Import providers to register them with the registry.
-# This must happen early so that the testsuite's conftest can find providers.
 try:
     import providers  # noqa: F401
-except Exception:
-    pass  # If providers import fails, scenario-based skip still works via YAML
+except Exception as exc:
+    print(f"[conftest] providers import warning: {exc}", file=sys.stderr)
 
 
 # --- Oracle 18c skip configuration ---
@@ -35,51 +34,50 @@ _ORACLE_18C_SKIP_TEST_NAMES = frozenset({
     "test_unicode_json_fixture_json_field_round_trip",
 })
 
-_skip_reason = (
+_SKIP_REASON = (
     "Oracle 18c AL32UTF8 cannot round-trip supplementary-plane characters "
     "(U+10000+). BMP-only tests cover Oracle 18c's usable charset."
 )
 
 
 def _detect_oracle_18c() -> bool:
-    """Read the scenario YAML directly to detect Oracle 18c.
-
-    We avoid depending on SCENARIO_MAP because the providers package
-    may not have finished initializing at conftest collection time.
-    """
+    """Read the scenario YAML directly to detect Oracle 18c."""
     try:
         import yaml
     except ImportError:
+        print("[conftest] yaml not available, skipping 18c detection", file=sys.stderr)
         return False
 
     config_path = os.getenv("ORACLE_SCENARIOS_CONFIG_PATH")
     if not config_path:
         config_path = os.path.join(os.path.dirname(__file__), "config", "oracle_scenarios.yaml")
     if not config_path or not os.path.exists(config_path):
+        print(f"[conftest] no config at {config_path}", file=sys.stderr)
         return False
     try:
         with open(config_path) as f:
             data = yaml.safe_load(f) or {}
-        for name in (data.get("scenarios") or {}):
-            if "18c" in name:
-                return True
-    except Exception:
-        pass
-    return False
-
-
-_IS_ORACLE_18C = _detect_oracle_18c()
+        scenarios = data.get("scenarios") or {}
+        found = any("18c" in name for name in scenarios)
+        print(f"[conftest] scenarios={list(scenarios.keys())}, is_18c={found}", file=sys.stderr)
+        return found
+    except Exception as exc:
+        print(f"[conftest] YAML read error: {exc}", file=sys.stderr)
+        return False
 
 
 def pytest_collection_modifyitems(config, items):
     """Skip supplementary-plane Unicode tests on Oracle 18c."""
-    if not _IS_ORACLE_18C:
+    if not _detect_oracle_18c():
         return
 
-    skip_marker = pytest.mark.skip(reason=_skip_reason)
+    skip_marker = pytest.mark.skip(reason=_SKIP_REASON)
+    count = 0
     for item in items:
         if item.name in _ORACLE_18C_SKIP_TEST_NAMES:
             item.add_marker(skip_marker)
+            count += 1
+    print(f"[conftest] Marked {count} tests as skip for Oracle 18c", file=sys.stderr)
 
 
 @pytest.fixture(scope="session", autouse=True)
