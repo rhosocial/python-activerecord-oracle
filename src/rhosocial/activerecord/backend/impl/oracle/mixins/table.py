@@ -28,7 +28,7 @@ class OracleTableMixin(object):
     * External tables (``EXTERNAL ORACLE_LOADER``).
     """
 
-    def supports_table_like_syntax(self) -> bool:
+    def supports_create_table_like(self) -> bool:
         """Oracle has no CREATE TABLE LIKE; use CTAS instead."""
         return False
 

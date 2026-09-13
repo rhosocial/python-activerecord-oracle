@@ -130,6 +130,7 @@ from .mixins import (
     OracleViewMixin,
 )
 from .protocols.partition import OraclePartitionSupport
+from .reserved_words import ORACLE_RESERVED_WORDS
 
 if TYPE_CHECKING:
     pass
@@ -280,6 +281,7 @@ class OracleDialect(
                 :meth:`backend.introspect_and_adapt`.
         """
         super().__init__()
+        self._reserved_words = ORACLE_RESERVED_WORDS
         if version is not None:
             self.version = version
 
@@ -303,22 +305,27 @@ class OracleDialect(
 
         return OracleSchemaDiffer()
 
-    def format_identifier(self, identifier) -> str:
-        """Format identifier for Oracle (uppercase, no quoting).
+    def format_identifier(self, identifier: str, need_quote: bool = True) -> str:
+        """Format identifier for Oracle with double-quote quoting.
 
-        Oracle folds unquoted identifiers to uppercase, so uppercasing is
-        sufficient for the common case. Callers that need explicit quoting
-        (e.g. bulk DML on externally-sourced identifiers) must quote via a
-        dedicated helper, since global quoting would alter every generated
-        statement's appearance.
+        Oracle folds unquoted identifiers to uppercase. When quoting is
+        enabled (the default), identifiers are uppercased, escaped, and
+        wrapped in double quotes. When need_quote=False, the identifier
+        is returned as-is without quoting or uppercasing.
         """
-        if isinstance(identifier, str):
-            return identifier.upper()
-        # Handle expression objects like TableExpression
-        name = getattr(identifier, 'name', None)
-        if name is not None:
-            return str(name).upper()
-        return str(identifier).upper()
+        if not need_quote:
+            if self.is_reserved_word(identifier):
+                import warnings
+                from rhosocial.activerecord.backend.warnings import IdentifierQuotingWarning
+                warnings.warn(
+                    f"Identifier '{identifier}' is a reserved word in {self.name} "
+                    f"and may cause SQL errors without quoting.",
+                    IdentifierQuotingWarning,
+                    stacklevel=2,
+                )
+            return identifier
+        escaped = identifier.replace('"', '""')
+        return f'"{escaped.upper()}"'
 
     def supports_explain_analyze(self) -> bool:
         """Oracle does not support EXPLAIN ANALYZE in the standard sense.
