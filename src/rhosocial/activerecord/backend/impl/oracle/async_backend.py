@@ -780,7 +780,11 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         This method uses the Expression-Dialect pattern to generate proper Oracle SQL.
         """
         from rhosocial.activerecord.backend.base.operations import _is_sql_expression
-        from rhosocial.activerecord.backend.expression import InsertExpression, Literal
+        from rhosocial.activerecord.backend.expression import (
+            InsertExpression,
+            Literal,
+            TableExpression,
+        )
         from rhosocial.activerecord.backend.expression.statements import ValuesSource, ReturningClause
         from rhosocial.activerecord.backend.expression import Column as ExprColumn
         from rhosocial.activerecord.backend.options import ExecutionOptions, StatementType
@@ -806,11 +810,16 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             returning_expressions = [ExprColumn(self.dialect, col) for col in options.returning_columns]
             returning_clause = ReturningClause(self.dialect, returning_expressions)
 
-        # Create InsertExpression and generate SQL
-        table_name = f"{options.schema_name}.{options.table}" if options.schema_name else options.table
+        # Create InsertExpression and generate SQL. Pass the schema separately
+        # via TableExpression so qualified identifiers are quoted per segment.
+        table_ref = (
+            TableExpression(self.dialect, options.table, schema_name=options.schema_name)
+            if options.schema_name
+            else options.table
+        )
         insert_expr = InsertExpression(
             dialect=self.dialect,
-            into=table_name,
+            into=table_ref,
             source=values_source,
             columns=list(options.data.keys()),
             returning=returning_clause,
@@ -871,7 +880,7 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         This method uses the Expression-Dialect pattern to generate proper Oracle SQL.
         """
         from rhosocial.activerecord.backend.base.operations import _is_sql_expression
-        from rhosocial.activerecord.backend.expression import UpdateExpression, Literal
+        from rhosocial.activerecord.backend.expression import UpdateExpression, Literal, TableExpression
         from rhosocial.activerecord.backend.expression.statements import ReturningClause
         from rhosocial.activerecord.backend.expression import Column as ExprColumn
         from rhosocial.activerecord.backend.options import ExecutionOptions, StatementType
@@ -890,11 +899,16 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             returning_expressions = [ExprColumn(self.dialect, col) for col in options.returning_columns]
             returning_clause = ReturningClause(self.dialect, returning_expressions)
 
-        # Create UpdateExpression and generate SQL
-        table_name = f"{options.schema_name}.{options.table}" if options.schema_name else options.table
+        # Create UpdateExpression and generate SQL. Pass the schema separately
+        # via TableExpression so qualified identifiers are quoted per segment.
+        table_ref = (
+            TableExpression(self.dialect, options.table, schema_name=options.schema_name)
+            if options.schema_name
+            else options.table
+        )
         update_expr = UpdateExpression(
             dialect=self.dialect,
-            table=table_name,
+            table=table_ref,
             assignments=assignments,
             where=options.where,
             returning=returning_clause,
@@ -936,7 +950,7 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         Oracle requires RETURNING ... INTO syntax with output bind variables.
         This method uses the Expression-Dialect pattern to generate proper Oracle SQL.
         """
-        from rhosocial.activerecord.backend.expression import DeleteExpression
+        from rhosocial.activerecord.backend.expression import DeleteExpression, TableExpression
         from rhosocial.activerecord.backend.expression.statements import ReturningClause
         from rhosocial.activerecord.backend.expression import Column as ExprColumn
         from rhosocial.activerecord.backend.options import ExecutionOptions, StatementType
@@ -947,11 +961,16 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             returning_expressions = [ExprColumn(self.dialect, col) for col in options.returning_columns]
             returning_clause = ReturningClause(self.dialect, returning_expressions)
 
-        # Create DeleteExpression and generate SQL
-        table_name = f"{options.schema_name}.{options.table}" if options.schema_name else options.table
+        # Create DeleteExpression and generate SQL. Pass the schema separately
+        # via TableExpression so qualified identifiers are quoted per segment.
+        table_ref = (
+            TableExpression(self.dialect, options.table, schema_name=options.schema_name)
+            if options.schema_name
+            else options.table
+        )
         delete_expr = DeleteExpression(
             dialect=self.dialect,
-            tables=table_name,
+            tables=table_ref,
             where=options.where,
             returning=returning_clause,
         )
