@@ -50,9 +50,7 @@ class TestOracleIntervalPartition:
         )
         sql, params = c.to_sql()
         assert sql == (
-            " PARTITION BY RANGE (created_at) "
-            "INTERVAL (NUMTOYMINTERVAL(1, 'YEAR')) "
-            "(PARTITION P0 VALUES LESS THAN ('2026-01-01'))"
+            ' PARTITION BY RANGE ("CREATED_AT") INTERVAL (NUMTOYMINTERVAL(1, \'YEAR\')) (PARTITION "P0" VALUES LESS THAN (\'2026-01-01\'))'
         )
         assert params == ()
 
@@ -123,7 +121,7 @@ class TestOracleReferencePartition:
         d = _dialect()
         r = OracleReferencePartitionClause(d, "fk_orders_customer")
         sql, params = r.to_sql()
-        assert sql == " PARTITION BY REFERENCE (FK_ORDERS_CUSTOMER)"
+        assert sql == ' PARTITION BY REFERENCE ("FK_ORDERS_CUSTOMER")'
         assert params == ()
 
     def test_reference_identifier_quoted(self):
@@ -189,10 +187,10 @@ class TestOracleCompositePartition:
             ],
         )
         sql, params = c.to_sql()
-        assert "PARTITION BY RANGE (created_at)" in sql
-        assert "SUBPARTITION BY HASH (id) SUBPARTITIONS 2" in sql
-        assert "PARTITION P1 VALUES LESS THAN ('2026-01-01')" in sql
-        assert "PARTITION P2 VALUES LESS THAN (MAXVALUE)" in sql
+        assert 'PARTITION BY RANGE ("CREATED_AT")' in sql
+        assert 'SUBPARTITION BY HASH ("ID") SUBPARTITIONS 2' in sql
+        assert "PARTITION \"P1\" VALUES LESS THAN ('2026-01-01')" in sql
+        assert 'PARTITION "P2" VALUES LESS THAN (MAXVALUE)' in sql
         assert params == ()
 
     def test_range_hash_composite_with_explicit_subpartitions(self):
@@ -219,7 +217,7 @@ class TestOracleCompositePartition:
             ],
         )
         sql, _ = c.to_sql()
-        assert "(SUBPARTITION P1_SUB1, SUBPARTITION P1_SUB2)" in sql
+        assert '(SUBPARTITION "P1_SUB1", SUBPARTITION "P1_SUB2")' in sql
 
     def test_list_hash_composite(self):
         d = _dialect()
@@ -237,8 +235,8 @@ class TestOracleCompositePartition:
             ],
         )
         sql, _ = c.to_sql()
-        assert "PARTITION BY LIST (region)" in sql
-        assert "SUBPARTITION BY HASH (id) SUBPARTITIONS 3" in sql
+        assert 'PARTITION BY LIST ("REGION")' in sql
+        assert 'SUBPARTITION BY HASH ("ID") SUBPARTITIONS 3' in sql
 
     def test_subpartition_by_list_template(self):
         d = _dialect()
@@ -246,7 +244,7 @@ class TestOracleCompositePartition:
             d, OracleSubpartitionStrategy.LIST, keys=[Column(d, "region")]
         )
         sql, _ = sub.to_sql()
-        assert sql == " SUBPARTITION BY LIST (region)"
+        assert sql == ' SUBPARTITION BY LIST ("REGION")'
 
     def test_subpartition_by_range_template(self):
         d = _dialect()
@@ -254,7 +252,7 @@ class TestOracleCompositePartition:
             d, OracleSubpartitionStrategy.RANGE, keys=[Column(d, "id")]
         )
         sql, _ = sub.to_sql()
-        assert sql == " SUBPARTITION BY RANGE (id)"
+        assert sql == ' SUBPARTITION BY RANGE ("ID")'
 
     def test_subpartition_count_must_be_positive(self):
         d = _dialect()
@@ -281,7 +279,7 @@ class TestOracleCompositePartition:
             name="sub1", less_than=[OraclePartitionValue(d, 100)]
         )
         sql, _ = d.format_subpartition_definition(sub_def)
-        assert sql == "SUBPARTITION SUB1 VALUES LESS THAN (100)"
+        assert sql == 'SUBPARTITION "SUB1" VALUES LESS THAN (100)'
 
     def test_subpartition_definition_with_in_values(self):
         d = _dialect()
@@ -289,7 +287,7 @@ class TestOracleCompositePartition:
             name="sub1", in_values=[OraclePartitionValue(d, "EAST")]
         )
         sql, _ = d.format_subpartition_definition(sub_def)
-        assert sql == "SUBPARTITION SUB1 VALUES ('EAST')"
+        assert sql == 'SUBPARTITION "SUB1" VALUES (\'EAST\')'
 
     def test_subpartition_definition_name_required(self):
         with pytest.raises(ValueError):
@@ -317,8 +315,8 @@ class TestOracleCompositePartition:
             d, [Column(d, "id")], partitions_count=4, subpartition_by=sub
         )
         sql, _ = c.to_sql()
-        assert "PARTITION BY HASH (id)" in sql
-        assert "SUBPARTITION BY HASH (region) SUBPARTITIONS 2" in sql
+        assert 'PARTITION BY HASH ("ID")' in sql
+        assert 'SUBPARTITION BY HASH ("REGION") SUBPARTITIONS 2' in sql
         assert sql.endswith("PARTITIONS 4")
 
     def test_subpartition_by_rejects_non_clause(self):

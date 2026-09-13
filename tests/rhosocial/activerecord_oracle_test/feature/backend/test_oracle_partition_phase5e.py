@@ -46,7 +46,7 @@ class TestOracleAddPartition:
             OraclePartitionDefinition(name="p3", less_than=[OraclePartitionValue(d, 200)]),
         )
         sql, params = e.to_sql()
-        assert sql == "ALTER TABLE ORDERS ADD PARTITION P3 VALUES LESS THAN (200)"
+        assert sql == 'ALTER TABLE "ORDERS" ADD PARTITION "P3" VALUES LESS THAN (200)'
         assert params == ()
 
     def test_add_list_partition(self):
@@ -56,7 +56,7 @@ class TestOracleAddPartition:
             OraclePartitionDefinition(name="p_south", in_values=[OraclePartitionValue(d, "SOUTH")]),
         )
         sql, _ = e.to_sql()
-        assert sql == "ALTER TABLE ORDERS ADD PARTITION P_SOUTH VALUES ('SOUTH')"
+        assert sql == 'ALTER TABLE "ORDERS" ADD PARTITION "P_SOUTH" VALUES (\'SOUTH\')'
 
     def test_add_pre_11g_raises(self):
         d = OracleDialect(version=(10, 0, 0))
@@ -91,14 +91,14 @@ class TestOracleDropPartition:
         d = _dialect()
         e = OracleDropPartitionExpression(d, "orders", "p2")
         sql, params = e.to_sql()
-        assert sql == "ALTER TABLE ORDERS DROP PARTITION P2"
+        assert sql == 'ALTER TABLE "ORDERS" DROP PARTITION "P2"'
         assert params == ()
 
     def test_drop_with_update_indexes(self):
         d = _dialect()
         e = OracleDropPartitionExpression(d, "orders", "p2", update_indexes=True)
         sql, _ = e.to_sql()
-        assert sql == "ALTER TABLE ORDERS DROP PARTITION P2 UPDATE INDEXES"
+        assert sql == 'ALTER TABLE "ORDERS" DROP PARTITION "P2" UPDATE INDEXES'
 
     def test_drop_pre_11g_raises(self):
         d = OracleDialect(version=(10, 0, 0))
@@ -130,8 +130,7 @@ class TestOracleSplitPartition:
         )
         sql, params = e.to_sql()
         assert sql == (
-            "ALTER TABLE ORDERS SPLIT PARTITION P_MAX AT (200) INTO "
-            "(PARTITION P2, PARTITION P_MAX)"
+            'ALTER TABLE "ORDERS" SPLIT PARTITION "P_MAX" AT (200) INTO (PARTITION "P2", PARTITION "P_MAX")'
         )
         assert params == ()
 
@@ -186,8 +185,7 @@ class TestOracleMergePartitions:
         )
         sql, params = e.to_sql()
         assert sql == (
-            "ALTER TABLE ORDERS MERGE PARTITIONS P1, P2 INTO "
-            "PARTITION P12"
+            'ALTER TABLE "ORDERS" MERGE PARTITIONS "P1", "P2" INTO PARTITION "P12"'
         )
         assert params == ()
 
@@ -220,8 +218,7 @@ class TestOracleExchangePartition:
         e = OracleExchangePartitionExpression(d, "orders", "p1", "orders_p1_staging")
         sql, params = e.to_sql()
         assert sql == (
-            "ALTER TABLE ORDERS EXCHANGE PARTITION P1 WITH TABLE "
-            "ORDERS_P1_STAGING WITH VALIDATION"
+            'ALTER TABLE "ORDERS" EXCHANGE PARTITION "P1" WITH TABLE "ORDERS_P1_STAGING" WITH VALIDATION'
         )
         assert params == ()
 
@@ -233,8 +230,7 @@ class TestOracleExchangePartition:
         )
         sql, _ = e.to_sql()
         assert sql == (
-            "ALTER TABLE ORDERS EXCHANGE PARTITION P1 WITH TABLE "
-            "ORDERS_P1_STAGING INCLUDING INDEXES WITHOUT VALIDATION"
+            'ALTER TABLE "ORDERS" EXCHANGE PARTITION "P1" WITH TABLE "ORDERS_P1_STAGING" INCLUDING INDEXES WITHOUT VALIDATION'
         )
 
     def test_exchange_pre_11g_raises(self):
@@ -259,14 +255,14 @@ class TestOracleMovePartition:
         d = _dialect()
         e = OracleMovePartitionExpression(d, "orders", "p1")
         sql, params = e.to_sql()
-        assert sql == "ALTER TABLE ORDERS MOVE PARTITION P1"
+        assert sql == 'ALTER TABLE "ORDERS" MOVE PARTITION "P1"'
         assert params == ()
 
     def test_move_with_tablespace(self):
         d = _dialect()
         e = OracleMovePartitionExpression(d, "orders", "p1", tablespace_name="users")
         sql, _ = e.to_sql()
-        assert sql == "ALTER TABLE ORDERS MOVE PARTITION P1 TABLESPACE USERS"
+        assert sql == 'ALTER TABLE "ORDERS" MOVE PARTITION "P1" TABLESPACE "USERS"'
 
     def test_move_pre_11g_raises(self):
         d = OracleDialect(version=(10, 0, 0))
@@ -285,14 +281,14 @@ class TestOracleTruncatePartition:
         d = _dialect()
         e = OracleTruncatePartitionExpression(d, "orders", "p1")
         sql, params = e.to_sql()
-        assert sql == "ALTER TABLE ORDERS TRUNCATE PARTITION P1"
+        assert sql == 'ALTER TABLE "ORDERS" TRUNCATE PARTITION "P1"'
         assert params == ()
 
     def test_truncate_with_update_indexes(self):
         d = _dialect()
         e = OracleTruncatePartitionExpression(d, "orders", "p1", update_indexes=True)
         sql, _ = e.to_sql()
-        assert sql == "ALTER TABLE ORDERS TRUNCATE PARTITION P1 UPDATE INDEXES"
+        assert sql == 'ALTER TABLE "ORDERS" TRUNCATE PARTITION "P1" UPDATE INDEXES'
 
     def test_truncate_pre_11g_raises(self):
         d = OracleDialect(version=(10, 0, 0))
