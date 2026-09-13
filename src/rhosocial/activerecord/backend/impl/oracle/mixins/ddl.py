@@ -28,10 +28,6 @@ class OracleDDLMixin:
         PL/SQL block that checks ``user_tables`` and only executes the DDL
         when the table does not exist, making creation idempotent.
         """
-        from rhosocial.activerecord.backend.expression.statements import (
-            ColumnConstraintType,
-            TableConstraintType,
-        )
         all_params: List[Any] = []
         parts = ["CREATE TABLE"]
         if expr.temporary:
@@ -40,16 +36,12 @@ class OracleDDLMixin:
 
         column_parts: List[str] = []
         for col_def in expr.columns:
-            col_sql, col_params = self.format_column_definition(
-                col_def, ColumnConstraintType
-            )
+            col_sql, col_params = self.format_column_definition(col_def)
             column_parts.append(col_sql)
             all_params.extend(col_params)
 
         for t_const in expr.table_constraints:
-            const_sql, const_params = self.format_table_constraint(
-                t_const, TableConstraintType
-            )
+            const_sql, const_params = self.format_table_constraint(t_const)
             column_parts.append(const_sql)
             all_params.extend(const_params)
 
@@ -160,6 +152,9 @@ class OracleDDLMixin:
         self,
         t_const: "TableConstraint",
     ) -> Tuple[str, tuple]:
+        from rhosocial.activerecord.backend.expression.statements.ddl_table import (
+            TableConstraintType,
+        )
         parts: List[str] = []
         params: List[Any] = []
         if t_const.name:
