@@ -127,11 +127,33 @@ class OracleFeaturesMixin:
 
     # --- EXPLAIN ------------------------------------------------------
     def supports_explain_analyze(self) -> bool:
-        return True
+        """Oracle does not support EXPLAIN ANALYZE in the standard sense."""
+        return False
 
     def supports_explain_format(self, format_type: str) -> bool:
-        format_type_upper = format_type.upper()
-        return format_type_upper in ("TEXT", "JSON", "XML", "HTML", "SERIAL")
+        """Oracle EXPLAIN PLAN writes rows to PLAN_TABLE; format options are not part of the SQL grammar."""
+        return False
+
+    # --- Locking ------------------------------------------------------
+    def supports_for_update(self) -> bool:
+        """Oracle does support SELECT ... FOR UPDATE natively, but the
+        ActiveRecord query builder emits composite SELECT shapes (with
+        DISTINCT / GROUP BY) that Oracle rejects for FOR UPDATE
+        (ORA-02014)."""
+        return False
+
+    # --- Auto-increment / Generated columns ---------------------------
+    def supports_auto_increment(self) -> bool:
+        return self.version >= (12, 0, 0)
+
+    def supports_generated_columns(self) -> bool:
+        return self.version >= (11, 0, 0)
+
+    def supports_stored_generated_columns(self) -> bool:
+        return self.supports_generated_columns()
+
+    def supports_virtual_generated_columns(self) -> bool:
+        return self.supports_generated_columns()
 
     # --- Graph --------------------------------------------------------
     def supports_graph_match(self) -> bool:

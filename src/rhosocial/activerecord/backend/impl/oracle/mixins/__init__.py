@@ -45,6 +45,8 @@ from .truncate import OracleTruncateMixin
 from .types import OracleTypeSupportMixin, OracleTypeSuggestionMixin
 from .vector import OracleVectorMixin
 from .view import OracleViewMixin
+from .identifier import OracleIdentifierMixin
+from .explain import OracleExplainMixin
 
 __all__ = [
     "OracleAnalyzeMixin",
@@ -88,4 +90,6 @@ __all__ = [
     "OracleTypeSuggestionMixin",
     "OracleVectorMixin",
     "OracleViewMixin",
+    "OracleIdentifierMixin",
+    "OracleExplainMixin",
 ]

@@ -84,7 +84,6 @@ from rhosocial.activerecord.backend.dialect.mixins import (
     DQLMixin,
     DMLMixin,
     PartitionMixin,
-    GraphTableMixin,
 )
 from .mixins import (
     OracleAnalyzeMixin,
@@ -126,6 +125,8 @@ from .mixins import (
     OracleTypeSuggestionMixin,
     OracleVectorMixin,
     OracleViewMixin,
+    OracleIdentifierMixin,
+    OracleExplainMixin,
 )
 from .protocols.partition import OraclePartitionSupport
 from .reserved_words import ORACLE_RESERVED_WORDS
@@ -179,6 +180,8 @@ class OracleDialect(
     OracleTypeSuggestionMixin,
     OracleVectorMixin,
     OracleViewMixin,
+    OracleIdentifierMixin,
+    OracleExplainMixin,
     # ================================================================
     # Generic fallback mixins – defaults that Oracle-specific mixins
     # above can override.
@@ -220,7 +223,7 @@ class OracleDialect(
     PartitionMixin,
     GraphTableMixin,
     # ================================================================
-    # Protocols (type-annotation guarentee only)
+    # Protocols (type-annotation guarantee only)
     # ================================================================
     SQLXMLSupport,
     SQLXMLParsingSupport,
@@ -300,113 +303,3 @@ class OracleDialect(
         )
 
         return OracleSchemaDiffer()
-
-    def format_identifier(self, identifier: str, need_quote: bool = True) -> str:
-        """Format identifier for Oracle with double-quote quoting.
-
-        Oracle folds unquoted identifiers to uppercase. When quoting is
-        enabled (the default), identifiers are uppercased, escaped, and
-        wrapped in double quotes. When need_quote=False, the identifier
-        is returned as-is without quoting or uppercasing.
-        """
-        if not need_quote:
-            if self.is_reserved_word(identifier):
-                import warnings
-                from rhosocial.activerecord.backend.warnings import IdentifierQuotingWarning
-                warnings.warn(
-                    f"Identifier '{identifier}' is a reserved word in {self.name} "
-                    f"and may cause SQL errors without quoting.",
-                    IdentifierQuotingWarning,
-                    stacklevel=2,
-                )
-            return identifier
-        escaped = identifier.replace('"', '""')
-        return f'"{escaped.upper()}"'
-
-    def format_table(self, expr) -> Tuple[str, Tuple]:
-        """Format a :class:`TableExpression` for Oracle.
-
-        Oracle-specific ``@dblink`` suffixes and flashback clauses carried on
-        the expression are rendered after the name, then the optional alias.
-        """
-        schema_name = getattr(expr, "schema_name", None)
-        alias = getattr(expr, "alias", None)
-        dblink = getattr(expr, "dblink", None)
-        flashback = getattr(expr, "flashback", None)
-        name_need_quote = getattr(expr, "name_need_quote", True)
-        schema_need_quote = getattr(expr, "schema_need_quote", True)
-        alias_need_quote = getattr(expr, "alias_need_quote", True)
-
-        if schema_name:
-            table_sql = (
-                f"{self.format_identifier(schema_name, schema_need_quote)}."
-                f"{self.format_identifier(expr.name, name_need_quote)}"
-            )
-        else:
-            table_sql = self.format_identifier(expr.name, name_need_quote)
-
-        table_params: Tuple = ()
-        if dblink:
-            table_sql = f"{table_sql}@{self.format_identifier(dblink)}"
-        if flashback is not None:
-            flash_sql, flash_params = flashback.to_sql()
-            table_sql = f"{table_sql} {flash_sql}"
-            table_params = tuple(flash_params)
-        if alias:
-            table_sql = f"{table_sql} {self.format_identifier(alias, alias_need_quote)}"
-        return table_sql, table_params
-
-    def supports_explain_analyze(self) -> bool:
-        """Oracle does not support EXPLAIN ANALYZE in the standard sense.
-
-        EXPLAIN PLAN only estimates the execution plan; it does not run the
-        statement, so ``ANALYZE`` semantics (which actually execute the
-        statement and report runtime statistics) are unavailable.
-        """
-        return False
-
-    def supports_explain_format(self, format_type: str) -> bool:
-        """Oracle EXPLAIN PLAN writes rows to PLAN_TABLE; format options are not part of the SQL grammar."""
-        return False
-
-    def supports_for_update(self) -> bool:
-        """Oracle does support ``SELECT ... FOR UPDATE`` natively, but the
-        ActiveRecord query builder emits composite ``SELECT`` shapes (with
-        ``DISTINCT`` / ``GROUP BY``) that Oracle rejects for ``FOR UPDATE``
-        (ORA-02014).  Reporting ``False`` here keeps the testsuite on the
-        non-locking fallback and avoids spurious failures; backends that
-        need strict serialisability should compose their own
-        ``for_update().all()`` calls instead.
-        """
-        return False
-
-    def supports_auto_increment(self) -> bool:
-        return self.version >= (12, 0, 0)
-
-    def supports_generated_columns(self) -> bool:
-        return self.version >= (11, 0, 0)
-
-    def supports_stored_generated_columns(self) -> bool:
-        return self.supports_generated_columns()
-
-    def supports_virtual_generated_columns(self) -> bool:
-        return self.supports_generated_columns()
-
-    def format_explain_statement(self, expr: "ExplainExpression") -> Tuple[str, tuple]:
-        """Format EXPLAIN PLAN FOR <stmt> for Oracle.
-
-        Oracle's ``EXPLAIN PLAN FOR`` statement only writes rows to
-        ``PLAN_TABLE``; it does not return a result set the way the testsuite
-        expects from ``backend.fetch_all(explain_sql, params)``. The testsuite
-        only asserts that ``explain().aggregate()`` returns a non-empty list.
-
-        We return a SELECT that always yields at least one row so that
-        ``aggregate()`` can honour the contract without depending on the
-        per-session PLAN_TABLE state. Real EXPLAIN PLAN semantics can be
-        obtained by issuing ``EXPLAIN PLAN FOR <statement_sql>`` explicitly
-        against the backend (see the OracleBackend.explain_plan helper if
-        wired up). ANALYZE, FORMAT, COSTS, BUFFERS, VERBOSE, SETTINGS and
-        WAL options are PostgreSQL/MySQL-specific and have no Oracle
-        equivalent; they are silently ignored.
-        """
-        return "SELECT 1 AS EXPLAIN_PLAN FROM DUAL", ()

@@ -7,11 +7,44 @@ unpivot, hint, for_update) back through the expression's own
 the core ``ExpressionMixin``.
 """
 
-from typing import List, Tuple
+from typing import List, Tuple, TYPE_CHECKING
 
 
 class OracleExpressionMixin:
     """Oracle-specific expression formatting that delegates to ``to_sql``."""
+
+    def format_table(self, expr) -> Tuple[str, Tuple]:
+        """Format a :class:`TableExpression` for Oracle.
+
+        Oracle-specific ``@dblink`` suffixes and flashback clauses carried on
+        the expression are rendered after the name, then the optional alias.
+        """
+        schema_name = getattr(expr, "schema_name", None)
+        alias = getattr(expr, "alias", None)
+        dblink = getattr(expr, "dblink", None)
+        flashback = getattr(expr, "flashback", None)
+        name_need_quote = getattr(expr, "name_need_quote", True)
+        schema_need_quote = getattr(expr, "schema_need_quote", True)
+        alias_need_quote = getattr(expr, "alias_need_quote", True)
+
+        if schema_name:
+            table_sql = (
+                f"{self.format_identifier(schema_name, schema_need_quote)}."
+                f"{self.format_identifier(expr.name, name_need_quote)}"
+            )
+        else:
+            table_sql = self.format_identifier(expr.name, name_need_quote)
+
+        table_params: Tuple = ()
+        if dblink:
+            table_sql = f"{table_sql}@{self.format_identifier(dblink)}"
+        if flashback is not None:
+            flash_sql, flash_params = flashback.to_sql()
+            table_sql = f"{table_sql} {flash_sql}"
+            table_params = tuple(flash_params)
+        if alias:
+            table_sql = f"{table_sql} {self.format_identifier(alias, alias_need_quote)}"
+        return table_sql, table_params
 
     def format_connect_by(self, expr) -> Tuple[str, List]:
         return expr.to_sql()
