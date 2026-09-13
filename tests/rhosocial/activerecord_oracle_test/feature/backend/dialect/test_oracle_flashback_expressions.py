@@ -2,7 +2,8 @@
 """Tests for Oracle FLASHBACK family expressions.
 
 Covers the ``AS OF`` / ``VERSIONS BETWEEN`` flashback query clauses, their
-attachment to table references via ``format_table(..., flashback=...)``,
+attachment to table references via a ``TableExpression`` carrying a
+``flashback`` clause,
 the ``FLASHBACK TABLE`` statement (TO BEFORE DROP / TO SCN / TO TIMESTAMP,
 RENAME TO, ENABLE/DISABLE TRIGGERS), and the ``PURGE`` statement, plus the
 ``(10, 0, 0)`` version boundary.
@@ -13,7 +14,7 @@ Pure-construction tests: no database connection is required.
 import pytest
 
 from rhosocial.activerecord.backend.dialect import UnsupportedFeatureError
-from rhosocial.activerecord.backend.expression.core import Literal
+from rhosocial.activerecord.backend.expression.core import Literal, TableExpression
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.expression import (
     OracleAsOfClause,
@@ -67,20 +68,26 @@ class TestOracleAsOfClause:
         as_of = OracleAsOfClause(
             dialect, OracleAsOfMode.TIMESTAMP, "(SYSTIMESTAMP - INTERVAL '1' DAY)"
         )
-        sql, params = dialect.format_table("t", flashback=as_of)
-        assert sql == "T AS OF TIMESTAMP (SYSTIMESTAMP - INTERVAL '1' DAY)"
+        table = TableExpression(dialect, "t")
+        table.flashback = as_of
+        sql, params = dialect.format_table(table)
+        assert sql == '"T" AS OF TIMESTAMP (SYSTIMESTAMP - INTERVAL \'1\' DAY)'
         assert params == ()
 
     def test_attached_with_alias(self, dialect):
         as_of = OracleAsOfClause(dialect, OracleAsOfMode.SCN, "100")
-        sql, params = dialect.format_table("t", alias="x", flashback=as_of)
-        assert sql == "T AS OF SCN 100 X"
+        table = TableExpression(dialect, "t", alias="x")
+        table.flashback = as_of
+        sql, params = dialect.format_table(table)
+        assert sql == '"T" AS OF SCN 100 "X"'
         assert params == ()
 
     def test_schema_qualified_with_flashback(self, dialect):
         as_of = OracleAsOfClause(dialect, OracleAsOfMode.SCN, "100")
-        sql, params = dialect.format_table("t", schema_name="scott", flashback=as_of)
-        assert sql == "SCOTT.T AS OF SCN 100"
+        table = TableExpression(dialect, "t", schema_name="scott")
+        table.flashback = as_of
+        sql, params = dialect.format_table(table)
+        assert sql == '"SCOTT"."T" AS OF SCN 100'
         assert params == ()
 
     def test_invalid_mode_rejected(self, dialect):
@@ -114,8 +121,10 @@ class TestOracleVersionsBetweenClause:
         versions = OracleVersionsBetweenClause(
             dialect, OracleVersionsBetweenMode.SCN, "100", "200"
         )
-        sql, params = dialect.format_table("t", flashback=versions)
-        assert sql == "T VERSIONS BETWEEN SCN 100 AND 200"
+        table = TableExpression(dialect, "t")
+        table.flashback = versions
+        sql, params = dialect.format_table(table)
+        assert sql == '"T" VERSIONS BETWEEN SCN 100 AND 200'
         assert params == ()
 
     def test_expression_bounds_bind_params(self, dialect):
@@ -138,7 +147,7 @@ class TestOracleFlashbackTableExpression:
     def test_to_before_drop(self, dialect):
         expr = OracleFlashbackTableExpression(dialect, "t", to_before_drop=True)
         sql, params = expr.to_sql()
-        assert sql == "FLASHBACK TABLE T TO BEFORE DROP"
+        assert sql == 'FLASHBACK TABLE "T" TO BEFORE DROP'
         assert params == ()
 
     def test_to_before_drop_rename_to(self, dialect):
@@ -146,13 +155,13 @@ class TestOracleFlashbackTableExpression:
             dialect, "t", to_before_drop=True, rename_to="t2"
         )
         sql, params = expr.to_sql()
-        assert sql == "FLASHBACK TABLE T TO BEFORE DROP RENAME TO T2"
+        assert sql == 'FLASHBACK TABLE "T" TO BEFORE DROP RENAME TO "T2"'
         assert params == ()
 
     def test_to_scn(self, dialect):
         expr = OracleFlashbackTableExpression(dialect, "t", to_scn=1234567)
         sql, params = expr.to_sql()
-        assert sql == "FLASHBACK TABLE T TO SCN 1234567"
+        assert sql == 'FLASHBACK TABLE "T" TO SCN 1234567'
         assert params == ()
 
     def test_to_timestamp(self, dialect):
@@ -160,7 +169,7 @@ class TestOracleFlashbackTableExpression:
             dialect, "t", to_timestamp="TIMESTAMP '2026-01-01 00:00:00'"
         )
         sql, params = expr.to_sql()
-        assert sql == "FLASHBACK TABLE T TO TIMESTAMP TIMESTAMP '2026-01-01 00:00:00'"
+        assert sql == 'FLASHBACK TABLE "T" TO TIMESTAMP TIMESTAMP \'2026-01-01 00:00:00\''
         assert params == ()
 
     def test_enable_triggers(self, dialect):
@@ -168,7 +177,7 @@ class TestOracleFlashbackTableExpression:
             dialect, "t", to_before_drop=True, enable_triggers=True
         )
         sql, params = expr.to_sql()
-        assert sql == "FLASHBACK TABLE T TO BEFORE DROP ENABLE TRIGGERS"
+        assert sql == 'FLASHBACK TABLE "T" TO BEFORE DROP ENABLE TRIGGERS'
         assert params == ()
 
     def test_disable_triggers(self, dialect):
@@ -176,13 +185,13 @@ class TestOracleFlashbackTableExpression:
             dialect, "t", to_timestamp="SYSTIMESTAMP", disable_triggers=True
         )
         sql, params = expr.to_sql()
-        assert sql == "FLASHBACK TABLE T TO TIMESTAMP SYSTIMESTAMP DISABLE TRIGGERS"
+        assert sql == 'FLASHBACK TABLE "T" TO TIMESTAMP SYSTIMESTAMP DISABLE TRIGGERS'
         assert params == ()
 
     def test_identifier_upper_cased(self, dialect):
         expr = OracleFlashbackTableExpression(dialect, "My_Table", to_before_drop=True)
         sql, params = expr.to_sql()
-        assert sql == "FLASHBACK TABLE MY_TABLE TO BEFORE DROP"
+        assert sql == 'FLASHBACK TABLE "MY_TABLE" TO BEFORE DROP'
         assert params == ()
 
     def test_no_target_rejected(self, dialect):
@@ -213,13 +222,13 @@ class TestOraclePurgeExpression:
     def test_purge_table(self, dialect):
         expr = OraclePurgeExpression(dialect, OraclePurgeObjectType.TABLE, "t")
         sql, params = expr.to_sql()
-        assert sql == "PURGE TABLE T"
+        assert sql == 'PURGE TABLE "T"'
         assert params == ()
 
     def test_purge_index(self, dialect):
         expr = OraclePurgeExpression(dialect, OraclePurgeObjectType.INDEX, "idx_t")
         sql, params = expr.to_sql()
-        assert sql == "PURGE INDEX IDX_T"
+        assert sql == 'PURGE INDEX "IDX_T"'
         assert params == ()
 
     def test_purge_recyclebin(self, dialect):
@@ -271,7 +280,7 @@ class TestOracleFlashbackVersionBoundary:
         assert OracleAsOfClause(d10, OracleAsOfMode.SCN, "1").to_sql()[0] == "AS OF SCN 1"
         assert OracleFlashbackTableExpression(
             d10, "t", to_before_drop=True
-        ).to_sql()[0] == "FLASHBACK TABLE T TO BEFORE DROP"
+        ).to_sql()[0] == 'FLASHBACK TABLE "T" TO BEFORE DROP'
         assert OraclePurgeExpression(
             d10, OraclePurgeObjectType.RECYCLEBIN
         ).to_sql()[0] == "PURGE RECYCLEBIN"

@@ -49,8 +49,8 @@ class TestOracleInsertAllStatement:
             select_query=build_query(dialect),
         )
         assert sql == (
-            "INSERT ALL INTO T1 (A) VALUES (x) INTO T2 (A) VALUES (y) "
-            "SELECT a, b FROM SRC"
+            'INSERT ALL INTO "T1" ("A") VALUES (x) INTO "T2" ("A") VALUES (y) '
+            'SELECT "A", "B" FROM "SRC"'
         )
         assert params == ()
 
@@ -58,14 +58,14 @@ class TestOracleInsertAllStatement:
         sql, params = dialect.format_insert_all_statement(
             [{"table": "t1", "columns": "a", "values": "x"}]
         )
-        assert sql == "INSERT ALL INTO T1 (A) VALUES (x)"
+        assert sql == 'INSERT ALL INTO "T1" ("A") VALUES (x)'
         assert params == ()
 
     def test_multiple_columns(self, dialect):
         sql, params = dialect.format_insert_all_statement(
             [{"table": "t1", "columns": ["a", "b"], "values": "x, y"}]
         )
-        assert sql == "INSERT ALL INTO T1 (A, B) VALUES (x, y)"
+        assert sql == 'INSERT ALL INTO "T1" ("A", "B") VALUES (x, y)'
         assert params == ()
 
     def test_with_condition_and_else(self, dialect):
@@ -78,9 +78,9 @@ class TestOracleInsertAllStatement:
             else_clause={"table": "t4", "columns": "a", "values": "w"},
         )
         assert sql == (
-            "INSERT ALL INTO T1 (A) VALUES (x) "
-            "WHEN b > 10 THEN INTO T3 (A) VALUES (z) "
-            "ELSE INTO T4 (A) VALUES (w) SELECT a, b FROM SRC"
+            'INSERT ALL INTO "T1" ("A") VALUES (x) '
+            'WHEN b > 10 THEN INTO "T3" ("A") VALUES (z) '
+            'ELSE INTO "T4" ("A") VALUES (w) SELECT "A", "B" FROM "SRC"'
         )
         assert params == ()
 
@@ -91,7 +91,7 @@ class TestOracleInsertAllStatement:
                 {"table": "t2", "columns": "a", "values": Literal(dialect, 2)},
             ]
         )
-        assert sql == "INSERT ALL INTO T1 (A) VALUES (?) INTO T2 (A) VALUES (?)"
+        assert sql == 'INSERT ALL INTO "T1" ("A") VALUES (?) INTO "T2" ("A") VALUES (?)'
         assert params == (1, 2)
 
     def test_expression_values_in_when_branch(self, dialect):
@@ -108,8 +108,8 @@ class TestOracleInsertAllStatement:
             ],
         )
         assert sql == (
-            "INSERT ALL INTO T1 (A) VALUES (x) "
-            "WHEN b > 10 THEN INTO T3 (A) VALUES (?) SELECT a, b FROM SRC"
+            'INSERT ALL INTO "T1" ("A") VALUES (x) '
+            'WHEN b > 10 THEN INTO "T3" ("A") VALUES (?) SELECT "A", "B" FROM "SRC"'
         )
         assert params == ("z",)
 
@@ -120,7 +120,7 @@ class TestOracleInsertFirstStatement:
             [{"table": "t1", "columns": "a", "values": "x"}],
             select_query=build_query(dialect),
         )
-        assert sql == "INSERT FIRST INTO T1 (A) VALUES (x) SELECT a, b FROM SRC"
+        assert sql == 'INSERT FIRST INTO "T1" ("A") VALUES (x) SELECT "A", "B" FROM "SRC"'
         assert params == ()
 
     def test_first_with_condition_and_else(self, dialect):
@@ -132,9 +132,9 @@ class TestOracleInsertFirstStatement:
             else_clause={"table": "t4", "columns": "a", "values": "w"},
         )
         assert sql == (
-            "INSERT FIRST INTO T1 (A) VALUES (x) "
-            "WHEN b > 10 THEN INTO T3 (A) VALUES (z) "
-            "ELSE INTO T4 (A) VALUES (w)"
+            'INSERT FIRST INTO "T1" ("A") VALUES (x) '
+            'WHEN b > 10 THEN INTO "T3" ("A") VALUES (z) '
+            'ELSE INTO "T4" ("A") VALUES (w)'
         )
         assert params == ()
 
@@ -145,7 +145,7 @@ class TestOracleInsertFirstStatement:
             ],
             select_query=build_query(dialect),
         )
-        assert sql == "INSERT FIRST INTO T1 (A, B) VALUES (a, b) SELECT a, b FROM SRC"
+        assert sql == 'INSERT FIRST INTO "T1" ("A", "B") VALUES (a, b) SELECT "A", "B" FROM "SRC"'
         assert params == ()
 
 
@@ -165,5 +165,5 @@ class TestOracleMultiTableInsertVersionBoundary:
         sql, params = d9.format_insert_all_statement(
             [{"table": "t1", "columns": "a", "values": "x"}]
         )
-        assert sql == "INSERT ALL INTO T1 (A) VALUES (x)"
+        assert sql == 'INSERT ALL INTO "T1" ("A") VALUES (x)'
         assert params == ()
