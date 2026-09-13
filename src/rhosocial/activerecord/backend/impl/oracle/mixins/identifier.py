@@ -13,7 +13,7 @@ class OracleIdentifierMixin:
     identical to unquoted ``USERS`` in Oracle.
     """
 
-    def format_identifier(self, identifier) -> str:
+    def format_identifier(self, identifier: str, need_quote: bool = True) -> str:
         """Format identifier for Oracle (uppercase, no quoting).
 
         Oracle stores unquoted identifiers as uppercase. Global quoting is
@@ -57,15 +57,15 @@ class OracleIdentifierMixin:
 
         if schema_name and table:
             col_sql = (
-                f"{self.format_identifier(schema_name)}."
-                f"{self.format_identifier(table)}.{name}"
+                f"{self.format_identifier(schema_name, expr.schema_need_quote)}."
+                f"{self.format_identifier(table, expr.table_need_quote)}.{name}"
             )
         elif table:
-            col_sql = f"{self.format_identifier(table)}.{name}"
+            col_sql = f"{self.format_identifier(table, expr.table_need_quote)}.{name}"
         else:
             col_sql = name
         if alias:
-            return f"{col_sql} AS {self.format_identifier(alias)}", ()
+            return f"{col_sql} AS {self.format_identifier(alias, expr.alias_need_quote)}", ()
         return col_sql, ()
 
     def format_table(

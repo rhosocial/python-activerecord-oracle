@@ -95,13 +95,10 @@ class OracleDDLMixin:
     def format_column_definition(
         self,
         col_def: "ColumnDefinition",
-        constraint_type=None,
-    ) -> Tuple[str, List[Any]]:
+    ) -> Tuple[str, tuple]:
         from rhosocial.activerecord.backend.expression.statements.ddl_table import (
             ColumnConstraintType,
         )
-        if constraint_type is None:
-            constraint_type = ColumnConstraintType
         type_sql, type_params = col_def.data_type.to_sql()
         parts = [self.format_identifier(col_def.name), type_sql]
         params: List[Any] = list(type_params)
@@ -162,8 +159,7 @@ class OracleDDLMixin:
     def format_table_constraint(
         self,
         t_const: "TableConstraint",
-        TableConstraintType,
-    ) -> Tuple[str, List[Any]]:
+    ) -> Tuple[str, tuple]:
         parts: List[str] = []
         params: List[Any] = []
         if t_const.name:
