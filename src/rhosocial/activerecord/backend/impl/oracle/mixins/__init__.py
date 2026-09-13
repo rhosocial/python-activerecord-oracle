@@ -21,7 +21,6 @@ from .flashback import OracleFlashbackMixin
 from .functions import OracleFunctionFormatMixin
 from .hierarchical import OracleHierarchicalMixin
 from .hint import OracleHintMixin
-from .identifier import OracleIdentifierMixin
 from .index import OracleIndexMixin
 from .introspection import OracleIntrospectionMixin
 from .json import OracleJSONFunctionMixin
@@ -58,7 +57,6 @@ __all__ = [
     "OracleFunctionFormatMixin",
     "OracleHierarchicalMixin",
     "OracleHintMixin",
-    "OracleIdentifierMixin",
     "OracleIndexMixin",
     "OracleIntrospectionMixin",
     "OracleJSONFunctionMixin",

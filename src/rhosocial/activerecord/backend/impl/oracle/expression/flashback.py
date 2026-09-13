@@ -48,7 +48,7 @@ class OracleAsOfClause(BaseExpression):
     """Oracle ``AS OF { SCN | TIMESTAMP } ...`` flashback query clause.
 
     Attaches to a table reference in a ``SELECT`` (through
-    ``OracleIdentifierMixin.format_table(..., flashback=...)``) to read the
+    ``format_table(..., flashback=...)``) to read the
     table as it was at a specified SCN or timestamp.
 
     Args:

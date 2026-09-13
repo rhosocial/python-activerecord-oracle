@@ -9,7 +9,7 @@ links, which enable cross-database/instance queries:
 * ``OracleDropDatabaseLinkExpression`` — ``DROP [PUBLIC] DATABASE LINK dl``.
 
 Remote table references are expressed with the ``@dblink`` suffix, supported
-through ``OracleIdentifierMixin.format_table(..., dblink=...)``.
+through ``format_table(..., dblink=...)``.
 
 All expressions delegate SQL generation to the dialect through the public
 ``format_*`` formatters implemented by ``OracleDatabaseLinkMixin``.
