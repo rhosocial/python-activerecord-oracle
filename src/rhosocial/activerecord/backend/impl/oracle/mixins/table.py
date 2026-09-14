@@ -72,60 +72,37 @@ class OracleTableMixin(object):
         """Oracle has no copyright-compatibility mode (e.g. MySQL forks)."""
         return False
 
-    def format_table_compression_clause(self, mode: str = 'BASIC') -> str:
-        """Compose an Oracle table-compression clause.
-
-        Passing ``mode='none'`` (case-insensitive) emits ``NOCOMPRESS``;
-        any other value becomes ``COMPRESS FOR <MODE>`` (uppercased), e.g.
-        ``COMPRESS FOR OLTP`` or ``COMPRESS FOR QUERY LOW``.
-
-        Accepts either a raw mode string or a
-        :class:`TableCompressionClauseExpression` instance (in which case
-        the expression's ``mode`` attribute is used).
-
-        See: Oracle Advanced Compression Option reference.
-        """
+    def format_table_compression_clause(self, expr: "TableCompressionClauseExpression") -> Tuple[str, tuple]:
+        """Format a TableCompressionClauseExpression into SQL and params."""
         from ..expression.table import TableCompressionClauseExpression
-        if isinstance(mode, TableCompressionClauseExpression):
-            mode = mode.mode
+        if isinstance(expr, TableCompressionClauseExpression):
+            mode = expr.mode
+        else:
+            mode = expr
         if mode is None:
-            return "NOCOMPRESS"
+            return "NOCOMPRESS", ()
         normalized = str(mode).strip().upper()
         if normalized == "NONE" or normalized == "":
-            return "NOCOMPRESS"
-        return f"COMPRESS FOR {normalized}"
+            return "NOCOMPRESS", ()
+        return f"COMPRESS FOR {normalized}", ()
 
-    def format_tablespace_clause(self, tablespace_name: str) -> str:
-        """Compose an Oracle TABLESPACE clause.
-
-        The identifier is always quoted via ``format_identifier`` to honor
-        the dialect's quoting configuration.
-
-        Accepts either a raw tablespace name string or a
-        :class:`TablespaceClauseExpression` instance (in which case the
-        expression's ``tablespace_name`` attribute is used).
-        """
+    def format_tablespace_clause(self, expr: "TablespaceClauseExpression") -> Tuple[str, tuple]:
+        """Format a TablespaceClauseExpression into SQL and params."""
         from ..expression.table import TablespaceClauseExpression
-        if isinstance(tablespace_name, TablespaceClauseExpression):
-            tablespace_name = tablespace_name.tablespace_name
-        return f"TABLESPACE {self.format_identifier(tablespace_name)}"
+        if isinstance(expr, TablespaceClauseExpression):
+            tablespace_name = expr.tablespace_name
+        else:
+            tablespace_name = expr
+        return f"TABLESPACE {self.format_identifier(tablespace_name)}", ()
 
     def format_table_compression_clause_expression(
         self, expr: "TableCompressionClauseExpression"
     ) -> Tuple[str, tuple]:
-        """Format a :class:`TableCompressionClauseExpression`.
-
-        Returns ``(sql, ())`` — this is a pure DDL clause with no bind
-        parameters.
-        """
-        return self.format_table_compression_clause(expr.mode), ()
+        """Alias for format_table_compression_clause."""
+        return self.format_table_compression_clause(expr)
 
     def format_tablespace_clause_expression(
         self, expr: "TablespaceClauseExpression"
     ) -> Tuple[str, tuple]:
-        """Format a :class:`TablespaceClauseExpression`.
-
-        Returns ``(sql, ())`` — this is a pure DDL clause with no bind
-        parameters.
-        """
-        return self.format_tablespace_clause(expr.tablespace_name), ()
+        """Alias for format_tablespace_clause."""
+        return self.format_tablespace_clause(expr)

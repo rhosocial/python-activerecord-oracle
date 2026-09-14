@@ -284,6 +284,22 @@ class OracleDialect(
         if version is not None:
             self.version = version
 
+    def format_identifier(self, identifier: str, need_quote: bool = True) -> str:
+        """Format identifier for Oracle with double-quote quoting and uppercasing."""
+        if not need_quote:
+            if self.is_reserved_word(identifier):
+                import warnings
+                from rhosocial.activerecord.backend.warnings import IdentifierQuotingWarning
+                warnings.warn(
+                    f"Identifier '{identifier}' is a reserved word in {self.name} "
+                    f"and may cause SQL errors without quoting.",
+                    IdentifierQuotingWarning,
+                    stacklevel=2,
+                )
+            return identifier
+        escaped = identifier.replace('"', '""')
+        return f'"{escaped.upper()}"'
+
     def get_parameter_placeholder(self, position: int = 0) -> str:
         """Return the positional placeholder ``?``.
 
