@@ -89,8 +89,8 @@ class OracleVectorMixin(object):
             )
 
         params: List[Any] = []
-        sql_left = self.format_vector_operand(vector1, params)
-        sql_right = self.format_vector_operand(vector2, params)
+        sql_left = self._format_vector_operand_raw(vector1, params)
+        sql_right = self._format_vector_operand_raw(vector2, params)
         sql = f"VECTOR_DISTANCE({sql_left}, {sql_right}, '{metric}')"
         return sql, tuple(params)
 

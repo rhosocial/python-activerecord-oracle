@@ -133,16 +133,18 @@ class TestEnableTriggerExpression:
 class TestVectorOperandPlaceholder:
     def test_uses_question_mark_placeholder(self, dialect):
         """Verify format_vector_operand returns '?' not '%s'."""
-        params = []
-        result = dialect.format_vector_operand('some_value', params)
-        assert result == '?'
-        assert params == ['some_value']
+        from rhosocial.activerecord.backend.impl.oracle.expression.vector import VectorOperandExpression
+        expr = VectorOperandExpression(dialect, 'some_value')
+        sql, params = dialect.format_vector_operand(expr)
+        assert sql == '?'
+        assert params == ('some_value',)
 
     def test_distance_expression_uses_question_mark(self, dialect):
         """Verify format_vector_distance builds SQL with '?' placeholders."""
+        from rhosocial.activerecord.backend.impl.oracle.expression.vector import VectorOperandExpression
         class FakeExpr:
-            vector1 = 'vec_a'
-            vector2 = 'vec_b'
+            vector1 = VectorOperandExpression(dialect, 'vec_a')
+            vector2 = VectorOperandExpression(dialect, 'vec_b')
             metric = 'COSINE'
         sql, params = dialect.format_vector_distance(FakeExpr())
         assert '?' in sql
