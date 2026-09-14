@@ -1362,13 +1362,13 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
                 if key[0]:
                     cur.execute(
                         "SELECT DATA_TYPE FROM ALL_TAB_COLUMNS "
-                        f"WHERE OWNER = {p} AND TABLE_NAME = {p} AND COLUMN_NAME = {p}",
+                        "WHERE OWNER = :1 AND TABLE_NAME = :2 AND COLUMN_NAME = :3",
                         [key[0], key[1], key[2]],
                     )
                 else:
                     cur.execute(
                         "SELECT DATA_TYPE FROM USER_TAB_COLUMNS "
-                        f"WHERE TABLE_NAME = {p} AND COLUMN_NAME = {p}",
+                        "WHERE TABLE_NAME = :1 AND COLUMN_NAME = :2",
                         [key[1], key[2]],
                     )
                 row = cur.fetchone()
