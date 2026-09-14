@@ -79,15 +79,15 @@ class OracleIntrospectionMixin:
         include_system: bool = False,
         column: str = "OWNER",
     ) -> Tuple[List[str], list, int]:
-        """Build owner-scoped WHERE fragments starting at bind index ``start``."""
+        """Build owner-scoped WHERE fragments using ``?`` placeholders."""
         conditions: List[str] = []
         params: list = []
         if schema:
-            conditions.append(f"{column} = :{start}")
+            conditions.append(f"{column} = ?")
             params.append(str(schema).upper())
             return conditions, params, start + 1
         if not include_system:
-            placeholders = ", ".join(f":{start + i}" for i in range(len(_SYSTEM_OWNERS)))
+            placeholders = ", ".join("?" for _ in _SYSTEM_OWNERS)
             conditions.append(f"{column} NOT IN ({placeholders})")
             params.extend(_SYSTEM_OWNERS)
             start += len(_SYSTEM_OWNERS)
