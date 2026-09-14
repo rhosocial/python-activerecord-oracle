@@ -119,9 +119,9 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
 
     def _create_introspector(self):
         """Create an Oracle introspector."""
-        from rhosocial.activerecord.backend.introspection.executor import SyncIntrospectorExecutor
         from .introspection import SyncOracleIntrospector
-        return SyncOracleIntrospector(self, SyncIntrospectorExecutor(self))
+        from .introspection.executor import SyncOracleIntrospectorExecutor
+        return SyncOracleIntrospector(self, SyncOracleIntrospectorExecutor(self))
 
     def introspect_and_adapt(self) -> None:
         """Introspect backend and adapt to actual server capabilities."""

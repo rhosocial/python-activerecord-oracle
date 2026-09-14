@@ -81,9 +81,9 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
 
     def _create_introspector(self):
         """Create an Oracle async introspector."""
-        from rhosocial.activerecord.backend.introspection.executor import AsyncIntrospectorExecutor
         from .introspection import AsyncOracleIntrospector
-        return AsyncOracleIntrospector(self, AsyncIntrospectorExecutor(self))
+        from .introspection.executor import AsyncOracleIntrospectorExecutor
+        return AsyncOracleIntrospector(self, AsyncOracleIntrospectorExecutor(self))
 
     @property
     def transaction_manager(self) -> AsyncOracleTransactionManager:

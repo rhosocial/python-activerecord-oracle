@@ -79,7 +79,11 @@ class OracleIntrospectionMixin:
         include_system: bool = False,
         column: str = "OWNER",
     ) -> Tuple[List[str], list, int]:
-        """Build owner-scoped WHERE fragments using ``?`` placeholders."""
+        """Build owner-scoped WHERE fragments using ``?`` placeholders.
+
+        The Oracle-specific :class:`SyncOracleIntrospectorExecutor` converts
+        ``?`` → ``:N`` before executing on the cursor.
+        """
         conditions: List[str] = []
         params: list = []
         if schema:
