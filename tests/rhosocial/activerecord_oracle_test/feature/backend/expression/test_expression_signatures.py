@@ -135,7 +135,7 @@ class TestVectorOperandPlaceholder:
         """Verify format_vector_operand returns '?' not '%s'."""
         from rhosocial.activerecord.backend.impl.oracle.expression.vector import VectorOperandExpression
         expr = VectorOperandExpression(dialect, 'some_value')
-        sql, params = dialect.format_vector_operand(expr)
+        sql, params = expr.to_sql()
         assert sql == '?'
         assert params == ('some_value',)
 

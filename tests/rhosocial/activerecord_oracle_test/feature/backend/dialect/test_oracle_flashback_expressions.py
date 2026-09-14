@@ -70,7 +70,7 @@ class TestOracleAsOfClause:
         )
         table = TableExpression(dialect, "t")
         table.flashback = as_of
-        sql, params = dialect.format_table(table)
+        sql, params = table.to_sql()
         assert sql == '"T" AS OF TIMESTAMP (SYSTIMESTAMP - INTERVAL \'1\' DAY)'
         assert params == ()
 
@@ -78,7 +78,7 @@ class TestOracleAsOfClause:
         as_of = OracleAsOfClause(dialect, OracleAsOfMode.SCN, "100")
         table = TableExpression(dialect, "t", alias="x")
         table.flashback = as_of
-        sql, params = dialect.format_table(table)
+        sql, params = table.to_sql()
         assert sql == '"T" AS OF SCN 100 "X"'
         assert params == ()
 
@@ -86,7 +86,7 @@ class TestOracleAsOfClause:
         as_of = OracleAsOfClause(dialect, OracleAsOfMode.SCN, "100")
         table = TableExpression(dialect, "t", schema_name="scott")
         table.flashback = as_of
-        sql, params = dialect.format_table(table)
+        sql, params = table.to_sql()
         assert sql == '"SCOTT"."T" AS OF SCN 100'
         assert params == ()
 
@@ -123,7 +123,7 @@ class TestOracleVersionsBetweenClause:
         )
         table = TableExpression(dialect, "t")
         table.flashback = versions
-        sql, params = dialect.format_table(table)
+        sql, params = table.to_sql()
         assert sql == '"T" VERSIONS BETWEEN SCN 100 AND 200'
         assert params == ()
 

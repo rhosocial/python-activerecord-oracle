@@ -184,28 +184,28 @@ class TestOracleDblinkTableReference:
     def test_dblink_suffix(self, dialect):
         table = TableExpression(dialect, "remote_table")
         table.dblink = "dl"
-        sql, params = dialect.format_table(table)
+        sql, params = table.to_sql()
         assert sql == '"REMOTE_TABLE"@"DL"'
         assert params == ()
 
     def test_dblink_uppercased(self, dialect):
         table = TableExpression(dialect, "remote_table")
         table.dblink = "my_dl"
-        sql, params = dialect.format_table(table)
+        sql, params = table.to_sql()
         assert sql == '"REMOTE_TABLE"@"MY_DL"'
         assert params == ()
 
     def test_dblink_with_schema(self, dialect):
         table = TableExpression(dialect, "remote_table", schema_name="scott")
         table.dblink = "dl"
-        sql, params = dialect.format_table(table)
+        sql, params = table.to_sql()
         assert sql == '"SCOTT"."REMOTE_TABLE"@"DL"'
         assert params == ()
 
     def test_dblink_with_alias(self, dialect):
         table = TableExpression(dialect, "remote_table", alias="r")
         table.dblink = "dl"
-        sql, params = dialect.format_table(table)
+        sql, params = table.to_sql()
         assert sql == '"REMOTE_TABLE"@"DL" "R"'
         assert params == ()
 

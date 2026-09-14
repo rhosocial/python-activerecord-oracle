@@ -126,7 +126,7 @@ class TestOracleFunctionFormatMixin:
                                  core.Literal(dialect, ";"), is_distinct=True)
         func._oracle_within_group = "e"
         func._oracle_on_overflow = "TRUNCATE"
-        sql, params = dialect.format_function_call(func)
+        sql, params = func.to_sql()
         assert sql == ('LISTAGG(DISTINCT "E", ?) WITHIN GROUP (ORDER BY e) ON OVERFLOW TRUNCATE')
         assert params == (";",)
 
