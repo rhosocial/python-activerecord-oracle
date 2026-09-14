@@ -1358,16 +1358,17 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         try:
             cur = self._connection.cursor()
             try:
+                p = self.dialect.get_parameter_placeholder()
                 if key[0]:
                     cur.execute(
                         "SELECT DATA_TYPE FROM ALL_TAB_COLUMNS "
-                        "WHERE OWNER = :1 AND TABLE_NAME = :2 AND COLUMN_NAME = :3",
+                        f"WHERE OWNER = {p} AND TABLE_NAME = {p} AND COLUMN_NAME = {p}",
                         [key[0], key[1], key[2]],
                     )
                 else:
                     cur.execute(
                         "SELECT DATA_TYPE FROM USER_TAB_COLUMNS "
-                        "WHERE TABLE_NAME = :1 AND COLUMN_NAME = :2",
+                        f"WHERE TABLE_NAME = {p} AND COLUMN_NAME = {p}",
                         [key[1], key[2]],
                     )
                 row = cur.fetchone()

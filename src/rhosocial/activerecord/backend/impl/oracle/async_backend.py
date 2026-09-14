@@ -761,8 +761,9 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
                 lob_var = cursor.var(oracledb.DB_TYPE_CLOB)
                 table_sql = self._quote_identifier(table)
                 column_sql = self._quote_identifier(column)
+                p = self.dialect.get_parameter_placeholder()
                 await cursor.execute(
-                    f"UPDATE {table_sql} SET {column_sql} = EMPTY_CLOB() WHERE id = :1 RETURNING {column_sql} INTO :2",
+                    f"UPDATE {table_sql} SET {column_sql} = EMPTY_CLOB() WHERE id = {p} RETURNING {column_sql} INTO {p}",
                     [pk_value, lob_var],
                 )
                 lob = lob_var.getvalue()
@@ -1174,16 +1175,17 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         try:
             cur = self._connection.cursor()
             try:
+                p = self.dialect.get_parameter_placeholder()
                 if key[0]:
                     await cur.execute(
                         "SELECT DATA_TYPE FROM ALL_TAB_COLUMNS "
-                        "WHERE OWNER = :1 AND TABLE_NAME = :2 AND COLUMN_NAME = :3",
+                        f"WHERE OWNER = {p} AND TABLE_NAME = {p} AND COLUMN_NAME = {p}",
                         [key[0], key[1], key[2]],
                     )
                 else:
                     await cur.execute(
                         "SELECT DATA_TYPE FROM USER_TAB_COLUMNS "
-                        "WHERE TABLE_NAME = :1 AND COLUMN_NAME = :2",
+                        f"WHERE TABLE_NAME = {p} AND COLUMN_NAME = {p}",
                         [key[1], key[2]],
                     )
                 row = await cur.fetchone()
