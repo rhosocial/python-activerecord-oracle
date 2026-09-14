@@ -1,4 +1,8 @@
 # src/rhosocial/activerecord/backend/impl/oracle/mixins/table.py
+from typing import Tuple, TYPE_CHECKING
+
+if TYPE_CHECKING:  # pragma: no cover
+    from ..expression.table import TableCompressionClauseExpression, TablespaceClauseExpression
 
 
 class OracleTableMixin(object):
@@ -75,8 +79,15 @@ class OracleTableMixin(object):
         any other value becomes ``COMPRESS FOR <MODE>`` (uppercased), e.g.
         ``COMPRESS FOR OLTP`` or ``COMPRESS FOR QUERY LOW``.
 
+        Accepts either a raw mode string or a
+        :class:`TableCompressionClauseExpression` instance (in which case
+        the expression's ``mode`` attribute is used).
+
         See: Oracle Advanced Compression Option reference.
         """
+        from ..expression.table import TableCompressionClauseExpression
+        if isinstance(mode, TableCompressionClauseExpression):
+            mode = mode.mode
         if mode is None:
             return "NOCOMPRESS"
         normalized = str(mode).strip().upper()
@@ -89,5 +100,32 @@ class OracleTableMixin(object):
 
         The identifier is always quoted via ``format_identifier`` to honor
         the dialect's quoting configuration.
+
+        Accepts either a raw tablespace name string or a
+        :class:`TablespaceClauseExpression` instance (in which case the
+        expression's ``tablespace_name`` attribute is used).
         """
+        from ..expression.table import TablespaceClauseExpression
+        if isinstance(tablespace_name, TablespaceClauseExpression):
+            tablespace_name = tablespace_name.tablespace_name
         return f"TABLESPACE {self.format_identifier(tablespace_name)}"
+
+    def format_table_compression_clause_expression(
+        self, expr: "TableCompressionClauseExpression"
+    ) -> Tuple[str, tuple]:
+        """Format a :class:`TableCompressionClauseExpression`.
+
+        Returns ``(sql, ())`` — this is a pure DDL clause with no bind
+        parameters.
+        """
+        return self.format_table_compression_clause(expr.mode), ()
+
+    def format_tablespace_clause_expression(
+        self, expr: "TablespaceClauseExpression"
+    ) -> Tuple[str, tuple]:
+        """Format a :class:`TablespaceClauseExpression`.
+
+        Returns ``(sql, ())`` — this is a pure DDL clause with no bind
+        parameters.
+        """
+        return self.format_tablespace_clause(expr.tablespace_name), ()

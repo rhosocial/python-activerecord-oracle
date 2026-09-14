@@ -1,5 +1,8 @@
 # src/rhosocial/activerecord/backend/impl/oracle/mixins/vector.py
-from typing import Any, Tuple, List
+from typing import Any, Tuple, List, TYPE_CHECKING
+
+if TYPE_CHECKING:  # pragma: no cover
+    from ..expression.vector import VectorLiteralExpression, VectorOperandExpression
 
 
 class OracleVectorMixin(object):
@@ -29,7 +32,15 @@ class OracleVectorMixin(object):
         return metric.upper() in self.SUPPORTED_DISTANCE_METRICS
 
     def format_vector_literal(self, vec: Any) -> str:
-        """Format a vector value as Oracle VECTOR string literal."""
+        """Format a vector value as Oracle VECTOR string literal.
+
+        Accepts either a raw vector value or a
+        :class:`VectorLiteralExpression` instance (in which case the
+        expression's ``vec`` attribute is used).
+        """
+        from ..expression.vector import VectorLiteralExpression
+        if isinstance(vec, VectorLiteralExpression):
+            vec = vec.vec
         if vec is None:
             return 'NULL'
         if hasattr(vec, 'to_string'):
@@ -90,12 +101,23 @@ class OracleVectorMixin(object):
             return 'NULL'
         if isinstance(operand, str):
             params.append(operand)
-            return '%s'
+            return '?'
         if hasattr(operand, 'to_string'):
             params.append(operand.to_string())
-            return '%s'
+            return '?'
         if isinstance(operand, (list, tuple)):
             params.append('[' + ','.join(str(v) for v in operand) + ']')
-            return '%s'
+            return '?'
         params.append(operand)
-        return '%s'
+        return '?'
+
+    def format_vector_operand_expression(self, expr: "VectorOperandExpression") -> Tuple[str, Tuple]:
+        """Format a :class:`VectorOperandExpression` into SQL and params.
+
+        Delegates to :meth:`format_vector_operand` with a fresh params
+        list and returns the ``(sql, params)`` tuple expected by the
+        expression rendering protocol.
+        """
+        params: List[Any] = []
+        sql = self.format_vector_operand(expr.operand, params)
+        return sql, tuple(params)
