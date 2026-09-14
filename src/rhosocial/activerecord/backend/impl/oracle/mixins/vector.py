@@ -49,12 +49,9 @@ class OracleVectorMixin(object):
             return vec
         raise TypeError(f"Cannot format vector literal from {type(vec).__name__}")
 
-    def format_vector_literal(self, vec_or_expr: "VectorLiteralExpression | Any") -> Tuple[str, tuple]:
-        """Format a vector value as Oracle VECTOR string literal."""
-        from ..expression.vector import VectorLiteralExpression
-        if isinstance(vec_or_expr, VectorLiteralExpression):
-            return self._format_vector_literal_value(vec_or_expr.vec), ()
-        return self._format_vector_literal_value(vec_or_expr), ()
+    def format_vector_literal(self, expr: "VectorLiteralExpression") -> Tuple[str, tuple]:
+        """Format a VectorLiteralExpression as Oracle VECTOR string literal."""
+        return self._format_vector_literal_value(expr.vec), ()
 
     def format_vector_distance(self, expr: Any) -> Tuple[str, Tuple]:
         """Format a vector distance expression.
@@ -112,12 +109,6 @@ class OracleVectorMixin(object):
 
     def format_vector_operand(self, expr: "VectorOperandExpression") -> Tuple[str, Tuple]:
         """Format a VectorOperandExpression into SQL and params."""
-        from ..expression.vector import VectorOperandExpression
-        if isinstance(expr, VectorOperandExpression):
-            params: List[Any] = []
-            sql = self._format_vector_operand_raw(expr.operand, params)
-            return sql, tuple(params)
-        # Legacy raw-value path
-        params2: List[Any] = []
-        sql = self._format_vector_operand_raw(expr, params2)
-        return sql, tuple(params2)
+        params: List[Any] = []
+        sql = self._format_vector_operand_raw(expr.operand, params)
+        return sql, tuple(params)

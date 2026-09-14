@@ -18,9 +18,9 @@ class OracleVectorSupport(Protocol):
         ...  # pragma: no cover
     def supports_vector_distance_metric(self, metric: str) -> bool:
         ...  # pragma: no cover
-    def format_vector_literal(self, vec: Any) -> str:
+    def format_vector_literal(self, expr: 'VectorLiteralExpression') -> Tuple[str, tuple]:
         ...  # pragma: no cover
     def format_vector_distance(self, expr: Any) -> Tuple[str, Tuple]:
         ...  # pragma: no cover
-    def format_vector_operand(self, operand: Any, params: List[Any]) -> str:
+    def format_vector_operand(self, expr: 'VectorOperandExpression') -> Tuple[str, Tuple]:
         ...  # pragma: no cover

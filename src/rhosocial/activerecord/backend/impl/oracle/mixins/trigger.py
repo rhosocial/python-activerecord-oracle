@@ -137,38 +137,20 @@ class OracleTriggerMixin(object):
 
         return " ".join(parts), ()
 
-    def format_disable_trigger_statement(self, trigger_name, table_name=None) -> Tuple[str, tuple]:
-        """Format ALTER TRIGGER ... DISABLE statement (Oracle syntax).
-
-        Accepts either raw arguments or a :class:`DisableTriggerExpression`
-        instance (in which case the expression's attributes are used).
-        """
-        from ..expression.trigger import DisableTriggerExpression
-        if isinstance(trigger_name, DisableTriggerExpression):
-            expr = trigger_name
-            trigger_name = expr.trigger_name
-            table_name = expr.table_name
+    def format_disable_trigger_statement(self, expr: "DisableTriggerExpression") -> Tuple[str, tuple]:
+        """Format ALTER TRIGGER ... DISABLE statement (Oracle syntax)."""
         if not self.supports_disable_trigger():
             from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
             raise UnsupportedFeatureError(self.name, "DISABLE TRIGGER")
 
-        parts = ["ALTER TRIGGER", self.format_identifier(trigger_name), "DISABLE"]
+        parts = ["ALTER TRIGGER", self.format_identifier(expr.trigger_name), "DISABLE"]
         return " ".join(parts), ()
 
-    def format_enable_trigger_statement(self, trigger_name, table_name=None) -> Tuple[str, tuple]:
-        """Format ALTER TRIGGER ... ENABLE statement (Oracle syntax).
-
-        Accepts either raw arguments or a :class:`EnableTriggerExpression`
-        instance (in which case the expression's attributes are used).
-        """
-        from ..expression.trigger import EnableTriggerExpression
-        if isinstance(trigger_name, EnableTriggerExpression):
-            expr = trigger_name
-            trigger_name = expr.trigger_name
-            table_name = expr.table_name
+    def format_enable_trigger_statement(self, expr: "EnableTriggerExpression") -> Tuple[str, tuple]:
+        """Format ALTER TRIGGER ... ENABLE statement (Oracle syntax)."""
         if not self.supports_disable_trigger():
             from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
             raise UnsupportedFeatureError(self.name, "ENABLE TRIGGER")
 
-        parts = ["ALTER TRIGGER", self.format_identifier(trigger_name), "ENABLE"]
+        parts = ["ALTER TRIGGER", self.format_identifier(expr.trigger_name), "ENABLE"]
         return " ".join(parts), ()

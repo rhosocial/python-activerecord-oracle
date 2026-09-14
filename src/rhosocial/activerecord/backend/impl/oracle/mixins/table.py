@@ -74,11 +74,7 @@ class OracleTableMixin(object):
 
     def format_table_compression_clause(self, expr: "TableCompressionClauseExpression") -> Tuple[str, tuple]:
         """Format a TableCompressionClauseExpression into SQL and params."""
-        from ..expression.table import TableCompressionClauseExpression
-        if isinstance(expr, TableCompressionClauseExpression):
-            mode = expr.mode
-        else:
-            mode = expr
+        mode = expr.mode
         if mode is None:
             return "NOCOMPRESS", ()
         normalized = str(mode).strip().upper()
@@ -88,12 +84,7 @@ class OracleTableMixin(object):
 
     def format_tablespace_clause(self, expr: "TablespaceClauseExpression") -> Tuple[str, tuple]:
         """Format a TablespaceClauseExpression into SQL and params."""
-        from ..expression.table import TablespaceClauseExpression
-        if isinstance(expr, TablespaceClauseExpression):
-            tablespace_name = expr.tablespace_name
-        else:
-            tablespace_name = expr
-        return f"TABLESPACE {self.format_identifier(tablespace_name)}", ()
+        return f"TABLESPACE {self.format_identifier(expr.tablespace_name)}", ()
 
     def format_table_compression_clause_expression(
         self, expr: "TableCompressionClauseExpression"
