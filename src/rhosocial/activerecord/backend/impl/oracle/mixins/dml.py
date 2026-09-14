@@ -193,18 +193,18 @@ class OracleDMLOperationMixin(object):
         params: List[Any] = []
         parts = [f"INSERT {keyword}"]
         for spec in into_clauses:
-            parts.append(self.format_insert_into_spec(spec, params))
+            parts.append(self.format_insert_into_spec(spec, params)[0])
         for spec in when_clauses or []:
             condition = spec.get("condition")
             cond_sql = self._render_insert_fragment(condition, params)
-            parts.append(f"WHEN {cond_sql} THEN {self.format_insert_into_spec(spec, params)}")
+            parts.append(f"WHEN {cond_sql} THEN {self.format_insert_into_spec(spec, params)[0]}")
         if else_clause:
-            parts.append(f"ELSE {self.format_insert_into_spec(else_clause, params)}")
+            parts.append(f"ELSE {self.format_insert_into_spec(else_clause, params)[0]}")
         if select_query:
             parts.append(select_query)
         return " ".join(parts), tuple(params)
 
-    def format_insert_into_spec(self, spec: dict, params: List[Any]) -> str:
+    def format_insert_into_spec(self, spec: dict, params: List[Any]) -> Tuple[str, tuple]:
         table = spec["table"]
         columns = spec.get("columns") or ""
         values = spec.get("values") or ""
@@ -216,7 +216,7 @@ class OracleDMLOperationMixin(object):
             columns_sql = ""
         cols_part = f"({columns_sql})" if columns_sql else ""
         values_sql = self._render_insert_fragment(values, params)
-        return f"INTO {self.format_identifier(table)} {cols_part} VALUES ({values_sql})".strip()
+        return f"INTO {self.format_identifier(table)} {cols_part} VALUES ({values_sql})".strip(), ()
 
     def _render_insert_fragment(self, value: Any, params: List[Any]) -> str:
         if isinstance(value, str):

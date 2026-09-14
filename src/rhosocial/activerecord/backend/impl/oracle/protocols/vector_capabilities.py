@@ -7,7 +7,7 @@ the capability contract.  Regenerate via scripts/p7_generate_protocols.py
 when mixins gain new public rendering methods.
 """
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from typing import Protocol
 
@@ -20,7 +20,7 @@ class OracleVectorSupport(Protocol):
         ...  # pragma: no cover
     def format_vector_literal(self, expr: 'VectorLiteralExpression') -> Tuple[str, tuple]:
         ...  # pragma: no cover
-    def format_vector_distance(self, expr: Any) -> Tuple[str, Tuple]:
+    def format_vector_distance(self, expr: Union[Dict[str, Any], Any]) -> Tuple[str, tuple]:
         ...  # pragma: no cover
-    def format_vector_operand(self, expr: 'VectorOperandExpression') -> Tuple[str, Tuple]:
+    def format_vector_operand(self, expr: 'VectorOperandExpression') -> Tuple[str, tuple]:
         ...  # pragma: no cover

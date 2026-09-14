@@ -11,7 +11,10 @@ This mixin is mixed into :class:`OracleDialect` alongside the other
 dialect mixins. All methods are defensive and side-effect free; they
 return strings or booleans only.
 """
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Optional, Tuple, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from rhosocial.activerecord.backend.expression.query_parts import ForUpdateClause
 
 
 class OracleLockingMixin(object):
@@ -66,11 +69,7 @@ class OracleLockingMixin(object):
 
     def format_for_update_clause(
         self,
-        strength=None,
-        of_columns: Optional[List[str]] = None,
-        nowait: bool = False,
-        skip_locked: bool = False,
-        wait: Optional[int] = None,
+        clause: "ForUpdateClause",
     ) -> Tuple[str, tuple]:
         """Compose an Oracle FOR UPDATE clause.
 
@@ -80,28 +79,20 @@ class OracleLockingMixin(object):
         [NOWAIT | WAIT n | SKIP LOCKED]``.
 
         Args:
-            strength: ignored on Oracle; only UPDATE semantics exist.
-            of_columns: optional list of column identifiers (strings)
-                or expressions to lock in joins.
-            nowait: if True, append NOWAIT.
-            skip_locked: if True, append SKIP LOCKED (11g+).
-            wait: if a non-negative int, append ``WAIT <wait>``.
+            clause: The ForUpdateClause node containing optional OF columns
+                and the NOWAIT / SKIP LOCKED flags.
 
         Returns:
             ``(sql_string, params_tuple)``; Oracle's FOR UPDATE option
             syntax takes no parameters, so the params tuple is always
             empty unless ``of_columns`` yields expression parameters.
         """
-        # `strength` is accepted for API symmetry with PG/MySQL mixins;
-        # Oracle only supports FOR UPDATE (SHARE is via FOR UPDATE OF).
-        _ = strength
-
         all_params: List[Any] = []
 
         sql_parts: List[str] = ["FOR UPDATE"]
 
         # OF <columns>
-        of_columns = of_columns if of_columns is not None else []
+        of_columns = getattr(clause, "of_columns", None) or []
         of_parts: List[str] = []
         for col in of_columns:
             if isinstance(col, str):
@@ -114,6 +105,10 @@ class OracleLockingMixin(object):
             sql_parts.append(f"OF {', '.join(of_parts)}")
 
         # Wait options: NOWAIT | WAIT n | SKIP LOCKED (mutually exclusive)
+        nowait = getattr(clause, "nowait", False)
+        skip_locked = getattr(clause, "skip_locked", False)
+        wait = getattr(clause, "wait", None)
+
         if nowait:
             sql_parts.append("NOWAIT")
         elif skip_locked:

@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 class OracleFunctionFormatMixin:
     """Oracle-specific function and expression formatters."""
 
-    def format_function_call(self, expr: "BaseExpression") -> Tuple[str, Tuple]:
+    def format_function_call(self, expr: "BaseExpression") -> Tuple[str, tuple]:
         fn_name = getattr(expr, "func_name", "").upper()
 
         if fn_name == "LISTAGG":
@@ -39,7 +39,7 @@ class OracleFunctionFormatMixin:
         self,
         expr: "BaseExpression",
         filter_predicate: Optional["SQLPredicate"] = None,
-    ) -> Tuple[str, Tuple]:
+    ) -> Tuple[str, tuple]:
         args_sql: List[str] = []
         all_params: List[Any] = []
         distinct = "DISTINCT " if getattr(expr, "is_distinct", False) else ""
@@ -64,7 +64,7 @@ class OracleFunctionFormatMixin:
 
         return self._finish_function_call(func_sql, all_params, expr)
 
-    def format_percentile_ordered_set(self, expr: "BaseExpression") -> Tuple[str, Tuple]:
+    def format_percentile_ordered_set(self, expr: "BaseExpression") -> Tuple[str, tuple]:
         fn_name = expr.func_name.upper()
         all_params: List[Any] = []
         distinct = "DISTINCT " if getattr(expr, "is_distinct", False) else ""
@@ -85,7 +85,7 @@ class OracleFunctionFormatMixin:
 
         return self._finish_function_call(func_sql, all_params, expr)
 
-    def format_json_scalar(self, expr: "BaseExpression") -> Tuple[str, Tuple]:
+    def format_json_scalar(self, expr: "BaseExpression") -> Tuple[str, tuple]:
         all_params: List[Any] = []
 
         args_sql: List[str] = []
@@ -104,7 +104,7 @@ class OracleFunctionFormatMixin:
 
         return self._finish_function_call(func_sql, all_params, expr)
 
-    def format_json_table_expression(self, expr: "BaseExpression") -> Tuple[str, Tuple]:
+    def format_json_table_expression(self, expr: "BaseExpression") -> Tuple[str, tuple]:
         all_params: List[Any] = []
 
         args_sql: List[str] = []
@@ -130,7 +130,7 @@ class OracleFunctionFormatMixin:
         func_sql: str,
         all_params: List[Any],
         expr: "BaseExpression",
-    ) -> Tuple[str, Tuple]:
+    ) -> Tuple[str, tuple]:
         filter_predicate = getattr(expr, "filter_predicate", None)
         if filter_predicate:
             filter_sql, filter_params = filter_predicate.to_sql()

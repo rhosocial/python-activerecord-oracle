@@ -1,7 +1,10 @@
 # src/rhosocial/activerecord/backend/impl/oracle/mixins/set_operation.py
 """Oracle set-operation formatting mixin."""
 
-from typing import Tuple
+from typing import Tuple, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from rhosocial.activerecord.backend.expression.bases import BaseExpression
 
 
 class OracleSetOperationMixin:
@@ -33,7 +36,7 @@ class OracleSetOperationMixin:
     def supports_set_operation_for_update(self) -> bool:
         return False
 
-    def format_set_operation_expression(self, expr) -> Tuple[str, Tuple]:
+    def format_set_operation_expression(self, expr: "BaseExpression") -> Tuple[str, tuple]:
         if expr.operation.upper() == "EXCEPT":
             expr.operation = "MINUS"
         return super().format_set_operation_expression(expr)

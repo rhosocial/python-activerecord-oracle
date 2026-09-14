@@ -36,5 +36,5 @@ class OracleDMLOperationSupport(Protocol):
         ...  # pragma: no cover
     def format_multi_table_insert_statement(self, keyword: str, into_clauses: List[dict], select_query: Optional[str], *, when_clauses: Optional[List[dict]]=None, else_clause: Optional[dict]=None, dialect_options: Optional[dict]=None) -> Tuple[str, tuple]:
         ...  # pragma: no cover
-    def format_insert_into_spec(self, spec: dict, params: List[Any]) -> str:
+    def format_insert_into_spec(self, spec: dict, params: List[Any]) -> Tuple[str, tuple]:
         ...  # pragma: no cover

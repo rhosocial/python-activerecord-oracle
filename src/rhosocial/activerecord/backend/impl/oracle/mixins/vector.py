@@ -1,5 +1,5 @@
 # src/rhosocial/activerecord/backend/impl/oracle/mixins/vector.py
-from typing import Any, Tuple, List, TYPE_CHECKING
+from typing import Any, Dict, Tuple, List, Union, TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..expression.vector import VectorLiteralExpression, VectorOperandExpression
@@ -53,7 +53,9 @@ class OracleVectorMixin(object):
         """Format a VectorLiteralExpression as Oracle VECTOR string literal."""
         return self._format_vector_literal_value(expr.vec), ()
 
-    def format_vector_distance(self, expr: Any) -> Tuple[str, Tuple]:
+    def format_vector_distance(
+        self, expr: Union[Dict[str, Any], Any]
+    ) -> Tuple[str, tuple]:
         """Format a vector distance expression.
 
         Args:
@@ -107,7 +109,7 @@ class OracleVectorMixin(object):
         params.append(operand)
         return self.p()
 
-    def format_vector_operand(self, expr: "VectorOperandExpression") -> Tuple[str, Tuple]:
+    def format_vector_operand(self, expr: "VectorOperandExpression") -> Tuple[str, tuple]:
         """Format a VectorOperandExpression into SQL and params."""
         params: List[Any] = []
         sql = self._format_vector_operand_raw(expr.operand, params)

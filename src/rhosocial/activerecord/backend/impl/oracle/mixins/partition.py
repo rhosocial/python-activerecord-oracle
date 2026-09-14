@@ -242,7 +242,7 @@ class OraclePartitionMixin:
                 "RANGE partitioning",
                 f"Oracle {self.version} does not support RANGE partitioning.",
             )
-        key_sql = self.format_partition_keys(expr.keys)
+        key_sql, _ = self.format_partition_keys(expr.keys)
         sql = f"PARTITION BY RANGE ({key_sql})"
         if expr.subpartition_by is not None:
             sub_sql, _ = expr.subpartition_by.to_sql()
@@ -260,7 +260,7 @@ class OraclePartitionMixin:
                 "LIST partitioning",
                 f"Oracle {self.version} does not support LIST partitioning.",
             )
-        key_sql = self.format_partition_keys(expr.keys)
+        key_sql, _ = self.format_partition_keys(expr.keys)
         sql = f"PARTITION BY LIST ({key_sql})"
         if expr.subpartition_by is not None:
             sub_sql, _ = expr.subpartition_by.to_sql()
@@ -278,7 +278,7 @@ class OraclePartitionMixin:
                 "HASH partitioning",
                 f"Oracle {self.version} does not support HASH partitioning.",
             )
-        key_sql = self.format_partition_keys(expr.keys)
+        key_sql, _ = self.format_partition_keys(expr.keys)
         sql = f"PARTITION BY HASH ({key_sql})"
         if expr.subpartition_by is not None:
             sub_sql, _ = expr.subpartition_by.to_sql()
@@ -304,7 +304,7 @@ class OraclePartitionMixin:
                 "RANGE partitioning",
                 f"Oracle {self.version} does not support RANGE partitioning.",
             )
-        key_sql = self.format_partition_keys(expr.keys)
+        key_sql, _ = self.format_partition_keys(expr.keys)
         interval_sql, interval_params = expr.interval.to_sql()
         if interval_params:
             raise ValueError(
@@ -339,7 +339,7 @@ class OraclePartitionMixin:
             )
         strategy = expr.strategy.value
         if strategy == "HASH":
-            key_sql = self.format_partition_keys(expr.keys) if expr.keys else ""
+            key_sql, _ = self.format_partition_keys(expr.keys) if expr.keys else ("", ())
             sql = f"SUBPARTITION BY HASH ({key_sql})"
             if expr.count is not None:
                 sql = f"{sql} SUBPARTITIONS {expr.count}"
@@ -347,7 +347,7 @@ class OraclePartitionMixin:
         # RANGE / LIST subpartition template: only the BY clause is emitted
         # here; individual subpartition definitions are emitted per-partition
         # in format_partition_definition.
-        key_sql = self.format_partition_keys(expr.keys) if expr.keys else ""
+        key_sql, _ = self.format_partition_keys(expr.keys) if expr.keys else ("", ())
         sql = f"SUBPARTITION BY {strategy} ({key_sql})"
         return f" {sql}", ()
 
@@ -381,7 +381,7 @@ class OraclePartitionMixin:
                 raise ValueError(
                     f"RANGE partition {definition.name!r} requires 'less_than' boundary values"
                 )
-            value_parts = [self.format_partition_boundary_value(v) for v in definition.less_than]
+            value_parts = [self.format_partition_boundary_value(v)[0] for v in definition.less_than]
             body = f"VALUES LESS THAN ({', '.join(value_parts)})"
         elif strategy.upper() == "LIST":
             if definition.in_values is None:
@@ -391,10 +391,10 @@ class OraclePartitionMixin:
             value_parts: List[str] = []
             for value in definition.in_values:
                 if isinstance(value, (list, tuple)):
-                    inner = [self.format_partition_boundary_value(v) for v in value]
+                    inner = [self.format_partition_boundary_value(v)[0] for v in value]
                     value_parts.append(f"({', '.join(inner)})")
                 else:
-                    value_parts.append(self.format_partition_boundary_value(value))
+                    value_parts.append(self.format_partition_boundary_value(value)[0])
             body = f"VALUES ({', '.join(value_parts)})"
         elif strategy.upper() == "HASH":
             # HASH partitions have no VALUES clause; only optional subpartitions.
@@ -428,16 +428,16 @@ class OraclePartitionMixin:
         name_sql = self.format_identifier(definition.name)
         parts: List[str] = [f"SUBPARTITION {name_sql}"]
         if definition.less_than is not None:
-            value_parts = [self.format_partition_boundary_value(v) for v in definition.less_than]
+            value_parts = [self.format_partition_boundary_value(v)[0] for v in definition.less_than]
             parts.append(f"VALUES LESS THAN ({', '.join(value_parts)})")
         elif definition.in_values is not None:
             value_parts: List[str] = []
             for value in definition.in_values:
                 if isinstance(value, (list, tuple)):
-                    inner = [self.format_partition_boundary_value(v) for v in value]
+                    inner = [self.format_partition_boundary_value(v)[0] for v in value]
                     value_parts.append(f"({', '.join(inner)})")
                 else:
-                    value_parts.append(self.format_partition_boundary_value(value))
+                    value_parts.append(self.format_partition_boundary_value(value)[0])
             parts.append(f"VALUES ({', '.join(value_parts)})")
         return " ".join(parts), ()
 
@@ -464,7 +464,7 @@ class OraclePartitionMixin:
     # ------------------------------------------------------------------
     # Shared helpers (public, no leading underscore per architecture rules)
     # ------------------------------------------------------------------
-    def format_partition_keys(self, keys: Sequence[BaseExpression]) -> str:
+    def format_partition_keys(self, keys: Sequence[BaseExpression]) -> Tuple[str, tuple]:
         """Format the partition key column list.
 
         Partition keys are column references (``Column`` expressions), not
@@ -480,9 +480,9 @@ class OraclePartitionMixin:
                 )
             key_sql, _ = key.to_sql()
             key_sql_parts.append(key_sql)
-        return ", ".join(key_sql_parts)
+        return ", ".join(key_sql_parts), ()
 
-    def format_partition_boundary_value(self, value: Any) -> str:
+    def format_partition_boundary_value(self, value: Any) -> Tuple[str, tuple]:
         """Render a partition boundary value as a safe inline SQL literal.
 
         Oracle DDL does not accept bind variables, so boundary values are
@@ -499,16 +499,16 @@ class OraclePartitionMixin:
                 or the string ``"MAXVALUE"``.
 
         Returns:
-            SQL literal string (no parameters).
+            Tuple of (SQL literal string, empty parameters tuple).
         """
         if isinstance(value, OraclePartitionMaxValue):
-            return "MAXVALUE"
+            return "MAXVALUE", ()
         if isinstance(value, OraclePartitionValue):
-            return self.render_partition_literal(value.value)
+            return self.render_partition_literal(value.value), ()
         if isinstance(value, str) and value.upper() == "MAXVALUE":
-            return "MAXVALUE"
+            return "MAXVALUE", ()
         if isinstance(value, Literal):
-            return self.render_partition_literal(value.value)
+            return self.render_partition_literal(value.value), ()
         raise TypeError(
             "partition boundary value must be an OraclePartitionValue, "
             "OraclePartitionMaxValue, Literal, or the string 'MAXVALUE', "
@@ -556,27 +556,27 @@ class OraclePartitionMixin:
     # ------------------------------------------------------------------
     def format_legacy_range(self, expr: "PartitionClause") -> Tuple[str, tuple]:
         """Legacy RANGE path reading ``expr.dialect_options['partitions']``."""
-        key_sql = self.format_partition_keys(expr.keys)
+        key_sql, _ = self.format_partition_keys(expr.keys)
         sql = f"PARTITION BY RANGE ({key_sql})"
         partitions = expr.dialect_options.get("partitions") or []
         if partitions:
-            parts = [self.format_legacy_range_definition(p) for p in partitions]
+            parts = [self.format_legacy_range_definition(p)[0] for p in partitions]
             sql = f"{sql} ({', '.join(parts)})"
         return f" {sql}", ()
 
     def format_legacy_list(self, expr: "PartitionClause") -> Tuple[str, tuple]:
         """Legacy LIST path reading ``expr.dialect_options['partitions']``."""
-        key_sql = self.format_partition_keys(expr.keys)
+        key_sql, _ = self.format_partition_keys(expr.keys)
         sql = f"PARTITION BY LIST ({key_sql})"
         partitions = expr.dialect_options.get("partitions") or []
         if partitions:
-            parts = [self.format_legacy_list_definition(p) for p in partitions]
+            parts = [self.format_legacy_list_definition(p)[0] for p in partitions]
             sql = f"{sql} ({', '.join(parts)})"
         return f" {sql}", ()
 
     def format_legacy_hash(self, expr: "PartitionClause") -> Tuple[str, tuple]:
         """Legacy HASH path reading ``expr.dialect_options['partitions_count']``."""
-        key_sql = self.format_partition_keys(expr.keys)
+        key_sql, _ = self.format_partition_keys(expr.keys)
         sql = f"PARTITION BY HASH ({key_sql})"
         partitions_count = expr.dialect_options.get("partitions_count")
         if partitions_count is not None:
@@ -592,7 +592,7 @@ class OraclePartitionMixin:
             sql = f"{sql} PARTITIONS {partitions_count}"
         return f" {sql}", ()
 
-    def format_legacy_range_definition(self, partition: Any) -> str:
+    def format_legacy_range_definition(self, partition: Any) -> Tuple[str, tuple]:
         """Render a single legacy RANGE partition definition dict."""
         if not isinstance(partition, dict):
             raise TypeError(
@@ -609,13 +609,14 @@ class OraclePartitionMixin:
                 "'less_than' must be a list or tuple, "
                 f"got {type(less_than).__name__}"
             )
-        value_sql_parts = [self.format_partition_boundary_value(v) for v in less_than]
+        value_sql_parts = [self.format_partition_boundary_value(v)[0] for v in less_than]
         return (
             f"PARTITION {self.format_identifier(name)} "
-            f"VALUES LESS THAN ({', '.join(value_sql_parts)})"
+            f"VALUES LESS THAN ({', '.join(value_sql_parts)})",
+            (),
         )
 
-    def format_legacy_list_definition(self, partition: Any) -> str:
+    def format_legacy_list_definition(self, partition: Any) -> Tuple[str, tuple]:
         """Render a single legacy LIST partition definition dict."""
         if not isinstance(partition, dict):
             raise TypeError(
@@ -635,11 +636,12 @@ class OraclePartitionMixin:
         value_sql_parts: List[str] = []
         for value in in_values:
             if isinstance(value, (list, tuple)):
-                inner = [self.format_partition_boundary_value(v) for v in value]
+                inner = [self.format_partition_boundary_value(v)[0] for v in value]
                 value_sql_parts.append(f"({', '.join(inner)})")
             else:
-                value_sql_parts.append(self.format_partition_boundary_value(value))
+                value_sql_parts.append(self.format_partition_boundary_value(value)[0])
         return (
             f"PARTITION {self.format_identifier(name)} "
-            f"VALUES ({', '.join(value_sql_parts)})"
+            f"VALUES ({', '.join(value_sql_parts)})",
+            (),
         )

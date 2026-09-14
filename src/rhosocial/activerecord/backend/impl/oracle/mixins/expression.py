@@ -7,13 +7,16 @@ unpivot, hint, for_update) back through the expression's own
 the core ``ExpressionMixin``.
 """
 
-from typing import List, Tuple, TYPE_CHECKING
+from typing import Any, List, Tuple, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from rhosocial.activerecord.backend.expression.bases import BaseExpression
 
 
 class OracleExpressionMixin:
     """Oracle-specific expression formatting that delegates to ``to_sql``."""
 
-    def format_table(self, expr) -> Tuple[str, Tuple]:
+    def format_table(self, expr: "BaseExpression") -> Tuple[str, tuple]:
         """Format a :class:`TableExpression` for Oracle.
 
         Oracle-specific ``@dblink`` suffixes and flashback clauses carried on
@@ -35,7 +38,7 @@ class OracleExpressionMixin:
         else:
             table_sql = self.format_identifier(expr.name, name_need_quote)
 
-        table_params: Tuple = ()
+        table_params: Tuple[Any, ...] = ()
         if dblink:
             table_sql = f"{table_sql}@{self.format_identifier(dblink)}"
         if flashback is not None:
@@ -46,22 +49,22 @@ class OracleExpressionMixin:
             table_sql = f"{table_sql} {self.format_identifier(alias, alias_need_quote)}"
         return table_sql, table_params
 
-    def format_connect_by(self, expr) -> Tuple[str, List]:
+    def format_connect_by(self, expr: "BaseExpression") -> Tuple[str, tuple]:
         return expr.to_sql()
 
-    def format_pivot(self, expr) -> Tuple[str, List]:
+    def format_pivot(self, expr: "BaseExpression") -> Tuple[str, tuple]:
         return expr.to_sql()
 
-    def format_unpivot(self, expr) -> Tuple[str, List]:
+    def format_unpivot(self, expr: "BaseExpression") -> Tuple[str, tuple]:
         return expr.to_sql()
 
-    def format_hint(self, expr) -> Tuple[str, List]:
+    def format_hint(self, expr: "BaseExpression") -> Tuple[str, tuple]:
         return expr.to_sql()
 
-    def format_for_update(self, expr) -> Tuple[str, List]:
+    def format_for_update(self, expr: "BaseExpression") -> Tuple[str, tuple]:
         return expr.to_sql()
 
-    def format_query_statement(self, expr) -> Tuple[str, tuple]:
+    def format_query_statement(self, expr: "BaseExpression") -> Tuple[str, tuple]:
         """Oracle SELECT builder.
 
         Oracle (unlike PostgreSQL/MySQL/SQLite) rejects ``SELECT *, expr AS x``

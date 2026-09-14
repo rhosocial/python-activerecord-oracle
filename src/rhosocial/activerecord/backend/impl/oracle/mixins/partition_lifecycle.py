@@ -94,7 +94,7 @@ class OraclePartitionLifecycleMixin:
             )
         table_sql = self.format_identifier(expr.table)
         part_sql = self.format_identifier(expr.partition_name)
-        at_parts = [self.format_partition_boundary_value(v) for v in expr.at_values]
+        at_parts = [self.format_partition_boundary_value(v)[0] for v in expr.at_values]
         at_sql = ", ".join(at_parts)
         # In the INTO partition list, Oracle does NOT accept a VALUES clause
         # for SPLIT PARTITION (ORA-14020). Only the partition name (and

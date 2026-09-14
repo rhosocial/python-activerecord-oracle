@@ -36,7 +36,7 @@ class OracleRoutineMixin:
     def supports_create_package_body(self) -> bool:
         return True
 
-    def format_parameters(self, parameters) -> str:
+    def format_parameters(self, parameters: list) -> Tuple[str, tuple]:
         """Render formal parameters as a comma-separated declaration list."""
         rendered = []
         for param in parameters:
@@ -46,7 +46,7 @@ class OracleRoutineMixin:
             # A data type is not an identifier: upper-case it without quoting.
             parts.append(param.data_type.upper())
             rendered.append(" ".join(parts))
-        return ", ".join(rendered)
+        return ", ".join(rendered), ()
 
     def format_create_procedure_statement(
         self, expr: "OracleCreateProcedureExpression"
@@ -66,7 +66,7 @@ class OracleRoutineMixin:
         parts.append("PROCEDURE")
         parts.append(self.format_identifier(expr.procedure_name))
         if expr.parameters:
-            parts.append(f"({self.format_parameters(expr.parameters)})")
+            parts.append(f"({self.format_parameters(expr.parameters)[0]})")
         parts.append(expr.keyword)
         parts.append(expr.body)
         return " ".join(parts), ()
@@ -89,7 +89,7 @@ class OracleRoutineMixin:
         parts.append("FUNCTION")
         parts.append(self.format_identifier(expr.function_name))
         if expr.parameters:
-            parts.append(f"({self.format_parameters(expr.parameters)})")
+            parts.append(f"({self.format_parameters(expr.parameters)[0]})")
         parts.append(expr.return_keyword)
         # A data type is not an identifier: upper-case it without quoting.
         parts.append(expr.return_type.upper())
