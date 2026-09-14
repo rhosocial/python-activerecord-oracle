@@ -237,7 +237,7 @@ class OracleIntrospectionMixin:
         table_name = params.get("table_name")
         conditions, sql_params, next_bind = self._owner_conditions(schema, 1)
         if table_name:
-            conditions.append(f"table_name = :{next_bind}")
+            conditions.append("table_name = ?")
             sql_params.append(str(table_name).upper())
         where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
         sql = (
