@@ -73,4 +73,4 @@ class VectorOperandExpression(BaseExpression):
     @property
     def format_method(self) -> str:
         """The dialect formatting method that renders this expression."""
-        return "format_vector_operand_expression"
+        return "format_vector_operand"
