@@ -158,7 +158,7 @@ class OracleIntrospectionMixin:
             "char_length AS CHAR_LENGTH, data_length AS DATA_LENGTH, "
             "character_set_name AS CHARACTER_SET_NAME "
             "FROM all_tab_columns "
-            "WHERE owner = :1 AND table_name = :2 "
+            "WHERE owner = ? AND table_name = ? "
             "ORDER BY column_id"
         )
         return sql, (str(schema).upper(), str(table_name).upper())
@@ -175,7 +175,7 @@ class OracleIntrospectionMixin:
             "FROM all_indexes i "
             "JOIN all_ind_columns ic ON i.index_name = ic.index_name "
             "AND i.owner = ic.index_owner "
-            "WHERE i.table_owner = :1 AND i.table_name = :2 "
+            "WHERE i.table_owner = ? AND i.table_name = ? "
             "ORDER BY i.index_name, ic.column_position"
         )
         return sql, (str(schema).upper(), str(table_name).upper())
@@ -198,7 +198,7 @@ class OracleIntrospectionMixin:
             "AND cons.r_owner = ref_cons.owner "
             "JOIN all_cons_columns ref_cols ON ref_cons.constraint_name = ref_cols.constraint_name "
             "AND ref_cons.owner = ref_cols.owner AND cols.position = ref_cols.position "
-            "WHERE cons.owner = :1 AND cons.table_name = :2 AND cons.constraint_type = 'R' "
+            "WHERE cons.owner = ? AND cons.table_name = ? AND cons.constraint_type = 'R' "
             "ORDER BY cons.constraint_name, cols.position"
         )
         return sql, (str(schema).upper(), str(table_name).upper())
@@ -226,7 +226,7 @@ class OracleIntrospectionMixin:
             "SELECT view_name AS VIEW_NAME, text_vc AS VIEW_DEFINITION, "
             "read_only AS READ_ONLY "
             "FROM all_views "
-            "WHERE owner = :1 AND view_name = :2"
+            "WHERE owner = ? AND view_name = ?"
         )
         return sql, (str(schema).upper(), str(view_name).upper())
 
