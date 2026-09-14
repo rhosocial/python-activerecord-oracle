@@ -1,4 +1,4 @@
-# src/rhosocial/activerecord/backend/impl/oracle/protocols/json_support.py
+# src/rhosocial/activerecord/backend/impl/oracle/protocols/json.py
 """Protocols for Oracle JSON/Duality/Boolean/Vector support."""
 
 from typing import Protocol, runtime_checkable
