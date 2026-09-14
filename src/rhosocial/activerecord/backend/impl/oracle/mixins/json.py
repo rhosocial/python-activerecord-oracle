@@ -68,7 +68,7 @@ class OracleJSONFunctionMixin(object):
             Tuple of (sql_fragment, params_tuple).
         """
         existing: Tuple = tuple(params) if params else ()
-        return f"JSON_MERGE_PATCH({col_expr}, ?)", existing + (patch_json,)
+        return f"JSON_MERGE_PATCH({col_expr}, {self.p()})", existing + (patch_json,)
 
     def format_json_array(self, *elements: Any) -> str:
         """Format JSON_ARRAY function."""

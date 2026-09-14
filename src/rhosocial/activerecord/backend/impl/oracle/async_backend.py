@@ -656,11 +656,11 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
 
         table_name = f"{options.schema_name}.{options.table}" if options.schema_name else options.table
         columns_sql = ", ".join(options.columns)
-        placeholders = ", ".join(["?"] * len(options.columns))
+        placeholders = ", ".join([self.dialect.p()] * len(options.columns))
         sql = f"INSERT INTO {table_name} ({columns_sql}) VALUES ({placeholders})"
         if options.returning_columns:
             returning_sql = ", ".join(options.returning_columns)
-            into_placeholders = ", ".join(["?"] * len(options.returning_columns))
+            into_placeholders = ", ".join([self.dialect.p()] * len(options.returning_columns))
             sql = f"{sql} RETURNING {returning_sql} INTO {into_placeholders}"
 
         cursor = None
@@ -1046,7 +1046,7 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
                 after_returning = sql[returning_pos:].upper()
                 if ' INTO ' not in after_returning:
                     # Add INTO clause with placeholders
-                    into_placeholders = ', '.join(['?'] * num_returning)
+                    into_placeholders = ', '.join([self.dialect.p()] * num_returning)
                     sql = f"{sql} INTO {into_placeholders}"
 
             # Convert input params for datetime preservation

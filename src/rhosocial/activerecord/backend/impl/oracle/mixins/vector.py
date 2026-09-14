@@ -97,15 +97,15 @@ class OracleVectorMixin(object):
             return 'NULL'
         if isinstance(operand, str):
             params.append(operand)
-            return '?'
+            return self.p()
         if hasattr(operand, 'to_string'):
             params.append(operand.to_string())
-            return '?'
+            return self.p()
         if isinstance(operand, (list, tuple)):
             params.append('[' + ','.join(str(v) for v in operand) + ']')
-            return '?'
+            return self.p()
         params.append(operand)
-        return '?'
+        return self.p()
 
     def format_vector_operand(self, expr: "VectorOperandExpression") -> Tuple[str, Tuple]:
         """Format a VectorOperandExpression into SQL and params."""
