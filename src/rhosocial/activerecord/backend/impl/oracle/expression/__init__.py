@@ -25,7 +25,7 @@ from .hint import (
     monitor_hint, no_monitor_hint
 )
 from .locking import (
-    OracleForUpdateExpression, OracleLockTableExpression,
+    OracleForUpdateExpression, OracleForUpdateClause, OracleLockTableExpression,
     for_update, for_update_nowait, for_update_wait, for_update_skip_locked,
 )
 from .sequence import (
@@ -87,7 +87,7 @@ __all__ = [
     'dynamic_sampling_hint', 'gather_plan_statistics_hint',
     'monitor_hint', 'no_monitor_hint',
     # Locking expressions
-    'OracleForUpdateExpression', 'OracleLockTableExpression',
+    'OracleForUpdateExpression', 'OracleForUpdateClause', 'OracleLockTableExpression',
     'for_update', 'for_update_nowait', 'for_update_wait', 'for_update_skip_locked',
     # Sequence expressions
     'OracleSequenceValueMode', 'OracleSequenceValueExpression',

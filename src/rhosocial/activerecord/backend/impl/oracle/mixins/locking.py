@@ -89,10 +89,19 @@ class OracleLockingMixin(object):
         """
         all_params: List[Any] = []
 
+        from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
+        from rhosocial.activerecord.backend.expression import LockStrength
+        from ..expression.locking import OracleForUpdateClause
+
+        if clause.strength != LockStrength.UPDATE:
+            raise UnsupportedFeatureError(
+                self.name, f"{clause.strength.value} (unsupported lock strength)"
+            )
+
         sql_parts: List[str] = ["FOR UPDATE"]
 
         # OF <columns>
-        of_columns = getattr(clause, "of_columns", None) or []
+        of_columns = clause.of_columns or []
         of_parts: List[str] = []
         for col in of_columns:
             if isinstance(col, str):
@@ -105,17 +114,14 @@ class OracleLockingMixin(object):
             sql_parts.append(f"OF {', '.join(of_parts)}")
 
         # Wait options: NOWAIT | WAIT n | SKIP LOCKED (mutually exclusive)
-        nowait = getattr(clause, "nowait", False)
-        skip_locked = getattr(clause, "skip_locked", False)
-        wait = getattr(clause, "wait", None)
+        nowait = clause.nowait
+        skip_locked = clause.skip_locked
+        wait = clause.wait if isinstance(clause, OracleForUpdateClause) else None
 
         if nowait:
             sql_parts.append("NOWAIT")
         elif skip_locked:
             if not self.supports_for_update_skip_locked():
-                from rhosocial.activerecord.backend.dialect.exceptions import (
-                    UnsupportedFeatureError,
-                )
                 raise UnsupportedFeatureError(
                     self.name, "SKIP LOCKED (requires Oracle 11g+)"
                 )

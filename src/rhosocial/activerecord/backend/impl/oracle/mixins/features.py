@@ -151,6 +151,15 @@ class OracleFeaturesMixin:
         (ORA-02014)."""
         return False
 
+    # --- DQL: ordering / pagination -----------------------------------
+    def supports_nulls_first_last(self) -> bool:
+        """Oracle supports explicit NULLS FIRST / NULLS LAST ordering."""
+        return True
+
+    def supports_fetch_with_ties(self) -> bool:
+        """Oracle supports FETCH FIRST ... WITH TIES since 12c."""
+        return self.version >= (12, 0, 0)
+
     # --- Auto-increment / Generated columns ---------------------------
     def supports_auto_increment(self) -> bool:
         return self.version >= (12, 0, 0)
