@@ -116,6 +116,8 @@ class TestOracleDialectProtocolConformance:
 # decision (move to ORACLE_PROTOCOLS or revert).
 ORACLE_NOT_IMPLEMENTED = [
     # --- Intentional non-support ---
+    # The generic DatabaseSupport protocol is not composed by OracleDialect.
+    dialect_protocols.DatabaseSupport,
     # Oracle has no SQL/PSM generic function protocol; routines are exposed
     # through the Oracle-specific OracleRoutineSupport / OracleFunctionFormatSupport
     # capability protocols instead.
