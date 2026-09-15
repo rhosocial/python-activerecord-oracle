@@ -18,6 +18,10 @@ class OracleDDLMixin:
     inlined in its monolithic file.
     """
 
+    def supports_check_constraint(self) -> bool:
+        """Oracle supports CHECK constraints (12c+)."""
+        return True
+
     def format_create_table_statement(
         self, expr: "CreateTableExpression"
     ) -> Tuple[str, tuple]:
@@ -149,6 +153,18 @@ class OracleDDLMixin:
 
         return " ".join(parts), tuple(params)
 
+    def supports_foreign_key_on_delete(self) -> bool:
+        """Oracle supports FOREIGN KEY ON DELETE."""
+        return True
+
+    def supports_foreign_key_on_update(self) -> bool:
+        """Oracle does not support FOREIGN KEY ON UPDATE."""
+        return False
+
+    def supports_fk_match(self) -> bool:
+        """Oracle does not support FOREIGN KEY MATCH."""
+        return False
+
     def format_table_constraint(
         self,
         t_const: "TableConstraint",
@@ -173,6 +189,12 @@ class OracleDDLMixin:
                 parts.append(f"UNIQUE ({cols_str})")
         elif t_const.constraint_type == TableConstraintType.CHECK:
             if t_const.check_condition is not None:
+                if not self.supports_check_constraint():
+                    from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
+                    raise UnsupportedFeatureError(
+                        self.name, "CHECK constraint",
+                        f"{self.name} does not support CHECK constraints."
+                    )
                 check_sql, check_params = t_const.check_condition.to_sql()
                 parts.append(f"CHECK ({check_sql})")
                 params.extend(check_params)
@@ -188,8 +210,20 @@ class OracleDDLMixin:
                 )
                 if isinstance(t_const, ForeignKeyConstraint):
                     if t_const.on_delete and t_const.on_delete != ReferentialAction.NO_ACTION:
+                        if not self.supports_foreign_key_on_delete():
+                            from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
+                            raise UnsupportedFeatureError(
+                                self.name, "FOREIGN KEY ON DELETE",
+                                f"{self.name} does not support ON DELETE for foreign keys."
+                            )
                         parts.append(f"ON DELETE {t_const.on_delete.value}")
                     if t_const.on_update and t_const.on_update != ReferentialAction.NO_ACTION:
+                        if not self.supports_foreign_key_on_update():
+                            from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
+                            raise UnsupportedFeatureError(
+                                self.name, "FOREIGN KEY ON UPDATE",
+                                f"{self.name} does not support ON UPDATE for foreign keys."
+                            )
                         parts.append(f"ON UPDATE {t_const.on_update.value}")
 
         return " ".join(parts), tuple(params)
