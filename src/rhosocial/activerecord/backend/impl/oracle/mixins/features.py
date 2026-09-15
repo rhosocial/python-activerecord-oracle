@@ -81,6 +81,15 @@ class OracleFeaturesMixin:
     def supports_returning_delete(self) -> bool:
         return True
 
+    def supports_returning_expressions(self) -> bool:
+        return False
+
+    def supports_returning_wildcard(self) -> bool:
+        return False
+
+    def supports_returning_single_row(self) -> bool:
+        return True
+
     # --- Window functions ---------------------------------------------
     def supports_window_functions(self) -> bool:
         return self.version >= (8, 0, 0)
