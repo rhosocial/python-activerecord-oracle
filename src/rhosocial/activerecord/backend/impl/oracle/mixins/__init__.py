@@ -37,8 +37,8 @@ from .sequence import OracleSequenceMixin
 from .set_operation import OracleSetOperationMixin
 from .spatial import OracleSpatialMixin
 from .synonym import OracleSynonymMixin
-from .table import OracleTableMixin
-from .table_op import OracleTableCapabilityMixin
+from .ddl_table import OracleTableMixin
+from .ddl_table_op import OracleTableCapabilityMixin
 from .transaction import OracleTransactionMixin
 from .trigger import OracleTriggerMixin
 from .truncate import OracleTruncateMixin

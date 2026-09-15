@@ -9,7 +9,7 @@ if TYPE_CHECKING:
         AddColumn,
         DropColumn,
         ModifyColumn,
-        RenameColumn,
+        RenameObject,
     )
 
 
@@ -74,7 +74,7 @@ class OracleModifyColumnMixin:
         sql = f"MODIFY ({col_sql})"
         return sql, col_params
 
-    def format_rename_column_action(self, action: "RenameColumn") -> Tuple[str, tuple]:
+    def format_rename_column_action(self, action: "RenameObject") -> Tuple[str, tuple]:
         """Format RENAME COLUMN action for ALTER TABLE."""
         sql = f"RENAME COLUMN {self.format_identifier(action.old_name)} TO {self.format_identifier(action.new_name)}"
         return sql, ()

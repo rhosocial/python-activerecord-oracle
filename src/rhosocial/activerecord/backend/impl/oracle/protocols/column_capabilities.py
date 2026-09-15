@@ -26,7 +26,7 @@ class OracleModifyColumnSupport(Protocol):
         ...  # pragma: no cover
     def format_modify_column_action(self, action: 'ModifyColumn') -> Tuple[str, tuple]:
         ...  # pragma: no cover
-    def format_rename_column_action(self, action: 'RenameColumn') -> Tuple[str, tuple]:
+    def format_rename_column_action(self, action: 'RenameObject') -> Tuple[str, tuple]:
         ...  # pragma: no cover
     def supports_set_unused(self) -> bool:
         ...  # pragma: no cover
