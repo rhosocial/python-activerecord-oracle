@@ -761,9 +761,13 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
                 lob_var = cursor.var(oracledb.DB_TYPE_CLOB)
                 table_sql = self._quote_identifier(table)
                 column_sql = self._quote_identifier(column)
-                p = self.dialect.get_parameter_placeholder()
+                # Use explicit Oracle positional binds: this cursor.execute call
+                # does not go through _convert_placeholders_to_oracle(), so a
+                # bare "?" would be treated as a literal and the binds rejected
+                # with DPY-4009.
                 await cursor.execute(
-                    f"UPDATE {table_sql} SET {column_sql} = EMPTY_CLOB() WHERE id = {p} RETURNING {column_sql} INTO {p}",
+                    f"UPDATE {table_sql} SET {column_sql} = EMPTY_CLOB() "
+                    f"WHERE id = :1 RETURNING {column_sql} INTO :2",
                     [pk_value, lob_var],
                 )
                 lob = lob_var.getvalue()
