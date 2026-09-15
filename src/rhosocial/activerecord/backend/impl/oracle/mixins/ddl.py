@@ -154,6 +154,8 @@ class OracleDDLMixin:
         t_const: "TableConstraint",
     ) -> Tuple[str, tuple]:
         from rhosocial.activerecord.backend.expression.statements.ddl_table import (
+            ForeignKeyConstraint,
+            ReferentialAction,
             TableConstraintType,
         )
         parts: List[str] = []
@@ -169,6 +171,11 @@ class OracleDDLMixin:
             if t_const.columns:
                 cols_str = ", ".join(self.format_identifier(c) for c in t_const.columns)
                 parts.append(f"UNIQUE ({cols_str})")
+        elif t_const.constraint_type == TableConstraintType.CHECK:
+            if t_const.check_condition is not None:
+                check_sql, check_params = t_const.check_condition.to_sql()
+                parts.append(f"CHECK ({check_sql})")
+                params.extend(check_params)
         elif t_const.constraint_type == TableConstraintType.FOREIGN_KEY:
             if t_const.columns and t_const.foreign_key_table and t_const.foreign_key_columns:
                 cols_str = ", ".join(self.format_identifier(c) for c in t_const.columns)
@@ -179,5 +186,10 @@ class OracleDDLMixin:
                 parts.append(
                     f"FOREIGN KEY ({cols_str}) REFERENCES {ref_table} ({ref_cols_str})"
                 )
+                if isinstance(t_const, ForeignKeyConstraint):
+                    if t_const.on_delete and t_const.on_delete != ReferentialAction.NO_ACTION:
+                        parts.append(f"ON DELETE {t_const.on_delete.value}")
+                    if t_const.on_update and t_const.on_update != ReferentialAction.NO_ACTION:
+                        parts.append(f"ON UPDATE {t_const.on_update.value}")
 
         return " ".join(parts), tuple(params)
