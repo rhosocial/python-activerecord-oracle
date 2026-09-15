@@ -29,9 +29,10 @@ class OracleDDLMixin:
         when the table does not exist, making creation idempotent.
         """
         all_params: List[Any] = []
-        parts = ["CREATE TABLE"]
+        parts = ["CREATE"]
         if expr.temporary:
             parts.append("GLOBAL TEMPORARY")
+        parts.append("TABLE")
         parts.append(self.format_identifier(expr.table_name))
 
         column_parts: List[str] = []
