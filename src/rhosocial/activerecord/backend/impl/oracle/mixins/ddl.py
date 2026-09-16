@@ -151,6 +151,11 @@ class OracleDDLMixin:
         if constraint_parts:
             parts.append(" ".join(constraint_parts))
 
+        if col_def.generated_expression is not None:
+            gen_sql, gen_params = col_def.generated_expression.to_sql()
+            parts.append(gen_sql.lstrip())
+            params.extend(gen_params)
+
         return " ".join(parts), tuple(params)
 
     def supports_foreign_key_on_delete(self) -> bool:
