@@ -51,18 +51,17 @@ from rhosocial.activerecord.backend.dialect.mixins import (
     SQLXMLMixin,
     CollationMixin,
     CTEMixin,
-    FilterClauseMixin,
+
     WindowFunctionMixin,
     JSONMixin,
-    AdvancedGroupingMixin,
+
     ArrayMixin,
     ExplainMixin,
     GraphMixin,
     GraphTableMixin,
-    LockingMixin,
+
     MergeMixin,
-    OrderedSetAggregationMixin,
-    QualifyClauseMixin,
+
     TemporalTableMixin,
     UpsertMixin,
     LateralJoinMixin,
@@ -188,17 +187,16 @@ class OracleDialect(
     SQLXMLMixin,
     CollationMixin,
     CTEMixin,
-    FilterClauseMixin,
+
     WindowFunctionMixin,
     JSONMixin,
-    AdvancedGroupingMixin,
+
     ArrayMixin,
     ExplainMixin,
     GraphMixin,
-    LockingMixin,
+
     MergeMixin,
-    OrderedSetAggregationMixin,
-    QualifyClauseMixin,
+
     TemporalTableMixin,
     UpsertMixin,
     LateralJoinMixin,
