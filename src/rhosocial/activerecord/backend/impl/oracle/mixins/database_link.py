@@ -18,7 +18,7 @@ class OracleDatabaseLinkMixin:
     Database links have existed since early Oracle releases; the formatters
     gate on ``(9, 0, 0)`` per the backend implementation contract. Remote
     table references use the ``@dblink`` suffix (see
-    :meth:`OracleIdentifierMixin.format_table`).
+    :meth:`format_table`).
     """
 
     def supports_create_database_link(self) -> bool:

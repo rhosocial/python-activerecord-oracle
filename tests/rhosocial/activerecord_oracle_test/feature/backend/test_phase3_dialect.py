@@ -182,7 +182,7 @@ class TestDialectExpressionFormatting:
         dialect = OracleDialect(version=(19, 0, 0))
         expr = ConnectByRootExpression(dialect, column="id")
         
-        sql, params = dialect.format_connect_by(expr)
+        sql, params = expr.to_sql()
         assert "CONNECT_BY_ROOT" in sql
 
     def test_format_pivot(self):
@@ -199,7 +199,7 @@ class TestDialectExpressionFormatting:
             values=["Jan", "Feb"]
         )
         
-        sql, params = dialect.format_pivot(pivot)
+        sql, params = pivot.to_sql()
         assert "PIVOT" in sql
         assert "SUM" in sql
 
@@ -211,7 +211,7 @@ class TestDialectExpressionFormatting:
         dialect = OracleDialect(version=(19, 0, 0))
         hint = OracleHintExpression(dialect, hints=["FULL(users)"])
         
-        sql, params = dialect.format_hint(hint)
+        sql, params = hint.to_sql()
         assert "/*+ FULL(users) */" in sql
 
     def test_format_for_update(self):
@@ -222,7 +222,7 @@ class TestDialectExpressionFormatting:
         dialect = OracleDialect(version=(19, 0, 0))
         lock = OracleForUpdateExpression(dialect, nowait=True)
         
-        sql, params = dialect.format_for_update(lock)
+        sql, params = lock.to_sql()
         assert "FOR UPDATE" in sql
         assert "NOWAIT" in sql
 
@@ -409,7 +409,7 @@ class TestTransactionControl:
         from rhosocial.activerecord.backend.expression.transaction import CommitTransactionExpression
         dialect = OracleDialect(version=(19, 0, 0))
         expr = CommitTransactionExpression(dialect)
-        sql, params = dialect.format_commit_transaction(expr)
+        sql, params = expr.to_sql()
         assert sql == "COMMIT"
 
     def test_format_rollback(self):
@@ -418,7 +418,7 @@ class TestTransactionControl:
         from rhosocial.activerecord.backend.expression.transaction import RollbackTransactionExpression
         dialect = OracleDialect(version=(19, 0, 0))
         expr = RollbackTransactionExpression(dialect)
-        sql, params = dialect.format_rollback_transaction(expr)
+        sql, params = expr.to_sql()
         assert sql == "ROLLBACK"
 
     def test_format_savepoint(self):
@@ -427,7 +427,7 @@ class TestTransactionControl:
         from rhosocial.activerecord.backend.expression.transaction import SavepointExpression
         dialect = OracleDialect(version=(19, 0, 0))
         expr = SavepointExpression(dialect, "sp1")
-        sql, params = dialect.format_savepoint(expr)
+        sql, params = expr.to_sql()
         assert "SAVEPOINT" in sql
         assert "SP1" in sql
 

@@ -5,7 +5,7 @@ from .hierarchical import HierarchicalQuerySupport
 from .pivot import PivotSupport
 from .hint import QueryHintSupport
 from .locking import OracleLockingSupport
-from .json_support import (
+from .json import (
     OracleNativeJSONSupport,
     OracleBooleanTypeSupport,
     OracleVectorTypeSupport,

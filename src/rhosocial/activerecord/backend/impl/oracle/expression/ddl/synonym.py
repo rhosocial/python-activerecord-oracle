@@ -59,8 +59,10 @@ class OracleCreateSynonymExpression(BaseExpression):
         self.public = bool(public)
         self.dialect_options = dialect_options or {}
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self.dialect.format_create_synonym_statement(self)
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_create_synonym_statement"
 
 
 class OracleDropSynonymExpression(BaseExpression):
@@ -95,5 +97,7 @@ class OracleDropSynonymExpression(BaseExpression):
         self.force = bool(force)
         self.dialect_options = dialect_options or {}
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self.dialect.format_drop_synonym_statement(self)
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_drop_synonym_statement"

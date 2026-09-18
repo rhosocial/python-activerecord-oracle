@@ -20,7 +20,7 @@ class OracleRoutineSupport(Protocol):
         ...  # pragma: no cover
     def supports_create_package_body(self) -> bool:
         ...  # pragma: no cover
-    def format_parameters(self, parameters) -> str:
+    def format_parameters(self, parameters: list) -> Tuple[str, tuple]:
         ...  # pragma: no cover
     def format_create_procedure_statement(self, expr: 'OracleCreateProcedureExpression') -> Tuple[str, tuple]:
         ...  # pragma: no cover

@@ -1,5 +1,8 @@
 # src/rhosocial/activerecord/backend/impl/oracle/mixins/trigger.py
-from typing import Tuple
+from typing import Tuple, TYPE_CHECKING
+
+if TYPE_CHECKING:  # pragma: no cover
+    from ..expression.trigger import DisableTriggerExpression, EnableTriggerExpression
 
 
 class OracleTriggerMixin(object):
@@ -134,20 +137,20 @@ class OracleTriggerMixin(object):
 
         return " ".join(parts), ()
 
-    def format_disable_trigger_statement(self, trigger_name, table_name=None) -> Tuple[str, tuple]:
+    def format_disable_trigger_statement(self, expr: "DisableTriggerExpression") -> Tuple[str, tuple]:
         """Format ALTER TRIGGER ... DISABLE statement (Oracle syntax)."""
         if not self.supports_disable_trigger():
             from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
             raise UnsupportedFeatureError(self.name, "DISABLE TRIGGER")
 
-        parts = ["ALTER TRIGGER", self.format_identifier(trigger_name), "DISABLE"]
+        parts = ["ALTER TRIGGER", self.format_identifier(expr.trigger_name), "DISABLE"]
         return " ".join(parts), ()
 
-    def format_enable_trigger_statement(self, trigger_name, table_name=None) -> Tuple[str, tuple]:
+    def format_enable_trigger_statement(self, expr: "EnableTriggerExpression") -> Tuple[str, tuple]:
         """Format ALTER TRIGGER ... ENABLE statement (Oracle syntax)."""
         if not self.supports_disable_trigger():
             from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
             raise UnsupportedFeatureError(self.name, "ENABLE TRIGGER")
 
-        parts = ["ALTER TRIGGER", self.format_identifier(trigger_name), "ENABLE"]
+        parts = ["ALTER TRIGGER", self.format_identifier(expr.trigger_name), "ENABLE"]
         return " ".join(parts), ()

@@ -150,9 +150,9 @@ class TestOracleRangePartitionClause:
         )
         sql, params = clause.to_sql()
         assert sql == (
-            " PARTITION BY RANGE (age) "
-            "(PARTITION P1 VALUES LESS THAN (18), "
-            "PARTITION P2 VALUES LESS THAN (MAXVALUE))"
+            " PARTITION BY RANGE (\"AGE\") "
+            "(PARTITION \"P1\" VALUES LESS THAN (18), "
+            "PARTITION \"P2\" VALUES LESS THAN (MAXVALUE))"
         )
         # Oracle DDL does not accept bind variables; values are inlined.
         assert params == ()
@@ -169,9 +169,9 @@ class TestOracleRangePartitionClause:
             },
         )
         sql, params = clause.to_sql()
-        assert sql.startswith(" PARTITION BY RANGE (a, b) ")
-        assert "PARTITION P1 VALUES LESS THAN (1, 100)" in sql
-        assert "PARTITION P2 VALUES LESS THAN (MAXVALUE, MAXVALUE)" in sql
+        assert sql.startswith(' PARTITION BY RANGE ("A", "B") ')
+        assert 'PARTITION "P1" VALUES LESS THAN (1, 100)' in sql
+        assert 'PARTITION "P2" VALUES LESS THAN (MAXVALUE, MAXVALUE)' in sql
         assert params == ()
 
     def test_range_string_boundary_escaped(self):
@@ -197,7 +197,7 @@ class TestOracleRangePartitionClause:
             d, PartitionStrategy.RANGE, [Column(d, "age")],
         )
         sql, params = clause.to_sql()
-        assert sql == " PARTITION BY RANGE (age)"
+        assert sql == ' PARTITION BY RANGE ("AGE")'
         assert params == ()
 
     def test_range_missing_less_than_raises(self):
@@ -241,9 +241,9 @@ class TestOracleListPartitionClause:
         )
         sql, params = clause.to_sql()
         assert sql == (
-            " PARTITION BY LIST (region) "
-            "(PARTITION P_EAST VALUES ('EAST', 'NORTH'), "
-            "PARTITION P_WEST VALUES ('WEST'))"
+            " PARTITION BY LIST (\"REGION\") "
+            "(PARTITION \"P_EAST\" VALUES ('EAST', 'NORTH'), "
+            "PARTITION \"P_WEST\" VALUES ('WEST'))"
         )
         assert params == ()
 
@@ -253,7 +253,7 @@ class TestOracleListPartitionClause:
             d, PartitionStrategy.LIST, [Column(d, "region")],
         )
         sql, params = clause.to_sql()
-        assert sql == " PARTITION BY LIST (region)"
+        assert sql == ' PARTITION BY LIST ("REGION")'
         assert params == ()
 
     def test_list_missing_in_values_raises(self):
@@ -280,7 +280,7 @@ class TestOracleHashPartitionClause:
             dialect_options={"partitions_count": 4},
         )
         sql, params = clause.to_sql()
-        assert sql == " PARTITION BY HASH (id) PARTITIONS 4"
+        assert sql == ' PARTITION BY HASH ("ID") PARTITIONS 4'
         assert params == ()
 
     def test_hash_multi_column(self):
@@ -290,7 +290,7 @@ class TestOracleHashPartitionClause:
             dialect_options={"partitions_count": 8},
         )
         sql, params = clause.to_sql()
-        assert sql == " PARTITION BY HASH (a, b) PARTITIONS 8"
+        assert sql == ' PARTITION BY HASH ("A", "B") PARTITIONS 8'
         assert params == ()
 
     def test_hash_without_count(self):
@@ -300,7 +300,7 @@ class TestOracleHashPartitionClause:
             d, PartitionStrategy.HASH, [Column(d, "id")],
         )
         sql, params = clause.to_sql()
-        assert sql == " PARTITION BY HASH (id)"
+        assert sql == ' PARTITION BY HASH ("ID")'
         assert params == ()
 
     def test_hash_invalid_count_raises(self):
@@ -341,7 +341,8 @@ class TestOraclePartitionClauseErrors:
     def test_invalid_method_raises(self):
         d = _dialect()
         # Build a PartitionClause with a valid strategy then mutate method
-        # to an unsupported value to exercise the dispatch default branch.
+        # to an unsupported value to exercise the expression dispatch default
+        # branch.
         clause = PartitionClause(
             d, PartitionStrategy.HASH, [Column(d, "id")],
             dialect_options={"partitions_count": 2},

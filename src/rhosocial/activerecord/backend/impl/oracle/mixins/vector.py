@@ -1,5 +1,8 @@
 # src/rhosocial/activerecord/backend/impl/oracle/mixins/vector.py
-from typing import Any, Tuple, List
+from typing import Any, Dict, Tuple, List, Union, TYPE_CHECKING
+
+if TYPE_CHECKING:  # pragma: no cover
+    from ..expression.vector import VectorLiteralExpression, VectorOperandExpression
 
 
 class OracleVectorMixin(object):
@@ -28,8 +31,8 @@ class OracleVectorMixin(object):
             return False
         return metric.upper() in self.SUPPORTED_DISTANCE_METRICS
 
-    def format_vector_literal(self, vec: Any) -> str:
-        """Format a vector value as Oracle VECTOR string literal."""
+    def _format_vector_literal_value(self, vec: Any) -> str:
+        """Format a raw vector value as Oracle VECTOR string literal."""
         if vec is None:
             return 'NULL'
         if hasattr(vec, 'to_string'):
@@ -46,7 +49,13 @@ class OracleVectorMixin(object):
             return vec
         raise TypeError(f"Cannot format vector literal from {type(vec).__name__}")
 
-    def format_vector_distance(self, expr: Any) -> Tuple[str, Tuple]:
+    def format_vector_literal(self, expr: "VectorLiteralExpression") -> Tuple[str, tuple]:
+        """Format a VectorLiteralExpression as Oracle VECTOR string literal."""
+        return self._format_vector_literal_value(expr.vec), ()
+
+    def format_vector_distance(
+        self, expr: Union[Dict[str, Any], Any]
+    ) -> Tuple[str, tuple]:
         """Format a vector distance expression.
 
         Args:
@@ -79,23 +88,29 @@ class OracleVectorMixin(object):
             )
 
         params: List[Any] = []
-        sql_left = self.format_vector_operand(vector1, params)
-        sql_right = self.format_vector_operand(vector2, params)
+        sql_left = self._format_vector_operand_raw(vector1, params)
+        sql_right = self._format_vector_operand_raw(vector2, params)
         sql = f"VECTOR_DISTANCE({sql_left}, {sql_right}, '{metric}')"
         return sql, tuple(params)
 
-    def format_vector_operand(self, operand: Any, params: List[Any]) -> str:
-        """Format a single vector operand for embedding in SQL."""
+    def _format_vector_operand_raw(self, operand: Any, params: List[Any]) -> str:
+        """Format a single raw vector operand for embedding in SQL."""
         if operand is None:
             return 'NULL'
         if isinstance(operand, str):
             params.append(operand)
-            return '%s'
+            return self.p()
         if hasattr(operand, 'to_string'):
             params.append(operand.to_string())
-            return '%s'
+            return self.p()
         if isinstance(operand, (list, tuple)):
             params.append('[' + ','.join(str(v) for v in operand) + ']')
-            return '%s'
+            return self.p()
         params.append(operand)
-        return '%s'
+        return self.p()
+
+    def format_vector_operand(self, expr: "VectorOperandExpression") -> Tuple[str, tuple]:
+        """Format a VectorOperandExpression into SQL and params."""
+        params: List[Any] = []
+        sql = self._format_vector_operand_raw(expr.operand, params)
+        return sql, tuple(params)

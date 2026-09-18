@@ -83,5 +83,7 @@ class OracleCommentExpression(BaseExpression):
         self.comment = comment
         self.dialect_options = dialect_options or {}
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self.dialect.format_comment_statement(self)
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_comment_statement"

@@ -60,9 +60,7 @@ class TestOraclePartitionByRange:
         )
         sql, params = c.to_sql()
         assert sql == (
-            " PARTITION BY RANGE (id) "
-            "(PARTITION P1 VALUES LESS THAN (100), "
-            "PARTITION P2 VALUES LESS THAN (MAXVALUE))"
+            ' PARTITION BY RANGE ("ID") (PARTITION "P1" VALUES LESS THAN (100), PARTITION "P2" VALUES LESS THAN (MAXVALUE))'
         )
         assert params == ()
 
@@ -82,8 +80,8 @@ class TestOraclePartitionByRange:
             ],
         )
         sql, _ = c.to_sql()
-        assert "PARTITION P1 VALUES LESS THAN (1, 100)" in sql
-        assert "PARTITION P2 VALUES LESS THAN (MAXVALUE, MAXVALUE)" in sql
+        assert 'PARTITION "P1" VALUES LESS THAN (1, 100)' in sql
+        assert 'PARTITION "P2" VALUES LESS THAN (MAXVALUE, MAXVALUE)' in sql
 
     def test_range_string_boundary_escaped(self):
         d = _dialect()
@@ -116,7 +114,7 @@ class TestOraclePartitionByRange:
         d = _dialect()
         c = OraclePartitionByRange(d, [Column(d, "id")])
         sql, params = c.to_sql()
-        assert sql == " PARTITION BY RANGE (id)"
+        assert sql == ' PARTITION BY RANGE ("ID")'
         assert params == ()
 
     def test_range_missing_less_than_raises(self):
@@ -162,9 +160,7 @@ class TestOraclePartitionByList:
         )
         sql, params = c.to_sql()
         assert sql == (
-            " PARTITION BY LIST (region) "
-            "(PARTITION P_EAST VALUES ('EAST', 'NORTH'), "
-            "PARTITION P_WEST VALUES ('WEST'))"
+            ' PARTITION BY LIST ("REGION") (PARTITION "P_EAST" VALUES (\'EAST\', \'NORTH\'), PARTITION "P_WEST" VALUES (\'WEST\'))'
         )
         assert params == ()
 
@@ -189,7 +185,7 @@ class TestOraclePartitionByList:
         d = _dialect()
         c = OraclePartitionByList(d, [Column(d, "region")])
         sql, _ = c.to_sql()
-        assert sql == " PARTITION BY LIST (region)"
+        assert sql == ' PARTITION BY LIST ("REGION")'
 
     def test_list_missing_in_values_raises(self):
         d = _dialect()
@@ -213,14 +209,14 @@ class TestOraclePartitionByHash:
         d = _dialect()
         c = OraclePartitionByHash(d, [Column(d, "id")], partitions_count=4)
         sql, params = c.to_sql()
-        assert sql == " PARTITION BY HASH (id) PARTITIONS 4"
+        assert sql == ' PARTITION BY HASH ("ID") PARTITIONS 4'
         assert params == ()
 
     def test_hash_no_count_no_partitions(self):
         d = _dialect()
         c = OraclePartitionByHash(d, [Column(d, "id")])
         sql, _ = c.to_sql()
-        assert sql == " PARTITION BY HASH (id)"
+        assert sql == ' PARTITION BY HASH ("ID")'
 
     def test_hash_with_explicit_partitions(self):
         d = _dialect()
@@ -232,7 +228,7 @@ class TestOraclePartitionByHash:
             ],
         )
         sql, _ = c.to_sql()
-        assert "PARTITION BY HASH (id) (PARTITION P1, PARTITION P2)" in sql
+        assert 'PARTITION BY HASH ("ID") (PARTITION "P1", PARTITION "P2")' in sql
 
     def test_hash_count_must_be_positive(self):
         d = _dialect()
@@ -356,9 +352,9 @@ class TestLegacyPartitionClauseCompat:
             },
         )
         sql, params = c.to_sql()
-        assert "PARTITION BY RANGE (id)" in sql
-        assert "PARTITION P1 VALUES LESS THAN (100)" in sql
-        assert "PARTITION P2 VALUES LESS THAN (MAXVALUE)" in sql
+        assert 'PARTITION BY RANGE ("ID")' in sql
+        assert 'PARTITION "P1" VALUES LESS THAN (100)' in sql
+        assert 'PARTITION "P2" VALUES LESS THAN (MAXVALUE)' in sql
         assert params == ()
 
     def test_legacy_hash_path(self):
@@ -368,7 +364,7 @@ class TestLegacyPartitionClauseCompat:
             dialect_options={"partitions_count": 2},
         )
         sql, _ = c.to_sql()
-        assert sql == " PARTITION BY HASH (id) PARTITIONS 2"
+        assert sql == ' PARTITION BY HASH ("ID") PARTITIONS 2'
 
     def test_backend_specific_dispatch_takes_priority(self):
         """Backend-specific expression dispatches before legacy method string."""
@@ -386,5 +382,5 @@ class TestLegacyPartitionClauseCompat:
         # Structured form produces identical SQL to legacy for this case,
         # but the dispatch path is verifiable through the absence of
         # dialect_options (structured form never reads dialect_options).
-        assert "PARTITION BY RANGE (id)" in sql
-        assert "PARTITION P1 VALUES LESS THAN (100)" in sql
+        assert 'PARTITION BY RANGE ("ID")' in sql
+        assert 'PARTITION "P1" VALUES LESS THAN (100)' in sql

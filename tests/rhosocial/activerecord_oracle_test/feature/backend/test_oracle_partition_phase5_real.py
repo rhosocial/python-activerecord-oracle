@@ -160,10 +160,10 @@ def test_interval_partition_auto_creates_partition_real(oracle_backend_single):
             dialect=d,
             table=table_name,
             columns=[
-                ColumnDefinition("ID", IntegerType(), constraints=[
-                    ColumnConstraint(constraint_type=ColumnConstraintType.PRIMARY_KEY),
+                ColumnDefinition(d, "ID", IntegerType(d), constraints=[
+                    ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
                 ]),
-                ColumnDefinition("CREATED_AT", DateType()),
+                ColumnDefinition(d, "CREATED_AT", DateType(d)),
             ],
             partition=partition,
         )
@@ -220,8 +220,8 @@ def test_reference_partitioning_inherits_parent_partitions_real(oracle_backend_s
             dialect=d,
             table=parent_name,
             columns=[
-                ColumnDefinition("ID", IntegerType(), constraints=[
-                    ColumnConstraint(constraint_type=ColumnConstraintType.PRIMARY_KEY),
+                ColumnDefinition(d, "ID", IntegerType(d), constraints=[
+                    ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
                 ]),
             ],
             partition=parent_partition,
@@ -238,6 +238,7 @@ def test_reference_partitioning_inherits_parent_partitions_real(oracle_backend_s
         )
 
         fk_constraint = TableConstraint(
+            d,
             name="fk_child_parent",
             constraint_type=TableConstraintType.FOREIGN_KEY,
             columns=["PARENT_ID"],
@@ -249,10 +250,10 @@ def test_reference_partitioning_inherits_parent_partitions_real(oracle_backend_s
             dialect=d,
             table=child_name,
             columns=[
-                ColumnDefinition("ID", IntegerType(), constraints=[
-                    ColumnConstraint(constraint_type=ColumnConstraintType.PRIMARY_KEY),
+                ColumnDefinition(d, "ID", IntegerType(d), constraints=[
+                    ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
                 ]),
-                ColumnDefinition("PARENT_ID", IntegerType()),
+                ColumnDefinition(d, "PARENT_ID", IntegerType(d)),
             ],
             table_constraints=[fk_constraint],
             partition=child_partition,
@@ -314,10 +315,10 @@ def test_composite_range_hash_partitioning_real(oracle_backend_single):
             dialect=d,
             table=table_name,
             columns=[
-                ColumnDefinition("ID", IntegerType(), constraints=[
-                    ColumnConstraint(constraint_type=ColumnConstraintType.PRIMARY_KEY),
+                ColumnDefinition(d, "ID", IntegerType(d), constraints=[
+                    ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
                 ]),
-                ColumnDefinition("CREATED_AT", DateType()),
+                ColumnDefinition(d, "CREATED_AT", DateType(d)),
             ],
             partition=partition,
         )
@@ -360,10 +361,10 @@ def test_add_and_drop_partition_real(oracle_backend_single):
             dialect=d,
             table=table_name,
             columns=[
-                ColumnDefinition("ID", IntegerType(), constraints=[
-                    ColumnConstraint(constraint_type=ColumnConstraintType.PRIMARY_KEY),
+                ColumnDefinition(d, "ID", IntegerType(d), constraints=[
+                    ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
                 ]),
-                ColumnDefinition("NAME", VarCharType(length=100)),
+                ColumnDefinition(d, "NAME", VarCharType(length=100, dialect=d)),
             ],
             partition=partition,
         )
@@ -410,8 +411,8 @@ def test_split_partition_real(oracle_backend_single):
             dialect=d,
             table=table_name,
             columns=[
-                ColumnDefinition("ID", IntegerType(), constraints=[
-                    ColumnConstraint(constraint_type=ColumnConstraintType.PRIMARY_KEY),
+                ColumnDefinition(d, "ID", IntegerType(d), constraints=[
+                    ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
                 ]),
             ],
             partition=partition,
@@ -457,8 +458,8 @@ def test_merge_partitions_real(oracle_backend_single):
             dialect=d,
             table=table_name,
             columns=[
-                ColumnDefinition("ID", IntegerType(), constraints=[
-                    ColumnConstraint(constraint_type=ColumnConstraintType.PRIMARY_KEY),
+                ColumnDefinition(d, "ID", IntegerType(d), constraints=[
+                    ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
                 ]),
             ],
             partition=partition,
@@ -499,8 +500,8 @@ def test_truncate_partition_real(oracle_backend_single):
             dialect=d,
             table=table_name,
             columns=[
-                ColumnDefinition("ID", IntegerType(), constraints=[
-                    ColumnConstraint(constraint_type=ColumnConstraintType.PRIMARY_KEY),
+                ColumnDefinition(d, "ID", IntegerType(d), constraints=[
+                    ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
                 ]),
             ],
             partition=partition,
@@ -553,8 +554,8 @@ def test_move_partition_real(oracle_backend_single):
             dialect=d,
             table=table_name,
             columns=[
-                ColumnDefinition("ID", IntegerType(), constraints=[
-                    ColumnConstraint(constraint_type=ColumnConstraintType.PRIMARY_KEY),
+                ColumnDefinition(d, "ID", IntegerType(d), constraints=[
+                    ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
                 ]),
             ],
             partition=partition,
@@ -595,8 +596,8 @@ def test_exchange_partition_real(oracle_backend_single):
             dialect=d,
             table=table_name,
             columns=[
-                ColumnDefinition("ID", IntegerType(), constraints=[
-                    ColumnConstraint(constraint_type=ColumnConstraintType.PRIMARY_KEY),
+                ColumnDefinition(d, "ID", IntegerType(d), constraints=[
+                    ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
                 ]),
             ],
             partition=partition,
@@ -609,8 +610,8 @@ def test_exchange_partition_real(oracle_backend_single):
             dialect=d,
             table=staging_name,
             columns=[
-                ColumnDefinition("ID", IntegerType(), constraints=[
-                    ColumnConstraint(constraint_type=ColumnConstraintType.PRIMARY_KEY),
+                ColumnDefinition(d, "ID", IntegerType(d), constraints=[
+                    ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
                 ]),
             ],
         )

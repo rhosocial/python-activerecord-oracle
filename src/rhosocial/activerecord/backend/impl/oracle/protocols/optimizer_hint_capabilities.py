@@ -18,7 +18,7 @@ class OracleOptimizerHintSupport(Protocol):
         ...  # pragma: no cover
     def supports_hint_with_arguments(self) -> bool:
         ...  # pragma: no cover
-    def format_optimizer_hint(self, name: str, args: Tuple=(), kwargs: Optional[dict]=None) -> str:
+    def format_optimizer_hint(self, name: str, args: Tuple[Any, ...]=(), kwargs: Optional[Dict[str, Any]]=None) -> Tuple[str, tuple]:
         ...  # pragma: no cover
-    def format_multiple_hints(self, *hints: str) -> str:
+    def format_multiple_hints(self, *hints: str) -> Tuple[str, tuple]:
         ...  # pragma: no cover

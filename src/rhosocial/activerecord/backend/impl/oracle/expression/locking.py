@@ -10,9 +10,47 @@ from __future__ import annotations
 from typing import Optional, List, TYPE_CHECKING
 
 from rhosocial.activerecord.backend.expression.bases import BaseExpression, SQLQueryAndParams
+from rhosocial.activerecord.backend.expression.query_parts import (
+    ForUpdateClause,
+    LockStrength,
+)
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
+
+
+class OracleForUpdateClause(ForUpdateClause):
+    """Oracle FOR UPDATE clause.
+
+    Extends the generic :class:`ForUpdateClause` with Oracle's unique
+    ``WAIT n`` lock option. Oracle supports only the ``FOR UPDATE`` strength
+    (there is no native ``FOR SHARE``), plus the mutually exclusive
+    NOWAIT / WAIT n / SKIP LOCKED options.
+    """
+
+    def __init__(
+        self,
+        dialect: "OracleDialect",
+        strength: Optional["LockStrength"] = None,
+        of_columns: Optional[List] = None,
+        nowait: bool = False,
+        skip_locked: bool = False,
+        wait: Optional[int] = None,
+        dialect_options: Optional[dict] = None,
+    ):
+        super().__init__(
+            dialect,
+            strength=strength,
+            of_columns=of_columns,
+            nowait=nowait,
+            skip_locked=skip_locked,
+            dialect_options=dialect_options,
+        )
+        if sum([bool(nowait), wait is not None, bool(skip_locked)]) > 1:
+            raise ValueError("NOWAIT, WAIT n, and SKIP LOCKED are mutually exclusive")
+        if wait is not None and wait < 0:
+            raise ValueError("wait must be non-negative")
+        self.wait = wait
 
 
 class OracleForUpdateExpression(BaseExpression):

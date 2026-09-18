@@ -18,6 +18,10 @@ class OracleDDLMixin:
     inlined in its monolithic file.
     """
 
+    def supports_check_constraint(self) -> bool:
+        """Oracle supports CHECK constraints (12c+)."""
+        return True
+
     def format_create_table_statement(
         self, expr: "CreateTableExpression"
     ) -> Tuple[str, tuple]:
@@ -28,28 +32,21 @@ class OracleDDLMixin:
         PL/SQL block that checks ``user_tables`` and only executes the DDL
         when the table does not exist, making creation idempotent.
         """
-        from rhosocial.activerecord.backend.expression.statements import (
-            ColumnConstraintType,
-            TableConstraintType,
-        )
         all_params: List[Any] = []
-        parts = ["CREATE TABLE"]
+        parts = ["CREATE"]
         if expr.temporary:
             parts.append("GLOBAL TEMPORARY")
+        parts.append("TABLE")
         parts.append(self.format_identifier(expr.table_name))
 
         column_parts: List[str] = []
         for col_def in expr.columns:
-            col_sql, col_params = self.format_column_definition(
-                col_def, ColumnConstraintType
-            )
+            col_sql, col_params = self.format_column_definition(col_def)
             column_parts.append(col_sql)
             all_params.extend(col_params)
 
         for t_const in expr.table_constraints:
-            const_sql, const_params = self.format_table_constraint(
-                t_const, TableConstraintType
-            )
+            const_sql, const_params = self.format_table_constraint(t_const)
             column_parts.append(const_sql)
             all_params.extend(const_params)
 
@@ -95,14 +92,11 @@ class OracleDDLMixin:
     def format_column_definition(
         self,
         col_def: "ColumnDefinition",
-        constraint_type=None,
-    ) -> Tuple[str, List[Any]]:
+    ) -> Tuple[str, tuple]:
         from rhosocial.activerecord.backend.expression.statements.ddl_table import (
             ColumnConstraintType,
         )
-        if constraint_type is None:
-            constraint_type = ColumnConstraintType
-        type_sql, type_params = col_def.data_type.to_sql(self)
+        type_sql, type_params = col_def.data_type.to_sql()
         parts = [self.format_identifier(col_def.name), type_sql]
         params: List[Any] = list(type_params)
         constraint_parts: List[str] = []
@@ -157,13 +151,34 @@ class OracleDDLMixin:
         if constraint_parts:
             parts.append(" ".join(constraint_parts))
 
+        if col_def.generated_expression is not None:
+            gen_sql, gen_params = col_def.generated_expression.to_sql()
+            parts.append(gen_sql.lstrip())
+            params.extend(gen_params)
+
         return " ".join(parts), tuple(params)
+
+    def supports_foreign_key_on_delete(self) -> bool:
+        """Oracle supports FOREIGN KEY ON DELETE."""
+        return True
+
+    def supports_foreign_key_on_update(self) -> bool:
+        """Oracle does not support FOREIGN KEY ON UPDATE."""
+        return False
+
+    def supports_fk_match(self) -> bool:
+        """Oracle does not support FOREIGN KEY MATCH."""
+        return False
 
     def format_table_constraint(
         self,
         t_const: "TableConstraint",
-        TableConstraintType,
-    ) -> Tuple[str, List[Any]]:
+    ) -> Tuple[str, tuple]:
+        from rhosocial.activerecord.backend.expression.statements.ddl_table import (
+            ForeignKeyConstraint,
+            ReferentialAction,
+            TableConstraintType,
+        )
         parts: List[str] = []
         params: List[Any] = []
         if t_const.name:
@@ -177,6 +192,17 @@ class OracleDDLMixin:
             if t_const.columns:
                 cols_str = ", ".join(self.format_identifier(c) for c in t_const.columns)
                 parts.append(f"UNIQUE ({cols_str})")
+        elif t_const.constraint_type == TableConstraintType.CHECK:
+            if t_const.check_condition is not None:
+                if not self.supports_check_constraint():
+                    from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
+                    raise UnsupportedFeatureError(
+                        self.name, "CHECK constraint",
+                        f"{self.name} does not support CHECK constraints."
+                    )
+                check_sql, check_params = t_const.check_condition.to_sql()
+                parts.append(f"CHECK ({check_sql})")
+                params.extend(check_params)
         elif t_const.constraint_type == TableConstraintType.FOREIGN_KEY:
             if t_const.columns and t_const.foreign_key_table and t_const.foreign_key_columns:
                 cols_str = ", ".join(self.format_identifier(c) for c in t_const.columns)
@@ -187,5 +213,22 @@ class OracleDDLMixin:
                 parts.append(
                     f"FOREIGN KEY ({cols_str}) REFERENCES {ref_table} ({ref_cols_str})"
                 )
+                if isinstance(t_const, ForeignKeyConstraint):
+                    if t_const.on_delete and t_const.on_delete != ReferentialAction.NO_ACTION:
+                        if not self.supports_foreign_key_on_delete():
+                            from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
+                            raise UnsupportedFeatureError(
+                                self.name, "FOREIGN KEY ON DELETE",
+                                f"{self.name} does not support ON DELETE for foreign keys."
+                            )
+                        parts.append(f"ON DELETE {t_const.on_delete.value}")
+                    if t_const.on_update and t_const.on_update != ReferentialAction.NO_ACTION:
+                        if not self.supports_foreign_key_on_update():
+                            from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
+                            raise UnsupportedFeatureError(
+                                self.name, "FOREIGN KEY ON UPDATE",
+                                f"{self.name} does not support ON UPDATE for foreign keys."
+                            )
+                        parts.append(f"ON UPDATE {t_const.on_update.value}")
 
         return " ".join(parts), tuple(params)

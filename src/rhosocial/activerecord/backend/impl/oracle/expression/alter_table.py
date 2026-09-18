@@ -57,8 +57,10 @@ class OracleSetUnusedColumnsAction(AlterTableAction):
         self.columns = list(columns)
         self.dialect_options = dialect_options or {}
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self.dialect.format_set_unused_action(self)
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_set_unused_action"
 
 
 class OracleDropUnusedColumnsAction(AlterTableAction):
@@ -81,8 +83,10 @@ class OracleDropUnusedColumnsAction(AlterTableAction):
         super().__init__(dialect)
         self.dialect_options = dialect_options or {}
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self.dialect.format_drop_unused_columns_action(self)
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_drop_unused_columns_action"
 
 
 class OracleMoveTableAction(AlterTableAction):
@@ -105,8 +109,10 @@ class OracleMoveTableAction(AlterTableAction):
         super().__init__(dialect)
         self.dialect_options = dialect_options or {}
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self.dialect.format_move_table_statement(self)
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_move_table_statement"
 
 
 class OracleShrinkSpaceAction(AlterTableAction):
@@ -132,8 +138,10 @@ class OracleShrinkSpaceAction(AlterTableAction):
         self.cascade = bool(cascade)
         self.dialect_options = dialect_options or {}
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self.dialect.format_shrink_space_statement(self)
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_shrink_space_statement"
 
 
 class OracleReadOnlyAction(AlterTableAction):
@@ -159,8 +167,10 @@ class OracleReadOnlyAction(AlterTableAction):
         self.read_only = bool(read_only)
         self.dialect_options = dialect_options or {}
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self.dialect.format_read_only_statement(self)
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_read_only_statement"
 
 
 class OracleRowMovementAction(AlterTableAction):
@@ -188,5 +198,7 @@ class OracleRowMovementAction(AlterTableAction):
         self.enable = bool(enable)
         self.dialect_options = dialect_options or {}
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self.dialect.format_row_movement_statement(self)
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_row_movement_statement"

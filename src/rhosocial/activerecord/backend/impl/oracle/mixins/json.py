@@ -21,20 +21,20 @@ class OracleJSONFunctionMixin(object):
         """JSON Relational Duality is supported since Oracle 23ai."""
         return getattr(self, 'version', (23, 0, 0)) >= (23, 0, 0)
 
-    def format_json_extract(self, col_expr: str, path: str) -> str:
+    def format_json_extract(self, col_expr: str, path: str) -> Tuple[str, tuple]:
         """Format JSON_VALUE function for scalar extraction."""
-        return f"JSON_VALUE({col_expr}, '$.{path}')"
+        return f"JSON_VALUE({col_expr}, '$.{path}')", ()
 
-    def format_json_query(self, col_expr: str, path: str) -> str:
+    def format_json_query(self, col_expr: str, path: str) -> Tuple[str, tuple]:
         """Format JSON_QUERY function for object/array extraction."""
-        return f"JSON_QUERY({col_expr}, '$.{path}')"
+        return f"JSON_QUERY({col_expr}, '$.{path}')", ()
 
-    def format_json_exists(self, col_expr: str, path: str) -> str:
+    def format_json_exists(self, col_expr: str, path: str) -> Tuple[str, tuple]:
         """Format JSON_EXISTS function for existence check."""
-        return f"JSON_EXISTS({col_expr}, '$.{path}')"
+        return f"JSON_EXISTS({col_expr}, '$.{path}')", ()
 
     def format_json_table(self, alias: str, col_expr: str,
-                          columns: List[Tuple[str, str]]) -> str:
+                          columns: List[Tuple[str, str]]) -> Tuple[str, tuple]:
         """Format JSON_TABLE function with an external alias.
 
         Args:
@@ -44,16 +44,16 @@ class OracleJSONFunctionMixin(object):
                 is rendered as ``PATH '$.<path>'``.
 
         Returns:
-            SQL fragment ``JSON_TABLE(...) <alias>``.
+            Tuple of (SQL fragment ``JSON_TABLE(...) <alias>``, empty params).
         """
         col_parts = []
         for col_name, col_path in columns:
             col_parts.append(f"{col_name} PATH '$.{col_path}'")
         cols_sql = ", ".join(col_parts)
-        return f"JSON_TABLE({col_expr}, '$' COLUMNS ({cols_sql})) {alias}"
+        return f"JSON_TABLE({col_expr}, '$' COLUMNS ({cols_sql})) {alias}", ()
 
     def format_json_merge_patch(self, col_expr: str, patch_json: str,
-                                params: Any) -> Tuple[str, Tuple]:
+                                params: Any) -> Tuple[str, tuple]:
         """Format JSON_MERGE_PATCH function.
 
         Uses the ``?`` positional placeholder; Oracle's parameter
@@ -68,13 +68,13 @@ class OracleJSONFunctionMixin(object):
             Tuple of (sql_fragment, params_tuple).
         """
         existing: Tuple = tuple(params) if params else ()
-        return f"JSON_MERGE_PATCH({col_expr}, ?)", existing + (patch_json,)
+        return f"JSON_MERGE_PATCH({col_expr}, {self.p()})", existing + (patch_json,)
 
-    def format_json_array(self, *elements: Any) -> str:
+    def format_json_array(self, *elements: Any) -> Tuple[str, tuple]:
         """Format JSON_ARRAY function."""
-        return f"JSON_ARRAY({', '.join(str(e) for e in elements)})"
+        return f"JSON_ARRAY({', '.join(str(e) for e in elements)})", ()
 
-    def format_json_object(self, *pairs: Tuple[str, str]) -> str:
+    def format_json_object(self, *pairs: Tuple[str, str]) -> Tuple[str, tuple]:
         """Format JSON_OBJECT function using Oracle KEY/VALUE syntax."""
         parts = [f"KEY {k} VALUE {v}" for k, v in pairs]
-        return f"JSON_OBJECT({', '.join(parts)})"
+        return f"JSON_OBJECT({', '.join(parts)})", ()

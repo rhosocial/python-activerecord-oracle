@@ -30,7 +30,7 @@ class OracleTableSupport(Protocol):
         ...  # pragma: no cover
     def supports_copyright_compatibility(self) -> bool:
         ...  # pragma: no cover
-    def format_table_compression_clause(self, mode: str='BASIC') -> str:
+    def format_table_compression_clause(self, expr: 'TableCompressionClauseExpression') -> Tuple[str, tuple]:
         ...  # pragma: no cover
-    def format_tablespace_clause(self, tablespace_name: str) -> str:
+    def format_tablespace_clause(self, expr: 'TablespaceClauseExpression') -> Tuple[str, tuple]:
         ...  # pragma: no cover

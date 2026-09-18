@@ -36,11 +36,11 @@ class OracleDateTimeMixin:
     def format_interval_expression(self, expr: "Any") -> Tuple[str, Tuple]:
         unit = expr.unit.value.upper()
         if unit in {"YEAR", "MONTH"}:
-            sql = f"NUMTOYMINTERVAL(?, '{unit}')"
+            sql = f"NUMTOYMINTERVAL({self.p()}, '{unit}')"
         elif unit == "WEEK":
-            sql = "NUMTODSINTERVAL(? * 7, 'DAY')"
+            sql = f"NUMTODSINTERVAL({self.p()} * 7, 'DAY')"
         else:
-            sql = f"NUMTODSINTERVAL(?, '{unit}')"
+            sql = f"NUMTODSINTERVAL({self.p()}, '{unit}')"
         return self._apply_value_expression_modifiers(sql, (expr.value,), expr)
 
     def format_datetime_add_expression(self, expr: "Any") -> Tuple[str, Tuple]:

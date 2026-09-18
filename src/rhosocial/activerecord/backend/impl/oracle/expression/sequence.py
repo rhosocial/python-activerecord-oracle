@@ -136,8 +136,10 @@ class OracleCreateSequenceExpression(BaseExpression):
         self.order = order
         self.dialect_options = dialect_options or {}
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self.dialect.format_create_sequence_statement(self)
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_create_sequence_statement"
 
 
 class OracleDropSequenceExpression(BaseExpression):
@@ -168,5 +170,7 @@ class OracleDropSequenceExpression(BaseExpression):
         self.if_exists = bool(if_exists)
         self.dialect_options = dialect_options or {}
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self.dialect.format_drop_sequence_statement(self)
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_drop_sequence_statement"

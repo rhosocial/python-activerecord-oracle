@@ -1,5 +1,5 @@
 # src/rhosocial/activerecord/backend/impl/oracle/mixins/spatial.py
-from typing import Any
+from typing import Any, Dict, Tuple, Union
 
 
 class OracleSpatialMixin(object):
@@ -40,7 +40,7 @@ class OracleSpatialMixin(object):
         """Return whether geodetic (lon/lat) spatial indexes are supported."""
         return True
 
-    def format_spatial_literal(self, geom: Any) -> str:
+    def format_spatial_literal(self, geom: Any) -> Tuple[str, tuple]:
         """Format a Python geometry value as an SDO_GEOMETRY SQL literal.
 
         When the supplied object exposes an ``sdo_geom_to_wkt`` helper, the
@@ -49,13 +49,13 @@ class OracleSpatialMixin(object):
         to its string form, which is expected to be already valid SQL.
         """
         if geom is None:
-            return "NULL"
+            return "NULL", ()
         if hasattr(geom, "sdo_geom_to_wkt"):
             wkt = geom.sdo_geom_to_wkt()
-            return f"MDSYS.SDO_GEOMETRY('{wkt}')"
-        return str(geom)
+            return f"MDSYS.SDO_GEOMETRY('{wkt}')", ()
+        return str(geom), ()
 
-    def format_spatial_function(self, name: str, *args) -> str:
+    def format_spatial_function(self, name: str, *args: str) -> Tuple[str, tuple]:
         """Format a generic Oracle Spatial function invocation.
 
         Spatial operators and functions in Oracle live under the ``MDSYS``
@@ -63,9 +63,9 @@ class OracleSpatialMixin(object):
         The supplied function name is uppercased and joined with its
         argument list to form the invocation text.
         """
-        return f"MDSYS.{name.upper()}({', '.join(args)})"
+        return f"MDSYS.{name.upper()}({', '.join(args)})", ()
 
-    def format_st_function(self, pg_name: str, *args) -> str:
+    def format_st_function(self, pg_name: str, *args: str) -> Tuple[str, tuple]:
         """Map a PostGIS-style ``ST_*`` function name onto Oracle Spatial.
 
         A small lookup table translates the common PostGIS predicate and
@@ -84,9 +84,11 @@ class OracleSpatialMixin(object):
         oracle_name = mapping.get(pg_name, pg_name)
         if oracle_name not in mapping.values():
             oracle_name = f"MDSYS.{oracle_name}"
-        return f"{oracle_name}({', '.join(args)})"
+        return f"{oracle_name}({', '.join(args)})", ()
 
-    def format_spatial_index_options(self, options) -> str:
+    def format_spatial_index_options(
+        self, options: Union[Dict[str, Any], str, None]
+    ) -> Tuple[str, tuple]:
         """Format the DDL clause appended to a CREATE INDEX statement.
 
         Oracle Spatial indexes are materialized by declaring the
@@ -102,4 +104,4 @@ class OracleSpatialMixin(object):
             else:
                 params = str(options)
             clause = f"{clause} PARAMETERS ({params})"
-        return clause
+        return clause, ()

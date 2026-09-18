@@ -120,8 +120,10 @@ class OracleCreateProcedureExpression(BaseExpression):
         self.keyword = keyword
         self.dialect_options = dialect_options or {}
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self.dialect.format_create_procedure_statement(self)
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_create_procedure_statement"
 
 
 class OracleCreateFunctionExpression(BaseExpression):
@@ -177,8 +179,10 @@ class OracleCreateFunctionExpression(BaseExpression):
         self.keyword = keyword
         self.dialect_options = dialect_options or {}
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self.dialect.format_create_function_statement(self)
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_create_function_statement"
 
 
 class OracleCreatePackageExpression(BaseExpression):
@@ -221,8 +225,10 @@ class OracleCreatePackageExpression(BaseExpression):
         self.keyword = keyword
         self.dialect_options = dialect_options or {}
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self.dialect.format_create_package_statement(self)
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_create_package_statement"
 
 
 class OracleCreatePackageBodyExpression(BaseExpression):
@@ -264,8 +270,10 @@ class OracleCreatePackageBodyExpression(BaseExpression):
         self.keyword = keyword
         self.dialect_options = dialect_options or {}
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self.dialect.format_create_package_body_statement(self)
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_create_package_body_statement"
 
 
 class OracleDropRoutineObjectType(Enum):
@@ -312,5 +320,7 @@ class OracleDropRoutineExpression(BaseExpression):
         self.object_name = object_name
         self.dialect_options = dialect_options or {}
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self.dialect.format_drop_routine_statement(self)
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_drop_routine_statement"

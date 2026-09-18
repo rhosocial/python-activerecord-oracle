@@ -21,7 +21,6 @@ from .flashback import OracleFlashbackMixin
 from .functions import OracleFunctionFormatMixin
 from .hierarchical import OracleHierarchicalMixin
 from .hint import OracleHintMixin
-from .identifier import OracleIdentifierMixin
 from .index import OracleIndexMixin
 from .introspection import OracleIntrospectionMixin
 from .json import OracleJSONFunctionMixin
@@ -38,14 +37,16 @@ from .sequence import OracleSequenceMixin
 from .set_operation import OracleSetOperationMixin
 from .spatial import OracleSpatialMixin
 from .synonym import OracleSynonymMixin
-from .table import OracleTableMixin
-from .table_op import OracleTableCapabilityMixin
+from .ddl_table import OracleTableMixin
+from .ddl_table_op import OracleTableCapabilityMixin
 from .transaction import OracleTransactionMixin
 from .trigger import OracleTriggerMixin
 from .truncate import OracleTruncateMixin
 from .types import OracleTypeSupportMixin, OracleTypeSuggestionMixin
 from .vector import OracleVectorMixin
-from .view import OracleViewMixin
+from .ddl_view import OracleViewMixin
+from .identifier import OracleIdentifierMixin
+from .explain import OracleExplainMixin
 
 __all__ = [
     "OracleAnalyzeMixin",
@@ -58,7 +59,6 @@ __all__ = [
     "OracleFunctionFormatMixin",
     "OracleHierarchicalMixin",
     "OracleHintMixin",
-    "OracleIdentifierMixin",
     "OracleIndexMixin",
     "OracleIntrospectionMixin",
     "OracleJSONFunctionMixin",
@@ -90,4 +90,6 @@ __all__ = [
     "OracleTypeSuggestionMixin",
     "OracleVectorMixin",
     "OracleViewMixin",
+    "OracleIdentifierMixin",
+    "OracleExplainMixin",
 ]
