@@ -7,7 +7,7 @@ the capability contract.  Regenerate via scripts/p7_generate_protocols.py
 when mixins gain new public rendering methods.
 """
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from typing import Protocol
 
@@ -24,11 +24,11 @@ class OracleSpatialSupport(Protocol):
         ...  # pragma: no cover
     def supports_geodetic_index(self) -> bool:
         ...  # pragma: no cover
-    def format_spatial_literal(self, geom: Any) -> str:
+    def format_spatial_literal(self, geom: Any) -> Tuple[str, tuple]:
         ...  # pragma: no cover
-    def format_spatial_function(self, name: str, *args) -> str:
+    def format_spatial_function(self, name: str, *args: str) -> Tuple[str, tuple]:
         ...  # pragma: no cover
-    def format_st_function(self, pg_name: str, *args) -> str:
+    def format_st_function(self, pg_name: str, *args: str) -> Tuple[str, tuple]:
         ...  # pragma: no cover
-    def format_spatial_index_options(self, options) -> str:
+    def format_spatial_index_options(self, options: Union[Dict[str, Any], str, None]) -> Tuple[str, tuple]:
         ...  # pragma: no cover

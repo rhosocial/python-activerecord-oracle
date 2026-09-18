@@ -54,8 +54,7 @@ class TestCreateTriggerFormatting:
                         events=[TriggerEvent.INSERT, TriggerEvent.UPDATE],
                         function_name="audit_proc")
         sql, params = expr.to_sql()
-        assert sql == ("CREATE OR REPLACE TRIGGER TRG_AUDIT BEFORE "
-                       "INSERT OR UPDATE ON CUSTOMERS FOR EACH ROW CALL AUDIT_PROC")
+        assert sql == ('CREATE OR REPLACE TRIGGER "TRG_AUDIT" BEFORE INSERT OR UPDATE ON "CUSTOMERS" FOR EACH ROW CALL "AUDIT_PROC"')
         assert params == ()
 
     def test_update_of_columns(self, dialect):
@@ -63,8 +62,7 @@ class TestCreateTriggerFormatting:
                         events=[TriggerEvent.UPDATE], function_name="do_it",
                         update_columns=["status", "note"])
         sql, _ = expr.to_sql()
-        assert sql == ("CREATE OR REPLACE TRIGGER TRG BEFORE "
-                       "UPDATE OF STATUS, NOTE ON ORDERS FOR EACH ROW CALL DO_IT")
+        assert sql == ('CREATE OR REPLACE TRIGGER "TRG" BEFORE UPDATE OF "STATUS", "NOTE" ON "ORDERS" FOR EACH ROW CALL "DO_IT"')
 
     def test_instead_of_trigger_on_view(self, dialect):
         expr = _trigger(dialect, trigger_name="TRG", table_name="v",
@@ -72,13 +70,12 @@ class TestCreateTriggerFormatting:
                         events=[TriggerEvent.INSERT], function_name="p",
                         level=TriggerLevel.STATEMENT)
         sql, _ = expr.to_sql()
-        assert sql == "CREATE OR REPLACE TRIGGER TRG INSTEAD OF INSERT ON V CALL P"
+        assert sql == 'CREATE OR REPLACE TRIGGER "TRG" INSTEAD OF INSERT ON "V" CALL "P"'
 
     def test_statement_level_becomes_compound_when_supported(self, dialect):
         expr = _trigger(dialect, level=TriggerLevel.STATEMENT)
         sql, _ = expr.to_sql()
-        assert sql == ("CREATE OR REPLACE TRIGGER TRG BEFORE INSERT ON T "
-                       "COMPOUND TRIGGER CALL PROC")
+        assert sql == ('CREATE OR REPLACE TRIGGER "TRG" BEFORE INSERT ON "T" COMPOUND TRIGGER CALL "PROC"')
 
     def test_statement_level_before_11g_not_implemented(self):
         old = OracleDialect(version=(10, 2, 0))
@@ -100,7 +97,7 @@ class TestCreateTriggerFormatting:
 class TestDropAndToggleTriggers:
     def test_drop_trigger(self, dialect):
         sql, params = DropTriggerExpression(dialect, "trg_x").to_sql()
-        assert sql == "DROP TRIGGER TRG_X"
+        assert sql == 'DROP TRIGGER "TRG_X"'
         assert params == ()
 
     def test_drop_if_exists_rejected(self, dialect):
@@ -109,25 +106,28 @@ class TestDropAndToggleTriggers:
             expr.to_sql()
 
     def test_disable_and_enable(self, dialect):
-        assert dialect.format_disable_trigger_statement("trg_a") == \
-            ("ALTER TRIGGER TRG_A DISABLE", ())
-        assert dialect.format_enable_trigger_statement("trg_a") == \
-            ("ALTER TRIGGER TRG_A ENABLE", ())
+        from rhosocial.activerecord.backend.impl.oracle.expression.trigger import (
+            DisableTriggerExpression,
+            EnableTriggerExpression,
+        )
+        assert DisableTriggerExpression(dialect, "trg_a").to_sql() == \
+            ('ALTER TRIGGER "TRG_A" DISABLE', ())
+        assert EnableTriggerExpression(dialect, "trg_a").to_sql() == \
+            ('ALTER TRIGGER "TRG_A" ENABLE', ())
 
 
 class TestOracleFunctionFormatMixin:
     def test_listagg_plain(self, dialect):
         func = analytic.listagg(dialect, "ename", ",")
-        assert func.to_sql() == ("LISTAGG(ename, ?)", (",",))
+        assert func.to_sql() == ('LISTAGG("ENAME", ?)', (",",))
 
     def test_listagg_distinct_within_group_overflow(self, dialect):
         func = core.FunctionCall(dialect, "LISTAGG", core.Column(dialect, "e"),
                                  core.Literal(dialect, ";"), is_distinct=True)
         func._oracle_within_group = "e"
         func._oracle_on_overflow = "TRUNCATE"
-        sql, params = dialect.format_function_call(func)
-        assert sql == ("LISTAGG(DISTINCT e, ?) WITHIN GROUP (ORDER BY e) "
-                       "ON OVERFLOW TRUNCATE")
+        sql, params = func.to_sql()
+        assert sql == ('LISTAGG(DISTINCT "E", ?) WITHIN GROUP (ORDER BY e) ON OVERFLOW TRUNCATE')
         assert params == (";",)
 
     def test_percentile_cont_and_disc(self, dialect):
@@ -144,87 +144,87 @@ class TestOracleFunctionFormatMixin:
             "ROW PATH 'x' COLUMNS (a VARCHAR2(10))",
         )
         assert func.to_sql() == (
-            "JSON_TABLE(doc, ? COLUMNS (ROW PATH 'x' COLUMNS (a VARCHAR2(10))))",
+            'JSON_TABLE("DOC", ? COLUMNS (ROW PATH \'x\' COLUMNS (a VARCHAR2(10))))',
             ("$",),
         )
 
     def test_json_table_without_columns(self, dialect):
         func = core.FunctionCall(dialect, "JSON_TABLE", core.Column(dialect, "doc"),
                                  core.Literal(dialect, "$"))
-        assert func.to_sql() == ("JSON_TABLE(doc, ?)", ("$",))
+        assert func.to_sql() == ('JSON_TABLE("DOC", ?)', ("$",))
 
     def test_plain_function_falls_back_to_generic(self, dialect):
         func = core.FunctionCall(dialect, "UPPER", core.Column(dialect, "name"))
-        assert func.to_sql() == ("UPPER(name)", ())
+        assert func.to_sql() == ('UPPER("NAME")', ())
 
     def test_alias_appended(self, dialect):
         func = core.FunctionCall(dialect, "UPPER", core.Column(dialect, "name"),
                                  alias="U")
-        assert func.to_sql() == ("UPPER(name) AS U", ())
+        assert func.to_sql() == ('UPPER("NAME") AS "U"', ())
 
     def test_cast_types_wrap_result(self, dialect):
         func = core.FunctionCall(dialect, "MAX", core.Column(dialect, "v"))
         func = func.cast("CLOB")
-        assert dialect.format_function_call(func) == ("CAST(MAX(v) AS CLOB)", ())
+        assert func.to_sql() == ('CAST(MAX("V") AS CLOB)', ())
 
 
 class TestStringFunctionFactories:
     def test_decode_with_default(self, dialect):
         call = string_funcs.decode_expr(dialect, "status", "A", 1, "B", 2, default=0)
-        assert call.to_sql() == ("DECODE(status, ?, ?, ?, ?, ?)",
+        assert call.to_sql() == ('DECODE("STATUS", ?, ?, ?, ?, ?)',
                                  ("A", 1, "B", 2, 0))
 
     def test_decode_without_default(self, dialect):
         call = string_funcs.decode_expr(dialect, "status", "A", 1)
-        assert call.to_sql() == ("DECODE(status, ?, ?)", ("A", 1))
+        assert call.to_sql() == ('DECODE("STATUS", ?, ?)', ("A", 1))
 
     def test_regexp_substr(self, dialect):
         basic = string_funcs.regexp_substr(dialect, "name", "[0-9]+")
-        assert basic.to_sql() == ("REGEXP_SUBSTR(name, ?, ?, ?)", ("[0-9]+", 1, 1))
+        assert basic.to_sql() == ('REGEXP_SUBSTR("NAME", ?, ?, ?)', ("[0-9]+", 1, 1))
         full = string_funcs.regexp_substr(dialect, "name", "[0-9]+", 2, 3, "i")
-        assert full.to_sql() == ("REGEXP_SUBSTR(name, ?, ?, ?, ?)",
+        assert full.to_sql() == ('REGEXP_SUBSTR("NAME", ?, ?, ?, ?)',
                                  ("[0-9]+", 2, 3, "i"))
 
     def test_regexp_instr(self, dialect):
         call = string_funcs.regexp_instr(dialect, "col1", "x", 1, 1, 1)
-        assert call.to_sql() == ("REGEXP_INSTR(col1, ?, ?, ?, ?)", ("x", 1, 1, 1))
+        assert call.to_sql() == ('REGEXP_INSTR("COL1", ?, ?, ?, ?)', ("x", 1, 1, 1))
 
     def test_regexp_like(self, dialect):
         plain = string_funcs.regexp_like(dialect, "email", ".+@.+")
-        assert plain.to_sql() == ("REGEXP_LIKE(email, ?)", (".+@.+",))
+        assert plain.to_sql() == ('REGEXP_LIKE("EMAIL", ?)', (".+@.+",))
         flagged = string_funcs.regexp_like(dialect, "email", ".+@.+", "i")
-        assert flagged.to_sql() == ("REGEXP_LIKE(email, ?, ?)", (".+@.+", "i"))
+        assert flagged.to_sql() == ('REGEXP_LIKE("EMAIL", ?, ?)', (".+@.+", "i"))
 
     def test_regexp_replace(self, dialect):
         call = string_funcs.regexp_replace(dialect, "phone", "-", "", 1, 0)
-        assert call.to_sql() == ("REGEXP_REPLACE(phone, ?, ?, ?, ?)", ("-", "", 1, 0))
+        assert call.to_sql() == ('REGEXP_REPLACE("PHONE", ?, ?, ?, ?)', ("-", "", 1, 0))
 
     def test_regexp_count(self, dialect):
         call = string_funcs.regexp_count(dialect, "txt", "a", 1, "i")
-        assert call.to_sql() == ("REGEXP_COUNT(txt, ?, ?, ?)", ("a", 1, "i"))
+        assert call.to_sql() == ('REGEXP_COUNT("TXT", ?, ?, ?)', ("a", 1, "i"))
 
 
 class TestJsonScalarFactories:
     def test_json_value(self, dialect):
         call = json_funcs.json_value(dialect, "doc", "$.a")
-        assert call.to_sql() == ("JSON_VALUE(doc, ?)", ("$.a",))
+        assert call.to_sql() == ('JSON_VALUE("DOC", ?)', ("$.a",))
 
     def test_json_query_and_exists(self, dialect):
         query = json_funcs.json_query(dialect, "doc", "$.a[*]")
-        assert query.to_sql() == ("JSON_QUERY(doc, ?)", ("$.a[*]",))
+        assert query.to_sql() == ('JSON_QUERY("DOC", ?)', ("$.a[*]",))
         exists = json_funcs.json_exists(dialect, "doc", "$.a")
-        assert exists.to_sql() == ("JSON_EXISTS(doc, ?)", ("$.a",))
+        assert exists.to_sql() == ('JSON_EXISTS("DOC", ?)', ("$.a",))
 
     def test_json_value_with_returning_clause(self, dialect):
         call = json_funcs.json_value(dialect, "doc", "$.a", "VARCHAR2(100)")
         assert call.to_sql() == (
-            "JSON_VALUE(doc, ? RETURNING VARCHAR2(100))", ("$.a",),
+            'JSON_VALUE("DOC", ? RETURNING VARCHAR2(100))', ("$.a",),
         )
 
     def test_json_query_with_returning_clause(self, dialect):
         call = json_funcs.json_query(dialect, "doc", "$.a[*]", "CLOB")
         assert call.to_sql() == (
-            "JSON_QUERY(doc, ? RETURNING CLOB)", ("$.a[*]",),
+            'JSON_QUERY("DOC", ? RETURNING CLOB)', ("$.a[*]",),
         )
 
 

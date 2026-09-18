@@ -3,6 +3,7 @@
 
 from typing import Any, List, Optional, Tuple
 
+from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 from rhosocial.activerecord.backend.expression.bases import ToSQLProtocol
 
 
@@ -51,14 +52,29 @@ class OraclePaginationMixin:
                     all_params.append(clause.offset)
 
             if clause.limit is not None:
+                suffix = "WITH TIES" if getattr(clause, "with_ties", False) else "ONLY"
+                if suffix == "WITH TIES" and not self.supports_fetch_with_ties():
+                    raise UnsupportedFeatureError(
+                        self.name,
+                        "FETCH FIRST ... ROWS WITH TIES",
+                        "Oracle supports FETCH FIRST ... WITH TIES since 12c.",
+                    )
                 if isinstance(clause.limit, ToSQLProtocol):
                     limit_sql, limit_params = clause.limit.to_sql()
-                    sql_parts.append(f"FETCH FIRST {limit_sql} ROWS ONLY")
+                    sql_parts.append(f"FETCH FIRST {limit_sql} ROWS {suffix}")
                     all_params.extend(limit_params)
                 else:
-                    sql_parts.append(f"FETCH FIRST {self.get_parameter_placeholder()} ROWS ONLY")
+                    sql_parts.append(
+                        f"FETCH FIRST {self.get_parameter_placeholder()} ROWS {suffix}"
+                    )
                     all_params.append(clause.limit)
         else:
+            if getattr(clause, "with_ties", False):
+                raise UnsupportedFeatureError(
+                    self.name,
+                    "FETCH FIRST ... ROWS WITH TIES",
+                    "Oracle supports FETCH FIRST ... WITH TIES since 12c.",
+                )
             if clause.limit is not None:
                 if isinstance(clause.limit, ToSQLProtocol):
                     limit_sql, limit_params = clause.limit.to_sql()

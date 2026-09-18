@@ -87,8 +87,10 @@ class OraclePartitionMaxValue(BaseExpression):
     def __init__(self, dialect: "OracleDialect"):
         super().__init__(dialect)
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self.dialect.format_partition_value(self)
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_partition_value"
 
 
 class OraclePartitionValue(BaseExpression):
@@ -121,8 +123,10 @@ class OraclePartitionValue(BaseExpression):
                 )
         self.value = value
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self.dialect.format_partition_value(self)
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_partition_value"
 
 
 # ---------------------------------------------------------------------------
@@ -248,8 +252,10 @@ class OracleSubpartitionClause(BaseExpression):
         self.count = count
         self.templates = list(templates) if templates else None
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self.dialect.format_subpartition_by(self)
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_subpartition_by"
 
 
 # ---------------------------------------------------------------------------

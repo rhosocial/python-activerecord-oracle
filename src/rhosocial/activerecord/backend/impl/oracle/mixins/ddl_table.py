@@ -1,4 +1,8 @@
 # src/rhosocial/activerecord/backend/impl/oracle/mixins/table.py
+from typing import Tuple, TYPE_CHECKING
+
+if TYPE_CHECKING:  # pragma: no cover
+    from ..expression.table import TableCompressionClauseExpression, TablespaceClauseExpression
 
 
 class OracleTableMixin(object):
@@ -28,7 +32,7 @@ class OracleTableMixin(object):
     * External tables (``EXTERNAL ORACLE_LOADER``).
     """
 
-    def supports_table_like_syntax(self) -> bool:
+    def supports_create_table_like(self) -> bool:
         """Oracle has no CREATE TABLE LIKE; use CTAS instead."""
         return False
 
@@ -68,26 +72,28 @@ class OracleTableMixin(object):
         """Oracle has no copyright-compatibility mode (e.g. MySQL forks)."""
         return False
 
-    def format_table_compression_clause(self, mode: str = 'BASIC') -> str:
-        """Compose an Oracle table-compression clause.
-
-        Passing ``mode='none'`` (case-insensitive) emits ``NOCOMPRESS``;
-        any other value becomes ``COMPRESS FOR <MODE>`` (uppercased), e.g.
-        ``COMPRESS FOR OLTP`` or ``COMPRESS FOR QUERY LOW``.
-
-        See: Oracle Advanced Compression Option reference.
-        """
+    def format_table_compression_clause(self, expr: "TableCompressionClauseExpression") -> Tuple[str, tuple]:
+        """Format a TableCompressionClauseExpression into SQL and params."""
+        mode = expr.mode
         if mode is None:
-            return "NOCOMPRESS"
+            return "NOCOMPRESS", ()
         normalized = str(mode).strip().upper()
         if normalized == "NONE" or normalized == "":
-            return "NOCOMPRESS"
-        return f"COMPRESS FOR {normalized}"
+            return "NOCOMPRESS", ()
+        return f"COMPRESS FOR {normalized}", ()
 
-    def format_tablespace_clause(self, tablespace_name: str) -> str:
-        """Compose an Oracle TABLESPACE clause.
+    def format_tablespace_clause(self, expr: "TablespaceClauseExpression") -> Tuple[str, tuple]:
+        """Format a TablespaceClauseExpression into SQL and params."""
+        return f"TABLESPACE {self.format_identifier(expr.tablespace_name)}", ()
 
-        The identifier is always quoted via ``format_identifier`` to honor
-        the dialect's quoting configuration.
-        """
-        return f"TABLESPACE {self.format_identifier(tablespace_name)}"
+    def format_table_compression_clause_expression(
+        self, expr: "TableCompressionClauseExpression"
+    ) -> Tuple[str, tuple]:
+        """Alias for format_table_compression_clause."""
+        return self.format_table_compression_clause(expr)
+
+    def format_tablespace_clause_expression(
+        self, expr: "TablespaceClauseExpression"
+    ) -> Tuple[str, tuple]:
+        """Alias for format_tablespace_clause."""
+        return self.format_tablespace_clause(expr)

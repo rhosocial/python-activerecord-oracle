@@ -33,7 +33,7 @@ class TestOracleAnalyzeExpression:
     def test_compute_statistics(self, dialect):
         expr = OracleAnalyzeExpression(dialect, "t", OracleAnalyzeMode.COMPUTE_STATISTICS)
         sql, params = expr.to_sql()
-        assert sql == "ANALYZE TABLE T COMPUTE STATISTICS"
+        assert sql == 'ANALYZE TABLE "T" COMPUTE STATISTICS'
         assert params == ()
 
     def test_estimate_statistics_with_sample(self, dialect):
@@ -41,19 +41,19 @@ class TestOracleAnalyzeExpression:
             dialect, "t", OracleAnalyzeMode.ESTIMATE_STATISTICS, sample_percent=5
         )
         sql, params = expr.to_sql()
-        assert sql == "ANALYZE TABLE T ESTIMATE STATISTICS SAMPLE 5 PERCENT"
+        assert sql == 'ANALYZE TABLE "T" ESTIMATE STATISTICS SAMPLE 5 PERCENT'
         assert params == ()
 
     def test_estimate_statistics_without_sample(self, dialect):
         expr = OracleAnalyzeExpression(dialect, "t", OracleAnalyzeMode.ESTIMATE_STATISTICS)
         sql, params = expr.to_sql()
-        assert sql == "ANALYZE TABLE T ESTIMATE STATISTICS"
+        assert sql == 'ANALYZE TABLE "T" ESTIMATE STATISTICS'
         assert params == ()
 
     def test_validate_structure(self, dialect):
         expr = OracleAnalyzeExpression(dialect, "t", OracleAnalyzeMode.VALIDATE_STRUCTURE)
         sql, params = expr.to_sql()
-        assert sql == "ANALYZE TABLE T VALIDATE STRUCTURE"
+        assert sql == 'ANALYZE TABLE "T" VALIDATE STRUCTURE'
         assert params == ()
 
     def test_validate_structure_cascade(self, dialect):
@@ -61,13 +61,13 @@ class TestOracleAnalyzeExpression:
             dialect, "t", OracleAnalyzeMode.VALIDATE_STRUCTURE, cascade=True
         )
         sql, params = expr.to_sql()
-        assert sql == "ANALYZE TABLE T VALIDATE STRUCTURE CASCADE"
+        assert sql == 'ANALYZE TABLE "T" VALIDATE STRUCTURE CASCADE'
         assert params == ()
 
     def test_list_chained_rows(self, dialect):
         expr = OracleAnalyzeExpression(dialect, "t", OracleAnalyzeMode.LIST_CHAINED_ROWS)
         sql, params = expr.to_sql()
-        assert sql == "ANALYZE TABLE T LIST CHAINED ROWS"
+        assert sql == 'ANALYZE TABLE "T" LIST CHAINED ROWS'
         assert params == ()
 
     def test_list_chained_rows_into(self, dialect):
@@ -75,19 +75,19 @@ class TestOracleAnalyzeExpression:
             dialect, "t", OracleAnalyzeMode.LIST_CHAINED_ROWS, into="chained_rows"
         )
         sql, params = expr.to_sql()
-        assert sql == "ANALYZE TABLE T LIST CHAINED ROWS INTO CHAINED_ROWS"
+        assert sql == 'ANALYZE TABLE "T" LIST CHAINED ROWS INTO "CHAINED_ROWS"'
         assert params == ()
 
     def test_delete_system_statistics(self, dialect):
         expr = OracleAnalyzeExpression(dialect, "t", OracleAnalyzeMode.DELETE_SYSTEM_STATISTICS)
         sql, params = expr.to_sql()
-        assert sql == "ANALYZE TABLE T DELETE SYSTEM STATISTICS"
+        assert sql == 'ANALYZE TABLE "T" DELETE SYSTEM STATISTICS'
         assert params == ()
 
     def test_identifier_upper_cased(self, dialect):
         expr = OracleAnalyzeExpression(dialect, "My_Table", OracleAnalyzeMode.COMPUTE_STATISTICS)
         sql, params = expr.to_sql()
-        assert sql == "ANALYZE TABLE MY_TABLE COMPUTE STATISTICS"
+        assert sql == 'ANALYZE TABLE "MY_TABLE" COMPUTE STATISTICS'
         assert params == ()
 
     def test_empty_table_rejected(self, dialect):
@@ -146,5 +146,5 @@ class TestOracleAnalyzeVersionBoundary:
         d9 = OracleDialect(version=(9, 0, 0))
         expr = OracleAnalyzeExpression(d9, "t", OracleAnalyzeMode.COMPUTE_STATISTICS)
         sql, params = expr.to_sql()
-        assert sql == "ANALYZE TABLE T COMPUTE STATISTICS"
+        assert sql == 'ANALYZE TABLE "T" COMPUTE STATISTICS'
         assert params == ()

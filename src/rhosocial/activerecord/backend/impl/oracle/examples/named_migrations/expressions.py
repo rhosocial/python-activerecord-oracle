@@ -36,17 +36,19 @@ def create_users_table(dialect):
         table="users",
         columns=[
             ColumnDefinition(
+                dialect,
                 "id",
-                OracleIntegerType(),
+                OracleIntegerType(dialect),
                 constraints=[
                     ColumnConstraint(
+                        dialect,
                         ColumnConstraintType.PRIMARY_KEY,
                         is_auto_increment=True,
                     ),
                 ],
             ),
-            ColumnDefinition("name", OracleVarChar2Type(length=255)),
-            ColumnDefinition("email", OracleVarChar2Type(length=255)),
+            ColumnDefinition(dialect, "name", OracleVarChar2Type(length=255, dialect=dialect)),
+            ColumnDefinition(dialect, "email", OracleVarChar2Type(length=255, dialect=dialect)),
         ],
     )
 
@@ -63,17 +65,19 @@ def create_posts_table(dialect):
         table="posts",
         columns=[
             ColumnDefinition(
+                dialect,
                 "id",
-                OracleIntegerType(),
+                OracleIntegerType(dialect),
                 constraints=[
                     ColumnConstraint(
+                        dialect,
                         ColumnConstraintType.PRIMARY_KEY,
                         is_auto_increment=True,
                     ),
                 ],
             ),
-            ColumnDefinition("title", OracleVarChar2Type(length=255)),
-            ColumnDefinition("user_id", OracleIntegerType()),
+            ColumnDefinition(dialect, "title", OracleVarChar2Type(length=255, dialect=dialect)),
+            ColumnDefinition(dialect, "user_id", OracleIntegerType(dialect)),
         ],
     )
 
@@ -94,16 +98,18 @@ def create_custom_table(dialect, table_name: str = "custom_table"):
         table=table_name,
         columns=[
             ColumnDefinition(
+                dialect,
                 "id",
-                OracleIntegerType(),
+                OracleIntegerType(dialect),
                 constraints=[
                     ColumnConstraint(
+                        dialect,
                         ColumnConstraintType.PRIMARY_KEY,
                         is_auto_increment=True,
                     ),
                 ],
             ),
-            ColumnDefinition("value", OracleVarChar2Type(length=255)),
+            ColumnDefinition(dialect, "value", OracleVarChar2Type(length=255, dialect=dialect)),
         ],
     )
 

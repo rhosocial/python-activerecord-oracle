@@ -55,9 +55,10 @@ class OracleShowDialectMixin:
             "       s.process",
             "FROM v$session s",
         ]
+        p = self.get_parameter_placeholder()
         binds = []
         if active_only:
-            clauses.append("WHERE s.status = :status")
+            clauses.append(f"WHERE s.status = {p}")
             binds.append("ACTIVE")
         else:
             clauses.append("WHERE s.username IS NOT NULL")
@@ -82,6 +83,7 @@ class OracleShowDialectMixin:
         limit = int(params.get("limit", 50))
         if limit < 1:
             limit = 1
+        p = self.get_parameter_placeholder()
         sql = (
             "SELECT sql_id, child_number, sql_text, executions, "
             "       elapsed_time / 1000000 AS elapsed_seconds, "
@@ -92,7 +94,7 @@ class OracleShowDialectMixin:
             "FROM v$sql "
             "WHERE executions > 0 "
             "ORDER BY elapsed_time DESC "
-            "FETCH FIRST :row_count ROWS ONLY"
+            f"FETCH FIRST {p} ROWS ONLY"
         )
         return sql, (limit,)
 
@@ -137,14 +139,15 @@ class OracleShowDialectMixin:
         binds = []
 
         view = self._select_objects_view(params.get("-owner"))
+        p = self.get_parameter_placeholder()
         where_parts: list = []
         if not include_invalid:
             where_parts.append("status = 'VALID'")
         if object_type is not None:
-            where_parts.append("object_type = :obj_type")
+            where_parts.append(f"object_type = {p}")
             binds.append(object_type)
         if name_pattern is not None:
-            where_parts.append("object_name LIKE :name_like")
+            where_parts.append(f"object_name LIKE {p}")
             binds.append(name_pattern)
 
         sql = (

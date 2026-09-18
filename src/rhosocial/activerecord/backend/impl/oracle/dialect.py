@@ -5,7 +5,7 @@ Assembles the full Oracle dialect surface by composing generic mixins
 (provided by the core framework) together with Oracle-specific mixins
 that override version-gated capability checks and syntax formatters.
 """
-from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
+from typing import Optional, Tuple, TYPE_CHECKING
 
 from rhosocial.activerecord.backend.dialect.base import SQLDialectBase
 from rhosocial.activerecord.backend.dialect.protocols import (
@@ -51,19 +51,17 @@ from rhosocial.activerecord.backend.dialect.mixins import (
     SQLXMLMixin,
     CollationMixin,
     CTEMixin,
-    FilterClauseMixin,
+
     WindowFunctionMixin,
     JSONMixin,
-    ReturningMixin,
-    AdvancedGroupingMixin,
+
     ArrayMixin,
     ExplainMixin,
     GraphMixin,
     GraphTableMixin,
-    LockingMixin,
+
     MergeMixin,
-    OrderedSetAggregationMixin,
-    QualifyClauseMixin,
+
     TemporalTableMixin,
     UpsertMixin,
     LateralJoinMixin,
@@ -78,14 +76,12 @@ from rhosocial.activerecord.backend.dialect.mixins import (
     ConstraintMixin,
     IntrospectionMixin,
     DDLColumnMixin,
-    IdentifierMixin,
     PredicateMixin,
     ExpressionMixin,
     DateTimeMixin,
     DQLMixin,
     DMLMixin,
     PartitionMixin,
-    GraphTableMixin,
 )
 from .mixins import (
     OracleAnalyzeMixin,
@@ -101,7 +97,6 @@ from .mixins import (
     OracleFunctionFormatMixin,
     OracleHierarchicalMixin,
     OracleHintMixin,
-    OracleIdentifierMixin,
     OracleIndexMixin,
     OracleIntrospectionMixin,
     OracleJSONFunctionMixin,
@@ -128,8 +123,11 @@ from .mixins import (
     OracleTypeSuggestionMixin,
     OracleVectorMixin,
     OracleViewMixin,
+    OracleIdentifierMixin,
+    OracleExplainMixin,
 )
 from .protocols.partition import OraclePartitionSupport
+from .reserved_words import ORACLE_RESERVED_WORDS
 
 if TYPE_CHECKING:
     pass
@@ -154,7 +152,6 @@ class OracleDialect(
     OracleFunctionFormatMixin,
     OracleHierarchicalMixin,
     OracleHintMixin,
-    OracleIdentifierMixin,
     OracleIndexMixin,
     OracleIntrospectionMixin,
     OracleJSONFunctionMixin,
@@ -181,6 +178,8 @@ class OracleDialect(
     OracleTypeSuggestionMixin,
     OracleVectorMixin,
     OracleViewMixin,
+    OracleIdentifierMixin,
+    OracleExplainMixin,
     # ================================================================
     # Generic fallback mixins – defaults that Oracle-specific mixins
     # above can override.
@@ -188,18 +187,16 @@ class OracleDialect(
     SQLXMLMixin,
     CollationMixin,
     CTEMixin,
-    FilterClauseMixin,
+
     WindowFunctionMixin,
     JSONMixin,
-    ReturningMixin,
-    AdvancedGroupingMixin,
+
     ArrayMixin,
     ExplainMixin,
     GraphMixin,
-    LockingMixin,
+
     MergeMixin,
-    OrderedSetAggregationMixin,
-    QualifyClauseMixin,
+
     TemporalTableMixin,
     UpsertMixin,
     LateralJoinMixin,
@@ -214,7 +211,6 @@ class OracleDialect(
     ConstraintMixin,
     IntrospectionMixin,
     DDLColumnMixin,
-    IdentifierMixin,
     PredicateMixin,
     ExpressionMixin,
     DateTimeMixin,
@@ -223,7 +219,7 @@ class OracleDialect(
     PartitionMixin,
     GraphTableMixin,
     # ================================================================
-    # Protocols (type-annotation guarentee only)
+    # Protocols (type-annotation guarantee only)
     # ================================================================
     SQLXMLSupport,
     SQLXMLParsingSupport,
@@ -280,8 +276,25 @@ class OracleDialect(
                 :meth:`backend.introspect_and_adapt`.
         """
         super().__init__()
+        self._reserved_words = ORACLE_RESERVED_WORDS
         if version is not None:
             self.version = version
+
+    def format_identifier(self, identifier: str, need_quote: bool = True) -> str:
+        """Format identifier for Oracle with double-quote quoting and uppercasing."""
+        if not need_quote:
+            if self.is_reserved_word(identifier):
+                import warnings
+                from rhosocial.activerecord.backend.warnings import IdentifierQuotingWarning
+                warnings.warn(
+                    f"Identifier '{identifier}' is a reserved word in {self.name} "
+                    f"and may cause SQL errors without quoting.",
+                    IdentifierQuotingWarning,
+                    stacklevel=2,
+                )
+            return identifier
+        escaped = identifier.replace('"', '""')
+        return f'"{escaped.upper()}"'
 
     def get_parameter_placeholder(self, position: int = 0) -> str:
         """Return the positional placeholder ``?``.
@@ -302,57 +315,3 @@ class OracleDialect(
         )
 
         return OracleSchemaDiffer()
-
-    def format_identifier(self, identifier: str) -> str:
-        """Format identifier for Oracle (uppercase, no quoting).
-
-        Oracle folds unquoted identifiers to uppercase, so uppercasing is
-        sufficient for the common case. Callers that need explicit quoting
-        (e.g. bulk DML on externally-sourced identifiers) must quote via a
-        dedicated helper, since global quoting would alter every generated
-        statement's appearance.
-        """
-        return identifier.upper()
-
-    def supports_explain_analyze(self) -> bool:
-        """Oracle does not support EXPLAIN ANALYZE in the standard sense.
-
-        EXPLAIN PLAN only estimates the execution plan; it does not run the
-        statement, so ``ANALYZE`` semantics (which actually execute the
-        statement and report runtime statistics) are unavailable.
-        """
-        return False
-
-    def supports_explain_format(self, format_type: str) -> bool:
-        """Oracle EXPLAIN PLAN writes rows to PLAN_TABLE; format options are not part of the SQL grammar."""
-        return False
-
-    def supports_for_update(self) -> bool:
-        """Oracle does support ``SELECT ... FOR UPDATE`` natively, but the
-        ActiveRecord query builder emits composite ``SELECT`` shapes (with
-        ``DISTINCT`` / ``GROUP BY``) that Oracle rejects for ``FOR UPDATE``
-        (ORA-02014).  Reporting ``False`` here keeps the testsuite on the
-        non-locking fallback and avoids spurious failures; backends that
-        need strict serialisability should compose their own
-        ``for_update().all()`` calls instead.
-        """
-        return False
-
-    def format_explain_statement(self, expr: "ExplainExpression") -> Tuple[str, tuple]:
-        """Format EXPLAIN PLAN FOR <stmt> for Oracle.
-
-        Oracle's ``EXPLAIN PLAN FOR`` statement only writes rows to
-        ``PLAN_TABLE``; it does not return a result set the way the testsuite
-        expects from ``backend.fetch_all(explain_sql, params)``. The testsuite
-        only asserts that ``explain().aggregate()`` returns a non-empty list.
-
-        We return a SELECT that always yields at least one row so that
-        ``aggregate()`` can honour the contract without depending on the
-        per-session PLAN_TABLE state. Real EXPLAIN PLAN semantics can be
-        obtained by issuing ``EXPLAIN PLAN FOR <statement_sql>`` explicitly
-        against the backend (see the OracleBackend.explain_plan helper if
-        wired up). ANALYZE, FORMAT, COSTS, BUFFERS, VERBOSE, SETTINGS and
-        WAL options are PostgreSQL/MySQL-specific and have no Oracle
-        equivalent; they are silently ignored.
-        """
-        return "SELECT 1 AS EXPLAIN_PLAN FROM DUAL", ()

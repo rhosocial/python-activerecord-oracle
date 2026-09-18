@@ -1,5 +1,5 @@
 # src/rhosocial/activerecord/backend/impl/oracle/mixins/optimizer_hint.py
-from typing import Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 
 class OracleOptimizerHintMixin(object):
@@ -32,9 +32,9 @@ class OracleOptimizerHintMixin(object):
     def format_optimizer_hint(
         self,
         name: str,
-        args: Tuple = (),
-        kwargs: Optional[dict] = None,
-    ) -> str:
+        args: Tuple[Any, ...] = (),
+        kwargs: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[str, tuple]:
         """Format a single Oracle optimizer hint ``/*+ NAME(args) */``.
 
         Keyword arguments are emitted as ``key value`` pairs inside the
@@ -46,9 +46,9 @@ class OracleOptimizerHintMixin(object):
                 parts.append(f"{key} {value}")
         inner = " ".join(parts)
         if inner:
-            return f"/*+ {name.upper()}({inner}) */"
-        return f"/*+ {name.upper()} */"
+            return f"/*+ {name.upper()}({inner}) */", ()
+        return f"/*+ {name.upper()} */", ()
 
-    def format_multiple_hints(self, *hints: str) -> str:
+    def format_multiple_hints(self, *hints: str) -> Tuple[str, tuple]:
         """Format multiple pre-formatted hints into one comment block."""
-        return f"/*+ {' '.join(hints)} */"
+        return f"/*+ {' '.join(hints)} */", ()
