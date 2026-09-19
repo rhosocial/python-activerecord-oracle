@@ -11,6 +11,9 @@ class OracleIndexMixin:
     def supports_drop_index(self) -> bool:
         return True
 
+    def supports_drop_index_on_table(self) -> bool:
+        return False
+
     def supports_unique_index(self) -> bool:
         return True
 
