@@ -21,6 +21,10 @@ class OracleViewMixin:
         """Oracle does not support IF NOT EXISTS for views."""
         return False
 
+    def supports_view_check_option(self) -> bool:
+        """Oracle supports ``WITH [LOCAL|CASCADED] CHECK OPTION`` on views."""
+        return True
+
     def format_create_view_statement(
         self, expr: "CreateViewExpression"
     ) -> Tuple[str, tuple]:
@@ -35,6 +39,12 @@ class OracleViewMixin:
         query_sql, query_params = expr.query.to_sql()
         parts.append(f"AS {query_sql}")
         if expr.options and expr.options.check_option:
+            if not self.supports_view_check_option():
+                from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
+                raise UnsupportedFeatureError(
+                    self.name, "WITH CHECK OPTION",
+                    f"{self.name} does not support WITH CHECK OPTION.",
+                )
             check_option = expr.options.check_option.value
             parts.append(f"WITH {check_option} CHECK OPTION")
         return " ".join(parts), query_params

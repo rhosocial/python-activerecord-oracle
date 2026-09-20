@@ -10,12 +10,29 @@ from rhosocial.activerecord.backend.expression import (
     CreateViewExpression,
     DropViewExpression,
 )
+from rhosocial.activerecord.backend.expression.statements import ViewOptions, ViewCheckOption
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 
 
 class TestOracleViewCapabilityGating:
     """Tests for Oracle VIEW DDL capability gating."""
+
+    def test_create_view_check_option_gated(self):
+        """WITH CHECK OPTION must fail fast when the capability is off."""
+        dialect = OracleDialect()
+        query = QueryExpression(
+            dialect, select=[Column(dialect, "id")], from_=TableExpression(dialect, "t")
+        )
+        expr = CreateViewExpression(
+            dialect,
+            view_name="v",
+            query=query,
+            options=ViewOptions(check_option=ViewCheckOption.CASCADED),
+        )
+        with patch.object(type(dialect), "supports_view_check_option", return_value=False):
+            with pytest.raises(UnsupportedFeatureError, match="CHECK OPTION"):
+                expr.to_sql()
 
     def test_create_or_replace_view_supported(self):
         """Oracle supports CREATE OR REPLACE VIEW."""
