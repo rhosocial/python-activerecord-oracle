@@ -24,7 +24,7 @@ matching ``format_data_type_<name>`` formatter declared in
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Set
+from typing import Optional, Set
 
 from rhosocial.activerecord.backend.expression.types import (
     BigIntType,
@@ -163,9 +163,8 @@ class OracleRawType(BlobType):
 
     length: Optional[int] = None
 
-    def __init__(self, dialect=None, *, length: Optional[int] = None,
-                 dialect_options: Optional[Dict[str, Any]] = None):
-        super().__init__(dialect, dialect_options=dialect_options)
+    def __init__(self, dialect=None, *, length: Optional[int] = None):
+        super().__init__(dialect)
         self.length = length
 
     def _type_params(self) -> tuple:
