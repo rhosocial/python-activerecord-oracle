@@ -27,9 +27,9 @@ All expressions delegate SQL generation to the dialect through the public
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import List, Optional, TYPE_CHECKING
 
-from rhosocial.activerecord.backend.expression.bases import BaseExpression, SQLQueryAndParams
+from rhosocial.activerecord.backend.expression.bases import BaseExpression
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
@@ -88,7 +88,6 @@ class OracleCreateProcedureExpression(BaseExpression):
         or_replace: emit ``OR REPLACE`` (default True).
         keyword: the ``AS`` / ``IS`` separator between the signature and
             the body.
-        dialect_options: reserved for future dialect-specific options.
 
     Raises:
         ValueError: if ``procedure_name`` or ``body`` is empty, or
@@ -103,8 +102,6 @@ class OracleCreateProcedureExpression(BaseExpression):
         parameters: Optional[List[OracleRoutineParameter]] = None,
         or_replace: bool = True,
         keyword: str = "AS",
-        *,
-        dialect_options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(dialect)
         if not isinstance(procedure_name, str) or not procedure_name.strip():
@@ -118,7 +115,6 @@ class OracleCreateProcedureExpression(BaseExpression):
         self.parameters = list(parameters) if parameters else []
         self.or_replace = bool(or_replace)
         self.keyword = keyword
-        self.dialect_options = dialect_options or {}
 
     @property
     def format_method(self) -> str:
@@ -139,7 +135,6 @@ class OracleCreateFunctionExpression(BaseExpression):
         return_keyword: ``RETURN`` (Oracle syntax) or ``RETURNS`` spelling.
         keyword: the ``AS`` / ``IS`` separator between the signature and
             the body.
-        dialect_options: reserved for future dialect-specific options.
 
     Raises:
         ValueError: if ``function_name``, ``return_type`` or ``body`` is
@@ -156,8 +151,6 @@ class OracleCreateFunctionExpression(BaseExpression):
         or_replace: bool = True,
         return_keyword: str = "RETURN",
         keyword: str = "AS",
-        *,
-        dialect_options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(dialect)
         if not isinstance(function_name, str) or not function_name.strip():
@@ -177,7 +170,6 @@ class OracleCreateFunctionExpression(BaseExpression):
         self.or_replace = bool(or_replace)
         self.return_keyword = return_keyword
         self.keyword = keyword
-        self.dialect_options = dialect_options or {}
 
     @property
     def format_method(self) -> str:
@@ -195,7 +187,6 @@ class OracleCreatePackageExpression(BaseExpression):
             p (x NUMBER);"``.
         or_replace: emit ``OR REPLACE`` (default True).
         keyword: the ``AS`` / ``IS`` separator before the body.
-        dialect_options: reserved for future dialect-specific options.
 
     Raises:
         ValueError: if ``package_name`` or ``body`` is empty, or ``keyword``
@@ -209,8 +200,6 @@ class OracleCreatePackageExpression(BaseExpression):
         body: str,
         or_replace: bool = True,
         keyword: str = "AS",
-        *,
-        dialect_options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(dialect)
         if not isinstance(package_name, str) or not package_name.strip():
@@ -223,7 +212,6 @@ class OracleCreatePackageExpression(BaseExpression):
         self.body = body
         self.or_replace = bool(or_replace)
         self.keyword = keyword
-        self.dialect_options = dialect_options or {}
 
     @property
     def format_method(self) -> str:
@@ -240,7 +228,6 @@ class OracleCreatePackageBodyExpression(BaseExpression):
         body: the package body as a raw string.
         or_replace: emit ``OR REPLACE`` (default True).
         keyword: the ``AS`` / ``IS`` separator before the body.
-        dialect_options: reserved for future dialect-specific options.
 
     Raises:
         ValueError: if ``package_name`` or ``body`` is empty, or ``keyword``
@@ -254,8 +241,6 @@ class OracleCreatePackageBodyExpression(BaseExpression):
         body: str,
         or_replace: bool = True,
         keyword: str = "AS",
-        *,
-        dialect_options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(dialect)
         if not isinstance(package_name, str) or not package_name.strip():
@@ -268,7 +253,6 @@ class OracleCreatePackageBodyExpression(BaseExpression):
         self.body = body
         self.or_replace = bool(or_replace)
         self.keyword = keyword
-        self.dialect_options = dialect_options or {}
 
     @property
     def format_method(self) -> str:
@@ -292,7 +276,6 @@ class OracleDropRoutineExpression(BaseExpression):
         dialect: the Oracle dialect instance.
         object_type: the PL/SQL object kind to drop.
         object_name: the name of the object to drop.
-        dialect_options: reserved for future dialect-specific options.
 
     Raises:
         ValueError: if ``object_name`` is empty.
@@ -305,8 +288,6 @@ class OracleDropRoutineExpression(BaseExpression):
         dialect: "OracleDialect",
         object_type: OracleDropRoutineObjectType,
         object_name: str,
-        *,
-        dialect_options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(dialect)
         if not isinstance(object_type, OracleDropRoutineObjectType):
@@ -318,7 +299,6 @@ class OracleDropRoutineExpression(BaseExpression):
             raise ValueError("object_name must be a non-empty string")
         self.object_type = object_type
         self.object_name = object_name
-        self.dialect_options = dialect_options or {}
 
     @property
     def format_method(self) -> str:

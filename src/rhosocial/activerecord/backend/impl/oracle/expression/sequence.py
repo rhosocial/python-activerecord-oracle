@@ -17,7 +17,7 @@ All expressions delegate SQL generation to the dialect through the public
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Dict, Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 
 from rhosocial.activerecord.backend.expression.bases import BaseExpression, SQLQueryAndParams
 
@@ -92,7 +92,6 @@ class OracleCreateSequenceExpression(BaseExpression):
         cache: ``CACHE n`` for a positive int, ``NOCACHE`` for ``0``,
             omitted when None.
         order: ``ORDER`` when True, ``NOORDER`` when False, omitted when None.
-        dialect_options: reserved for future dialect-specific options.
 
     Raises:
         ValueError: if ``sequence_name`` is empty, or ``cache`` is negative.
@@ -111,8 +110,6 @@ class OracleCreateSequenceExpression(BaseExpression):
         cycle: Optional[bool] = None,
         cache: Optional[int] = None,
         order: Optional[bool] = None,
-        *,
-        dialect_options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(dialect)
         if not isinstance(sequence_name, str) or not sequence_name.strip():
@@ -134,7 +131,6 @@ class OracleCreateSequenceExpression(BaseExpression):
         self.cycle = cycle
         self.cache = cache
         self.order = order
-        self.dialect_options = dialect_options or {}
 
     @property
     def format_method(self) -> str:
@@ -149,7 +145,6 @@ class OracleDropSequenceExpression(BaseExpression):
         dialect: the Oracle dialect instance.
         sequence_name: name of the sequence to drop.
         if_exists: if True, emit ``IF EXISTS`` (Oracle 23ai+).
-        dialect_options: reserved for future dialect-specific options.
 
     Raises:
         ValueError: if ``sequence_name`` is empty.
@@ -160,15 +155,12 @@ class OracleDropSequenceExpression(BaseExpression):
         dialect: "OracleDialect",
         sequence_name: str,
         if_exists: bool = False,
-        *,
-        dialect_options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(dialect)
         if not isinstance(sequence_name, str) or not sequence_name.strip():
             raise ValueError("sequence_name must be a non-empty string")
         self.sequence_name = sequence_name
         self.if_exists = bool(if_exists)
-        self.dialect_options = dialect_options or {}
 
     @property
     def format_method(self) -> str:

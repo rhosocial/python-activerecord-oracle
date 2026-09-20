@@ -1,9 +1,8 @@
 # src/rhosocial/activerecord/backend/impl/oracle/expression/partition.py
 """Oracle partition DDL expressions.
 
-This module defines backend-specific partition clause expressions that
-upgrade Phase 4's ``dialect_options``-based partition definition carrying
-into structured ``Expression`` / dataclass objects.
+This module defines backend-specific partition clause expressions as
+structured ``Expression`` / dataclass objects.
 
 Phase 5 scope (this module):
 
@@ -34,9 +33,9 @@ from dataclasses import dataclass
 from decimal import Decimal
 from enum import Enum
 from math import isfinite
-from typing import Any, Dict, List, Optional, Sequence, TYPE_CHECKING, Union
+from typing import Any, List, Optional, Sequence, TYPE_CHECKING, Union
 
-from rhosocial.activerecord.backend.expression.bases import BaseExpression, SQLQueryAndParams
+from rhosocial.activerecord.backend.expression.bases import BaseExpression
 from rhosocial.activerecord.backend.expression.statements import (
     PartitionClause,
     PartitionDefinition,
@@ -149,7 +148,6 @@ class OracleSubpartitionDefinition(SubpartitionDefinition):
 
     Raises:
         ValueError: if ``name`` is empty or whitespace-only.
-        TypeError: if ``dialect_options`` is not a dict when provided.
     """
 
     less_than: Optional[Sequence[BaseExpression]] = None
@@ -179,7 +177,6 @@ class OraclePartitionDefinition(PartitionDefinition):
 
     Raises:
         ValueError: if both ``less_than`` and ``in_values`` are provided.
-        TypeError: if ``dialect_options`` is not a dict when provided.
     """
 
     subpartition_definitions: Optional[Sequence[OracleSubpartitionDefinition]] = None
@@ -410,5 +407,4 @@ class OracleReferencePartitionClause(OraclePartitionClause):
             raise ValueError("fk_constraint must be a non-empty string")
         self.method = OraclePartitionStrategy.REFERENCE.value
         self.keys: List[BaseExpression] = []
-        self.dialect_options: Dict[str, Any] = {}
         self.fk_constraint = fk_constraint
