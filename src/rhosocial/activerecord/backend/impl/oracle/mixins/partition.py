@@ -7,9 +7,6 @@ Oracle, plus the Oracle-specific partition strategies declared in
 
 Phase 5 scope:
 
-* Generic RANGE / LIST / HASH through the core ``PartitionClause``
-  expression (Phase 4 backward compatibility). Partition definitions are
-  read from ``PartitionClause.dialect_options`` for the legacy path.
 * Backend-specific
   :class:`~rhosocial.activerecord.backend.impl.oracle.expression.partition.OraclePartitionByRange`
   / ``...ByList`` / ``...ByHash`` expressions with structured
@@ -24,7 +21,9 @@ Dispatch rule (expression-dialect-architecture §7.1): the public
 ``format_partition_clause`` formatter inspects the expression type via
 ``isinstance`` and dispatches to the backend-specific public formatters
 (``format_partition_by_range`` etc.). The generic ``PartitionClause``
-path is preserved for Phase 4 backward compatibility.
+expression is **not** supported: Oracle partitioning requires one of the
+Oracle-specific subclasses. Passing a generic ``PartitionClause`` raises
+``TypeError`` instead of reading ``dialect_options``.
 
 Note on parameter binding: Oracle does not accept bind variables in DDL
 statements (CREATE TABLE ... PARTITION BY ...). Partition boundary
@@ -171,13 +170,16 @@ class OraclePartitionMixin:
         """Format Oracle ``PARTITION BY`` clause from a partition expression.
 
         Dispatches by ``isinstance`` to the backend-specific public
-        formatters first (``format_partition_by_range`` etc.), falling
-        back to the legacy generic ``PartitionClause`` path (Phase 4
-        compatibility) that reads ``expr.dialect_options``.
+        formatters (``format_partition_by_range`` etc.). Only the
+        Oracle-specific subclasses are accepted; a generic core
+        ``PartitionClause`` is rejected because its untyped
+        ``dialect_options`` bag is no longer read.
 
         Args:
-            expr: a core ``PartitionClause`` (legacy) or an Oracle-specific
-                subclass (``OraclePartitionByRange`` etc.).
+            expr: an Oracle-specific partition clause
+                (``OraclePartitionByRange`` / ``...ByList`` / ``...ByHash``
+                / ``OracleIntervalPartitionClause`` /
+                ``OracleReferencePartitionClause``).
 
         Returns:
             Tuple of (SQL string, parameters tuple). The SQL string is
@@ -189,9 +191,10 @@ class OraclePartitionMixin:
         Raises:
             UnsupportedFeatureError: if table partitioning or the requested
                 strategy is not supported by the current Oracle version.
-            ValueError: if the partition method is invalid or required
-                partition definition data is missing/malformed.
-            TypeError: if partition definition fields have wrong types.
+            ValueError: if required partition definition data is
+                missing/malformed.
+            TypeError: if ``expr`` is not an Oracle-specific partition
+                clause, or partition definition fields have wrong types.
         """
         if not self.supports_table_partitioning():
             raise UnsupportedFeatureError(
@@ -218,17 +221,12 @@ class OraclePartitionMixin:
         if isinstance(expr, OraclePartitionByHash):
             return self.format_partition_by_hash(expr)
 
-        # Legacy generic PartitionClause path (Phase 4 compatibility).
-        method = expr.method.upper()
-        if method == "RANGE":
-            return self.format_legacy_range(expr)
-        if method == "LIST":
-            return self.format_legacy_list(expr)
-        if method == "HASH":
-            return self.format_legacy_hash(expr)
-        raise ValueError(
-            f"Invalid Oracle partition method: {expr.method!r}. "
-            "Supported: RANGE, LIST, HASH, INTERVAL, REFERENCE."
+        raise TypeError(
+            "Oracle table partitioning requires an Oracle-specific partition "
+            "clause expression (OraclePartitionByRange, OraclePartitionByList, "
+            "OraclePartitionByHash, OracleIntervalPartitionClause, or "
+            f"OracleReferencePartitionClause); got {type(expr).__name__}. "
+            "The generic PartitionClause dialect_options bag is not supported."
         )
 
     # ------------------------------------------------------------------
@@ -381,12 +379,22 @@ class OraclePartitionMixin:
                 raise ValueError(
                     f"RANGE partition {definition.name!r} requires 'less_than' boundary values"
                 )
+            if not isinstance(definition.less_than, (list, tuple)):
+                raise TypeError(
+                    "'less_than' must be a list or tuple, "
+                    f"got {type(definition.less_than).__name__}"
+                )
             value_parts = [self.format_partition_boundary_value(v)[0] for v in definition.less_than]
             body = f"VALUES LESS THAN ({', '.join(value_parts)})"
         elif strategy.upper() == "LIST":
             if definition.in_values is None:
                 raise ValueError(
                     f"LIST partition {definition.name!r} requires 'in_values' boundary values"
+                )
+            if not isinstance(definition.in_values, (list, tuple)):
+                raise TypeError(
+                    "'in_values' must be a list or tuple, "
+                    f"got {type(definition.in_values).__name__}"
                 )
             value_parts: List[str] = []
             for value in definition.in_values:
@@ -549,99 +557,4 @@ class OraclePartitionMixin:
             "partition boundary value must be str, int, float, Decimal, "
             "date, datetime, or None, got "
             f"{type(value).__name__}"
-        )
-
-    # ------------------------------------------------------------------
-    # Legacy generic PartitionClause path (Phase 4 compatibility)
-    # ------------------------------------------------------------------
-    def format_legacy_range(self, expr: "PartitionClause") -> Tuple[str, tuple]:
-        """Legacy RANGE path reading ``expr.dialect_options['partitions']``."""
-        key_sql, _ = self.format_partition_keys(expr.keys)
-        sql = f"PARTITION BY RANGE ({key_sql})"
-        partitions = expr.dialect_options.get("partitions") or []
-        if partitions:
-            parts = [self.format_legacy_range_definition(p)[0] for p in partitions]
-            sql = f"{sql} ({', '.join(parts)})"
-        return f" {sql}", ()
-
-    def format_legacy_list(self, expr: "PartitionClause") -> Tuple[str, tuple]:
-        """Legacy LIST path reading ``expr.dialect_options['partitions']``."""
-        key_sql, _ = self.format_partition_keys(expr.keys)
-        sql = f"PARTITION BY LIST ({key_sql})"
-        partitions = expr.dialect_options.get("partitions") or []
-        if partitions:
-            parts = [self.format_legacy_list_definition(p)[0] for p in partitions]
-            sql = f"{sql} ({', '.join(parts)})"
-        return f" {sql}", ()
-
-    def format_legacy_hash(self, expr: "PartitionClause") -> Tuple[str, tuple]:
-        """Legacy HASH path reading ``expr.dialect_options['partitions_count']``."""
-        key_sql, _ = self.format_partition_keys(expr.keys)
-        sql = f"PARTITION BY HASH ({key_sql})"
-        partitions_count = expr.dialect_options.get("partitions_count")
-        if partitions_count is not None:
-            if not isinstance(partitions_count, int) or isinstance(partitions_count, bool):
-                raise TypeError(
-                    "partitions_count must be an int, "
-                    f"got {type(partitions_count).__name__}"
-                )
-            if partitions_count <= 0:
-                raise ValueError(
-                    f"partitions_count must be a positive integer, got {partitions_count}"
-                )
-            sql = f"{sql} PARTITIONS {partitions_count}"
-        return f" {sql}", ()
-
-    def format_legacy_range_definition(self, partition: Any) -> Tuple[str, tuple]:
-        """Render a single legacy RANGE partition definition dict."""
-        if not isinstance(partition, dict):
-            raise TypeError(
-                f"RANGE partition definition must be a dict, got {type(partition).__name__}"
-            )
-        name = partition.get("name")
-        less_than = partition.get("less_than")
-        if not name or not isinstance(name, str):
-            raise TypeError("RANGE partition definition requires a non-empty string 'name'")
-        if less_than is None:
-            raise ValueError(f"RANGE partition {name!r} requires 'less_than' boundary values")
-        if not isinstance(less_than, (list, tuple)):
-            raise TypeError(
-                "'less_than' must be a list or tuple, "
-                f"got {type(less_than).__name__}"
-            )
-        value_sql_parts = [self.format_partition_boundary_value(v)[0] for v in less_than]
-        return (
-            f"PARTITION {self.format_identifier(name)} "
-            f"VALUES LESS THAN ({', '.join(value_sql_parts)})",
-            (),
-        )
-
-    def format_legacy_list_definition(self, partition: Any) -> Tuple[str, tuple]:
-        """Render a single legacy LIST partition definition dict."""
-        if not isinstance(partition, dict):
-            raise TypeError(
-                f"LIST partition definition must be a dict, got {type(partition).__name__}"
-            )
-        name = partition.get("name")
-        in_values = partition.get("in_values")
-        if not name or not isinstance(name, str):
-            raise TypeError("LIST partition definition requires a non-empty string 'name'")
-        if in_values is None:
-            raise ValueError(f"LIST partition {name!r} requires 'in_values' boundary values")
-        if not isinstance(in_values, (list, tuple)):
-            raise TypeError(
-                "'in_values' must be a list or tuple, "
-                f"got {type(in_values).__name__}"
-            )
-        value_sql_parts: List[str] = []
-        for value in in_values:
-            if isinstance(value, (list, tuple)):
-                inner = [self.format_partition_boundary_value(v)[0] for v in value]
-                value_sql_parts.append(f"({', '.join(inner)})")
-            else:
-                value_sql_parts.append(self.format_partition_boundary_value(value)[0])
-        return (
-            f"PARTITION {self.format_identifier(name)} "
-            f"VALUES ({', '.join(value_sql_parts)})",
-            (),
         )

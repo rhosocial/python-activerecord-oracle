@@ -24,9 +24,13 @@ from rhosocial.activerecord.backend.expression import (
     TableExpression,
 )
 from rhosocial.activerecord.backend.errors import DatabaseError
-from rhosocial.activerecord.backend.expression.statements import (
-    PartitionClause,
-    PartitionStrategy,
+from rhosocial.activerecord.backend.impl.oracle.expression.partition import (
+    OraclePartitionByHash,
+    OraclePartitionByList,
+    OraclePartitionByRange,
+    OraclePartitionDefinition,
+    OraclePartitionMaxValue,
+    OraclePartitionValue,
 )
 from rhosocial.activerecord.backend.expression.types import (
     IntegerType,
@@ -105,15 +109,13 @@ def test_create_range_partitioned_table_real(oracle_backend_single):
     _drop(backend, table_name)
     try:
         d = backend.dialect
-        partition = PartitionClause(
-            d, PartitionStrategy.RANGE, [Column(d, "AGE")],
-            dialect_options={
-                "partitions": [
-                    {"name": "p_minor", "less_than": [Literal(d, 18)]},
-                    {"name": "p_adult", "less_than": [Literal(d, 65)]},
-                    {"name": "p_senior", "less_than": ["MAXVALUE"]},
-                ],
-            },
+        partition = OraclePartitionByRange(
+            d, [Column(d, "AGE")],
+            partitions=[
+                OraclePartitionDefinition(name="p_minor", less_than=[OraclePartitionValue(d, 18)]),
+                OraclePartitionDefinition(name="p_adult", less_than=[OraclePartitionValue(d, 65)]),
+                OraclePartitionDefinition(name="p_senior", less_than=[OraclePartitionMaxValue(d)]),
+            ],
         )
         expr = CreateTableExpression(
             dialect=d,
@@ -151,14 +153,12 @@ def test_create_list_partitioned_table_real(oracle_backend_single):
     _drop(backend, table_name)
     try:
         d = backend.dialect
-        partition = PartitionClause(
-            d, PartitionStrategy.LIST, [Column(d, "REGION")],
-            dialect_options={
-                "partitions": [
-                    {"name": "p_east", "in_values": [Literal(d, "EAST")]},
-                    {"name": "p_west", "in_values": [Literal(d, "WEST")]},
-                ],
-            },
+        partition = OraclePartitionByList(
+            d, [Column(d, "REGION")],
+            partitions=[
+                OraclePartitionDefinition(name="p_east", in_values=[OraclePartitionValue(d, "EAST")]),
+                OraclePartitionDefinition(name="p_west", in_values=[OraclePartitionValue(d, "WEST")]),
+            ],
         )
         expr = CreateTableExpression(
             dialect=d,
@@ -195,10 +195,7 @@ def test_create_hash_partitioned_table_real(oracle_backend_single):
     _drop(backend, table_name)
     try:
         d = backend.dialect
-        partition = PartitionClause(
-            d, PartitionStrategy.HASH, [Column(d, "ID")],
-            dialect_options={"partitions_count": 4},
-        )
+        partition = OraclePartitionByHash(d, [Column(d, "ID")], partitions_count=4)
         expr = CreateTableExpression(
             dialect=d,
             table=table_name,
@@ -234,14 +231,12 @@ def test_explain_range_partitioned_table_real(oracle_backend_single):
     _drop(backend, table_name)
     try:
         d = backend.dialect
-        partition = PartitionClause(
-            d, PartitionStrategy.RANGE, [Column(d, "AGE")],
-            dialect_options={
-                "partitions": [
-                    {"name": "p1", "less_than": [Literal(d, 100)]},
-                    {"name": "p2", "less_than": ["MAXVALUE"]},
-                ],
-            },
+        partition = OraclePartitionByRange(
+            d, [Column(d, "AGE")],
+            partitions=[
+                OraclePartitionDefinition(name="p1", less_than=[OraclePartitionValue(d, 100)]),
+                OraclePartitionDefinition(name="p2", less_than=[OraclePartitionMaxValue(d)]),
+            ],
         )
         expr = CreateTableExpression(
             dialect=d,

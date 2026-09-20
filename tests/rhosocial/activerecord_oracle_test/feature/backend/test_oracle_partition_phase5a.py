@@ -333,45 +333,32 @@ class TestOraclePartitionValue:
 
 
 # ---------------------------------------------------------------------------
-# Backward compatibility: legacy PartitionClause path
+# Generic PartitionClause is no longer supported
 # ---------------------------------------------------------------------------
 
 
-class TestLegacyPartitionClauseCompat:
-    """Phase 4 generic PartitionClause path must still work."""
+class TestGenericPartitionClauseRejected:
+    """The Phase 4 generic PartitionClause/dialect_options path is removed."""
 
-    def test_legacy_range_path(self):
+    def test_generic_partition_clause_raises_type_error(self):
         d = _dialect()
         c = PartitionClause(
             d, PartitionStrategy.RANGE, [Column(d, "id")],
-            dialect_options={
-                "partitions": [
-                    {"name": "p1", "less_than": [Literal(d, 100)]},
-                    {"name": "p2", "less_than": ["MAXVALUE"]},
-                ],
-            },
         )
-        sql, params = c.to_sql()
-        assert 'PARTITION BY RANGE ("ID")' in sql
-        assert 'PARTITION "P1" VALUES LESS THAN (100)' in sql
-        assert 'PARTITION "P2" VALUES LESS THAN (MAXVALUE)' in sql
-        assert params == ()
+        with pytest.raises(TypeError, match="Oracle-specific partition clause"):
+            c.to_sql()
 
-    def test_legacy_hash_path(self):
+    def test_generic_hash_clause_raises_type_error(self):
         d = _dialect()
         c = PartitionClause(
             d, PartitionStrategy.HASH, [Column(d, "id")],
-            dialect_options={"partitions_count": 2},
         )
-        sql, _ = c.to_sql()
-        assert sql == ' PARTITION BY HASH ("ID") PARTITIONS 2'
+        with pytest.raises(TypeError, match="Oracle-specific partition clause"):
+            c.to_sql()
 
     def test_backend_specific_dispatch_takes_priority(self):
-        """Backend-specific expression dispatches before legacy method string."""
+        """Backend-specific expression dispatches to the structured formatter."""
         d = _dialect()
-        # Even though method is RANGE, an OraclePartitionByRange instance
-        # should dispatch through format_partition_by_range (structured form),
-        # not the legacy dialect_options path.
         c = OraclePartitionByRange(
             d, [Column(d, "id")],
             partitions=[
@@ -379,8 +366,5 @@ class TestLegacyPartitionClauseCompat:
             ],
         )
         sql, _ = c.to_sql()
-        # Structured form produces identical SQL to legacy for this case,
-        # but the dispatch path is verifiable through the absence of
-        # dialect_options (structured form never reads dialect_options).
         assert 'PARTITION BY RANGE ("ID")' in sql
         assert 'PARTITION "P1" VALUES LESS THAN (100)' in sql
