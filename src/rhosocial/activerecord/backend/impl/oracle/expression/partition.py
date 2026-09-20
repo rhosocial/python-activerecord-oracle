@@ -37,7 +37,11 @@ from math import isfinite
 from typing import Any, Dict, List, Optional, Sequence, TYPE_CHECKING, Union
 
 from rhosocial.activerecord.backend.expression.bases import BaseExpression, SQLQueryAndParams
-from rhosocial.activerecord.backend.expression.statements import PartitionClause
+from rhosocial.activerecord.backend.expression.statements import (
+    PartitionClause,
+    PartitionDefinition,
+    SubpartitionDefinition,
+)
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
@@ -135,36 +139,31 @@ class OraclePartitionValue(BaseExpression):
 
 
 @dataclass
-class OracleSubpartitionDefinition:
-    """A single named subpartition within a partition definition.
+class OracleSubpartitionDefinition(SubpartitionDefinition):
+    """A single named Oracle subpartition within a partition definition.
 
-    Used when individual subpartitions need explicit names or distinct
-    boundary values. When omitted, Oracle applies the template from the
-    ``SUBPARTITION BY`` clause automatically.
+    Derives from the generic ``SubpartitionDefinition`` and adds Oracle's
+    subpartition boundary fields (RANGE ``less_than`` / LIST ``in_values``).
+    When omitted, Oracle applies the template from the ``SUBPARTITION BY``
+    clause automatically.
 
     Raises:
         ValueError: if ``name`` is empty or whitespace-only.
         TypeError: if ``dialect_options`` is not a dict when provided.
     """
 
-    name: str
     less_than: Optional[Sequence[BaseExpression]] = None
     in_values: Optional[Sequence[Union[BaseExpression, Sequence[BaseExpression]]]] = None
-    dialect_options: Optional[Dict[str, Any]] = None
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.name, str) or not self.name.strip():
-            raise ValueError("subpartition name must be a non-empty string")
-        if self.dialect_options is not None and not isinstance(self.dialect_options, dict):
-            raise TypeError(
-                "dialect_options must be dict or None, "
-                f"got {type(self.dialect_options).__name__}"
-            )
 
 
 @dataclass
-class OraclePartitionDefinition:
+class OraclePartitionDefinition(PartitionDefinition):
     """An Oracle ``PARTITION ... VALUES ...`` definition.
+
+    Derives from the generic ``PartitionDefinition``. Oracle permits a
+    boundary to be omitted (HASH / composite HASH subpartitioning), so the
+    base's "mutually exclusive" check is the only boundary validation here;
+    the strategy-specific requirement is enforced by the formatter.
 
     For RANGE: provide ``less_than`` (sequence of ``BaseExpression`` or
     ``OraclePartitionMaxValue``). The special ``MAXVALUE`` upper bound is
@@ -179,30 +178,11 @@ class OraclePartitionDefinition:
     be provided to override the template.
 
     Raises:
-        ValueError: if both ``less_than`` and ``in_values`` are provided,
-                    or if neither is provided when the strategy requires
-                    boundaries (the strategy check is enforced by the
-                    formatter; this dataclass only rejects the mutual
-                    exclusion violation).
+        ValueError: if both ``less_than`` and ``in_values`` are provided.
         TypeError: if ``dialect_options`` is not a dict when provided.
     """
 
-    name: str
-    less_than: Optional[Sequence[BaseExpression]] = None
-    in_values: Optional[Sequence[Union[BaseExpression, Sequence[BaseExpression]]]] = None
     subpartition_definitions: Optional[Sequence[OracleSubpartitionDefinition]] = None
-    dialect_options: Optional[Dict[str, Any]] = None
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.name, str) or not self.name.strip():
-            raise ValueError("partition name must be a non-empty string")
-        if self.less_than is not None and self.in_values is not None:
-            raise ValueError("less_than and in_values are mutually exclusive")
-        if self.dialect_options is not None and not isinstance(self.dialect_options, dict):
-            raise TypeError(
-                "dialect_options must be dict or None, "
-                f"got {type(self.dialect_options).__name__}"
-            )
 
 
 # ---------------------------------------------------------------------------
