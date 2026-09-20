@@ -186,7 +186,8 @@ class OracleFeaturesMixin:
 
     # --- Temporal tables ----------------------------------------------
     def supports_temporal_tables(self) -> bool:
-        return True
+        # Oracle has no SQL:2011 system-versioned temporal tables.
+        return False
 
     # --- QUALIFY ------------------------------------------------------
     def supports_qualify_clause(self) -> bool:
