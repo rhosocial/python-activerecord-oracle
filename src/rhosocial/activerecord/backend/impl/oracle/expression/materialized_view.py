@@ -22,9 +22,9 @@ All expressions delegate SQL generation to the dialect through the public
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import List, Optional, TYPE_CHECKING
 
-from rhosocial.activerecord.backend.expression.bases import BaseExpression, SQLQueryAndParams
+from rhosocial.activerecord.backend.expression.bases import BaseExpression
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
@@ -70,7 +70,6 @@ class OracleCreateMaterializedViewExpression(BaseExpression):
             ``REFRESH`` clause).
         query_rewrite: ``ENABLE QUERY REWRITE`` when True, ``DISABLE QUERY
             REWRITE`` when False, omitted when None.
-        dialect_options: reserved for future dialect-specific options.
 
     Raises:
         ValueError: if ``view_name`` is empty.
@@ -89,8 +88,6 @@ class OracleCreateMaterializedViewExpression(BaseExpression):
         refresh_method: Optional[MaterializedViewRefreshMethod] = None,
         refresh_trigger: Optional[MaterializedViewRefreshTrigger] = None,
         query_rewrite: Optional[bool] = None,
-        *,
-        dialect_options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(dialect)
         if not isinstance(view_name, str) or not view_name.strip():
@@ -109,7 +106,6 @@ class OracleCreateMaterializedViewExpression(BaseExpression):
         self.refresh_method = refresh_method
         self.refresh_trigger = refresh_trigger
         self.query_rewrite = query_rewrite
-        self.dialect_options = dialect_options or {}
 
     @property
     def format_method(self) -> str:
@@ -125,7 +121,6 @@ class OracleCreateMaterializedViewLogExpression(BaseExpression):
         table: name of the master (base) table to log.
         with_rowid: emit ``WITH ROWID``.
         with_primary_key: emit ``WITH PRIMARY KEY``.
-        dialect_options: reserved for future dialect-specific options.
 
     Raises:
         ValueError: if ``table`` is empty, or neither ``with_rowid`` nor
@@ -138,8 +133,6 @@ class OracleCreateMaterializedViewLogExpression(BaseExpression):
         table: str,
         with_rowid: bool = False,
         with_primary_key: bool = False,
-        *,
-        dialect_options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(dialect)
         if not isinstance(table, str) or not table.strip():
@@ -151,7 +144,6 @@ class OracleCreateMaterializedViewLogExpression(BaseExpression):
         self.table = table
         self.with_rowid = bool(with_rowid)
         self.with_primary_key = bool(with_primary_key)
-        self.dialect_options = dialect_options or {}
 
     @property
     def format_method(self) -> str:
@@ -168,7 +160,6 @@ class OracleDropMaterializedViewExpression(BaseExpression):
         if_exists: if True, emit ``IF EXISTS`` (Oracle 23ai+).
         preserve_table: if True, append ``PRESERVE TABLE`` to keep the
             underlying container table.
-        dialect_options: reserved for future dialect-specific options.
 
     Raises:
         ValueError: if ``view_name`` is empty.
@@ -180,8 +171,6 @@ class OracleDropMaterializedViewExpression(BaseExpression):
         view_name: str,
         if_exists: bool = False,
         preserve_table: bool = False,
-        *,
-        dialect_options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(dialect)
         if not isinstance(view_name, str) or not view_name.strip():
@@ -189,7 +178,6 @@ class OracleDropMaterializedViewExpression(BaseExpression):
         self.view_name = view_name
         self.if_exists = bool(if_exists)
         self.preserve_table = bool(preserve_table)
-        self.dialect_options = dialect_options or {}
 
     @property
     def format_method(self) -> str:

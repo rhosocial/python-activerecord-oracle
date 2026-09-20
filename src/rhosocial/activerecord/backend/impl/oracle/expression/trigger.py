@@ -10,7 +10,7 @@ expression tree and renderable through the unified
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 
 from rhosocial.activerecord.backend.expression.bases import BaseExpression
 
@@ -27,7 +27,6 @@ class DisableTriggerExpression(BaseExpression):
         dialect: the Oracle dialect instance.
         trigger_name: the trigger to disable.
         table_name: optional table name (reserved for future use).
-        dialect_options: reserved for future dialect-specific options.
     """
 
     def __init__(
@@ -35,13 +34,10 @@ class DisableTriggerExpression(BaseExpression):
         dialect: "OracleDialect",
         trigger_name: str,
         table_name: Optional[str] = None,
-        *,
-        dialect_options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(dialect)
         self.trigger_name = trigger_name
         self.table_name = table_name
-        self.dialect_options = dialect_options or {}
 
     @property
     def format_method(self) -> str:
@@ -58,7 +54,6 @@ class EnableTriggerExpression(BaseExpression):
         dialect: the Oracle dialect instance.
         trigger_name: the trigger to enable.
         table_name: optional table name (reserved for future use).
-        dialect_options: reserved for future dialect-specific options.
     """
 
     def __init__(
@@ -66,13 +61,10 @@ class EnableTriggerExpression(BaseExpression):
         dialect: "OracleDialect",
         trigger_name: str,
         table_name: Optional[str] = None,
-        *,
-        dialect_options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(dialect)
         self.trigger_name = trigger_name
         self.table_name = table_name
-        self.dialect_options = dialect_options or {}
 
     @property
     def format_method(self) -> str:

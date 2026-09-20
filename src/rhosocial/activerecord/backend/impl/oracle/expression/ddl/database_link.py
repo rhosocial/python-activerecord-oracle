@@ -16,9 +16,9 @@ All expressions delegate SQL generation to the dialect through the public
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 
-from rhosocial.activerecord.backend.expression.bases import BaseExpression, SQLQueryAndParams
+from rhosocial.activerecord.backend.expression.bases import BaseExpression
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
@@ -37,7 +37,6 @@ class OracleCreateDatabaseLinkExpression(BaseExpression):
         public: create a PUBLIC database link instead of a private one.
         shared: create a SHARED database link used by multiple sessions
             through the same connection.
-        dialect_options: reserved for future dialect-specific options.
 
     Raises:
         ValueError: if ``link_name`` is empty, or if only one of ``user`` /
@@ -53,8 +52,6 @@ class OracleCreateDatabaseLinkExpression(BaseExpression):
         using: Optional[str] = None,
         public: bool = False,
         shared: bool = False,
-        *,
-        dialect_options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(dialect)
         if not isinstance(link_name, str) or not link_name.strip():
@@ -67,7 +64,6 @@ class OracleCreateDatabaseLinkExpression(BaseExpression):
         self.using = using
         self.public = bool(public)
         self.shared = bool(shared)
-        self.dialect_options = dialect_options or {}
 
     @property
     def format_method(self) -> str:
@@ -82,7 +78,6 @@ class OracleDropDatabaseLinkExpression(BaseExpression):
         dialect: the Oracle dialect instance.
         link_name: name of the database link to drop.
         public: drop the PUBLIC database link.
-        dialect_options: reserved for future dialect-specific options.
 
     Raises:
         ValueError: if ``link_name`` is empty.
@@ -93,15 +88,12 @@ class OracleDropDatabaseLinkExpression(BaseExpression):
         dialect: "OracleDialect",
         link_name: str,
         public: bool = False,
-        *,
-        dialect_options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(dialect)
         if not isinstance(link_name, str) or not link_name.strip():
             raise ValueError("link_name must be a non-empty string")
         self.link_name = link_name
         self.public = bool(public)
-        self.dialect_options = dialect_options or {}
 
     @property
     def format_method(self) -> str:

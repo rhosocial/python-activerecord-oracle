@@ -14,9 +14,9 @@ All expressions delegate SQL generation to the dialect through the public
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 
-from rhosocial.activerecord.backend.expression.bases import BaseExpression, SQLQueryAndParams
+from rhosocial.activerecord.backend.expression.bases import BaseExpression
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
@@ -32,7 +32,6 @@ class OracleCreateSynonymExpression(BaseExpression):
         schema_name: optional schema qualifier of the target object.
         public: create a PUBLIC synonym (shared by all users) instead of a
             private one.
-        dialect_options: reserved for future dialect-specific options.
 
     Raises:
         ValueError: if ``synonym_name`` or ``table_name`` is empty.
@@ -45,8 +44,6 @@ class OracleCreateSynonymExpression(BaseExpression):
         table_name: str,
         schema_name: Optional[str] = None,
         public: bool = False,
-        *,
-        dialect_options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(dialect)
         if not isinstance(synonym_name, str) or not synonym_name.strip():
@@ -57,7 +54,6 @@ class OracleCreateSynonymExpression(BaseExpression):
         self.table_name = table_name
         self.schema_name = schema_name
         self.public = bool(public)
-        self.dialect_options = dialect_options or {}
 
     @property
     def format_method(self) -> str:
@@ -74,7 +70,6 @@ class OracleDropSynonymExpression(BaseExpression):
         public: drop the PUBLIC synonym.
         force: append ``FORCE`` to drop the synonym even when it has
             dependents.
-        dialect_options: reserved for future dialect-specific options.
 
     Raises:
         ValueError: if ``synonym_name`` is empty.
@@ -86,8 +81,6 @@ class OracleDropSynonymExpression(BaseExpression):
         synonym_name: str,
         public: bool = False,
         force: bool = False,
-        *,
-        dialect_options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(dialect)
         if not isinstance(synonym_name, str) or not synonym_name.strip():
@@ -95,7 +88,6 @@ class OracleDropSynonymExpression(BaseExpression):
         self.synonym_name = synonym_name
         self.public = bool(public)
         self.force = bool(force)
-        self.dialect_options = dialect_options or {}
 
     @property
     def format_method(self) -> str:

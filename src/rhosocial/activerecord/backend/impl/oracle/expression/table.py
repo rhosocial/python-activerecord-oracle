@@ -10,7 +10,7 @@ point.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from rhosocial.activerecord.backend.expression.bases import BaseExpression
 
@@ -29,19 +29,15 @@ class TableCompressionClauseExpression(BaseExpression):
         mode: the compression mode — ``'none'`` (or empty) yields
             ``NOCOMPRESS``; any other value becomes
             ``COMPRESS FOR <MODE>`` (uppercased).
-        dialect_options: reserved for future dialect-specific options.
     """
 
     def __init__(
         self,
         dialect: "OracleDialect",
         mode: str = "BASIC",
-        *,
-        dialect_options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(dialect)
         self.mode = mode
-        self.dialect_options = dialect_options or {}
 
     @property
     def format_method(self) -> str:
@@ -57,19 +53,15 @@ class TablespaceClauseExpression(BaseExpression):
     Args:
         dialect: the Oracle dialect instance.
         tablespace_name: the tablespace identifier.
-        dialect_options: reserved for future dialect-specific options.
     """
 
     def __init__(
         self,
         dialect: "OracleDialect",
         tablespace_name: str,
-        *,
-        dialect_options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(dialect)
         self.tablespace_name = tablespace_name
-        self.dialect_options = dialect_options or {}
 
     @property
     def format_method(self) -> str:
