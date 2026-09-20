@@ -36,7 +36,6 @@ class OracleForUpdateClause(ForUpdateClause):
         nowait: bool = False,
         skip_locked: bool = False,
         wait: Optional[int] = None,
-        dialect_options: Optional[dict] = None,
     ):
         super().__init__(
             dialect,
@@ -44,7 +43,6 @@ class OracleForUpdateClause(ForUpdateClause):
             of_columns=of_columns,
             nowait=nowait,
             skip_locked=skip_locked,
-            dialect_options=dialect_options,
         )
         if sum([bool(nowait), wait is not None, bool(skip_locked)]) > 1:
             raise ValueError("NOWAIT, WAIT n, and SKIP LOCKED are mutually exclusive")
