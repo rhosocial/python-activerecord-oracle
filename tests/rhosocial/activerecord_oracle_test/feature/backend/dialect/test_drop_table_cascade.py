@@ -47,7 +47,7 @@ class TestOracleDropTableRendering:
             dialect,
             table="users",
             cascade=True,
-            dialect_options={"purge": True},
+            purge=True,
         )
         sql, params = expr.to_sql()
         assert sql.endswith(" CASCADE CONSTRAINTS PURGE")
