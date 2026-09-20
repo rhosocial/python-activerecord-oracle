@@ -93,8 +93,17 @@ class OracleDDLMixin:
         self,
         col_def: "ColumnDefinition",
     ) -> Tuple[str, tuple]:
+        """Format a single column definition with Oracle-specific syntax.
+
+        Accepts both the generic ``ColumnDefinition`` and the Oracle
+        ``OracleColumnDefinition``; the latter's ``invisible`` attribute is
+        rendered here.
+        """
         from rhosocial.activerecord.backend.expression.statements.ddl_table import (
             ColumnConstraintType,
+        )
+        from rhosocial.activerecord.backend.impl.oracle.expression.column import (
+            OracleColumnDefinition,
         )
         type_sql, type_params = col_def.data_type.to_sql()
         parts = [self.format_identifier(col_def.name), type_sql]
@@ -150,6 +159,9 @@ class OracleDDLMixin:
 
         if constraint_parts:
             parts.append(" ".join(constraint_parts))
+
+        if isinstance(col_def, OracleColumnDefinition) and col_def.invisible:
+            parts.append("INVISIBLE")
 
         if col_def.generated_expression is not None:
             gen_sql, gen_params = col_def.generated_expression.to_sql()

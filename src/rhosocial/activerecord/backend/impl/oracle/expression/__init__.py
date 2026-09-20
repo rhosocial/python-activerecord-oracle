@@ -48,6 +48,10 @@ from .flashback import (
     OracleFlashbackTableExpression,
     OraclePurgeObjectType, OraclePurgeExpression,
 )
+from .column import (
+    OracleColumnDefinition,
+    OracleColumnOptions,
+)
 from .alter_table import (
     OracleSetUnusedColumnsAction, OracleDropUnusedColumnsAction,
     OracleMoveTableAction, OracleShrinkSpaceAction,
@@ -69,6 +73,7 @@ from .table import TableCompressionClauseExpression, TablespaceClauseExpression
 from .trigger import DisableTriggerExpression, EnableTriggerExpression
 
 __all__ = [
+'OracleColumnDefinition', 'OracleColumnOptions',
 # Hierarchical query expressions
 'ConnectByExpression', 'PriorExpression',
 'ConnectByRootExpression', 'SysConnectByPathExpression',
