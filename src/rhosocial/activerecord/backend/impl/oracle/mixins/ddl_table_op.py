@@ -73,9 +73,9 @@ class OracleTableCapabilityMixin:
                     self.name, "DROP TABLE ... CASCADE CONSTRAINTS"
                 )
             parts.append("CASCADE CONSTRAINTS")
-            if getattr(expr, "purge", False) and self.supports_purge_on_drop_table():
-                parts.append("PURGE")
         elif expr.cascade is False:
             raise UnsupportedFeatureError(self.name, "DROP TABLE ... RESTRICT")
+        if getattr(expr, "purge", False) and self.supports_purge_on_drop_table():
+            parts.append("PURGE")
         return " ".join(parts), table_params
 
