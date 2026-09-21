@@ -136,19 +136,6 @@ class OracleDDLMixin:
                         constraint_parts.append(f"DEFAULT {constraint.default_value}")
             elif constraint.constraint_type == ColumnConstraintType.NULL:
                 constraint_parts.append("NULL")
-            elif constraint.constraint_type == ColumnConstraintType.COLLATE:
-                if constraint.collation:
-                    if self.version >= (12, 2, 0):
-                        constraint_parts.append(
-                            f"COLLATE {self.format_identifier(constraint.collation)}"
-                        )
-                    else:
-                        from rhosocial.activerecord.backend.dialect.exceptions import (
-                            UnsupportedFeatureError,
-                        )
-                        raise UnsupportedFeatureError(
-                            self.name, "column-level COLLATE (requires Oracle 12.2+)"
-                        )
 
             if constraint.is_auto_increment:
                 if self.version >= (12, 0, 0):
@@ -159,6 +146,11 @@ class OracleDDLMixin:
 
         if constraint_parts:
             parts.append(" ".join(constraint_parts))
+
+        attr_sql, attr_params = self.format_column_attributes(col_def)
+        if attr_sql:
+            parts.append(attr_sql.strip())
+        params.extend(attr_params)
 
         if isinstance(col_def, OracleColumnDefinition) and col_def.invisible:
             parts.append("INVISIBLE")
