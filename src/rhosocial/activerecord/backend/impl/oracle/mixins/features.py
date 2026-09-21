@@ -164,6 +164,10 @@ class OracleFeaturesMixin:
     def supports_auto_increment(self) -> bool:
         return self.version >= (12, 0, 0)
 
+    def supports_column_collation(self) -> bool:
+        """Oracle supports column-level COLLATE since 12.2."""
+        return self.version >= (12, 2, 0)
+
     def supports_generated_columns(self) -> bool:
         return self.version >= (11, 0, 0)
 
