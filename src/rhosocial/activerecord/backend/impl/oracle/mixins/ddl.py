@@ -32,6 +32,18 @@ class OracleDDLMixin:
         PL/SQL block that checks ``user_tables`` and only executes the DDL
         when the table does not exist, making creation idempotent.
         """
+        from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
+
+        table_options = getattr(expr, "table_options", None)
+        if getattr(table_options, "comment", None):
+            # Oracle annotates comments through the standalone COMMENT ON
+            # statement (no inline table option); a comment on the table
+            # options is never silently dropped.
+            raise UnsupportedFeatureError(
+                self.name, "TABLE COMMENT",
+                "Oracle has no inline table comment; use a standalone "
+                "COMMENT ON TABLE statement.",
+            )
         all_params: List[Any] = []
         parts = ["CREATE"]
         if expr.temporary:
@@ -105,6 +117,16 @@ class OracleDDLMixin:
         from rhosocial.activerecord.backend.impl.oracle.expression.column import (
             OracleColumnDefinition,
         )
+        if getattr(col_def, "comment", None):
+            # Oracle annotates column comments through the standalone
+            # COMMENT ON COLUMN statement (no inline column clause); a
+            # comment on a column definition is never silently dropped.
+            from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
+            raise UnsupportedFeatureError(
+                self.name, "COLUMN COMMENT",
+                "Oracle has no inline column comment; use a standalone "
+                "COMMENT ON COLUMN statement.",
+            )
         type_sql, type_params = col_def.data_type.to_sql()
         parts = [self.format_identifier(col_def.name), type_sql]
         params: List[Any] = list(type_params)
