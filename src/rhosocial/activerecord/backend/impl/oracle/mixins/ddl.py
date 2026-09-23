@@ -44,6 +44,20 @@ class OracleDDLMixin:
                 "Oracle has no inline table comment; use a standalone "
                 "COMMENT ON TABLE statement.",
             )
+        if expr.inherits:
+            # Oracle has no table inheritance; a declared INHERITS clause is
+            # never silently dropped.
+            raise UnsupportedFeatureError(
+                self.name, "table INHERITS",
+                "Oracle does not support table inheritance.",
+            )
+        if expr.storage_options is not None:
+            # Oracle has no generic WITH (...) storage options clause.
+            raise UnsupportedFeatureError(
+                self.name, "storage options",
+                "Oracle does not support the generic WITH (...) storage "
+                "options clause.",
+            )
         all_params: List[Any] = []
         parts = ["CREATE"]
         if expr.temporary:
@@ -210,6 +224,13 @@ class OracleDDLMixin:
         if t_const.name:
             parts.append(f"CONSTRAINT {self.format_identifier(t_const.name)}")
 
+        if getattr(t_const, "match_type", None) is not None:
+            from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
+            raise UnsupportedFeatureError(
+                self.name, "FOREIGN KEY MATCH",
+                "Oracle does not support FOREIGN KEY MATCH.",
+            )
+
         if t_const.constraint_type == TableConstraintType.PRIMARY_KEY:
             if t_const.columns:
                 cols_str = ", ".join(self.format_identifier(c) for c in t_const.columns)
@@ -256,5 +277,17 @@ class OracleDDLMixin:
                                 f"{self.name} does not support ON UPDATE for foreign keys."
                             )
                         parts.append(f"ON UPDATE {t_const.on_update.value}")
+
+        deferrable = getattr(t_const, "deferrable", None)
+        if deferrable is not None:
+            if deferrable:
+                parts.append("DEFERRABLE")
+                initially = getattr(t_const, "initially_deferred", None)
+                if initially is True:
+                    parts.append("INITIALLY DEFERRED")
+                elif initially is False:
+                    parts.append("INITIALLY IMMEDIATE")
+            else:
+                parts.append("NOT DEFERRABLE")
 
         return " ".join(parts), tuple(params)
