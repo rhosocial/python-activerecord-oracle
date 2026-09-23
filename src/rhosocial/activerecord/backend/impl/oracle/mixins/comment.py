@@ -1,13 +1,9 @@
 # src/rhosocial/activerecord/backend/impl/oracle/mixins/comment.py
 """Oracle COMMENT ON formatter mixin."""
 
-from typing import Tuple, TYPE_CHECKING
+from typing import Tuple
 
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
-
-if TYPE_CHECKING:  # pragma: no cover
-    from ..expression.comment import OracleCommentExpression
-
 
 class OracleCommentMixin:
     """Oracle ``COMMENT ON`` capability check and formatter.
@@ -18,12 +14,23 @@ class OracleCommentMixin:
     statement, never through an inline column clause.
     """
 
-    def supports_comment(self) -> bool:
+    def supports_comment_on(self) -> bool:
+        """Whether standalone ``COMMENT ON`` statements are supported.
+
+        Oracle annotates schema objects through the standalone statement;
+        always ``True`` (the version gate lives in
+        :meth:`format_comment_statement`).
+        """
         return True
 
     def format_comment_statement(
-        self, expr: "OracleCommentExpression"
+        self, expr
     ) -> Tuple[str, tuple]:
+        """Format a standalone ``COMMENT ON`` statement.
+
+        Accepts any comment expression carrying ``object_type``,
+        ``object_name`` and ``comment``.
+        """
         if self.version < (9, 0, 0):
             raise UnsupportedFeatureError(
                 self.name,
@@ -38,7 +45,8 @@ class OracleCommentMixin:
         object_sql = ".".join(
             self.format_identifier(part) for part in expr.object_name.split(".")
         )
-        head = f"COMMENT ON {expr.object_type.value} {object_sql} IS"
+        object_type = getattr(expr.object_type, "value", expr.object_type)
+        head = f"COMMENT ON {object_type} {object_sql} IS"
         if expr.comment is None:
             return f"{head} NULL", ()
         escaped = self._escape_sql_string(expr.comment)
