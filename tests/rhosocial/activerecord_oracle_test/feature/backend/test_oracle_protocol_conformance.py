@@ -13,7 +13,7 @@ This test ensures:
 import inspect
 import sys
 
-from typing import Protocol
+from typing import Any, Protocol
 
 if sys.version_info >= (3, 13):
     from typing import get_protocol_members
@@ -56,7 +56,8 @@ ORACLE_PROTOCOLS = [
     dialect_protocols.CommentSupport,
     dialect_protocols.CollationSupport,
     dialect_protocols.ConstraintSupport,
-    dialect_protocols.DDLTypeSupport,
+    dialect_protocols.DataTypeSupport,
+    dialect_protocols.UserDefinedTypeSupport,
     dialect_protocols.ExplainSupport,
     dialect_protocols.FilterClauseSupport,
     dialect_protocols.GeneratedColumnSupport,
@@ -98,12 +99,16 @@ class TestOracleDialectProtocolConformance:
     """Assert OracleDialect implements all generic protocols it declares to support."""
 
     @pytest.fixture
-    def dialect(self):
+    def dialect(self) -> oracle_dialect.OracleDialect:
         """Create an OracleDialect instance for testing."""
         return oracle_dialect.OracleDialect(version=(23, 0, 0))
 
     @pytest.mark.parametrize("protocol", ORACLE_PROTOCOLS)
-    def test_implements_protocol(self, dialect, protocol):
+    def test_implements_protocol(
+        self,
+        dialect: oracle_dialect.OracleDialect,
+        protocol: Any,
+    ) -> None:
         """OracleDialect should implement each protocol in ORACLE_PROTOCOLS."""
         assert isinstance(dialect, protocol), (
             f"OracleDialect does not implement protocol {protocol.__name__}, "
@@ -120,6 +125,7 @@ ORACLE_NOT_IMPLEMENTED = [
     # --- Intentional non-support ---
     # The generic DatabaseSupport protocol is not composed by OracleDialect.
     dialect_protocols.DatabaseSupport,
+    dialect_protocols.DomainSupport,
     # Oracle has no SQL/PSM generic function protocol; routines are exposed
     # through the Oracle-specific OracleRoutineSupport / OracleFunctionFormatSupport
     # capability protocols instead.
@@ -133,11 +139,17 @@ ORACLE_NOT_IMPLEMENTED = [
     dialect_protocols.ILIKESupport,
 ]
 
+ORACLE_PROTOCOL_ALIASES = {
+    "DDLTypeSupport": dialect_protocols.DataTypeSupport,
+}
+
 
 def get_all_generic_protocols() -> dict:
     """Discover every generic dialect protocol defined in protocols.py."""
     discovered = {}
     for name, obj in inspect.getmembers(dialect_protocols, inspect.isclass):
+        if name in ORACLE_PROTOCOL_ALIASES:
+            continue
         if Protocol in getattr(obj, "__mro__", []) and name.endswith("Support"):
             discovered[name] = obj
     return discovered
@@ -147,11 +159,15 @@ class TestOracleDialectNegativeProtocolConformance:
     """Assert OracleDialect does not implement intentionally-unsupported protocols."""
 
     @pytest.fixture
-    def dialect(self):
+    def dialect(self) -> oracle_dialect.OracleDialect:
         return oracle_dialect.OracleDialect(version=(23, 0, 0))
 
     @pytest.mark.parametrize("protocol", ORACLE_NOT_IMPLEMENTED)
-    def test_does_not_implement_protocol(self, dialect, protocol):
+    def test_does_not_implement_protocol(
+        self,
+        dialect: oracle_dialect.OracleDialect,
+        protocol: Any,
+    ) -> None:
         """OracleDialect must NOT implement any protocol in ORACLE_NOT_IMPLEMENTED."""
         assert not isinstance(dialect, protocol), (
             f"OracleDialect unexpectedly implements {protocol.__name__}. "
@@ -159,7 +175,11 @@ class TestOracleDialectNegativeProtocolConformance:
             f"(and implement the behaviour fully)."
         )
 
-    def test_positive_and_negative_lists_partition_all_protocols(self):
+    def test_ddl_type_support_alias_is_explicitly_exempt(self) -> None:
+        assert dialect_protocols.DDLTypeSupport is dialect_protocols.DataTypeSupport
+        assert "DDLTypeSupport" not in get_all_generic_protocols()
+
+    def test_positive_and_negative_lists_partition_all_protocols(self) -> None:
         """Every generic protocol must be classified for Oracle."""
         all_protos = set(get_all_generic_protocols())
         positive = {p.__name__ for p in ORACLE_PROTOCOLS if p.__module__ == dialect_protocols.__name__}
