@@ -10,6 +10,9 @@ from .protocols import (
     OracleBooleanTypeSupport,
     OracleVectorTypeSupport,
     OracleJSONDualitySupport,
+    OracleTypeDDLSupport,
+    OracleTypeSupport,
+    OracleUserDefinedTypeSupport,
 )
 
 __all__ = [
@@ -21,4 +24,7 @@ __all__ = [
     "OracleBooleanTypeSupport",
     "OracleVectorTypeSupport",
     "OracleJSONDualitySupport",
+    "OracleTypeDDLSupport",
+    "OracleTypeSupport",
+    "OracleUserDefinedTypeSupport",
 ]

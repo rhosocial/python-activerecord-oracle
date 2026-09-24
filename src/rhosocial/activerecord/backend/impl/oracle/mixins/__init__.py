@@ -14,6 +14,7 @@ from .concurrency import OracleConcurrencyMixin
 from .database_link import OracleDatabaseLinkMixin
 from .datetime_op import OracleDateTimeMixin
 from .ddl import OracleDDLMixin
+from .ddl_type import OracleTypeDDLMixin
 from .dml import OracleDMLOperationMixin
 from .expression import OracleExpressionMixin
 from .features import OracleFeaturesMixin
@@ -54,6 +55,7 @@ __all__ = [
     "OracleCollationMixin",
     "OracleDateTimeMixin",
     "OracleDDLMixin",
+    "OracleTypeDDLMixin",
     "OracleExpressionMixin",
     "OracleFeaturesMixin",
     "OracleFunctionFormatMixin",
