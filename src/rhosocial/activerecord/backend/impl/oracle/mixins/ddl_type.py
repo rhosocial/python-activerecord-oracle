@@ -680,7 +680,7 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
         if expr.if_exists and not self.supports_drop_type_if_exists():
             raise UnsupportedFeatureError(self.name, "DROP TYPE IF EXISTS")
         force = bool(getattr(expr, "force", False))
-        validate = bool(getattr(expr, "validate", False))
+        validate = bool(vars(expr).get("validate", False))
         if force and validate:
             raise ValueError("DROP TYPE FORCE and VALIDATE are mutually exclusive")
         if force and not self.supports_drop_type_force():
