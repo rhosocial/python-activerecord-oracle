@@ -44,7 +44,7 @@ class TestOracleTableCapabilityGating:
 
             id: int
 
-        expression = TableDDLDeriver(Plain, OracleDialect()).create_table()
+        expression = TableDDLDeriver(Plain, OracleDialect(version=(19, 0, 0))).create_table()
         assert expression.inherits == []
         assert expression.tablespace is None
 
