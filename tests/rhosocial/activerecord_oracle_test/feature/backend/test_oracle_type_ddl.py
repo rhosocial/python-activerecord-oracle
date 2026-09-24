@@ -188,13 +188,13 @@ def test_collection_sqlj_and_incomplete_sql() -> None:
     )
     incomplete = OracleIncompleteTypeDefinition(dialect)
 
-    assert CreateTypeExpression(dialect, "numbers_t", varray).to_sql() == (
+    assert CreateTypeExpression(dialect, "numbers_t", varray).to_sql()[0] == (
         'CREATE TYPE "NUMBERS_T" AS VARRAY(10) OF NUMBER NOT NULL'
     )
-    assert CreateTypeExpression(dialect, "names_t", nested).to_sql() == (
+    assert CreateTypeExpression(dialect, "names_t", nested).to_sql()[0] == (
         'CREATE TYPE "NAMES_T" AS TABLE OF (VARCHAR2(30)) NOT PERSISTABLE'
     )
-    assert CreateTypeExpression(dialect, "person_java", sqlj).to_sql() == (
+    assert CreateTypeExpression(dialect, "person_java", sqlj).to_sql()[0] == (
         'CREATE TYPE "PERSON_JAVA" AS OBJECT EXTERNAL NAME \'Person\' LANGUAGE JAVA '
         'USING SQLData ("NAME" VARCHAR2(30) EXTERNAL NAME \'name\', '
         'MEMBER FUNCTION id RETURN NUMBER EXTERNAL NAME \'id() return int\')'
@@ -220,7 +220,7 @@ def test_collection_sqlj_and_incomplete_sql() -> None:
             external_name="Person",
             language="JAVA",
         )
-    assert CreateTypeExpression(dialect, "forward_t", incomplete).to_sql() == (
+    assert CreateTypeExpression(dialect, "forward_t", incomplete).to_sql()[0] == (
         'CREATE TYPE "FORWARD_T"'
     )
 
