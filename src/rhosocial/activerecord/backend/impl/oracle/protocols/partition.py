@@ -9,7 +9,7 @@ subpartitioning) and Oracle partition maintenance statements
 All formatters are public (no leading underscore) and declared here per
 expression-dialect-architecture §8 (no pseudo-private SQL formatters).
 """
-from typing import TYPE_CHECKING, Tuple
+from typing import Any, TYPE_CHECKING, Tuple
 
 from rhosocial.activerecord.backend.dialect.protocols import PartitionSupport
 
@@ -71,6 +71,9 @@ class OraclePartitionSupport(PartitionSupport):
     def supports_move_partition(self) -> bool:
         """Whether MOVE PARTITION is supported."""
         ...  # pragma: no cover
+
+    def get_partition_lifecycle_provider(self) -> Any:
+        ...
 
     # ------------------------------------------------------------------
     # Generic partition clause formatter (overrides PartitionSupport)
