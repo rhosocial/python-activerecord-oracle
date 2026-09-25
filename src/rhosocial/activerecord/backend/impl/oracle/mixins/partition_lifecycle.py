@@ -10,9 +10,24 @@ formatters live on the dialect instance.
 All formatters are public (no leading underscore) per
 expression-dialect-architecture §8.
 """
-from typing import Tuple
+from typing import Any, Tuple
 
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
+from rhosocial.activerecord.backend.expression.bases import BaseExpression
+from rhosocial.activerecord.ddl.partition import (
+    AddPartitionRequest,
+    DropPartitionRequest,
+    ExchangePartitionRequest,
+    MergePartitionsRequest,
+    MovePartitionRequest,
+    PartitionCapabilities,
+    PartitionLifecycleContractError,
+    PartitionOperation,
+    PartitionOperationNotSupportedError,
+    PartitionRequest,
+    SplitPartitionRequest,
+    TruncatePartitionRequest,
+)
 
 from ..expression.partition_lifecycle import (
     OracleAddPartitionExpression,
@@ -31,6 +46,9 @@ class OraclePartitionLifecycleMixin:
     These formatters are gated by the corresponding ``supports_*``
     capability methods defined on :class:`OraclePartitionMixin`.
     """
+
+    def get_partition_lifecycle_provider(self) -> Any:
+        return OraclePartitionLifecycleProvider(self)
 
     # ------------------------------------------------------------------
     # ADD PARTITION
@@ -204,3 +222,119 @@ class OraclePartitionLifecycleMixin:
         if expr.update_indexes:
             sql = f"{sql} UPDATE INDEXES"
         return sql, ()
+
+
+class OraclePartitionLifecycleProvider:
+    """Construct Oracle partition lifecycle expressions."""
+
+    _SUPPORT_METHODS = {
+        PartitionOperation.ADD: "supports_add_partition",
+        PartitionOperation.DROP: "supports_drop_partition",
+        PartitionOperation.TRUNCATE: "supports_truncate_partition",
+        PartitionOperation.SPLIT: "supports_split_partition",
+        PartitionOperation.MERGE: "supports_merge_partition",
+        PartitionOperation.EXCHANGE: "supports_exchange_partition",
+        PartitionOperation.MOVE: "supports_move_partition",
+    }
+
+    def __init__(self, dialect: Any):
+        self.dialect = dialect
+
+    def capabilities(self) -> PartitionCapabilities:
+        operations = frozenset(
+            operation
+            for operation, method_name in self._SUPPORT_METHODS.items()
+            if getattr(self.dialect, method_name)()
+        )
+        strategies = tuple(
+            strategy
+            for strategy, supported in (
+                ("RANGE", self.dialect.supports_range_table_partitioning()),
+                ("LIST", self.dialect.supports_list_table_partitioning()),
+                ("HASH", self.dialect.supports_hash_table_partitioning()),
+                ("INTERVAL", self.dialect.supports_interval_partitioning()),
+                ("REFERENCE", self.dialect.supports_reference_partitioning()),
+            )
+            if supported
+        )
+        return PartitionCapabilities(operations, strategies)
+
+    def supports(self, operation: PartitionOperation) -> bool:
+        return operation in self._SUPPORT_METHODS and self.capabilities().supports(operation)
+
+    def _require(self, request: PartitionRequest) -> None:
+        if not self.supports(request.operation):
+            raise PartitionOperationNotSupportedError(self.dialect.name, request.operation)
+
+    def _require_type(self, request: PartitionRequest, request_type: type) -> None:
+        if not isinstance(request, request_type):
+            raise PartitionLifecycleContractError(
+                f"Oracle partition provider received {type(request).__name__} for "
+                f"{request.operation.value}"
+            )
+
+    def build(self, request: PartitionRequest) -> BaseExpression:
+        self._require(request)
+        from ..expression.partition import OraclePartitionDefinition
+
+        if request.operation is PartitionOperation.ADD:
+            self._require_type(request, AddPartitionRequest)
+            if not isinstance(request.definition, OraclePartitionDefinition):
+                raise TypeError(
+                    "Oracle add_partition requires OraclePartitionDefinition, "
+                    f"got {type(request.definition).__name__}"
+                )
+            return OracleAddPartitionExpression(
+                self.dialect,
+                request.table.name,
+                request.definition,
+            )
+        if request.operation is PartitionOperation.DROP:
+            self._require_type(request, DropPartitionRequest)
+            return OracleDropPartitionExpression(
+                self.dialect,
+                request.table.name,
+                request.partition_name,
+            )
+        if request.operation is PartitionOperation.TRUNCATE:
+            self._require_type(request, TruncatePartitionRequest)
+            return OracleTruncatePartitionExpression(
+                self.dialect,
+                request.table.name,
+                request.partition_name,
+            )
+        if request.operation is PartitionOperation.SPLIT:
+            self._require_type(request, SplitPartitionRequest)
+            return OracleSplitPartitionExpression(
+                self.dialect,
+                request.table.name,
+                request.partition_name,
+                request.at_values,
+                request.new_partitions,
+            )
+        if request.operation is PartitionOperation.MERGE:
+            self._require_type(request, MergePartitionsRequest)
+            return OracleMergePartitionsExpression(
+                self.dialect,
+                request.table.name,
+                request.partition_names,
+                request.into_partition,
+            )
+        if request.operation is PartitionOperation.EXCHANGE:
+            self._require_type(request, ExchangePartitionRequest)
+            return OracleExchangePartitionExpression(
+                self.dialect,
+                request.table.name,
+                request.partition_name,
+                request.exchange_table.name,
+                with_validation=request.with_validation,
+            )
+        if request.operation is PartitionOperation.MOVE:
+            self._require_type(request, MovePartitionRequest)
+            return OracleMovePartitionExpression(
+                self.dialect,
+                request.table.name,
+                request.partition_name,
+                tablespace_name=request.tablespace_name,
+            )
+        raise PartitionOperationNotSupportedError(self.dialect.name, request.operation)

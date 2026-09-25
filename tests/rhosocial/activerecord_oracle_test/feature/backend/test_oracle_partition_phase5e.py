@@ -27,6 +27,26 @@ from rhosocial.activerecord.backend.impl.oracle.expression.partition_lifecycle i
     OracleSplitPartitionExpression,
     OracleTruncatePartitionExpression,
 )
+from rhosocial.activerecord.ddl import PartitionLifecycle, PartitionOperation
+
+
+class _LifecycleSource:
+    @classmethod
+    def table_name(cls):
+        return "orders"
+
+    @classmethod
+    def schema_name(cls):
+        return None
+
+
+def test_partition_lifecycle_provider_constructs_oracle_expressions():
+    dialect = _dialect()
+    lifecycle = PartitionLifecycle(_LifecycleSource, dialect)
+    assert lifecycle.capabilities().supports(PartitionOperation.SPLIT)
+    expression = lifecycle.drop_partition("p2")
+    assert isinstance(expression, OracleDropPartitionExpression)
+    assert "DROP PARTITION" in expression.to_sql()[0]
 
 
 def _dialect(version=(23, 1, 0)) -> OracleDialect:
