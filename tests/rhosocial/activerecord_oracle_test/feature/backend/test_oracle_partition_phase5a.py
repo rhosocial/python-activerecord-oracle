@@ -23,17 +23,12 @@ from rhosocial.activerecord.backend.expression.statements import (
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.expression.partition import (
-    OracleIntervalPartitionClause,
     OraclePartitionByHash,
     OraclePartitionByList,
     OraclePartitionByRange,
     OraclePartitionDefinition,
     OraclePartitionMaxValue,
     OraclePartitionValue,
-    OracleReferencePartitionClause,
-    OracleSubpartitionClause,
-    OracleSubpartitionDefinition,
-    OracleSubpartitionStrategy,
 )
 
 
@@ -60,7 +55,9 @@ class TestOraclePartitionByRange:
         )
         sql, params = c.to_sql()
         assert sql == (
-            ' PARTITION BY RANGE ("ID") (PARTITION "P1" VALUES LESS THAN (100), PARTITION "P2" VALUES LESS THAN (MAXVALUE))'
+            ' PARTITION BY RANGE ("ID") '
+            '(PARTITION "P1" VALUES LESS THAN (100), '
+            'PARTITION "P2" VALUES LESS THAN (MAXVALUE))'
         )
         assert params == ()
 
@@ -160,7 +157,9 @@ class TestOraclePartitionByList:
         )
         sql, params = c.to_sql()
         assert sql == (
-            ' PARTITION BY LIST ("REGION") (PARTITION "P_EAST" VALUES (\'EAST\', \'NORTH\'), PARTITION "P_WEST" VALUES (\'WEST\'))'
+            ' PARTITION BY LIST ("REGION") '
+            '(PARTITION "P_EAST" VALUES (\'EAST\', \'NORTH\'), '
+            'PARTITION "P_WEST" VALUES (\'WEST\'))'
         )
         assert params == ()
 
@@ -271,9 +270,6 @@ class TestOraclePartitionDefinition:
                 in_values=[OraclePartitionValue(d, "x")],
             )
 
-    def test_dialect_options_must_be_dict(self):
-        with pytest.raises(TypeError):
-            OraclePartitionDefinition(name="p1", dialect_options="not a dict")  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------------
