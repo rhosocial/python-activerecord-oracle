@@ -3,7 +3,8 @@
 
 Covers ``CREATE MATERIALIZED VIEW`` (REFRESH / QUERY REWRITE / BUILD
 options), ``CREATE MATERIALIZED VIEW LOG`` (WITH ROWID / PRIMARY KEY) and
-``DROP MATERIALIZED VIEW`` (PRESERVE TABLE), plus capability switches,
+``DROP MATERIALIZED VIEW`` (PRESERVE TABLE), ``DBMS_MVIEW.REFRESH``,
+plus capability switches,
 identifier quoting, the ``IF NOT EXISTS`` / ``IF EXISTS`` version gate
 (23ai) and the ``(9, 0, 0)`` version boundary.
 
@@ -18,6 +19,9 @@ from rhosocial.activerecord.backend.expression import (
     QueryExpression,
 )
 from rhosocial.activerecord.backend.expression.core import Column, TableExpression
+from rhosocial.activerecord.backend.expression.statements.ddl_view import (
+    RefreshMaterializedViewExpression,
+)
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.expression import (
     MaterializedViewBuildMode,
@@ -26,6 +30,8 @@ from rhosocial.activerecord.backend.impl.oracle.expression import (
     OracleCreateMaterializedViewExpression,
     OracleCreateMaterializedViewLogExpression,
     OracleDropMaterializedViewExpression,
+    OracleRefreshMaterializedViewExpression,
+    OracleRefreshMethod,
 )
 
 
@@ -240,3 +246,120 @@ class TestOracleMaterializedViewVersionBoundary:
         d9 = OracleDialect(version=(9, 0, 0))
         expr = OracleCreateMaterializedViewExpression(d9, view_name="mv", query=build_query(d9))
         assert expr.to_sql()[0].startswith('CREATE MATERIALIZED VIEW "MV"')
+
+
+class TestOracleRefreshMaterializedViewExpression:
+    """``DBMS_MVIEW.REFRESH`` — Oracle has no REFRESH MATERIALIZED VIEW statement."""
+
+    def test_minimal_block(self, dialect):
+        expr = OracleRefreshMaterializedViewExpression(dialect, "sales_summary")
+        sql, params = expr.to_sql()
+        assert sql == "BEGIN DBMS_MVIEW.REFRESH('SALES_SUMMARY'); END;"
+        assert params == ()
+
+    def test_name_is_upper_cased(self, dialect):
+        expr = OracleRefreshMaterializedViewExpression(dialect, "Sales_Summary")
+        assert "'SALES_SUMMARY'" in expr.to_sql()[0]
+
+    def test_single_quote_in_name_is_escaped(self, dialect):
+        expr = OracleRefreshMaterializedViewExpression(dialect, "o'brien_mv")
+        sql, _ = expr.to_sql()
+        assert "'O''BRIEN_MV'" in sql
+
+    def test_schema_qualified(self, dialect):
+        expr = OracleRefreshMaterializedViewExpression(
+            dialect, "sales_summary", schema="reporting"
+        )
+        assert expr.to_sql()[0] == "BEGIN DBMS_MVIEW.REFRESH('REPORTING.SALES_SUMMARY'); END;"
+
+    @pytest.mark.parametrize(
+        "method,code",
+        [
+            (OracleRefreshMethod.FAST, "F"),
+            (OracleRefreshMethod.COMPLETE, "C"),
+            (OracleRefreshMethod.FORCE, "?"),
+            (OracleRefreshMethod.PARTITION_CHANGE_TRACKING, "P"),
+            (OracleRefreshMethod.ALWAYS, "A"),
+        ],
+    )
+    def test_method_codes(self, dialect, method, code):
+        """The procedure codes differ from the REFRESH FAST/COMPLETE DDL keywords."""
+        expr = OracleRefreshMaterializedViewExpression(dialect, "mv", method=method)
+        assert f"method => '{code}'" in expr.to_sql()[0]
+
+    def test_boolean_options_use_named_notation(self, dialect):
+        expr = OracleRefreshMaterializedViewExpression(
+            dialect,
+            "mv",
+            atomic_refresh=False,
+            out_of_place=True,
+            nested=True,
+            refresh_after_errors=True,
+            push_deferred_rpc=False,
+        )
+        sql, _ = expr.to_sql()
+        assert "atomic_refresh => FALSE" in sql
+        assert "out_of_place => TRUE" in sql
+        assert "nested => TRUE" in sql
+        assert "refresh_after_errors => TRUE" in sql
+        assert "push_deferred_rpc => FALSE" in sql
+
+    def test_numeric_options(self, dialect):
+        expr = OracleRefreshMaterializedViewExpression(
+            dialect, "mv", parallelism=4, purge_option=2
+        )
+        sql, _ = expr.to_sql()
+        assert "parallelism => 4" in sql
+        assert "purge_option => 2" in sql
+
+    def test_options_default_to_omitted(self, dialect):
+        """Server defaults (atomic_refresh TRUE, purge_option 1) stay implicit."""
+        sql, _ = OracleRefreshMaterializedViewExpression(dialect, "mv").to_sql()
+        assert "atomic_refresh" not in sql
+        assert "purge_option" not in sql
+        assert "parallelism" not in sql
+
+    def test_invalid_purge_option(self, dialect):
+        with pytest.raises(ValueError, match="purge_option"):
+            OracleRefreshMaterializedViewExpression(dialect, "mv", purge_option=5)
+
+    def test_invalid_parallelism(self, dialect):
+        with pytest.raises(ValueError, match="parallelism"):
+            OracleRefreshMaterializedViewExpression(dialect, "mv", parallelism=-1)
+
+    def test_empty_name_rejected(self, dialect):
+        with pytest.raises(ValueError, match="view_name"):
+            OracleRefreshMaterializedViewExpression(dialect, "  ")
+
+    def test_capability_probe_is_true_and_version_independent(self):
+        """DBMS_MVIEW.REFRESH predates 9i, so no version gate applies."""
+        assert OracleDialect(version=(19, 0, 0)).supports_refresh_materialized_view() is True
+        assert OracleDialect(version=(8, 1, 0)).supports_refresh_materialized_view() is True
+
+    def test_renders_without_adapted_dialect(self):
+        """Unlike CREATE/DROP, refresh needs no server version."""
+        d = OracleDialect(version=(19, 0, 0))
+        sql, _ = OracleRefreshMaterializedViewExpression(d, "mv").to_sql()
+        assert sql.startswith("BEGIN DBMS_MVIEW.REFRESH(")
+
+    def test_generic_expression_routes_here(self, dialect):
+        """The generic RefreshMaterializedViewExpression works on Oracle."""
+        expr = RefreshMaterializedViewExpression(dialect=dialect, view_name="mv")
+        sql, params = expr.to_sql()
+        assert sql == "BEGIN DBMS_MVIEW.REFRESH('MV'); END;"
+        assert params == ()
+
+    def test_generic_with_data_is_ignored(self, dialect):
+        """A refresh always repopulates; WITH [NO] DATA has no counterpart."""
+        expr = RefreshMaterializedViewExpression(
+            dialect=dialect, view_name="mv", with_data=False
+        )
+        assert "WITH NO DATA" not in expr.to_sql()[0]
+
+    def test_generic_concurrent_is_rejected(self, dialect):
+        expr = RefreshMaterializedViewExpression(
+            dialect=dialect, view_name="mv", concurrent=True
+        )
+        with pytest.raises(UnsupportedFeatureError) as exc:
+            expr.to_sql()
+        assert "CONCURRENTLY" in str(exc.value)

@@ -38,6 +38,8 @@ from .materialized_view import (
     OracleCreateMaterializedViewExpression,
     OracleCreateMaterializedViewLogExpression,
     OracleDropMaterializedViewExpression,
+    OracleRefreshMaterializedViewExpression,
+    OracleRefreshMethod,
 )
 from .comment import (
     OracleCommentObjectType, OracleCommentExpression,
@@ -119,6 +121,8 @@ __all__ = [
     'OracleCreateMaterializedViewExpression',
     'OracleCreateMaterializedViewLogExpression',
     'OracleDropMaterializedViewExpression',
+    'OracleRefreshMaterializedViewExpression',
+    'OracleRefreshMethod',
     # COMMENT ON expressions
     'OracleCommentObjectType', 'OracleCommentExpression',
     # FLASHBACK family expressions
