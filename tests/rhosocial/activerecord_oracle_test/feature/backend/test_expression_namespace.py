@@ -19,6 +19,7 @@ from rhosocial.activerecord.backend.expression.bases import BaseExpression
 from rhosocial.activerecord.backend.impl import oracle
 
 EXPRESSION_NS = oracle.__name__ + ".expression"
+BACKEND_NS = oracle.__name__ + "."
 TYPE_VALUES_NS = oracle.__name__ + ".type_values"
 
 
@@ -67,14 +68,21 @@ def test_backend_modules_import_cleanly():
 
 
 def test_no_expression_defined_outside_expression_namespace(all_expression_classes):
-    """The core invariant: expressions are only defined under ``expression``."""
+    """The core invariant: backend expressions are only defined under ``expression``.
+
+    Only classes defined *inside this backend's* package are constrained. Core
+    expressions live in ``rhosocial.activerecord.backend.expression`` and
+    expressions belonging to other backends are irrelevant here, so both are
+    excluded by requiring the module to start with the backend namespace.
+    """
     offenders = [
         f"{cls.__module__}.{cls.__qualname__}"
         for cls in all_expression_classes
-        if not cls.__module__.startswith(EXPRESSION_NS)
+        if cls.__module__.startswith(BACKEND_NS)
+        and not cls.__module__.startswith(EXPRESSION_NS)
     ]
     assert not offenders, (
-        "BaseExpression subclasses defined outside "
+        "BaseExpression subclasses defined in this backend but outside "
         f"{EXPRESSION_NS}:\n  " + "\n  ".join(sorted(offenders))
     )
 
