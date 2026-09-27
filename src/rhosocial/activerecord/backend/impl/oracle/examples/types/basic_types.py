@@ -20,7 +20,7 @@ print("\n" + "-" * 40)
 print("1. INTERVAL Types")
 print("-" * 40)
 
-from rhosocial.activerecord.backend.impl.oracle.types import (
+from rhosocial.activerecord.backend.impl.oracle.type_values import (
     IntervalYearToMonth,
     IntervalDayToSecond,
 )
@@ -43,7 +43,7 @@ print("\n" + "-" * 40)
 print("2. ROWID Types")
 print("-" * 40)
 
-from rhosocial.activerecord.backend.impl.oracle.types import (
+from rhosocial.activerecord.backend.impl.oracle.type_values import (
     OracleRowID,
     OracleURowID,
 )
@@ -63,7 +63,7 @@ print("\n" + "-" * 40)
 print("3. XMLType")
 print("-" * 40)
 
-from rhosocial.activerecord.backend.impl.oracle.types import OracleXMLType
+from rhosocial.activerecord.backend.impl.oracle.type_values import OracleXMLType
 
 xml = OracleXMLType("<root><name>John</name><age>30</age></root>")
 print(f"XMLType: {xml.content[:50]}...")
@@ -74,7 +74,7 @@ print("\n" + "-" * 40)
 print("4. SDO_GEOMETRY (Spatial)")
 print("-" * 40)
 
-from rhosocial.activerecord.backend.impl.oracle.types import (
+from rhosocial.activerecord.backend.impl.oracle.type_values import (
     SDOGeometry,
 )
 
@@ -97,7 +97,7 @@ print("\n" + "-" * 40)
 print("5. VECTOR Type (23ai+)")
 print("-" * 40)
 
-from rhosocial.activerecord.backend.impl.oracle.types import OracleVector
+from rhosocial.activerecord.backend.impl.oracle.type_values import OracleVector
 
 vec1 = OracleVector(dimensions=3, values=[1.0, 2.0, 3.0])
 vec2 = OracleVector(dimensions=3, values=[1.0, 0.0, 0.0])

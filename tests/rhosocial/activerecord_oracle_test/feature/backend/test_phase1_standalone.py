@@ -57,7 +57,7 @@ class TestTypesModule:
     
     def test_import_interval_types(self):
         """Test interval type imports."""
-        from rhosocial.activerecord.backend.impl.oracle.types import (
+        from rhosocial.activerecord.backend.impl.oracle.type_values import (
             IntervalYearToMonth, IntervalDayToSecond
         )
         assert IntervalYearToMonth is not None
@@ -65,7 +65,7 @@ class TestTypesModule:
     
     def test_interval_year_to_month(self):
         """Test IntervalYearToMonth creation."""
-        from rhosocial.activerecord.backend.impl.oracle.types import IntervalYearToMonth
+        from rhosocial.activerecord.backend.impl.oracle.type_values import IntervalYearToMonth
         interval = IntervalYearToMonth(years=1, months=3)
         assert interval.years == 1
         assert interval.months == 3
@@ -73,25 +73,25 @@ class TestTypesModule:
     
     def test_interval_year_to_month_validation(self):
         """Test interval validation."""
-        from rhosocial.activerecord.backend.impl.oracle.types import IntervalYearToMonth
+        from rhosocial.activerecord.backend.impl.oracle.type_values import IntervalYearToMonth
         with pytest.raises(ValueError):
             IntervalYearToMonth(years=1, months=15)
     
     def test_import_rowid_types(self):
         """Test ROWID type imports."""
-        from rhosocial.activerecord.backend.impl.oracle.types import OracleRowID
+        from rhosocial.activerecord.backend.impl.oracle.type_values import OracleRowID
         rowid = OracleRowID("AAASdqAAEAAAAInAAA")
         assert rowid.data_object_number == "AAASdq"
     
     def test_import_xml_type(self):
         """Test XMLType import."""
-        from rhosocial.activerecord.backend.impl.oracle.types import OracleXMLType
+        from rhosocial.activerecord.backend.impl.oracle.type_values import OracleXMLType
         xml = OracleXMLType("<root><child>value</child></root>")
         assert xml.is_valid
     
     def test_import_spatial_types(self):
         """Test spatial type imports."""
-        from rhosocial.activerecord.backend.impl.oracle.types import (
+        from rhosocial.activerecord.backend.impl.oracle.type_values import (
             SDOGeometry, SDOPoint, SDOGeometryType
         )
         point = SDOPoint(x=1.0, y=2.0)
@@ -102,7 +102,7 @@ class TestTypesModule:
     
     def test_import_vector_type(self):
         """Test VECTOR type import."""
-        from rhosocial.activerecord.backend.impl.oracle.types import OracleVector
+        from rhosocial.activerecord.backend.impl.oracle.type_values import OracleVector
         vec = OracleVector(dimensions=3, values=[1.0, 2.0, 3.0])
         assert vec.dimensions == 3
 

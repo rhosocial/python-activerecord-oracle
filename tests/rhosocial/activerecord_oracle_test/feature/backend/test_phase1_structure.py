@@ -66,7 +66,7 @@ class TestTypesModule:
     
     def test_import_interval_types(self):
         """Test interval type imports."""
-        from rhosocial.activerecord.backend.impl.oracle.types import (
+        from rhosocial.activerecord.backend.impl.oracle.type_values import (
             IntervalYearToMonth, IntervalDayToSecond
         )
         assert IntervalYearToMonth is not None
@@ -74,7 +74,7 @@ class TestTypesModule:
     
     def test_interval_year_to_month(self):
         """Test IntervalYearToMonth creation."""
-        from rhosocial.activerecord.backend.impl.oracle.types import IntervalYearToMonth
+        from rhosocial.activerecord.backend.impl.oracle.type_values import IntervalYearToMonth
         interval = IntervalYearToMonth(years=1, months=3)
         assert interval.years == 1
         assert interval.months == 3
@@ -82,19 +82,19 @@ class TestTypesModule:
     
     def test_interval_year_to_month_validation(self):
         """Test interval validation."""
-        from rhosocial.activerecord.backend.impl.oracle.types import IntervalYearToMonth
+        from rhosocial.activerecord.backend.impl.oracle.type_values import IntervalYearToMonth
         with pytest.raises(ValueError):
             IntervalYearToMonth(years=1, months=15)
     
     def test_interval_year_to_month_iso8601(self):
         """Test ISO 8601 conversion."""
-        from rhosocial.activerecord.backend.impl.oracle.types import IntervalYearToMonth
+        from rhosocial.activerecord.backend.impl.oracle.type_values import IntervalYearToMonth
         interval = IntervalYearToMonth(years=2, months=3)
         assert interval.to_iso8601() == "P2Y3M"
     
     def test_interval_day_to_second(self):
         """Test IntervalDayToSecond creation."""
-        from rhosocial.activerecord.backend.impl.oracle.types import IntervalDayToSecond
+        from rhosocial.activerecord.backend.impl.oracle.type_values import IntervalDayToSecond
         interval = IntervalDayToSecond(days=5, hours=12, minutes=30, seconds=45)
         assert interval.days == 5
         assert interval.hours == 12
@@ -102,7 +102,7 @@ class TestTypesModule:
     
     def test_interval_to_timedelta(self):
         """Test timedelta conversion."""
-        from rhosocial.activerecord.backend.impl.oracle.types import IntervalDayToSecond
+        from rhosocial.activerecord.backend.impl.oracle.type_values import IntervalDayToSecond
         from datetime import timedelta
         interval = IntervalDayToSecond(days=1, hours=2, minutes=30, seconds=0)
         td = interval.to_timedelta()
@@ -111,7 +111,7 @@ class TestTypesModule:
     
     def test_import_rowid_types(self):
         """Test ROWID type imports."""
-        from rhosocial.activerecord.backend.impl.oracle.types import OracleRowID
+        from rhosocial.activerecord.backend.impl.oracle.type_values import OracleRowID
         rowid = OracleRowID("AAASdqAAEAAAAInAAA")
         assert rowid.data_object_number == "AAASdq"
         assert rowid.file_number == "AAE"
@@ -120,20 +120,20 @@ class TestTypesModule:
     
     def test_rowid_validation(self):
         """Test ROWID validation."""
-        from rhosocial.activerecord.backend.impl.oracle.types import OracleRowID
+        from rhosocial.activerecord.backend.impl.oracle.type_values import OracleRowID
         with pytest.raises(ValueError):
             OracleRowID("invalid-rowid")
     
     def test_import_xml_type(self):
         """Test XMLType import."""
-        from rhosocial.activerecord.backend.impl.oracle.types import OracleXMLType
+        from rhosocial.activerecord.backend.impl.oracle.type_values import OracleXMLType
         xml = OracleXMLType("<root><child>value</child></root>")
         assert xml.is_valid
         assert xml.root is not None
     
     def test_import_spatial_types(self):
         """Test spatial type imports."""
-        from rhosocial.activerecord.backend.impl.oracle.types import (
+        from rhosocial.activerecord.backend.impl.oracle.type_values import (
             SDOGeometry, SDOPoint, SDOGeometryType
         )
         point = SDOPoint(x=1.0, y=2.0)
@@ -145,7 +145,7 @@ class TestTypesModule:
     
     def test_sdo_geometry_factories(self):
         """Test SDOGeometry factory methods."""
-        from rhosocial.activerecord.backend.impl.oracle.types import SDOGeometry
+        from rhosocial.activerecord.backend.impl.oracle.type_values import SDOGeometry
         point = SDOGeometry.point(10.0, 20.0)
         assert point.is_point
         assert point.sdo_point.x == 10.0
@@ -155,20 +155,20 @@ class TestTypesModule:
     
     def test_import_vector_type(self):
         """Test VECTOR type import."""
-        from rhosocial.activerecord.backend.impl.oracle.types import OracleVector
+        from rhosocial.activerecord.backend.impl.oracle.type_values import OracleVector
         vec = OracleVector(dimensions=3, values=[1.0, 2.0, 3.0])
         assert vec.dimensions == 3
         assert len(vec) == 3
     
     def test_vector_validation(self):
         """Test vector validation."""
-        from rhosocial.activerecord.backend.impl.oracle.types import OracleVector
+        from rhosocial.activerecord.backend.impl.oracle.type_values import OracleVector
         with pytest.raises(ValueError):
             OracleVector(dimensions=3, values=[1.0, 2.0])
     
     def test_vector_similarity(self):
         """Test vector similarity methods."""
-        from rhosocial.activerecord.backend.impl.oracle.types import OracleVector
+        from rhosocial.activerecord.backend.impl.oracle.type_values import OracleVector
         v1 = OracleVector(dimensions=3, values=[1.0, 0.0, 0.0])
         v2 = OracleVector(dimensions=3, values=[1.0, 0.0, 0.0])
         assert v1.cosine_similarity(v2) == 1.0

@@ -1,2 +1,2 @@
-# types/__init__.py
+# type_values/__init__.py
 """Type examples."""

@@ -1,4 +1,4 @@
-# types/constants.py
+# type_values/constants.py
 """
 Oracle type constants for DDL generation.
 

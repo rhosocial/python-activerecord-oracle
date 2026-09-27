@@ -223,7 +223,7 @@ class OracleIntervalAdapter(BaseSQLTypeAdapter):
     def __init__(self):
         super().__init__()
         # Import here to avoid circular imports
-        from .types import IntervalYearToMonth, IntervalDayToSecond
+        from .type_values import IntervalYearToMonth, IntervalDayToSecond
         self.IntervalYearToMonth = IntervalYearToMonth
         self.IntervalDayToSecond = IntervalDayToSecond
         self._register_type(IntervalYearToMonth, str)
@@ -249,7 +249,7 @@ class OracleRowIDAdapter(BaseSQLTypeAdapter):
 
     def __init__(self):
         super().__init__()
-        from .types import OracleRowID, OracleURowID
+        from .type_values import OracleRowID, OracleURowID
         self.OracleRowID = OracleRowID
         self.OracleURowID = OracleURowID
         self._register_type(OracleRowID, str)
@@ -276,7 +276,7 @@ class OracleXMLAdapter(BaseSQLTypeAdapter):
 
     def __init__(self):
         super().__init__()
-        from .types import OracleXMLType
+        from .type_values import OracleXMLType
         self.OracleXMLType = OracleXMLType
         self._register_type(OracleXMLType, str)
 
@@ -296,7 +296,7 @@ class OracleSDOGeometryAdapter(BaseSQLTypeAdapter):
 
     def __init__(self):
         super().__init__()
-        from .types import SDOGeometry, SDOPoint
+        from .type_values import SDOGeometry, SDOPoint
         self.SDOGeometry = SDOGeometry
         self.SDOPoint = SDOPoint
         self._register_type(SDOGeometry, str)
@@ -317,7 +317,7 @@ class OracleVectorAdapter(BaseSQLTypeAdapter):
 
     def __init__(self):
         super().__init__()
-        from .types import OracleVector
+        from .type_values import OracleVector
         self.OracleVector = OracleVector
         self._register_type(OracleVector, str)
 

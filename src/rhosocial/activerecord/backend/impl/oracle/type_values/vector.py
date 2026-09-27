@@ -1,4 +1,4 @@
-# types/vector.py
+# type_values/vector.py
 """
 Oracle VECTOR type definition (Oracle 23ai+).
 
