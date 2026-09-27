@@ -14,7 +14,7 @@ mixin and result shapes live in `.types`.
 
 from typing import Optional, TYPE_CHECKING
 
-from .expressions import (
+from ..expression.show import (
     OracleQuerySessionsExpression,
     OracleQueryRunningSQLExpression,
     OracleQueryDatabaseInfoExpression,

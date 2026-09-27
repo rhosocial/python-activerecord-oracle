@@ -29,7 +29,7 @@ from .types import (
     OracleNlsParameter,
     OracleIntrospectionResult,
 )
-from .expressions import (
+from ..expression.show import (
     OracleQueryExpression,
     OracleQuerySessionsExpression,
     OracleQueryRunningSQLExpression,
