@@ -56,8 +56,7 @@ class OracleDMLOperationMixin(object):
                                *,
                                delete_where: Optional[str] = None,
                                log_errors_into: Optional[str] = None,
-                               reject_limit: Optional[int] = None,
-                               dialect_options: Optional[dict] = None) -> Tuple[str, tuple]:
+                               reject_limit: Optional[int] = None) -> Tuple[str, tuple]:
         """Format an Oracle-standard MERGE statement.
 
         Composes caller-supplied SQL fragments into the canonical pattern:
@@ -83,7 +82,6 @@ class OracleDMLOperationMixin(object):
                 ``LOG ERRORS INTO <table>`` (Oracle 10g+).
             reject_limit: optional ``REJECT LIMIT n`` for the error-logging
                 clause.
-            dialect_options: reserved for future dialect-specific options.
         """
         if delete_where is not None and self.version < (10, 0, 0):
             raise UnsupportedFeatureError(
@@ -130,7 +128,6 @@ class OracleDMLOperationMixin(object):
         *,
         when_clauses: Optional[List[dict]] = None,
         else_clause: Optional[dict] = None,
-        dialect_options: Optional[dict] = None,
     ) -> Tuple[str, tuple]:
         """Format an Oracle ``INSERT ALL`` multi-table insert statement.
 
@@ -147,7 +144,6 @@ class OracleDMLOperationMixin(object):
         return self.format_multi_table_insert_statement(
             "ALL", into_clauses, select_query,
             when_clauses=when_clauses, else_clause=else_clause,
-            dialect_options=dialect_options,
         )
 
     def format_insert_first_statement(
@@ -157,7 +153,6 @@ class OracleDMLOperationMixin(object):
         *,
         when_clauses: Optional[List[dict]] = None,
         else_clause: Optional[dict] = None,
-        dialect_options: Optional[dict] = None,
     ) -> Tuple[str, tuple]:
         """Format an Oracle ``INSERT FIRST`` multi-table insert statement.
 
@@ -168,7 +163,6 @@ class OracleDMLOperationMixin(object):
         return self.format_multi_table_insert_statement(
             "FIRST", into_clauses, select_query,
             when_clauses=when_clauses, else_clause=else_clause,
-            dialect_options=dialect_options,
         )
 
     def format_multi_table_insert_statement(
@@ -179,7 +173,6 @@ class OracleDMLOperationMixin(object):
         *,
         when_clauses: Optional[List[dict]] = None,
         else_clause: Optional[dict] = None,
-        dialect_options: Optional[dict] = None,
     ) -> Tuple[str, tuple]:
         if self.version < (9, 0, 0):
             raise UnsupportedFeatureError(

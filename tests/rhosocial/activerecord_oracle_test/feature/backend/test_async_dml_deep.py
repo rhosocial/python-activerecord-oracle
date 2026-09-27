@@ -28,7 +28,6 @@ BATCH_TABLE = "AR_CRM.ASYNC_BATCH"
 class AsyncCustomer(AsyncActiveRecord):
     __table_name__ = "customers"
     __schema_name__ = "ar_crm"
-    __primary_key__ = "id"
     c: ClassVar[FieldProxy] = FieldProxy()
 
     id: Optional[int] = None

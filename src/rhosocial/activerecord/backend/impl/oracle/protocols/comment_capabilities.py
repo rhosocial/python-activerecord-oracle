@@ -14,7 +14,7 @@ from typing import Protocol
 class OracleCommentSupport(Protocol):
     """Auto-generated capability protocol (P7)."""
 
-    def supports_comment(self) -> bool:
+    def supports_comment_on(self) -> bool:
         ...  # pragma: no cover
-    def format_comment_statement(self, expr: 'OracleCommentExpression') -> Tuple[str, tuple]:
+    def format_comment_statement(self, expr) -> Tuple[str, tuple]:
         ...  # pragma: no cover

@@ -40,7 +40,6 @@ SCHEMA_USER_PASSWORD = "Rh0social#2026"
 class DeepCustomer(ActiveRecord):
     __table_name__ = "customers"
     __schema_name__ = "ar_crm"
-    __primary_key__ = "id"
     c: ClassVar[FieldProxy] = FieldProxy()
 
     id: Optional[int] = None

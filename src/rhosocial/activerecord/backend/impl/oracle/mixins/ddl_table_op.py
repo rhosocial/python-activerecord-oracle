@@ -10,7 +10,7 @@ capability checks that were previously inlined in the monolithic
 from typing import Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover
-    from ...expression.statements import DropTableExpression
+    from ....expression.statements import DropTableExpression
 
 
 class OracleTableCapabilityMixin:
@@ -60,7 +60,7 @@ class OracleTableCapabilityMixin:
         Oracle has no IF EXISTS clause and no bare CASCADE/RESTRICT keyword;
         instead, the dialect-specific ``CASCADE CONSTRAINTS`` form (optionally
         followed by ``PURGE``) is emitted when ``expr.cascade is True``. The
-        dialect_options dict may carry ``purge=True`` to append PURGE.
+        typed ``expr.purge`` flag appends PURGE.
         """
         from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 
@@ -73,9 +73,9 @@ class OracleTableCapabilityMixin:
                     self.name, "DROP TABLE ... CASCADE CONSTRAINTS"
                 )
             parts.append("CASCADE CONSTRAINTS")
-            if expr.dialect_options.get("purge") and self.supports_purge_on_drop_table():
-                parts.append("PURGE")
         elif expr.cascade is False:
             raise UnsupportedFeatureError(self.name, "DROP TABLE ... RESTRICT")
+        if getattr(expr, "purge", False) and self.supports_purge_on_drop_table():
+            parts.append("PURGE")
         return " ".join(parts), table_params
 

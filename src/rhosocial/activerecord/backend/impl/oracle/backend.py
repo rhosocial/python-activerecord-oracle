@@ -35,6 +35,13 @@ from .config import OracleConnectionConfig
 from .dialect import OracleDialect
 from .transaction import OracleTransactionManager
 from .mixins import OracleBackendMixin, OracleConcurrencyMixin
+from .version import (
+    VERSION_FULL_QUERY,
+    VERSION_QUERY,
+    normalize_version,
+    parse_version_row,
+    ru_from_version_full,
+)
 
 
 def _is_numeric_python_type(python_type: Optional[Type]) -> bool:
@@ -71,6 +78,8 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         """
         # Extract version from kwargs if provided
         version = kwargs.pop('version', None) or (19, 0, 0)
+        version_full = kwargs.pop('version_full', None)
+        ru_version = kwargs.pop('ru_version', None)
 
         # Ensure we have proper Oracle configuration
         connection_config = kwargs.get('connection_config')
@@ -105,6 +114,10 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
 
         # Store the expected Oracle server version
         self._version = version or (19, 0, 0)
+        self._version_full = normalize_version(version_full, minimum_length=2) or None
+        self._ru_version = (
+            ru_version if ru_version is not None else ru_from_version_full(self._version_full)
+        )
         # Cached column type info from cursor.description for _adapt_row_types
         self._current_column_types = None
         # Initialize Oracle-specific components (lazy load dialect)
@@ -127,10 +140,37 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         """Introspect backend and adapt to actual server capabilities."""
         if not self._connection:
             self.connect()
+        previous_version = getattr(self, "_version", None)
+        previous_version_full = getattr(self, "_version_full", None)
+        previous_ru_version = getattr(self, "_ru_version", None)
+        previous_dialect = getattr(self, "_dialect", None)
         actual_version = self.get_server_version()
-        if self._version != actual_version:
+        actual_version_full = getattr(self, "_version_full", None)
+        if actual_version_full is None:
+            actual_version_full = self.get_server_version_full()
+        actual_ru_version = getattr(self, "_ru_version", None)
+        if actual_ru_version is None and actual_version_full is not None:
+            actual_ru_version = ru_from_version_full(actual_version_full)
+        dialect_version = getattr(previous_dialect, "_version", None)
+        dialect_version_full = getattr(previous_dialect, "version_full", None)
+        dialect_ru_version = getattr(previous_dialect, "ru_version", None)
+        if (
+            previous_version != actual_version
+            or previous_version_full != actual_version_full
+            or previous_ru_version != actual_ru_version
+            or previous_dialect is None
+            or dialect_version != actual_version
+            or dialect_version_full != actual_version_full
+            or dialect_ru_version != actual_ru_version
+        ):
             self._version = actual_version
-            self._dialect = OracleDialect(actual_version)
+            self._version_full = actual_version_full
+            self._ru_version = actual_ru_version
+            self._dialect = OracleDialect(
+                actual_version,
+                version_full=actual_version_full,
+                ru_version=actual_ru_version,
+            )
             self._register_oracle_adapters()
             self.log(logging.INFO, f"Adapted to Oracle server version {actual_version}")
 
@@ -138,7 +178,11 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
     def dialect(self) -> OracleDialect:
         """Get Oracle SQL dialect."""
         if self._dialect is None:
-            self._dialect = OracleDialect(self._version)
+            self._dialect = OracleDialect(
+                self._version,
+                version_full=self._version_full,
+                ru_version=self._ru_version,
+            )
         return self._dialect
 
     @property
@@ -629,32 +673,45 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
                 cursor.close()
 
     def get_server_version(self) -> tuple:
-        """Get Oracle server version."""
+        """Get the Oracle base and full release versions."""
         if not self._connection:
             self.connect()
 
         cursor = None
         try:
             cursor = self._get_cursor()
-            cursor.execute("SELECT VERSION FROM PRODUCT_COMPONENT_VERSION WHERE PRODUCT LIKE 'Oracle%'")
-            version_str = cursor.fetchone()[0]
-
-            # Parse version string (e.g., "19.0.0.0.0")
-            version_parts = version_str.split('.')
-            major = int(version_parts[0]) if len(version_parts) > 0 else 0
-            minor = int(version_parts[1]) if len(version_parts) > 1 else 0
-            patch = int(version_parts[2]) if len(version_parts) > 2 else 0
-
-            version_tuple = (major, minor, patch)
-
-            self.log(logging.INFO, f"Oracle server version: {major}.{minor}.{patch}")
-            return version_tuple
+            try:
+                cursor.execute(VERSION_FULL_QUERY)
+                row = cursor.fetchone()
+                base, version_full = parse_version_row(row)
+            except Exception:
+                cursor.close()
+                cursor = self._get_cursor()
+                cursor.execute(VERSION_QUERY)
+                row = cursor.fetchone()
+                base, version_full = parse_version_row(row)
+            base = normalize_version(base)[:3]
+            if not base:
+                raise ValueError("Oracle PRODUCT_COMPONENT_VERSION returned no version")
+            self._version_full = version_full
+            self._ru_version = ru_from_version_full(version_full)
+            self.log(logging.INFO, f"Oracle server version: {base}")
+            return base
         except Exception as e:
             self.log(logging.WARNING, f"Could not determine Oracle version: {str(e)}, defaulting to 19.0.0")
+            self._version_full = None
+            self._ru_version = None
             return (19, 0, 0)
         finally:
             if cursor:
                 cursor.close()
+
+    def get_server_version_full(self) -> Optional[Tuple[int, ...]]:
+        """Return the full Oracle version, including the RU when available."""
+        if self._version_full is not None:
+            return self._version_full
+        self.get_server_version()
+        return self._version_full
 
     def ping(self, reconnect: bool = True) -> bool:
         """Ping the Oracle server to check if the connection is alive."""

@@ -38,6 +38,8 @@ from .materialized_view import (
     OracleCreateMaterializedViewExpression,
     OracleCreateMaterializedViewLogExpression,
     OracleDropMaterializedViewExpression,
+    OracleRefreshMaterializedViewExpression,
+    OracleRefreshMethod,
 )
 from .comment import (
     OracleCommentObjectType, OracleCommentExpression,
@@ -47,6 +49,10 @@ from .flashback import (
     OracleAsOfClause, OracleVersionsBetweenClause,
     OracleFlashbackTableExpression,
     OraclePurgeObjectType, OraclePurgeExpression,
+)
+from .column import (
+    OracleColumnDefinition,
+    OracleColumnOptions,
 )
 from .alter_table import (
     OracleSetUnusedColumnsAction, OracleDropUnusedColumnsAction,
@@ -60,6 +66,22 @@ from .ddl import (
     OracleCreateProcedureExpression, OracleCreateFunctionExpression,
     OracleCreatePackageExpression, OracleCreatePackageBodyExpression,
     OracleDropRoutineObjectType, OracleDropRoutineExpression,
+    OracleTypeAttribute, OracleTypeMethod,
+    OracleObjectTypeDefinition, OracleSqljTypeDefinition,
+    OracleVarrayTypeDefinition, OracleNestedTableTypeDefinition,
+    OracleIncompleteTypeDefinition, OracleAlterTypeDependentHandling,
+    OracleTypeDependentHandling, OracleAlterTypeAttributeAction,
+    OracleAlterTypeMethodAction,
+    OracleAlterTypeModifyLimitAction, OracleCompileTypeAction,
+    OracleSetTypeFinalAction, OracleSetTypeInstantiableAction,
+    OracleTypeAlterAction, OracleAlterTypeAddAttributeAction,
+    OracleAlterTypeModifyAttributeAction, OracleAlterTypeDropAttributeAction,
+    OracleAlterTypeAddMethodAction, OracleAlterTypeDropMethodAction,
+    OracleAlterTypeLimitAction, OracleAlterTypeElementTypeAction,
+    OracleAlterTypeCompileAction, OracleAlterTypeFinalAction,
+    OracleAlterTypeInstantiableAction, OracleAlterTypeResetAction,
+    OracleCreateTypeBodyExpression, OracleDropTypeExpression,
+    DropTypeBodyExpression, OracleDropTypeBodyExpression,
 )
 from .analyze import (
     OracleAnalyzeMode, OracleAnalyzeExpression,
@@ -69,6 +91,7 @@ from .table import TableCompressionClauseExpression, TablespaceClauseExpression
 from .trigger import DisableTriggerExpression, EnableTriggerExpression
 
 __all__ = [
+'OracleColumnDefinition', 'OracleColumnOptions',
 # Hierarchical query expressions
 'ConnectByExpression', 'PriorExpression',
 'ConnectByRootExpression', 'SysConnectByPathExpression',
@@ -98,6 +121,8 @@ __all__ = [
     'OracleCreateMaterializedViewExpression',
     'OracleCreateMaterializedViewLogExpression',
     'OracleDropMaterializedViewExpression',
+    'OracleRefreshMaterializedViewExpression',
+    'OracleRefreshMethod',
     # COMMENT ON expressions
     'OracleCommentObjectType', 'OracleCommentExpression',
     # FLASHBACK family expressions
@@ -117,6 +142,23 @@ __all__ = [
     'OracleCreateProcedureExpression', 'OracleCreateFunctionExpression',
     'OracleCreatePackageExpression', 'OracleCreatePackageBodyExpression',
     'OracleDropRoutineObjectType', 'OracleDropRoutineExpression',
+    # User-defined TYPE DDL expressions
+    'OracleTypeAttribute', 'OracleTypeMethod',
+    'OracleObjectTypeDefinition', 'OracleSqljTypeDefinition',
+    'OracleVarrayTypeDefinition', 'OracleNestedTableTypeDefinition',
+    'OracleIncompleteTypeDefinition', 'OracleAlterTypeDependentHandling',
+    'OracleTypeDependentHandling', 'OracleAlterTypeAttributeAction',
+    'OracleAlterTypeMethodAction',
+    'OracleAlterTypeModifyLimitAction', 'OracleCompileTypeAction',
+    'OracleSetTypeFinalAction', 'OracleSetTypeInstantiableAction',
+    'OracleTypeAlterAction', 'OracleAlterTypeAddAttributeAction',
+    'OracleAlterTypeModifyAttributeAction', 'OracleAlterTypeDropAttributeAction',
+    'OracleAlterTypeAddMethodAction', 'OracleAlterTypeDropMethodAction',
+    'OracleAlterTypeLimitAction', 'OracleAlterTypeElementTypeAction',
+    'OracleAlterTypeCompileAction', 'OracleAlterTypeFinalAction',
+    'OracleAlterTypeInstantiableAction', 'OracleAlterTypeResetAction',
+    'OracleCreateTypeBodyExpression', 'OracleDropTypeExpression',
+    'DropTypeBodyExpression', 'OracleDropTypeBodyExpression',
     # ANALYZE TABLE expressions
     'OracleAnalyzeMode', 'OracleAnalyzeExpression',
     # Vector expressions

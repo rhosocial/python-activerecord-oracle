@@ -24,8 +24,8 @@ def dialect():
 
 
 class TestOracleCommentCapabilities:
-    def test_supports_comment(self, dialect):
-        assert dialect.supports_comment() is True
+    def test_supports_comment_on(self, dialect):
+        assert dialect.supports_comment_on() is True
 
 
 class TestOracleCommentExpression:

@@ -32,6 +32,32 @@ class OracleDDLMixin:
         PL/SQL block that checks ``user_tables`` and only executes the DDL
         when the table does not exist, making creation idempotent.
         """
+        from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
+
+        table_options = getattr(expr, "table_options", None)
+        if getattr(table_options, "comment", None):
+            # Oracle annotates comments through the standalone COMMENT ON
+            # statement (no inline table option); a comment on the table
+            # options is never silently dropped.
+            raise UnsupportedFeatureError(
+                self.name, "TABLE COMMENT",
+                "Oracle has no inline table comment; use a standalone "
+                "COMMENT ON TABLE statement.",
+            )
+        if expr.inherits:
+            # Oracle has no table inheritance; a declared INHERITS clause is
+            # never silently dropped.
+            raise UnsupportedFeatureError(
+                self.name, "table INHERITS",
+                "Oracle does not support table inheritance.",
+            )
+        if expr.storage_options is not None:
+            # Oracle has no generic WITH (...) storage options clause.
+            raise UnsupportedFeatureError(
+                self.name, "storage options",
+                "Oracle does not support the generic WITH (...) storage "
+                "options clause.",
+            )
         all_params: List[Any] = []
         parts = ["CREATE"]
         if expr.temporary:
@@ -93,9 +119,28 @@ class OracleDDLMixin:
         self,
         col_def: "ColumnDefinition",
     ) -> Tuple[str, tuple]:
+        """Format a single column definition with Oracle-specific syntax.
+
+        Accepts both the generic ``ColumnDefinition`` and the Oracle
+        ``OracleColumnDefinition``; the latter's ``invisible`` attribute is
+        rendered here.
+        """
         from rhosocial.activerecord.backend.expression.statements.ddl_table import (
             ColumnConstraintType,
         )
+        from rhosocial.activerecord.backend.impl.oracle.expression.column import (
+            OracleColumnDefinition,
+        )
+        if getattr(col_def, "comment", None):
+            # Oracle annotates column comments through the standalone
+            # COMMENT ON COLUMN statement (no inline column clause); a
+            # comment on a column definition is never silently dropped.
+            from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
+            raise UnsupportedFeatureError(
+                self.name, "COLUMN COMMENT",
+                "Oracle has no inline column comment; use a standalone "
+                "COMMENT ON COLUMN statement.",
+            )
         type_sql, type_params = col_def.data_type.to_sql()
         parts = [self.format_identifier(col_def.name), type_sql]
         params: List[Any] = list(type_params)
@@ -127,19 +172,6 @@ class OracleDDLMixin:
                         constraint_parts.append(f"DEFAULT {constraint.default_value}")
             elif constraint.constraint_type == ColumnConstraintType.NULL:
                 constraint_parts.append("NULL")
-            elif constraint.constraint_type == ColumnConstraintType.COLLATE:
-                if constraint.collation:
-                    if self.version >= (12, 2, 0):
-                        constraint_parts.append(
-                            f"COLLATE {self.format_identifier(constraint.collation)}"
-                        )
-                    else:
-                        from rhosocial.activerecord.backend.dialect.exceptions import (
-                            UnsupportedFeatureError,
-                        )
-                        raise UnsupportedFeatureError(
-                            self.name, "column-level COLLATE (requires Oracle 12.2+)"
-                        )
 
             if constraint.is_auto_increment:
                 if self.version >= (12, 0, 0):
@@ -150,6 +182,14 @@ class OracleDDLMixin:
 
         if constraint_parts:
             parts.append(" ".join(constraint_parts))
+
+        attr_sql, attr_params = self.format_column_attributes(col_def)
+        if attr_sql:
+            parts.append(attr_sql.strip())
+        params.extend(attr_params)
+
+        if isinstance(col_def, OracleColumnDefinition) and col_def.invisible:
+            parts.append("INVISIBLE")
 
         if col_def.generated_expression is not None:
             gen_sql, gen_params = col_def.generated_expression.to_sql()
@@ -183,6 +223,13 @@ class OracleDDLMixin:
         params: List[Any] = []
         if t_const.name:
             parts.append(f"CONSTRAINT {self.format_identifier(t_const.name)}")
+
+        if getattr(t_const, "match_type", None) is not None:
+            from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
+            raise UnsupportedFeatureError(
+                self.name, "FOREIGN KEY MATCH",
+                "Oracle does not support FOREIGN KEY MATCH.",
+            )
 
         if t_const.constraint_type == TableConstraintType.PRIMARY_KEY:
             if t_const.columns:
@@ -230,5 +277,17 @@ class OracleDDLMixin:
                                 f"{self.name} does not support ON UPDATE for foreign keys."
                             )
                         parts.append(f"ON UPDATE {t_const.on_update.value}")
+
+        deferrable = getattr(t_const, "deferrable", None)
+        if deferrable is not None:
+            if deferrable:
+                parts.append("DEFERRABLE")
+                initially = getattr(t_const, "initially_deferred", None)
+                if initially is True:
+                    parts.append("INITIALLY DEFERRED")
+                elif initially is False:
+                    parts.append("INITIALLY IMMEDIATE")
+            else:
+                parts.append("NOT DEFERRABLE")
 
         return " ".join(parts), tuple(params)

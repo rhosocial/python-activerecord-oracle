@@ -14,6 +14,7 @@ from .concurrency import OracleConcurrencyMixin
 from .database_link import OracleDatabaseLinkMixin
 from .datetime_op import OracleDateTimeMixin
 from .ddl import OracleDDLMixin
+from .ddl_type import OracleTypeDDLMixin
 from .dml import OracleDMLOperationMixin
 from .expression import OracleExpressionMixin
 from .features import OracleFeaturesMixin
@@ -29,7 +30,6 @@ from .materialized_view import OracleMaterializedViewMixin
 from .optimizer_hint import OracleOptimizerHintMixin
 from .pagination import OraclePaginationMixin
 from .partition import OraclePartitionMixin
-from .partition_lifecycle import OraclePartitionLifecycleMixin
 from .pivot import OraclePivotMixin
 from .routine import OracleRoutineMixin
 from .schema import OracleSchemaMixin
@@ -54,6 +54,7 @@ __all__ = [
     "OracleCollationMixin",
     "OracleDateTimeMixin",
     "OracleDDLMixin",
+    "OracleTypeDDLMixin",
     "OracleExpressionMixin",
     "OracleFeaturesMixin",
     "OracleFunctionFormatMixin",
@@ -73,7 +74,6 @@ __all__ = [
     "OracleOptimizerHintMixin",
     "OraclePaginationMixin",
     "OraclePartitionMixin",
-    "OraclePartitionLifecycleMixin",
     "OraclePivotMixin",
     "OracleRoutineMixin",
     "OracleSchemaMixin",

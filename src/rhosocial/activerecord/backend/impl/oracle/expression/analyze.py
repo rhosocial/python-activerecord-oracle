@@ -17,9 +17,9 @@ The expression delegates SQL generation to the dialect through the public
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Dict, Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 
-from rhosocial.activerecord.backend.expression.bases import BaseExpression, SQLQueryAndParams
+from rhosocial.activerecord.backend.expression.bases import BaseExpression
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
@@ -49,7 +49,6 @@ class OracleAnalyzeExpression(BaseExpression):
             structures (``CASCADE``).
         into: with ``LIST CHAINED ROWS``, the table to receive the chained
             row list (``INTO ...``).
-        dialect_options: reserved for future dialect-specific options.
 
     Raises:
         ValueError: if ``table`` is empty, ``sample_percent`` is used
@@ -68,8 +67,6 @@ class OracleAnalyzeExpression(BaseExpression):
         sample_percent: Optional[int] = None,
         cascade: bool = False,
         into: Optional[str] = None,
-        *,
-        dialect_options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(dialect)
         if not isinstance(table, str) or not table.strip():
@@ -101,7 +98,6 @@ class OracleAnalyzeExpression(BaseExpression):
         self.sample_percent = sample_percent
         self.cascade = bool(cascade)
         self.into = into
-        self.dialect_options = dialect_options or {}
 
     @property
     def format_method(self) -> str:

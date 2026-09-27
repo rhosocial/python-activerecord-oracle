@@ -30,7 +30,6 @@ SCHEMA_USER_PASSWORD = "Rh0social#2026"
 class SchemaCustomer(ActiveRecord):
     __table_name__ = "customers"
     __schema_name__ = "ar_crm"
-    __primary_key__ = "id"
     c: ClassVar[FieldProxy] = FieldProxy()
 
     id: Optional[int] = None
@@ -40,7 +39,6 @@ class SchemaCustomer(ActiveRecord):
 class SchemaOrder(ActiveRecord):
     __table_name__ = "orders"
     __schema_name__ = "ar_shop"
-    __primary_key__ = "id"
     c: ClassVar[FieldProxy] = FieldProxy()
 
     id: Optional[int] = None
@@ -165,7 +163,6 @@ async def test_async_insert_is_scoped(provisioned):
     class AsyncSchemaCustomer(AsyncActiveRecord):
         __table_name__ = "customers"
         __schema_name__ = "ar_crm"
-        __primary_key__ = "id"
         c: ClassVar[FieldProxy] = FieldProxy()
 
         id: _Optional[int] = None

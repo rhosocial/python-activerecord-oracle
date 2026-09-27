@@ -22,7 +22,7 @@ from rhosocial.activerecord.backend.expression.bases import (
 )
 
 if TYPE_CHECKING:
-    from ...dialect import OracleDialect
+    from ..dialect import OracleDialect
 
 
 class OracleQueryExpression(BaseExpression):

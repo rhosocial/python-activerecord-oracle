@@ -13,17 +13,12 @@ import re
 import pytest
 
 from rhosocial.activerecord.backend.expression.types import (
-    BigIntType, BlobType, BooleanType, CharType, DateType, DateTimeType,
-    DecimalType, DoubleType, FloatType, IntegerType, JsonBType, JsonType,
-    RealType, SmallIntType, TextType, TimeTzType, TimestampTzType,
-    TinyIntType, VarCharType,
+    DateTimeType,
+    DecimalType, FloatType,
 )
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.expression.types import (
-    OracleBigIntType, OracleBlobType, OracleCharType, OracleClobType,
-    OracleIntegerType, OracleLongRawType, OracleLongType, OracleNClobType,
-    OracleNVarChar2Type, OracleRawType, OracleSmallIntType, OracleVarChar2Type,
-    OracleXmlType,
+    OracleRawType,
 )
 
 
@@ -111,13 +106,13 @@ class TestSuggestedDataTypes:
             assert isinstance(cls, type), f"{name}: value is not a class"
 
 
-# --- W1 + W4: dialect_options forwarding and equality ---
+# --- W4: type-param equality (dialect_options bag removed) ---
 
-class TestDialectOptionsForwarding:
-    def test_oracle_raw_type_forwards_dialect_options(self):
-        opts = {"unsigned": True}
-        t = OracleRawType(length=10, dialect_options=opts)
-        assert t.dialect_options == {"unsigned": True}
+class TestDialectOptionsRemoved:
+
+    def test_constructor_rejects_dialect_options(self):
+        with pytest.raises(TypeError):
+            OracleRawType(length=16, dialect_options={"a": 1})
 
     def test_oracle_raw_type_equality_ignores_dialect(self):
         t1 = OracleRawType(length=16)
@@ -134,19 +129,8 @@ class TestDialectOptionsForwarding:
         t2 = OracleRawType(length=16)
         assert hash(t1) == hash(t2)
 
-    def test_oracle_raw_type_equality_with_dialect_options(self):
-        t1 = OracleRawType(length=16, dialect_options={"a": 1})
-        t2 = OracleRawType(length=16, dialect_options={"a": 1})
-        assert t1 == t2
 
-    def test_oracle_raw_type_inequality_on_dialect_options(self):
-        t1 = OracleRawType(length=16, dialect_options={"a": 1})
-        t2 = OracleRawType(length=16, dialect_options={"a": 2})
-        assert t1 != t2
 
-    def test_oracle_varchar2_dialect_options_forwarded(self):
-        t = VarCharType(dialect_options={"charset": "utf8"})
-        assert t.dialect_options == {"charset": "utf8"}
 
 
 # --- W4: Precision validation ---

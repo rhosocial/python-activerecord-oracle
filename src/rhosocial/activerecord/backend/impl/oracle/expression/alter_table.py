@@ -19,9 +19,8 @@ core ``AlterTableExpression`` action-dispatch mechanism unchanged.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import List, TYPE_CHECKING
 
-from rhosocial.activerecord.backend.expression.bases import SQLQueryAndParams
 from rhosocial.activerecord.backend.expression.statements.ddl_alter import AlterTableAction
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -38,7 +37,6 @@ class OracleSetUnusedColumnsAction(AlterTableAction):
     Args:
         dialect: the Oracle dialect instance.
         columns: list of column names to mark as unused.
-        dialect_options: reserved for future dialect-specific options.
 
     Raises:
         ValueError: if ``columns`` is empty.
@@ -48,14 +46,11 @@ class OracleSetUnusedColumnsAction(AlterTableAction):
         self,
         dialect: "OracleDialect",
         columns: List[str],
-        *,
-        dialect_options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(dialect)
         if not columns:
             raise ValueError("columns must be a non-empty list")
         self.columns = list(columns)
-        self.dialect_options = dialect_options or {}
 
     @property
     def format_method(self) -> str:
@@ -71,17 +66,13 @@ class OracleDropUnusedColumnsAction(AlterTableAction):
 
     Args:
         dialect: the Oracle dialect instance.
-        dialect_options: reserved for future dialect-specific options.
     """
 
     def __init__(
         self,
         dialect: "OracleDialect",
-        *,
-        dialect_options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(dialect)
-        self.dialect_options = dialect_options or {}
 
     @property
     def format_method(self) -> str:
@@ -97,17 +88,13 @@ class OracleMoveTableAction(AlterTableAction):
 
     Args:
         dialect: the Oracle dialect instance.
-        dialect_options: reserved for future dialect-specific options.
     """
 
     def __init__(
         self,
         dialect: "OracleDialect",
-        *,
-        dialect_options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(dialect)
-        self.dialect_options = dialect_options or {}
 
     @property
     def format_method(self) -> str:
@@ -124,19 +111,15 @@ class OracleShrinkSpaceAction(AlterTableAction):
     Args:
         dialect: the Oracle dialect instance.
         cascade: when True, also shrink dependent segments (indexes, LOBs).
-        dialect_options: reserved for future dialect-specific options.
     """
 
     def __init__(
         self,
         dialect: "OracleDialect",
         cascade: bool = False,
-        *,
-        dialect_options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(dialect)
         self.cascade = bool(cascade)
-        self.dialect_options = dialect_options or {}
 
     @property
     def format_method(self) -> str:
@@ -153,19 +136,15 @@ class OracleReadOnlyAction(AlterTableAction):
     Args:
         dialect: the Oracle dialect instance.
         read_only: when True emit ``READ ONLY``, otherwise ``READ WRITE``.
-        dialect_options: reserved for future dialect-specific options.
     """
 
     def __init__(
         self,
         dialect: "OracleDialect",
         read_only: bool = True,
-        *,
-        dialect_options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(dialect)
         self.read_only = bool(read_only)
-        self.dialect_options = dialect_options or {}
 
     @property
     def format_method(self) -> str:
@@ -184,19 +163,15 @@ class OracleRowMovementAction(AlterTableAction):
         dialect: the Oracle dialect instance.
         enable: when True emit ``ENABLE ROW MOVEMENT``, otherwise ``DISABLE
             ROW MOVEMENT``.
-        dialect_options: reserved for future dialect-specific options.
     """
 
     def __init__(
         self,
         dialect: "OracleDialect",
         enable: bool = True,
-        *,
-        dialect_options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(dialect)
         self.enable = bool(enable)
-        self.dialect_options = dialect_options or {}
 
     @property
     def format_method(self) -> str:

@@ -22,9 +22,9 @@ All expressions delegate SQL generation to the dialect through the public
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Dict, Optional, TYPE_CHECKING
+from typing import Any, Optional, TYPE_CHECKING
 
-from rhosocial.activerecord.backend.expression.bases import BaseExpression, SQLQueryAndParams
+from rhosocial.activerecord.backend.expression.bases import BaseExpression
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
@@ -57,7 +57,6 @@ class OracleAsOfClause(BaseExpression):
         value: the timestamp/SCN value. Accepts a ``BaseExpression`` (rendered
             via ``to_sql()``) or a raw SQL fragment string, e.g.
             ``"SYSTIMESTAMP - INTERVAL '1' DAY"``.
-        dialect_options: reserved for future dialect-specific options.
 
     Raises:
         TypeError: if ``mode`` is not an :class:`OracleAsOfMode`.
@@ -68,8 +67,6 @@ class OracleAsOfClause(BaseExpression):
         dialect: "OracleDialect",
         mode: OracleAsOfMode,
         value: Any,
-        *,
-        dialect_options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(dialect)
         if not isinstance(mode, OracleAsOfMode):
@@ -79,7 +76,6 @@ class OracleAsOfClause(BaseExpression):
             )
         self.mode = mode
         self.value = value
-        self.dialect_options = dialect_options or {}
 
     @property
     def format_method(self) -> str:
@@ -98,7 +94,6 @@ class OracleVersionsBetweenClause(BaseExpression):
         mode: ``TIMESTAMP`` or ``SCN``.
         low_value: the lower bound of the range.
         high_value: the upper bound of the range.
-        dialect_options: reserved for future dialect-specific options.
 
     Raises:
         TypeError: if ``mode`` is not an :class:`OracleVersionsBetweenMode`.
@@ -110,8 +105,6 @@ class OracleVersionsBetweenClause(BaseExpression):
         mode: OracleVersionsBetweenMode,
         low_value: Any,
         high_value: Any,
-        *,
-        dialect_options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(dialect)
         if not isinstance(mode, OracleVersionsBetweenMode):
@@ -122,7 +115,6 @@ class OracleVersionsBetweenClause(BaseExpression):
         self.mode = mode
         self.low_value = low_value
         self.high_value = high_value
-        self.dialect_options = dialect_options or {}
 
     @property
     def format_method(self) -> str:
@@ -149,7 +141,6 @@ class OracleFlashbackTableExpression(BaseExpression):
         rename_to: with ``to_before_drop``, rename the restored table.
         enable_triggers: append ``ENABLE TRIGGERS``.
         disable_triggers: append ``DISABLE TRIGGERS``.
-        dialect_options: reserved for future dialect-specific options.
 
     Raises:
         ValueError: if ``table`` is empty, if no flashback target clause is
@@ -167,8 +158,6 @@ class OracleFlashbackTableExpression(BaseExpression):
         rename_to: Optional[str] = None,
         enable_triggers: bool = False,
         disable_triggers: bool = False,
-        *,
-        dialect_options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(dialect)
         if not isinstance(table, str) or not table.strip():
@@ -195,7 +184,6 @@ class OracleFlashbackTableExpression(BaseExpression):
         self.rename_to = rename_to
         self.enable_triggers = bool(enable_triggers)
         self.disable_triggers = bool(disable_triggers)
-        self.dialect_options = dialect_options or {}
 
     @property
     def format_method(self) -> str:
@@ -223,7 +211,6 @@ class OraclePurgeExpression(BaseExpression):
         object_type: ``TABLE``, ``INDEX`` or ``RECYCLEBIN``.
         object_name: the object name; required for ``TABLE``/``INDEX`` and
             must be ``None`` for ``RECYCLEBIN``.
-        dialect_options: reserved for future dialect-specific options.
 
     Raises:
         ValueError: if ``object_type`` is ``TABLE``/``INDEX`` without an
@@ -236,8 +223,6 @@ class OraclePurgeExpression(BaseExpression):
         dialect: "OracleDialect",
         object_type: OraclePurgeObjectType,
         object_name: Optional[str] = None,
-        *,
-        dialect_options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(dialect)
         if not isinstance(object_type, OraclePurgeObjectType):
@@ -252,7 +237,6 @@ class OraclePurgeExpression(BaseExpression):
             raise ValueError("object_name must be a non-empty string")
         self.object_type = object_type
         self.object_name = object_name
-        self.dialect_options = dialect_options or {}
 
     @property
     def format_method(self) -> str:

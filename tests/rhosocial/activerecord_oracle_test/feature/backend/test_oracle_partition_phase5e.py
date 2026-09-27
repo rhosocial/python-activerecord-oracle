@@ -10,7 +10,6 @@ Real Oracle execution is covered in ``test_oracle_partition_phase5_real.py``.
 
 import pytest
 
-from rhosocial.activerecord.backend.expression import Column, Literal
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.expression.partition import (
@@ -230,7 +229,8 @@ class TestOracleExchangePartition:
         )
         sql, _ = e.to_sql()
         assert sql == (
-            'ALTER TABLE "ORDERS" EXCHANGE PARTITION "P1" WITH TABLE "ORDERS_P1_STAGING" INCLUDING INDEXES WITHOUT VALIDATION'
+            'ALTER TABLE "ORDERS" EXCHANGE PARTITION "P1" WITH TABLE '
+            '"ORDERS_P1_STAGING" INCLUDING INDEXES WITHOUT VALIDATION'
         )
 
     def test_exchange_pre_11g_raises(self):

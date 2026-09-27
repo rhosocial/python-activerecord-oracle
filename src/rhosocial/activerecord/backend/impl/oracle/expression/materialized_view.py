@@ -11,6 +11,9 @@ views and materialized view logs:
   LOG ON t WITH { ROWID | PRIMARY KEY }``.
 * ``OracleDropMaterializedViewExpression`` — ``DROP MATERIALIZED VIEW`` with
   the optional ``PRESERVE TABLE`` clause.
+* ``OracleRefreshMaterializedViewExpression`` — ``DBMS_MVIEW.REFRESH`` inside a
+  PL/SQL block. Oracle has **no** standalone ``REFRESH MATERIALIZED VIEW``
+  statement, so refreshing is a stored-procedure call.
 
 Clause order follows the Oracle SQL Language Reference grammar:
 ``name [column_aliases] [TABLESPACE] [BUILD ...] [REFRESH ...]
@@ -22,9 +25,9 @@ All expressions delegate SQL generation to the dialect through the public
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import List, Optional, TYPE_CHECKING
 
-from rhosocial.activerecord.backend.expression.bases import BaseExpression, SQLQueryAndParams
+from rhosocial.activerecord.backend.expression.bases import BaseExpression
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
@@ -70,7 +73,6 @@ class OracleCreateMaterializedViewExpression(BaseExpression):
             ``REFRESH`` clause).
         query_rewrite: ``ENABLE QUERY REWRITE`` when True, ``DISABLE QUERY
             REWRITE`` when False, omitted when None.
-        dialect_options: reserved for future dialect-specific options.
 
     Raises:
         ValueError: if ``view_name`` is empty.
@@ -89,8 +91,6 @@ class OracleCreateMaterializedViewExpression(BaseExpression):
         refresh_method: Optional[MaterializedViewRefreshMethod] = None,
         refresh_trigger: Optional[MaterializedViewRefreshTrigger] = None,
         query_rewrite: Optional[bool] = None,
-        *,
-        dialect_options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(dialect)
         if not isinstance(view_name, str) or not view_name.strip():
@@ -109,7 +109,6 @@ class OracleCreateMaterializedViewExpression(BaseExpression):
         self.refresh_method = refresh_method
         self.refresh_trigger = refresh_trigger
         self.query_rewrite = query_rewrite
-        self.dialect_options = dialect_options or {}
 
     @property
     def format_method(self) -> str:
@@ -125,7 +124,6 @@ class OracleCreateMaterializedViewLogExpression(BaseExpression):
         table: name of the master (base) table to log.
         with_rowid: emit ``WITH ROWID``.
         with_primary_key: emit ``WITH PRIMARY KEY``.
-        dialect_options: reserved for future dialect-specific options.
 
     Raises:
         ValueError: if ``table`` is empty, or neither ``with_rowid`` nor
@@ -138,8 +136,6 @@ class OracleCreateMaterializedViewLogExpression(BaseExpression):
         table: str,
         with_rowid: bool = False,
         with_primary_key: bool = False,
-        *,
-        dialect_options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(dialect)
         if not isinstance(table, str) or not table.strip():
@@ -151,7 +147,6 @@ class OracleCreateMaterializedViewLogExpression(BaseExpression):
         self.table = table
         self.with_rowid = bool(with_rowid)
         self.with_primary_key = bool(with_primary_key)
-        self.dialect_options = dialect_options or {}
 
     @property
     def format_method(self) -> str:
@@ -168,7 +163,6 @@ class OracleDropMaterializedViewExpression(BaseExpression):
         if_exists: if True, emit ``IF EXISTS`` (Oracle 23ai+).
         preserve_table: if True, append ``PRESERVE TABLE`` to keep the
             underlying container table.
-        dialect_options: reserved for future dialect-specific options.
 
     Raises:
         ValueError: if ``view_name`` is empty.
@@ -180,8 +174,6 @@ class OracleDropMaterializedViewExpression(BaseExpression):
         view_name: str,
         if_exists: bool = False,
         preserve_table: bool = False,
-        *,
-        dialect_options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(dialect)
         if not isinstance(view_name, str) or not view_name.strip():
@@ -189,9 +181,88 @@ class OracleDropMaterializedViewExpression(BaseExpression):
         self.view_name = view_name
         self.if_exists = bool(if_exists)
         self.preserve_table = bool(preserve_table)
-        self.dialect_options = dialect_options or {}
 
     @property
     def format_method(self) -> str:
         """The dialect formatting method that renders this expression."""
         return "format_drop_materialized_view_statement"
+
+
+class OracleRefreshMethod(Enum):
+    """``DBMS_MVIEW.REFRESH`` method codes.
+
+    These are the *procedure* codes, which differ from the ``REFRESH ON DEMAND``
+    / ``REFRESH FAST`` DDL keywords: ``f`` fast, ``C`` complete, ``?`` force,
+    ``P`` partition change tracking, ``A`` always (equivalent to complete).
+    """
+
+    FAST = "F"
+    COMPLETE = "C"
+    FORCE = "?"
+    PARTITION_CHANGE_TRACKING = "P"
+    ALWAYS = "A"
+
+
+class OracleRefreshMaterializedViewExpression(BaseExpression):
+    """Oracle ``DBMS_MVIEW.REFRESH('mv', ...)`` expression.
+
+    Oracle exposes materialized view refresh only through the
+    ``DBMS_MVIEW.REFRESH`` PL/SQL procedure, so the rendered statement is a
+    ``BEGIN ... END;`` anonymous block.
+
+    Args:
+        dialect: the Oracle dialect instance.
+        view_name: name of the materialized view to refresh.
+        schema: optional owner/schema of the materialized view.
+        method: refresh method code, e.g. ``OracleRefreshMethod.COMPLETE``.
+        atomic_refresh: refresh the list in a single transaction (server default
+            is ``TRUE``).
+        out_of_place: perform an out-of-place refresh.
+        nested: also refresh dependent materialized views in dependency order.
+        parallelism: DML parallelism degree (``0`` = serial).
+        purge_option: ``0`` none, ``1`` lazy (server default), ``2`` aggressive.
+        refresh_after_errors: continue past conflicts in ``DEFERROR``.
+        push_deferred_rpc: push deferred changes from an updatable MV first.
+
+    Raises:
+        ValueError: if ``view_name`` is empty.
+    """
+
+    def __init__(
+        self,
+        dialect: "OracleDialect",
+        view_name: str,
+        schema: Optional[str] = None,
+        method: Optional[OracleRefreshMethod] = None,
+        atomic_refresh: Optional[bool] = None,
+        out_of_place: Optional[bool] = None,
+        nested: Optional[bool] = None,
+        parallelism: Optional[int] = None,
+        purge_option: Optional[int] = None,
+        refresh_after_errors: Optional[bool] = None,
+        push_deferred_rpc: Optional[bool] = None,
+    ):
+        super().__init__(dialect)
+        if not isinstance(view_name, str) or not view_name.strip():
+            raise ValueError("view_name must be a non-empty string")
+        if schema is not None and (not isinstance(schema, str) or not schema.strip()):
+            raise ValueError("schema must be a non-empty string when provided")
+        if purge_option is not None and purge_option not in (0, 1, 2):
+            raise ValueError("purge_option must be 0 (none), 1 (lazy) or 2 (aggressive)")
+        if parallelism is not None and (not isinstance(parallelism, int) or parallelism < 0):
+            raise ValueError("parallelism must be a non-negative integer")
+        self.view_name = view_name
+        self.schema = schema
+        self.method = method
+        self.atomic_refresh = atomic_refresh
+        self.out_of_place = out_of_place
+        self.nested = nested
+        self.parallelism = parallelism
+        self.purge_option = purge_option
+        self.refresh_after_errors = refresh_after_errors
+        self.push_deferred_rpc = push_deferred_rpc
+
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_refresh_materialized_view_statement"

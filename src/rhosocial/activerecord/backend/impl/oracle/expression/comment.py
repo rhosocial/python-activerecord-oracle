@@ -17,9 +17,9 @@ The expression delegates SQL generation to the dialect through the public
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Dict, Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 
-from rhosocial.activerecord.backend.expression.bases import BaseExpression, SQLQueryAndParams
+from rhosocial.activerecord.backend.expression.bases import BaseExpression
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
@@ -53,7 +53,6 @@ class OracleCommentExpression(BaseExpression):
             ``table.column``.
         comment: the comment text. ``None`` renders ``IS NULL``, which
             removes any existing comment from the object.
-        dialect_options: reserved for future dialect-specific options.
 
     Raises:
         ValueError: if ``object_name`` is empty.
@@ -67,8 +66,6 @@ class OracleCommentExpression(BaseExpression):
         object_type: OracleCommentObjectType,
         object_name: str,
         comment: Optional[str] = None,
-        *,
-        dialect_options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(dialect)
         if not isinstance(object_type, OracleCommentObjectType):
@@ -81,7 +78,6 @@ class OracleCommentExpression(BaseExpression):
         self.object_type = object_type
         self.object_name = object_name
         self.comment = comment
-        self.dialect_options = dialect_options or {}
 
     @property
     def format_method(self) -> str:
