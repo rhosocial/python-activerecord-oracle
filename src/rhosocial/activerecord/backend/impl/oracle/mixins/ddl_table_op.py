@@ -10,7 +10,7 @@ capability checks that were previously inlined in the monolithic
 from typing import Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover
-    from ...expression.statements import DropTableExpression
+    from ....expression.statements import DropTableExpression
 
 
 class OracleTableCapabilityMixin:

@@ -19,7 +19,7 @@ from typing import Optional, TYPE_CHECKING
 from rhosocial.activerecord.backend.expression.bases import BaseExpression
 
 if TYPE_CHECKING:  # pragma: no cover
-    from ..dialect import OracleDialect
+    from ...dialect import OracleDialect
 
 
 class OracleCreateSynonymExpression(BaseExpression):
