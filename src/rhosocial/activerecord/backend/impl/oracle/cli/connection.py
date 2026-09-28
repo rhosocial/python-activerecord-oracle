@@ -145,7 +145,7 @@ def resolve_connection_config_from_args(args):
 
 def create_backend(args):
     """Create, connect, and introspect an Oracle backend from parsed args."""
-    from rhosocial.activerecord.backend.impl.oracle import OracleBackend
+    from rhosocial.activerecord.backend.impl.oracle.backend import OracleBackend
     config = resolve_connection_config_from_args(args)
     backend = OracleBackend(connection_config=config)
     backend.connect()

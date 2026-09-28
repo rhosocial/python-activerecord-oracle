@@ -58,7 +58,7 @@ pip install rhosocial-activerecord-oracle
 
 ```python
 from rhosocial.activerecord.model import ActiveRecord
-from rhosocial.activerecord.backend.impl.oracle import OracleBackend
+from rhosocial.activerecord.backend.impl.oracle.backend import OracleBackend
 from rhosocial.activerecord.backend.impl.oracle.config import OracleConnectionConfig
 from typing import Optional
 

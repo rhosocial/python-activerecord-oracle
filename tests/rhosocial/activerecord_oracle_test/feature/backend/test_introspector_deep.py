@@ -379,7 +379,7 @@ class TestLiveStatusSurface:
 
 @pytest.mark.asyncio
 async def test_async_status_tablespaces():
-    from rhosocial.activerecord.backend.impl.oracle import AsyncOracleBackend
+    from rhosocial.activerecord.backend.impl.oracle.async_backend import AsyncOracleBackend
 
     _, config = get_scenario_raw("oracle_23c")
     backend = AsyncOracleBackend(connection_config=config)

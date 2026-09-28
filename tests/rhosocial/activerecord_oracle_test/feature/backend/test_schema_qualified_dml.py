@@ -157,7 +157,7 @@ def test_update_and_delete_are_scoped(provisioned):
 async def test_async_insert_is_scoped(provisioned):
     from typing import Optional as _Optional
 
-    from rhosocial.activerecord.backend.impl.oracle import AsyncOracleBackend
+    from rhosocial.activerecord.backend.impl.oracle.async_backend import AsyncOracleBackend
     from rhosocial.activerecord.model import AsyncActiveRecord
 
     class AsyncSchemaCustomer(AsyncActiveRecord):

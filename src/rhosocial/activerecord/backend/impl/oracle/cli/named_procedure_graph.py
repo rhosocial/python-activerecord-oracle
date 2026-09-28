@@ -4,7 +4,7 @@
 named-procedure-graph requires connection arguments, output arguments, and --rich-ascii.
 """
 
-from rhosocial.activerecord.backend.impl.oracle import OracleBackend
+from rhosocial.activerecord.backend.impl.oracle.backend import OracleBackend
 
 from .connection import create_connection_parent_parser, resolve_connection_config_from_args
 from .output import create_provider
@@ -49,7 +49,7 @@ def handle(args):
 
         def backend_async_factory():
             nonlocal async_backend
-            from rhosocial.activerecord.backend.impl.oracle import AsyncOracleBackend
+            from rhosocial.activerecord.backend.impl.oracle.async_backend import AsyncOracleBackend
 
             config = resolve_connection_config_from_args(args)
             async_backend = AsyncOracleBackend(connection_config=config)

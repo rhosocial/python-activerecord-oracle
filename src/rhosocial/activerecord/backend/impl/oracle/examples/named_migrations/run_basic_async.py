@@ -25,7 +25,7 @@ import os
 from pathlib import Path
 import tempfile
 
-from rhosocial.activerecord.backend.impl.oracle import AsyncOracleBackend
+from rhosocial.activerecord.backend.impl.oracle.async_backend import AsyncOracleBackend
 from rhosocial.activerecord.backend.impl.oracle.config import OracleConnectionConfig
 from rhosocial.activerecord.backend.migration import (
     AsyncMigrationRunner,

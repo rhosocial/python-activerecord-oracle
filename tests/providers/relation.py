@@ -351,7 +351,7 @@ class RelationAsyncProvider(RelationProviderBase, IRelationAsyncProvider):
         await backend.executescript(sql)
 
     def _configure_async_model_without_connection(self, model_class, config, backend=None):
-        from rhosocial.activerecord.backend.impl.oracle import AsyncOracleBackend
+        from rhosocial.activerecord.backend.impl.oracle.async_backend import AsyncOracleBackend
         if backend is None:
             backend = AsyncOracleBackend(connection_config=config)
         model_class.__connection_config__ = config

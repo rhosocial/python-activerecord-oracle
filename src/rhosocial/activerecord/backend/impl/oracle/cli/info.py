@@ -86,7 +86,7 @@ def handle(args):
     named_conn = getattr(args, "named_connection", None)
     if named_conn or (args.host and args.service):
         try:
-            from rhosocial.activerecord.backend.impl.oracle import OracleBackend
+            from rhosocial.activerecord.backend.impl.oracle.backend import OracleBackend
             config = resolve_connection_config_from_args(args)
             backend = OracleBackend(connection_config=config)
             backend.connect()

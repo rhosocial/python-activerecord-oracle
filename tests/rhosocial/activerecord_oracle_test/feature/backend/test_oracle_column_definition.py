@@ -5,7 +5,7 @@ import pytest
 
 from rhosocial.activerecord.backend.expression import ColumnDefinition
 from rhosocial.activerecord.backend.expression.types import IntegerType
-from rhosocial.activerecord.backend.impl.oracle import OracleDialect
+from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.expression import (
     OracleColumnDefinition,
     OracleColumnOptions,

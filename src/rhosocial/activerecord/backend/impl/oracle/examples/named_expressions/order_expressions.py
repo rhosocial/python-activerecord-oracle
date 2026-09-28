@@ -173,7 +173,8 @@ def prepare_orders_demo(backend) -> None:
 if __name__ == "__main__":
     import os
 
-    from rhosocial.activerecord.backend.impl.oracle import OracleBackend, OracleConnectionConfig
+    from rhosocial.activerecord.backend.impl.oracle.backend import OracleBackend
+    from rhosocial.activerecord.backend.impl.oracle.config import OracleConnectionConfig
     from rhosocial.activerecord.backend.options import ExecutionOptions
     from rhosocial.activerecord.backend.schema import StatementType
 

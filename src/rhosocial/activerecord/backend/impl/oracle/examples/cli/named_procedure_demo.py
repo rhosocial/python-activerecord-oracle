@@ -129,7 +129,8 @@ def prepare_demo_schema():
     """
     code = (
         "import os;"
-        "from rhosocial.activerecord.backend.impl.oracle import OracleBackend, OracleConnectionConfig;"
+        "from rhosocial.activerecord.backend.impl.oracle.async_backend import OracleBackend
+        "from rhosocial.activerecord.backend.impl.oracle.config import OracleConnectionConfig;"
         "from rhosocial.activerecord.backend.impl.oracle.examples.named_expressions.order_expressions "
         "import prepare_orders_demo;"
         "c = OracleConnectionConfig(host=os.getenv('ORACLE_HOST', '127.0.0.1'), "

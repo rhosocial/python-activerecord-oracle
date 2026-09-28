@@ -9,7 +9,7 @@ query classes context awareness (ActiveQuery, CTEQuery, SetOperationQuery).
 from typing import Type, Tuple, Optional, List
 
 from rhosocial.activerecord.model import ActiveRecord, AsyncActiveRecord
-from rhosocial.activerecord.backend.impl.oracle import OracleBackend
+from rhosocial.activerecord.backend.impl.oracle.backend import OracleBackend
 from rhosocial.activerecord.backend.impl.oracle.async_backend import AsyncOracleBackend
 from rhosocial.activerecord.connection.pool import BackendPool, AsyncBackendPool, PoolConfig
 from rhosocial.activerecord.backend.options import ExecutionOptions

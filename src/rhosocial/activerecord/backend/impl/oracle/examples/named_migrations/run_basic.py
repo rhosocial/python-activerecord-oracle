@@ -22,7 +22,7 @@ from pathlib import Path
 import tempfile
 import os
 
-from rhosocial.activerecord.backend.impl.oracle import OracleBackend
+from rhosocial.activerecord.backend.impl.oracle.backend import OracleBackend
 from rhosocial.activerecord.backend.impl.oracle.config import OracleConnectionConfig
 from rhosocial.activerecord.backend.migration import (
     MigrationRunner,
