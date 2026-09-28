@@ -1,4 +1,4 @@
-# src/rhosocial/activerecord/backend/impl/oracle/mixins/table.py
+# src/rhosocial/activerecord/backend/impl/oracle/mixins/ddl_table.py
 from typing import Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover
