@@ -95,7 +95,7 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
     def _create_introspector(self):
         """Create an Oracle async introspector."""
         from ..introspection import AsyncOracleIntrospector
-        from .introspection.executor import AsyncOracleIntrospectorExecutor
+        from ..introspection.executor import AsyncOracleIntrospectorExecutor
         return AsyncOracleIntrospector(self, AsyncOracleIntrospectorExecutor(self))
 
     @property
