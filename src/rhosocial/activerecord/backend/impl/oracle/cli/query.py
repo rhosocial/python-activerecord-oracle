@@ -10,7 +10,7 @@ import logging
 import sys
 
 from rhosocial.activerecord.backend.impl.oracle.backend import OracleBackend
-from rhosocial.activerecord.backend.impl.oracle.async_backend import AsyncOracleBackend
+from rhosocial.activerecord.backend.impl.oracle.backend.async_backend import AsyncOracleBackend
 from rhosocial.activerecord.backend.errors import ConnectionError, QueryError
 from rhosocial.activerecord.backend.options import ExecutionOptions, StatementType
 

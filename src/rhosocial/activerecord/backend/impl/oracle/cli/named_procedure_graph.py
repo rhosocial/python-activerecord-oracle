@@ -49,7 +49,7 @@ def handle(args):
 
         def backend_async_factory():
             nonlocal async_backend
-            from rhosocial.activerecord.backend.impl.oracle.async_backend import AsyncOracleBackend
+            from rhosocial.activerecord.backend.impl.oracle.backend.async_backend import AsyncOracleBackend
 
             config = resolve_connection_config_from_args(args)
             async_backend = AsyncOracleBackend(connection_config=config)

@@ -473,7 +473,7 @@ class QuerySyncProvider(QueryProviderBase, IQuerySyncProvider, WorkerTestProtoco
         if pooled_db:
             config_dict = {**config_dict, "username": pooled_db, "password": POOLED_USER_PASSWORD}
         return {
-            "backend_module": "rhosocial.activerecord.backend.impl.oracle.async_backend",
+            "backend_module": "rhosocial.activerecord.backend.impl.oracle.backend",
             "backend_class_name": backend_class_name,
             "config_class_module": "rhosocial.activerecord.backend.impl.oracle.config",
             "config_class_name": "OracleConnectionConfig",
@@ -514,7 +514,7 @@ class QueryAsyncProvider(QueryProviderBase, IQueryAsyncProvider):
     async def _setup_model_async(
         self, model_class: Type[ActiveRecord], scenario_name: str, table_name: str, shared_backend=None
     ) -> Type[ActiveRecord]:
-        from rhosocial.activerecord.backend.impl.oracle.async_backend import AsyncOracleBackend
+        from rhosocial.activerecord.backend.impl.oracle.backend.async_backend import AsyncOracleBackend
 
         _, config = get_scenario(scenario_name)
         if shared_backend is None:
@@ -543,7 +543,7 @@ class QueryAsyncProvider(QueryProviderBase, IQueryAsyncProvider):
             else:
                 _, config = get_scenario(scenario_name)
                 model_class.__connection_config__ = config
-                from rhosocial.activerecord.backend.impl.oracle.async_backend import (
+                from rhosocial.activerecord.backend.impl.oracle.backend.async_backend import (
                     AsyncOracleBackend,
                 )
                 model_class.__backend_class__ = AsyncOracleBackend
@@ -634,7 +634,7 @@ class QueryAsyncProvider(QueryProviderBase, IQueryAsyncProvider):
         )
 
     async def setup_order_item_model(self, scenario_name: str) -> Type[AsyncActiveRecord]:
-        from rhosocial.activerecord.backend.impl.oracle.async_backend import AsyncOracleBackend
+        from rhosocial.activerecord.backend.impl.oracle.backend.async_backend import AsyncOracleBackend
         _, config = get_scenario(scenario_name)
         await AsyncCompositeOrderItemBase.configure(config, AsyncOracleBackend)
         backend_instance = AsyncCompositeOrderItemBase.__backend__
@@ -662,7 +662,7 @@ class QueryAsyncProvider(QueryProviderBase, IQueryAsyncProvider):
 
     async def setup_schema_fixtures(self, scenario_name: str):
         """Two async models bound to distinct user schemas."""
-        from rhosocial.activerecord.backend.impl.oracle.async_backend import AsyncOracleBackend
+        from rhosocial.activerecord.backend.impl.oracle.backend.async_backend import AsyncOracleBackend
         from rhosocial.activerecord.testsuite.feature.query.fixtures.schema_models import (
             AsyncSchemaCustomer,
             AsyncSchemaOrder,
@@ -681,7 +681,7 @@ class QueryAsyncProvider(QueryProviderBase, IQueryAsyncProvider):
 
     async def setup_mixed_schema_fixtures(self, scenario_name: str):
         """(AsyncUser, AsyncOrder, AsyncMixedSchemaOrder) with orders also in AR_CRM."""
-        from rhosocial.activerecord.backend.impl.oracle.async_backend import AsyncOracleBackend
+        from rhosocial.activerecord.backend.impl.oracle.backend.async_backend import AsyncOracleBackend
         from rhosocial.activerecord.testsuite.feature.query.cross_schema.mixed_schema_models import (
             AsyncMixedSchemaOrder,
         )

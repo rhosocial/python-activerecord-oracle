@@ -37,7 +37,7 @@ from .types import (
 
 if TYPE_CHECKING:
     from ..backend import OracleBackend
-    from ..async_backend import AsyncOracleBackend
+    from .async_backend import AsyncOracleBackend
 
 
 def query_sessions(backend: "OracleBackend", active_only: bool = False):

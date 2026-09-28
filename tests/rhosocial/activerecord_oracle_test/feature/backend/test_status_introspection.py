@@ -54,7 +54,7 @@ class TestSyncStatusIntrospection:
 
 @pytest.mark.asyncio
 async def test_async_status_overview():
-    from rhosocial.activerecord.backend.impl.oracle.async_backend import AsyncOracleBackend
+    from rhosocial.activerecord.backend.impl.oracle.backend.async_backend import AsyncOracleBackend
 
     _, config = get_scenario_raw("oracle_23c")
     backend = AsyncOracleBackend(connection_config=config)

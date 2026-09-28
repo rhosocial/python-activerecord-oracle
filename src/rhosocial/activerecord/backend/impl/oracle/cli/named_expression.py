@@ -5,7 +5,7 @@ named-expression requires connection arguments, output arguments, and --rich-asc
 """
 
 from rhosocial.activerecord.backend.impl.oracle.backend import OracleBackend
-from rhosocial.activerecord.backend.impl.oracle.async_backend import AsyncOracleBackend
+from rhosocial.activerecord.backend.impl.oracle.backend.async_backend import AsyncOracleBackend
 from rhosocial.activerecord.backend.options import ExecutionOptions
 
 from .connection import create_connection_parent_parser, resolve_connection_config_from_args

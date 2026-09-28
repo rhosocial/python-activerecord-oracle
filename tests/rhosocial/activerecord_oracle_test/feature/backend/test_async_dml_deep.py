@@ -92,7 +92,7 @@ def provisioned():
 
 @pytest.fixture
 async def async_backend(provisioned):
-    from rhosocial.activerecord.backend.impl.oracle.async_backend import AsyncOracleBackend
+    from rhosocial.activerecord.backend.impl.oracle.backend.async_backend import AsyncOracleBackend
 
     backend = AsyncOracleBackend(connection_config=provisioned)
     await backend.connect()

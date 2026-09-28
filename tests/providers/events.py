@@ -172,7 +172,7 @@ class EventsAsyncProvider(EventsProviderBase, IEventsAsyncProvider):
     async def _setup_async_model(
         self, model_class: Type[ActiveRecord], scenario_name: str, table_name: str
     ) -> Type[ActiveRecord]:
-        from rhosocial.activerecord.backend.impl.oracle.async_backend import AsyncOracleBackend
+        from rhosocial.activerecord.backend.impl.oracle.backend.async_backend import AsyncOracleBackend
 
         _, config = get_scenario(scenario_name)
         await model_class.configure(config, AsyncOracleBackend)

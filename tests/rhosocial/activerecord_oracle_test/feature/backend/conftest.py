@@ -6,7 +6,7 @@ import os
 from typing import Dict, Any, Tuple, Type
 
 from rhosocial.activerecord.backend.impl.oracle.backend import OracleBackend
-from rhosocial.activerecord.backend.impl.oracle.async_backend import AsyncOracleBackend
+from rhosocial.activerecord.backend.impl.oracle.backend.async_backend import AsyncOracleBackend
 from rhosocial.activerecord.backend.impl.oracle.config import OracleConnectionConfig
 
 # --- Scenario Loading Logic ---
