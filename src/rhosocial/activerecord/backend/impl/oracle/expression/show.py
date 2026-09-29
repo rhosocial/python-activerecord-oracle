@@ -1,4 +1,4 @@
-# src/rhosocial/activerecord/backend/impl/oracle/show/expressions.py
+# src/rhosocial/activerecord/backend/impl/oracle/expression/show.py
 """
 Oracle data dictionary expression classes.
 

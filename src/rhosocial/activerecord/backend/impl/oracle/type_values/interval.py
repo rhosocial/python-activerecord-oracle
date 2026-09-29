@@ -1,4 +1,4 @@
-# types/interval.py
+# type_values/interval.py
 """
 Oracle INTERVAL type definitions.
 

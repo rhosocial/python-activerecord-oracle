@@ -17,7 +17,7 @@ The mixin is intended to be added to OracleDialect; it relies only on
 from typing import Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .expressions import (
+    from ..expression.show import (
         OracleQuerySessionsExpression,
         OracleQueryRunningSQLExpression,
         OracleQueryDatabaseInfoExpression,

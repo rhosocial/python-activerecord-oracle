@@ -1,4 +1,4 @@
-# types/rowid.py
+# type_values/rowid.py
 """
 Oracle ROWID type definitions.
 

@@ -36,7 +36,7 @@ from rhosocial.activerecord.backend.impl.oracle.expression.types import (
     OracleNVarChar2Type, OracleRawType, OracleSmallIntType, OracleVarChar2Type,
     OracleXmlType,
 )
-from rhosocial.activerecord.backend.impl.oracle.types import (
+from rhosocial.activerecord.backend.impl.oracle.type_values import (
     IntervalDayToSecond, IntervalYearToMonth, OracleVector, OracleXMLType,
     SDOGeometry,
 )

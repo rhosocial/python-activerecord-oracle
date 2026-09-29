@@ -1,4 +1,4 @@
-# types/xml.py
+# type_values/xml.py
 """
 Oracle XMLType type definition.
 

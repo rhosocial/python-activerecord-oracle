@@ -534,7 +534,7 @@ class BasicSyncProvider(BasicProviderBase, IBasicSyncProvider, WorkerTestProtoco
         if pooled_db:
             config_dict = {**config_dict, "username": pooled_db, "password": POOLED_USER_PASSWORD}
         return {
-            "backend_module": "rhosocial.activerecord.backend.impl.oracle",
+            "backend_module": "rhosocial.activerecord.backend.impl.oracle.backend",
             "backend_class_name": backend_class_name,
             "config_class_module": "rhosocial.activerecord.backend.impl.oracle.config",
             "config_class_name": "OracleConnectionConfig",
@@ -581,7 +581,7 @@ class BasicAsyncProvider(BasicProviderBase, IBasicAsyncProvider):
     async def _setup_async_model(
         self, model_class: Type[ActiveRecord], scenario_name: str, table_name: str
     ) -> Type[ActiveRecord]:
-        from rhosocial.activerecord.backend.impl.oracle import AsyncOracleBackend
+        from rhosocial.activerecord.backend.impl.oracle.backend.async_backend import AsyncOracleBackend
 
         _, config = get_scenario(scenario_name)
         await model_class.configure(config, AsyncOracleBackend)

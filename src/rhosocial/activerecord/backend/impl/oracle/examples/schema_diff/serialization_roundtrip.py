@@ -15,7 +15,7 @@ import json
 # SECTION: Setup (necessary for execution, reference only)
 # ============================================================
 import os
-from rhosocial.activerecord.backend.impl.oracle import OracleBackend
+from rhosocial.activerecord.backend.impl.oracle.backend import OracleBackend
 from rhosocial.activerecord.backend.impl.oracle.config import OracleConnectionConfig
 
 config = OracleConnectionConfig(

@@ -14,7 +14,7 @@ mixin and result shapes live in `.types`.
 
 from typing import Optional, TYPE_CHECKING
 
-from .expressions import (
+from ..expression.show import (
     OracleQuerySessionsExpression,
     OracleQueryRunningSQLExpression,
     OracleQueryDatabaseInfoExpression,
@@ -37,7 +37,7 @@ from .types import (
 
 if TYPE_CHECKING:
     from ..backend import OracleBackend
-    from ..async_backend import AsyncOracleBackend
+    from ..backend.async_backend import AsyncOracleBackend
 
 
 def query_sessions(backend: "OracleBackend", active_only: bool = False):

@@ -49,7 +49,7 @@ def _drop_user_block(user: str) -> str:
 
 @pytest.fixture(scope="module")
 def provisioned():
-    from rhosocial.activerecord.backend.impl.oracle import OracleBackend
+    from rhosocial.activerecord.backend.impl.oracle.backend import OracleBackend
 
     backend_class, config = get_scenario_raw("oracle_23c")
     backend = OracleBackend(connection_config=config)
@@ -92,7 +92,7 @@ def provisioned():
 
 @pytest.fixture
 async def async_backend(provisioned):
-    from rhosocial.activerecord.backend.impl.oracle import AsyncOracleBackend
+    from rhosocial.activerecord.backend.impl.oracle.backend.async_backend import AsyncOracleBackend
 
     backend = AsyncOracleBackend(connection_config=provisioned)
     await backend.connect()

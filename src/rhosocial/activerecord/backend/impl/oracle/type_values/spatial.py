@@ -1,4 +1,4 @@
-# types/spatial.py
+# type_values/spatial.py
 """
 Oracle SDO_GEOMETRY spatial type definitions.
 

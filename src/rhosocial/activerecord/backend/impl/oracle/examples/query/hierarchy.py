@@ -19,7 +19,8 @@ Oracle Version Support: 12c+ (CONNECT BY available since Oracle 2!)
 
 import os
 
-from rhosocial.activerecord.backend.impl.oracle import OracleBackend, OracleConnectionConfig
+from rhosocial.activerecord.backend.impl.oracle.backend import OracleBackend
+from rhosocial.activerecord.backend.impl.oracle.config import OracleConnectionConfig
 from rhosocial.activerecord.backend.options import ExecutionOptions
 from rhosocial.activerecord.backend.schema import StatementType
 

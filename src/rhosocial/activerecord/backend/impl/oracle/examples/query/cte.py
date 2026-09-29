@@ -11,7 +11,8 @@ Oracle Version Support: 12c+ (WITH clause since Oracle 9i, recursive since 11gR2
 
 import os
 
-from rhosocial.activerecord.backend.impl.oracle import OracleBackend, OracleConnectionConfig
+from rhosocial.activerecord.backend.impl.oracle.backend import OracleBackend
+from rhosocial.activerecord.backend.impl.oracle.config import OracleConnectionConfig
 from rhosocial.activerecord.backend.options import ExecutionOptions
 from rhosocial.activerecord.backend.schema import StatementType
 

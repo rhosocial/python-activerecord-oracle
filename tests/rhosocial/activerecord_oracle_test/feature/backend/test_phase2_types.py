@@ -20,7 +20,7 @@ class TestIntervalAdapter:
     def test_interval_year_to_month_to_db(self):
         """Test converting IntervalYearToMonth to database format."""
         from rhosocial.activerecord.backend.impl.oracle.adapters import OracleIntervalAdapter
-        from rhosocial.activerecord.backend.impl.oracle.types import IntervalYearToMonth
+        from rhosocial.activerecord.backend.impl.oracle.type_values import IntervalYearToMonth
 
         adapter = OracleIntervalAdapter()
         interval = IntervalYearToMonth(years=1, months=6)
@@ -30,7 +30,7 @@ class TestIntervalAdapter:
     def test_interval_year_to_month_from_db(self):
         """Test converting database string to IntervalYearToMonth."""
         from rhosocial.activerecord.backend.impl.oracle.adapters import OracleIntervalAdapter
-        from rhosocial.activerecord.backend.impl.oracle.types import IntervalYearToMonth
+        from rhosocial.activerecord.backend.impl.oracle.type_values import IntervalYearToMonth
 
         adapter = OracleIntervalAdapter()
         result = adapter.from_database("01-06", IntervalYearToMonth)
@@ -41,7 +41,7 @@ class TestIntervalAdapter:
     def test_interval_day_to_second_to_db(self):
         """Test converting IntervalDayToSecond to database format."""
         from rhosocial.activerecord.backend.impl.oracle.adapters import OracleIntervalAdapter
-        from rhosocial.activerecord.backend.impl.oracle.types import IntervalDayToSecond
+        from rhosocial.activerecord.backend.impl.oracle.type_values import IntervalDayToSecond
 
         adapter = OracleIntervalAdapter()
         interval = IntervalDayToSecond(days=5, hours=12, minutes=30, seconds=45)
@@ -52,7 +52,7 @@ class TestIntervalAdapter:
     def test_interval_day_to_second_from_db(self):
         """Test converting database string to IntervalDayToSecond."""
         from rhosocial.activerecord.backend.impl.oracle.adapters import OracleIntervalAdapter
-        from rhosocial.activerecord.backend.impl.oracle.types import IntervalDayToSecond
+        from rhosocial.activerecord.backend.impl.oracle.type_values import IntervalDayToSecond
 
         adapter = OracleIntervalAdapter()
         result = adapter.from_database("5 12:30:45", IntervalDayToSecond)
@@ -73,7 +73,7 @@ class TestRowIDAdapter:
     def test_rowid_to_db(self):
         """Test converting OracleRowID to database format."""
         from rhosocial.activerecord.backend.impl.oracle.adapters import OracleRowIDAdapter
-        from rhosocial.activerecord.backend.impl.oracle.types import OracleRowID
+        from rhosocial.activerecord.backend.impl.oracle.type_values import OracleRowID
 
         adapter = OracleRowIDAdapter()
         rowid = OracleRowID("AAASdqAAEAAAAInAAA")
@@ -83,7 +83,7 @@ class TestRowIDAdapter:
     def test_rowid_from_db_extended(self):
         """Test converting 18-char ROWID string to OracleRowID."""
         from rhosocial.activerecord.backend.impl.oracle.adapters import OracleRowIDAdapter
-        from rhosocial.activerecord.backend.impl.oracle.types import OracleRowID
+        from rhosocial.activerecord.backend.impl.oracle.type_values import OracleRowID
 
         adapter = OracleRowIDAdapter()
         result = adapter.from_database("AAASdqAAEAAAAInAAA", OracleRowID)
@@ -93,7 +93,7 @@ class TestRowIDAdapter:
     def test_urowid_from_db(self):
         """Test converting UROWID string."""
         from rhosocial.activerecord.backend.impl.oracle.adapters import OracleRowIDAdapter
-        from rhosocial.activerecord.backend.impl.oracle.types import OracleURowID
+        from rhosocial.activerecord.backend.impl.oracle.type_values import OracleURowID
 
         adapter = OracleRowIDAdapter()
         result = adapter.from_database("some_urowid_value", OracleURowID)
@@ -112,7 +112,7 @@ class TestXMLAdapter:
     def test_xml_to_db(self):
         """Test converting OracleXMLType to database format."""
         from rhosocial.activerecord.backend.impl.oracle.adapters import OracleXMLAdapter
-        from rhosocial.activerecord.backend.impl.oracle.types import OracleXMLType
+        from rhosocial.activerecord.backend.impl.oracle.type_values import OracleXMLType
 
         adapter = OracleXMLAdapter()
         xml = OracleXMLType("<root><child>value</child></root>")
@@ -123,7 +123,7 @@ class TestXMLAdapter:
     def test_xml_from_db(self):
         """Test converting database string to OracleXMLType."""
         from rhosocial.activerecord.backend.impl.oracle.adapters import OracleXMLAdapter
-        from rhosocial.activerecord.backend.impl.oracle.types import OracleXMLType
+        from rhosocial.activerecord.backend.impl.oracle.type_values import OracleXMLType
 
         adapter = OracleXMLAdapter()
         result = adapter.from_database("<root><child>value</child></root>", OracleXMLType)
@@ -143,7 +143,7 @@ class TestSDOGeometryAdapter:
     def test_sdo_point_to_db(self):
         """Test converting SDOGeometry point to SQL constructor."""
         from rhosocial.activerecord.backend.impl.oracle.adapters import OracleSDOGeometryAdapter
-        from rhosocial.activerecord.backend.impl.oracle.types import SDOGeometry
+        from rhosocial.activerecord.backend.impl.oracle.type_values import SDOGeometry
 
         adapter = OracleSDOGeometryAdapter()
         geom = SDOGeometry.point(10.0, 20.0)
@@ -154,7 +154,7 @@ class TestSDOGeometryAdapter:
     def test_sdo_from_dict(self):
         """Test converting dictionary to SDOGeometry."""
         from rhosocial.activerecord.backend.impl.oracle.adapters import OracleSDOGeometryAdapter
-        from rhosocial.activerecord.backend.impl.oracle.types import SDOGeometry
+        from rhosocial.activerecord.backend.impl.oracle.type_values import SDOGeometry
 
         adapter = OracleSDOGeometryAdapter()
         data = {
@@ -182,7 +182,7 @@ class TestVectorAdapter:
     def test_vector_to_db_string(self):
         """Test converting OracleVector to string format."""
         from rhosocial.activerecord.backend.impl.oracle.adapters import OracleVectorAdapter
-        from rhosocial.activerecord.backend.impl.oracle.types import OracleVector
+        from rhosocial.activerecord.backend.impl.oracle.type_values import OracleVector
 
         adapter = OracleVectorAdapter()
         vec = OracleVector(dimensions=3, values=[1.0, 2.0, 3.0])
@@ -200,7 +200,7 @@ class TestVectorAdapter:
     def test_vector_from_db_string(self):
         """Test converting string to OracleVector."""
         from rhosocial.activerecord.backend.impl.oracle.adapters import OracleVectorAdapter
-        from rhosocial.activerecord.backend.impl.oracle.types import OracleVector
+        from rhosocial.activerecord.backend.impl.oracle.type_values import OracleVector
 
         adapter = OracleVectorAdapter()
         result = adapter.from_database("[1.0, 2.0, 3.0]", OracleVector)
@@ -211,7 +211,7 @@ class TestVectorAdapter:
     def test_vector_from_db_list(self):
         """Test converting list to OracleVector."""
         from rhosocial.activerecord.backend.impl.oracle.adapters import OracleVectorAdapter
-        from rhosocial.activerecord.backend.impl.oracle.types import OracleVector
+        from rhosocial.activerecord.backend.impl.oracle.type_values import OracleVector
 
         adapter = OracleVectorAdapter()
         result = adapter.from_database([1.0, 2.0, 3.0], OracleVector)

@@ -4,7 +4,8 @@
 named-procedure requires connection arguments, output arguments, and --rich-ascii.
 """
 
-from rhosocial.activerecord.backend.impl.oracle import OracleBackend, AsyncOracleBackend
+from rhosocial.activerecord.backend.impl.oracle.backend import OracleBackend
+from rhosocial.activerecord.backend.impl.oracle.backend.async_backend import AsyncOracleBackend
 
 from .connection import create_connection_parent_parser, resolve_connection_config_from_args
 from .output import create_provider

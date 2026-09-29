@@ -23,7 +23,7 @@ from rhosocial.activerecord.backend.expression.statements.ddl_partition import (
     PartitionClause,
     PartitionStrategy,
 )
-from rhosocial.activerecord.backend.impl.oracle import OracleDialect
+from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.expression.column import (
     OracleColumnOptions,
 )

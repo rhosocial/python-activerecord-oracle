@@ -15,7 +15,7 @@ from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.functions import analytic
 from rhosocial.activerecord.backend.impl.oracle.functions import json as json_funcs
 from rhosocial.activerecord.backend.impl.oracle.functions import string as string_funcs
-from rhosocial.activerecord.backend.impl.oracle.types.xml import OracleXMLType
+from rhosocial.activerecord.backend.impl.oracle.type_values.xml import OracleXMLType
 
 
 @pytest.fixture

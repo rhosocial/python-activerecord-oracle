@@ -1,4 +1,4 @@
-# src/rhosocial/activerecord/backend/impl/oracle/mixins/table_op.py
+# src/rhosocial/activerecord/backend/impl/oracle/mixins/ddl_table_op.py
 """Oracle table DDL support mixin (capability flags for table operations).
 
 The existing ``table.py`` contains ``OracleTableMixin`` which handles

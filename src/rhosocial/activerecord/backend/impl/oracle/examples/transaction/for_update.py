@@ -20,7 +20,8 @@ Oracle Version Support: FOR UPDATE SKIP LOCKED 11g+ / WAIT 9i+ / NOWAIT 8i+
 
 import os
 
-from rhosocial.activerecord.backend.impl.oracle import OracleBackend, OracleConnectionConfig
+from rhosocial.activerecord.backend.impl.oracle.backend import OracleBackend
+from rhosocial.activerecord.backend.impl.oracle.config import OracleConnectionConfig
 from rhosocial.activerecord.backend.options import ExecutionOptions
 from rhosocial.activerecord.backend.schema import StatementType
 
