@@ -63,7 +63,10 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
                 'pool_min', 'pool_max', 'pool_increment', 'pool_get_timeout',
                 'stmtcachesize', 'prefetchrows', 'arraysize',
                 'threaded', 'events',
-                'ssl_ca', 'ssl_cert', 'ssl_key',
+                'ssl_ca', 'ssl_cert', 'ssl_key', 'ssl_mode',
+                'ssl_ciphers', 'ssl_verify_cert',
+                'protocol', 'wallet_location', 'wallet_password',
+                'ssl_server_dn_match', 'ssl_server_cert_dn',
                 'log_queries', 'log_level',
             ]
 
@@ -240,6 +243,9 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
                 conn_params['edition'] = self.config.edition
             if hasattr(self.config, 'stmtcachesize'):
                 conn_params['stmtcachesize'] = self.config.stmtcachesize
+
+            # Add TLS parameters (protocol, wallet, ssl_context, ...)
+            conn_params.update(self.config.get_ssl_connection_params())
 
             # Use async connection
             self._connection = await oracledb.connect_async(**conn_params)

@@ -94,7 +94,10 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
                 'pool_min', 'pool_max', 'pool_increment', 'pool_get_timeout',
                 'stmtcachesize', 'prefetchrows', 'arraysize',
                 'threaded', 'events',
-                'ssl_ca', 'ssl_cert', 'ssl_key', 'ssl_verify_cert',
+                'ssl_ca', 'ssl_cert', 'ssl_key', 'ssl_mode',
+                'ssl_ciphers', 'ssl_verify_cert',
+                'protocol', 'wallet_location', 'wallet_password',
+                'ssl_server_dn_match', 'ssl_server_cert_dn',
                 'log_queries', 'log_level',
             ]
 
@@ -287,6 +290,9 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
                 conn_params['edition'] = self.config.edition
             if hasattr(self.config, 'stmtcachesize'):
                 conn_params['stmtcachesize'] = self.config.stmtcachesize
+
+            # Add TLS parameters (protocol, wallet, ssl_context, ...)
+            conn_params.update(self.config.get_ssl_connection_params())
 
             # Handle connection mode (SYSDBA, SYSOPER, etc.)
             if hasattr(self.config, 'mode') and self.config.mode:
