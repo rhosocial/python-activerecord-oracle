@@ -66,7 +66,7 @@ class OracleMaterializedViewMixin:
                     ),
                 )
             parts.append("IF NOT EXISTS")
-        parts.append(self._format_view_name(expr))
+        parts.append(self.format_view_name(expr))
         if expr.column_aliases:
             cols = ", ".join(self.format_identifier(c) for c in expr.column_aliases)
             parts.append(f"({cols})")
@@ -137,7 +137,7 @@ class OracleMaterializedViewMixin:
                     ),
                 )
             parts.append("IF EXISTS")
-        parts.append(self._format_view_name(expr))
+        parts.append(self.format_view_name(expr))
         if getattr(expr, "preserve_table", False):
             parts.append("PRESERVE TABLE")
         return " ".join(parts), ()
