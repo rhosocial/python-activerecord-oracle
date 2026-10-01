@@ -9,6 +9,7 @@ expression tree and renderable through the unified
 :meth:`BaseExpression.to_sql` entry point.
 """
 from __future__ import annotations
+from rhosocial.activerecord.backend.expression.core import _validate_schema_name
 
 from typing import Optional, TYPE_CHECKING
 
@@ -34,9 +35,11 @@ class DisableTriggerExpression(BaseExpression):
         dialect: "OracleDialect",
         trigger_name: str,
         table_name: Optional[str] = None,
+        schema_name: Optional[str] = None,
     ):
         super().__init__(dialect)
         self.trigger_name = trigger_name
+        self.schema_name = _validate_schema_name(schema_name, type(self).__name__)
         self.table_name = table_name
 
     @property
@@ -61,9 +64,11 @@ class EnableTriggerExpression(BaseExpression):
         dialect: "OracleDialect",
         trigger_name: str,
         table_name: Optional[str] = None,
+        schema_name: Optional[str] = None,
     ):
         super().__init__(dialect)
         self.trigger_name = trigger_name
+        self.schema_name = _validate_schema_name(schema_name, type(self).__name__)
         self.table_name = table_name
 
     @property

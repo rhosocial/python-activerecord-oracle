@@ -15,6 +15,7 @@ All expressions delegate SQL generation to the dialect through the public
 ``format_*`` formatters implemented by ``OracleSequenceMixin``.
 """
 from __future__ import annotations
+from rhosocial.activerecord.backend.expression.core import _validate_schema_name
 
 from enum import Enum
 from typing import Optional, TYPE_CHECKING
@@ -110,6 +111,7 @@ class OracleCreateSequenceExpression(BaseExpression):
         cycle: Optional[bool] = None,
         cache: Optional[int] = None,
         order: Optional[bool] = None,
+        schema_name: Optional[str] = None,
     ):
         super().__init__(dialect)
         if not isinstance(sequence_name, str) or not sequence_name.strip():
@@ -123,6 +125,7 @@ class OracleCreateSequenceExpression(BaseExpression):
             if cache < 0:
                 raise ValueError(f"cache must be non-negative, got {cache}")
         self.sequence_name = sequence_name
+        self.schema_name = _validate_schema_name(schema_name, type(self).__name__)
         self.if_not_exists = bool(if_not_exists)
         self.start = start
         self.increment = increment
@@ -155,11 +158,13 @@ class OracleDropSequenceExpression(BaseExpression):
         dialect: "OracleDialect",
         sequence_name: str,
         if_exists: bool = False,
+        schema_name: Optional[str] = None,
     ):
         super().__init__(dialect)
         if not isinstance(sequence_name, str) or not sequence_name.strip():
             raise ValueError("sequence_name must be a non-empty string")
         self.sequence_name = sequence_name
+        self.schema_name = _validate_schema_name(schema_name, type(self).__name__)
         self.if_exists = bool(if_exists)
 
     @property

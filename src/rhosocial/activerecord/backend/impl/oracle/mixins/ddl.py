@@ -64,7 +64,10 @@ class OracleDDLMixin:
         if expr.temporary:
             parts.append("GLOBAL TEMPORARY")
         parts.append("TABLE")
-        parts.append(TableExpression(self, expr.table_name, schema_name=expr.schema_name).to_sql()[0])
+        table = expr.table
+        if isinstance(table, str):
+            table = TableExpression(self, table)
+        parts.append(table.to_sql()[0])
 
         column_parts: List[str] = []
         for col_def in expr.columns:
