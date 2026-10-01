@@ -7,7 +7,7 @@ than elsewhere. A schema *is* the user: it is created with ``CREATE USER``
 and dropped with ``DROP USER ... CASCADE``, so the tests here provision real
 users rather than ``CREATE SCHEMA`` the way SQL Server does. The dialect also
 folds every identifier to upper case in ``format_identifier``, so a model
-declaring ``__schema_name__ = \"ar_crm\"`` addresses ``\"AR_CRM\"`` -- the
+declaring ``__schema_name__ = \"ar_xcrm\"`` addresses ``\"AR_XCRM\"`` -- the
 round trip is only correct because Oracle is case-insensitive here, and a
 test that asserted the declared spelling would be asserting the wrong thing.
 
@@ -38,8 +38,12 @@ from providers.scenarios import get_enabled_scenarios, get_scenario_raw
 # land on a single xdist worker; --dist=loadgroup honours this mark.
 pytestmark = pytest.mark.xdist_group("oracle_cross_schema")
 
-SCHEMA_CRM = "ar_crm"
-SCHEMA_SHOP = "ar_shop"
+# Names are deliberately not AR_CRM / AR_SHOP. Three other modules create and
+# drop those users under the oracle_schema_dml group, and a different group
+# lands on a different worker, so sharing the names had one module dropping a
+# user out from under another mid-test (ORA-01920, then ORA-00942).
+SCHEMA_CRM = "ar_xcrm"
+SCHEMA_SHOP = "ar_xshop"
 SCHEMA_PASSWORD = "Rh0social#2026"
 SOFT_TABLE = "ar_soft_orders"
 CUSTOMER_TABLE = "ar_customers"
@@ -98,7 +102,7 @@ def _provision(backend) -> None:
         )
 
     # The soft-order table is created twice under one name -- once in the
-    # default schema and once under AR_CRM -- because that collision is the
+    # default schema and once under AR_XCRM -- because that collision is the
     # whole point: it is what a namespace-scoped bug corrupts.
     soft_columns = (
         "id NUMBER NOT NULL PRIMARY KEY, "
@@ -157,7 +161,7 @@ class PlainSoftOrder(DefaultSoftDeleteMixin, ActiveRecord):
 
 
 class CrmSoftOrder(DefaultSoftDeleteMixin, ActiveRecord):
-    """Identical table and identical model, owned by ``AR_CRM``."""
+    """Identical table and identical model, owned by ``AR_XCRM``."""
 
     __table_name__ = SOFT_TABLE
     __schema_name__ = SCHEMA_CRM
@@ -261,7 +265,7 @@ def _norm(sql: str) -> str:
 
 
 def test_declared_schema_is_folded_to_upper_case(cross_schema):
-    """``__schema_name__ = \"ar_crm\"`` renders as ``\"AR_CRM\"``.
+    """``__schema_name__ = \"ar_xcrm\"`` renders as ``\"AR_XCRM\"``.
 
     The model declares lower case and the dialect upper-cases it. That is
     correct here only because the user was created upper-case too, so the
@@ -269,7 +273,7 @@ def test_declared_schema_is_folded_to_upper_case(cross_schema):
     """
     sql, _ = CrmSoftOrder.query().select(CrmSoftOrder.c.label).to_sql()
 
-    assert '"AR_CRM"."AR_SOFT_ORDERS"' in _norm(sql), (
+    assert '"AR_XCRM"."AR_SOFT_ORDERS"' in _norm(sql), (
         f"Expected the schema folded to upper case, got: {sql}"
     )
 
@@ -277,14 +281,14 @@ def test_declared_schema_is_folded_to_upper_case(cross_schema):
 def test_range_is_qualified_but_columns_stay_two_part(cross_schema):
     """The owner belongs on the range only.
 
-    ``\"AR_CRM\".\"AR_SOFT_ORDERS\".\"LABEL\"`` is a three-part column
+    ``\"AR_XCRM\".\"AR_SOFT_ORDERS\".\"LABEL\"`` is a three-part column
     reference, which Oracle rejects -- the range already carries the owner.
     """
     sql, _ = CrmSoftOrder.query().select(CrmSoftOrder.c.label).to_sql()
     normed = _norm(sql)
 
-    assert '"ar_crm"."ar_soft_orders"' in normed, f"Got: {sql}"
-    assert '"ar_crm"."ar_soft_orders"."label"' not in normed, (
+    assert '"ar_xcrm"."ar_soft_orders"' in normed, f"Got: {sql}"
+    assert '"ar_xcrm"."ar_soft_orders"."label"' not in normed, (
         f"Column reference must not repeat the schema, got: {sql}"
     )
     assert '"ar_soft_orders"."label"' in normed, (
@@ -306,7 +310,7 @@ def test_same_named_tables_coexist_and_pk_is_namespace_scoped(cross_schema):
     CrmSoftOrder.query().where(CrmSoftOrder.c.id == 1).delete_all()
     assert CrmSoftOrder.query().count() == 0
     assert PlainSoftOrder.query().count() == 1, (
-        "deleting under AR_CRM must not remove the identically keyed row "
+        "deleting under AR_XCRM must not remove the identically keyed row "
         "owned by the connected user"
     )
 
@@ -316,7 +320,7 @@ def test_restore_writes_only_into_its_own_namespace(cross_schema):
 
     An unqualified UPDATE resolves to the connected user's schema, so it
     would clear ``deleted_at`` on the default-schema row of the same primary
-    key and leave the ``AR_CRM`` row soft-deleted -- a silent cross-namespace
+    key and leave the ``AR_XCRM`` row soft-deleted -- a silent cross-namespace
     write that no read-only assertion would catch.
     """
     scoped = CrmSoftOrder(id=7, label="scoped")
@@ -330,7 +334,7 @@ def test_restore_writes_only_into_its_own_namespace(cross_schema):
 
     assert scoped.restore() == 1
     assert CrmSoftOrder.query().where(CrmSoftOrder.c.id == 7).count() == 1, (
-        "restore() must clear deleted_at under AR_CRM"
+        "restore() must clear deleted_at under AR_XCRM"
     )
     assert PlainSoftOrder.query_only_deleted().count() == 0, (
         "the default-schema row was never soft-deleted and must stay untouched"
@@ -352,7 +356,7 @@ def test_bulk_update_stays_inside_its_namespace(cross_schema):
 
 
 def test_join_across_two_owners(cross_schema):
-    """``AR_CRM`` joined to ``AR_SHOP``, both sides fully qualified."""
+    """``AR_XCRM`` joined to ``AR_XSHOP``, both sides fully qualified."""
     CrmCustomer(id=31, name="alice").save()
     ShopOrder(id=31, customer_id=31, label="from-shop").save()
 
@@ -363,8 +367,8 @@ def test_join_across_two_owners(cross_schema):
 
     joined_sql, _ = joined.select(CrmCustomer.c.name).to_sql()
     normed = _norm(joined_sql)
-    assert '"ar_crm"."ar_customers"' in normed, f"Got: {joined_sql}"
-    assert '"ar_shop"."ar_orders"' in normed, (
+    assert '"ar_xcrm"."ar_customers"' in normed, f"Got: {joined_sql}"
+    assert '"ar_xshop"."ar_orders"' in normed, (
         f"Expected the joined range to keep its own owner, got: {joined_sql}"
     )
 
@@ -378,7 +382,7 @@ async def test_async_restore_writes_only_into_its_own_namespace(cross_schema):
 
     scenarios = get_enabled_scenarios()
     # Same credentials the module fixture provisioned under, so the async
-    # connection reaches the database that actually holds AR_CRM.
+    # connection reaches the database that actually holds AR_XCRM.
     backend_class, config = get_scenario_raw(next(iter(scenarios)))
     backend = AsyncOracleBackend(connection_config=config)
     await backend.connect()
@@ -398,7 +402,7 @@ async def test_async_restore_writes_only_into_its_own_namespace(cross_schema):
         assert await scoped.restore() == 1
         assert await AsyncCrmSoftOrder.query().where(
             AsyncCrmSoftOrder.c.id == 41
-        ).count() == 1, "async restore() must clear deleted_at under AR_CRM"
+        ).count() == 1, "async restore() must clear deleted_at under AR_XCRM"
         assert await AsyncPlainSoftOrder.query_only_deleted().count() == 0
     finally:
         try:
