@@ -44,14 +44,11 @@ class OracleSynonymMixin:
         parts.append("SYNONYM")
         parts.append(self.format_identifier(expr.synonym_name))
         parts.append("FOR")
-        if expr.schema_name:
-            target = (
-                f"{self.format_identifier(expr.schema_name)}."
-                f"{TableExpression(self, expr.table_name, schema_name=expr.schema_name).to_sql()[0]}"
-            )
-        else:
-            target = TableExpression(self, expr.table_name, schema_name=expr.schema_name).to_sql()[0]
-        parts.append(target)
+        parts.append(
+            TableExpression(
+                self, expr.table_name, schema_name=expr.schema_name
+            ).to_sql()[0]
+        )
         return " ".join(parts), ()
 
     def format_drop_synonym_statement(

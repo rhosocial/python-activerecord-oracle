@@ -23,6 +23,7 @@ All expressions delegate SQL generation to the dialect through the public
 ``format_*`` formatters implemented by ``OracleMaterializedViewMixin``.
 """
 from __future__ import annotations
+from rhosocial.activerecord.backend.expression.core import _validate_schema_name
 
 from enum import Enum
 from typing import List, Optional, TYPE_CHECKING
@@ -91,6 +92,7 @@ class OracleCreateMaterializedViewExpression(BaseExpression):
         refresh_method: Optional[MaterializedViewRefreshMethod] = None,
         refresh_trigger: Optional[MaterializedViewRefreshTrigger] = None,
         query_rewrite: Optional[bool] = None,
+        schema_name: Optional[str] = None,
     ):
         super().__init__(dialect)
         if not isinstance(view_name, str) or not view_name.strip():
@@ -101,6 +103,7 @@ class OracleCreateMaterializedViewExpression(BaseExpression):
                 f"got {type(query).__name__}"
             )
         self.view_name = view_name
+        self.schema_name = _validate_schema_name(schema_name, type(self).__name__)
         self.query = query
         self.if_not_exists = bool(if_not_exists)
         self.column_aliases = list(column_aliases) if column_aliases else []
@@ -174,11 +177,13 @@ class OracleDropMaterializedViewExpression(BaseExpression):
         view_name: str,
         if_exists: bool = False,
         preserve_table: bool = False,
+        schema_name: Optional[str] = None,
     ):
         super().__init__(dialect)
         if not isinstance(view_name, str) or not view_name.strip():
             raise ValueError("view_name must be a non-empty string")
         self.view_name = view_name
+        self.schema_name = _validate_schema_name(schema_name, type(self).__name__)
         self.if_exists = bool(if_exists)
         self.preserve_table = bool(preserve_table)
 
