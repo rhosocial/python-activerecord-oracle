@@ -16,6 +16,7 @@ from rhosocial.activerecord.backend.impl.oracle.functions import analytic
 from rhosocial.activerecord.backend.impl.oracle.functions import json as json_funcs
 from rhosocial.activerecord.backend.impl.oracle.functions import string as string_funcs
 from rhosocial.activerecord.backend.impl.oracle.type_values.xml import OracleXMLType
+from rhosocial.activerecord.backend.impl.oracle.expression.types import OracleClobType
 
 
 @pytest.fixture
@@ -164,7 +165,7 @@ class TestOracleFunctionFormatMixin:
 
     def test_cast_types_wrap_result(self, dialect):
         func = core.FunctionCall(dialect, "MAX", core.Column(dialect, "v"))
-        func = func.cast("CLOB")
+        func = func.cast(OracleClobType(dialect))
         assert func.to_sql() == ('CAST(MAX("V") AS CLOB)', ())
 
 
