@@ -2,6 +2,7 @@
 """Oracle view DDL formatting mixin."""
 
 from typing import Tuple, TYPE_CHECKING
+from ....expression.core import TableExpression
 
 if TYPE_CHECKING:
     from rhosocial.activerecord.backend.expression.statements import (
@@ -32,7 +33,7 @@ class OracleViewMixin:
         if expr.replace and self.supports_create_or_replace_view():
             parts.append("OR REPLACE")
         parts.append("VIEW")
-        parts.append(self.format_view_name(expr))
+        parts.append(TableExpression(self, expr.view_name, schema_name=expr.schema_name).to_sql()[0])
         if expr.column_aliases:
             cols = ", ".join(self.format_identifier(c) for c in expr.column_aliases)
             parts.append(f"({cols})")
@@ -53,5 +54,5 @@ class OracleViewMixin:
         self, expr: "DropViewExpression"
     ) -> Tuple[str, tuple]:
         parts = ["DROP VIEW"]
-        parts.append(self.format_view_name(expr))
+        parts.append(TableExpression(self, expr.view_name, schema_name=expr.schema_name).to_sql()[0])
         return " ".join(parts), ()
