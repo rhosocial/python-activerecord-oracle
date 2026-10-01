@@ -56,6 +56,17 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
 
     # --- Core type formatters (render standard types to Oracle SQL) ---
 
+    def suggested_data_types(self) -> Dict[str, type]:
+        """Core types Oracle stores some other way.
+
+        Oracle has no enum type before 23c, and a model declaring one before
+        that would otherwise be told the type is unsupported with no route
+        forward. The value goes in a VARCHAR2 constrained by a CHECK, so
+        VARCHAR is what the type means here.
+        """
+        from rhosocial.activerecord.backend.expression.types import VarCharType
+
+        return {"enum": VarCharType}
     def format_data_type_integer(self, data_type: IntegerType) -> Tuple[str, tuple]:
         return "NUMBER(10)", ()
 
@@ -429,6 +440,7 @@ class OracleTypeSuggestionMixin:
     size limit). Version-unknown returns ``None`` (no guessing).
     """
 
+
     def suggest_column_type(
         self, python_type: type, version: "Optional[Tuple[int, int, int]]" = None
     ) -> "Optional[DataType]":
@@ -471,7 +483,3 @@ class OracleTypeSuggestionMixin:
             return OracleClobType(dialect=self)
 
         return None
-
-    def suggested_data_types(self) -> Dict[str, type]:
-        """Oracle handles all core types natively — nothing to suggest."""
-        return {}
