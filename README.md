@@ -141,6 +141,38 @@ Employee.query().where(
 `SDO_GEOMETRY` columns and spatial indexes are available through
 `supports_spatial_type()` and `supports_spatial_index()`.
 
+## Schema Names
+
+In Oracle a schema is the owning user, so `schema_name` names a user and
+identifiers fold to upper case:
+
+```python
+class Order(ActiveRecord):
+    __schema_name__ = "app"   # this is a user
+    __tablename__ = "orders"
+```
+
+```sql
+-- generated
+SELECT * FROM "APP"."ORDERS"
+```
+
+Two things to keep in mind:
+
+- **Identifiers are folded upper.** A lower-case `schema_name` becomes upper
+  case in the SQL, which is what Oracle stores. A quoted mixed-case name would
+  not match the user created by an unquoted `CREATE USER`.
+- **Columns take three parts.** `` "APP"."ORDERS"."ID" `` is valid here, unlike
+  MySQL, SQL Server and ClickHouse where a column reference stops at two.
+
+DDL statements take a `schema_name` of their own — views, types, indexes,
+sequences, domains, functions and triggers all accept it, defaulting to `None`
+for an unqualified reference. `__schema_name__` is not consulted when DDL is
+built, so a migration names the schema it means.
+
+`get_current_schema()` reads `SYS_CONTEXT('USERENV','CURRENT_SCHEMA')`, selected
+`FROM DUAL` because the value function cannot stand alone in a SELECT list.
+
 ## Version Gates
 
 Gates below are the versions at which this backend's own `supports_*`
