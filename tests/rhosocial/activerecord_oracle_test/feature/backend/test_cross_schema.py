@@ -43,6 +43,7 @@ SCHEMA_SHOP = "ar_shop"
 SCHEMA_PASSWORD = "Rh0social#2026"
 SOFT_TABLE = "ar_soft_orders"
 CUSTOMER_TABLE = "ar_customers"
+SHOP_ORDER_TABLE = "ar_orders"
 
 
 def _ddl_options() -> ExecutionOptions:
@@ -106,16 +107,25 @@ def _provision(backend) -> None:
     )
     statements = [
         _drop_table_block(f"{SCHEMA_CRM}.{SOFT_TABLE.upper()}"),
-        _drop_table_block(f"{SCHEMA_SHOP}.{SOFT_TABLE.upper()}"),
         _drop_table_block(SOFT_TABLE.upper()),
     ]
-    for owner in (None, SCHEMA_CRM, SCHEMA_SHOP):
+    for owner in (None, SCHEMA_CRM):
         qualified = f"{owner.upper()}.{SOFT_TABLE.upper()}" if owner else SOFT_TABLE.upper()
         statements.append(f"CREATE TABLE {qualified} ({soft_columns})")
     statements.append(f"DROP TABLE {SCHEMA_CRM}.{CUSTOMER_TABLE.upper()}")
     statements.append(
         f"CREATE TABLE {SCHEMA_CRM}.{CUSTOMER_TABLE.upper()} ("
         "id NUMBER NOT NULL PRIMARY KEY, name VARCHAR2(100) NOT NULL)"
+    )
+    # A differently named table on purpose: SQL Server rejects a join whose
+    # two ranges share an exposed name, and the two modules are meant to
+    # read the same way. Same-name coexistence is asserted on its own.
+    statements.append(_drop_table_block(f"{SCHEMA_SHOP}.{SHOP_ORDER_TABLE.upper()}"))
+    statements.append(
+        f"CREATE TABLE {SCHEMA_SHOP}.{SHOP_ORDER_TABLE.upper()} ("
+        "id NUMBER NOT NULL PRIMARY KEY, "
+        "customer_id NUMBER NOT NULL, "
+        "label VARCHAR2(100) NOT NULL)"
     )
     for sql in statements:
         backend.execute(sql, options=_ddl_options())
@@ -169,14 +179,20 @@ class CrmCustomer(ActiveRecord):
 
 
 class ShopOrder(ActiveRecord):
-    """A third owner, so a join can cross a user boundary."""
+    """A third owner, so a join can cross a user boundary.
 
-    __table_name__ = SOFT_TABLE
+    Deliberately a different table name from the soft-order table, so the
+    join is not also asserting that the dialect tolerates two ranges with the
+    same exposed name.
+    """
+
+    __table_name__ = SHOP_ORDER_TABLE
     __schema_name__ = SCHEMA_SHOP
     __pk_auto_generated__ = False
     c: ClassVar[FieldProxy] = FieldProxy()
 
     id: Optional[int] = None
+    customer_id: int
     label: str
 
 
@@ -337,16 +353,18 @@ def test_bulk_update_stays_inside_its_namespace(cross_schema):
 
 def test_join_across_two_owners(cross_schema):
     """``AR_CRM`` joined to ``AR_SHOP``, both sides fully qualified."""
-    CrmSoftOrder(id=31, label="from-crm").save()
-    ShopOrder(id=31, label="from-shop").save()
+    CrmCustomer(id=31, name="alice").save()
+    ShopOrder(id=31, customer_id=31, label="from-shop").save()
 
-    joined = CrmSoftOrder.query().join(ShopOrder, on=CrmSoftOrder.c.id == ShopOrder.c.id)
+    joined = CrmCustomer.query().join(
+        ShopOrder, on=CrmCustomer.c.id == ShopOrder.c.customer_id
+    )
     assert joined.count() == 1, "Expected the join to match across both owners"
 
-    joined_sql, _ = joined.select(CrmSoftOrder.c.label).to_sql()
+    joined_sql, _ = joined.select(CrmCustomer.c.name).to_sql()
     normed = _norm(joined_sql)
-    assert '"ar_crm"."ar_soft_orders"' in normed, f"Got: {joined_sql}"
-    assert '"ar_shop"."ar_soft_orders"' in normed, (
+    assert '"ar_crm"."ar_customers"' in normed, f"Got: {joined_sql}"
+    assert '"ar_shop"."ar_orders"' in normed, (
         f"Expected the joined range to keep its own owner, got: {joined_sql}"
     )
 
