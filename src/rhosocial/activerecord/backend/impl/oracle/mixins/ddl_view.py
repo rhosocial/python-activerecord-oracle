@@ -32,7 +32,7 @@ class OracleViewMixin:
         if expr.replace and self.supports_create_or_replace_view():
             parts.append("OR REPLACE")
         parts.append("VIEW")
-        parts.append(self.format_identifier(expr.view_name))
+        parts.append(self._format_view_name(expr))
         if expr.column_aliases:
             cols = ", ".join(self.format_identifier(c) for c in expr.column_aliases)
             parts.append(f"({cols})")
@@ -53,5 +53,5 @@ class OracleViewMixin:
         self, expr: "DropViewExpression"
     ) -> Tuple[str, tuple]:
         parts = ["DROP VIEW"]
-        parts.append(self.format_identifier(expr.view_name))
+        parts.append(self._format_view_name(expr))
         return " ".join(parts), ()
