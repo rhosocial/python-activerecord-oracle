@@ -116,7 +116,7 @@ def _provision(backend) -> None:
     for owner in (None, SCHEMA_CRM):
         qualified = f"{owner.upper()}.{SOFT_TABLE.upper()}" if owner else SOFT_TABLE.upper()
         statements.append(f"CREATE TABLE {qualified} ({soft_columns})")
-    statements.append(f"DROP TABLE {SCHEMA_CRM}.{CUSTOMER_TABLE.upper()}")
+    statements.append(_drop_table_block(f"{SCHEMA_CRM}.{CUSTOMER_TABLE.upper()}"))
     statements.append(
         f"CREATE TABLE {SCHEMA_CRM}.{CUSTOMER_TABLE.upper()} ("
         "id NUMBER NOT NULL PRIMARY KEY, name VARCHAR2(100) NOT NULL)"
