@@ -122,6 +122,11 @@ class TestOracleDialectProtocolConformance:
 # satisfies one by accident, the negative test fails and forces a conscious
 # decision (move to ORACLE_PROTOCOLS or revert).
 ORACLE_NOT_IMPLEMENTED = [
+    # UUID value expressions (generation / nil-max constants / cast) are not
+    # implemented yet on this dialect. Listed here so the omission is a
+    # recorded decision rather than a gap; move it to the implemented list
+    # when the mixin lands.
+    dialect_protocols.UUIDSupport,
     # --- Intentional non-support ---
     # The generic DatabaseSupport protocol is not composed by OracleDialect.
     dialect_protocols.DatabaseSupport,
