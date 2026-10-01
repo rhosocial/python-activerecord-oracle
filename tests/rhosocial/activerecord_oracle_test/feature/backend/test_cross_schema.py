@@ -74,6 +74,19 @@ def _create_user_with_retry(backend, user: str, attempts: int = 3) -> None:
             time.sleep(1.5)
 
 
+def _drop_table_block(qualified: str) -> str:
+    """Drop a table if it is there.
+
+    A bare DROP TABLE raises ORA-00942 when the table is absent, which would
+    abort provisioning before any CREATE TABLE ran. The users are dropped
+    first, so their tables are usually already gone.
+    """
+    return (
+        f"BEGIN EXECUTE IMMEDIATE 'DROP TABLE {qualified}'; "
+        "EXCEPTION WHEN OTHERS THEN NULL; END;"
+    )
+
+
 def _provision(backend) -> None:
     for user in (SCHEMA_CRM, SCHEMA_SHOP):
         backend.execute(_drop_user_block(user), options=_ddl_options())
@@ -92,9 +105,9 @@ def _provision(backend) -> None:
         "deleted_at TIMESTAMP NULL"
     )
     statements = [
-        f"DROP TABLE {SCHEMA_CRM}.{SOFT_TABLE.upper()}",
-        f"DROP TABLE {SCHEMA_SHOP}.{SOFT_TABLE.upper()}",
-        f"DROP TABLE {SOFT_TABLE.upper()}",
+        _drop_table_block(f"{SCHEMA_CRM}.{SOFT_TABLE.upper()}"),
+        _drop_table_block(f"{SCHEMA_SHOP}.{SOFT_TABLE.upper()}"),
+        _drop_table_block(SOFT_TABLE.upper()),
     ]
     for owner in (None, SCHEMA_CRM, SCHEMA_SHOP):
         qualified = f"{owner.upper()}.{SOFT_TABLE.upper()}" if owner else SOFT_TABLE.upper()
