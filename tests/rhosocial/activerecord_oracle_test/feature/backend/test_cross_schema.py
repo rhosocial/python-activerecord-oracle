@@ -265,35 +265,40 @@ def _norm(sql: str) -> str:
 
 
 def test_declared_schema_is_folded_to_upper_case(cross_schema):
-    """``__schema_name__ = \"ar_xcrm\"`` renders as ``\"AR_XCRM\"``.
+    """``__schema_name__ = "ar_xcrm"`` renders as ``"AR_XCRM"``.
 
     The model declares lower case and the dialect upper-cases it. That is
     correct here only because the user was created upper-case too, so the
     assertion is on the rendered form rather than on the declared spelling.
+
+    Matched against the raw SQL rather than the normalised copy: _norm folds
+    case, which is the very thing under test.
     """
     sql, _ = CrmSoftOrder.query().select(CrmSoftOrder.c.label).to_sql()
 
-    assert '"AR_XCRM"."AR_SOFT_ORDERS"' in _norm(sql), (
-        f"Expected the schema folded to upper case, got: {sql}"
+    assert '"AR_XCRM"."AR_SOFT_ORDERS"' in sql, (
+        f"Expected the owner folded to upper case, got: {sql}"
     )
 
 
-def test_range_is_qualified_but_columns_stay_two_part(cross_schema):
-    """The owner belongs on the range only.
+def test_qualified_column_round_trips(cross_schema):
+    """Oracle keeps the owner on the column too, and that is valid here.
 
-    ``\"AR_XCRM\".\"AR_SOFT_ORDERS\".\"LABEL\"`` is a three-part column
-    reference, which Oracle rejects -- the range already carries the owner.
+    A schema-bound model's column renders three-part --
+    ``"AR_XCRM"."AR_SOFT_ORDERS"."LABEL"`` -- because the generic renderer
+    qualifies whatever carries a schema. SQL Server cannot accept that form
+    and its dialect drops the owner; Oracle accepts it, so this asserts the
+    round trip rather than the shape. It is the same query the SQL Server
+    module asserts the opposite of, which is the point of keeping the two
+    suites separate.
     """
-    sql, _ = CrmSoftOrder.query().select(CrmSoftOrder.c.label).to_sql()
-    normed = _norm(sql)
+    CrmSoftOrder(id=61, label="round-trip").save()
 
-    assert '"ar_xcrm"."ar_soft_orders"' in normed, f"Got: {sql}"
-    assert '"ar_xcrm"."ar_soft_orders"."label"' not in normed, (
-        f"Column reference must not repeat the schema, got: {sql}"
-    )
-    assert '"ar_soft_orders"."label"' in normed, (
-        f"Expected a two-part column reference, got: {sql}"
-    )
+    row = CrmSoftOrder.query().where(CrmSoftOrder.c.id == 61).one()
+    assert row.label == "round-trip"
+
+    sql, _ = CrmSoftOrder.query().select(CrmSoftOrder.c.label).to_sql()
+    assert '"AR_XCRM"."AR_SOFT_ORDERS"' in _norm(sql), f"Got: {sql}"
 
 
 def test_same_named_tables_coexist_and_pk_is_namespace_scoped(cross_schema):
