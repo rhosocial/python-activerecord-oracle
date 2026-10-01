@@ -29,6 +29,15 @@ class OracleJSONFunctionMixin(object):
         """Format JSON_QUERY function for object/array extraction."""
         return f"JSON_QUERY({col_expr}, '$.{path}')", ()
 
+    def supports_json_path(self) -> bool:
+        """Whether a JSON path can be read on this server.
+
+        Same gate as the formatter below, which uses JSON_QUERY for a document
+        and JSON_VALUE for a scalar. Both exist in the versions this claims and
+        not in the ones it does not.
+        """
+        return self.supports_json_type()
+
     def format_json_function_expression(self, expr) -> Tuple[str, tuple]:
         """Render a JSON path with JSON_QUERY / JSON_VALUE.
 
