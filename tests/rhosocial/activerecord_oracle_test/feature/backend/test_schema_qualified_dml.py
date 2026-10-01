@@ -1,10 +1,9 @@
 # tests/rhosocial/activerecord_oracle_test/feature/backend/test_schema_qualified_dml.py
 """Standalone schema-qualified DML round-trip (no testsuite dependency).
 
-Mirrors the provider fixtures used by the cross_schema suite: two user
-schemas (AR_CRM / AR_SHOP) host ``customers`` and ``orders``; models bind
-via ``__schema_name__`` and the tests assert INSERT/UPDATE/DELETE land in
-and only in the owning namespace.
+Provisions its own fixtures: two user schemas (AR_CRM / AR_SHOP) host
+``customers`` and ``orders``; models bind via ``__schema_name__`` and the
+tests assert INSERT/UPDATE/DELETE land in and only in the owning namespace.
 """
 import pytest
 
