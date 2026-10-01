@@ -298,7 +298,7 @@ def test_qualified_column_round_trips(cross_schema):
     assert row.label == "round-trip"
 
     sql, _ = CrmSoftOrder.query().select(CrmSoftOrder.c.label).to_sql()
-    assert '"AR_XCRM"."AR_SOFT_ORDERS"' in _norm(sql), f"Got: {sql}"
+    assert '"ar_xcrm"."ar_soft_orders"' in _norm(sql), f"Got: {sql}"
 
 
 def test_same_named_tables_coexist_and_pk_is_namespace_scoped(cross_schema):
