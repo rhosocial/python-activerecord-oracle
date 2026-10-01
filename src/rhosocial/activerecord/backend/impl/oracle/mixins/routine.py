@@ -2,6 +2,7 @@
 """Oracle PL/SQL routine and package DDL formatter mixin."""
 
 from typing import Tuple, TYPE_CHECKING
+from ....expression.core import TableExpression
 
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 
@@ -87,7 +88,7 @@ class OracleRoutineMixin:
         if expr.or_replace:
             parts.append("OR REPLACE")
         parts.append("FUNCTION")
-        parts.append(self.format_identifier(expr.function_name))
+        parts.append(TableExpression(self, expr.function_name, schema_name=expr.schema_name).to_sql()[0])
         if expr.parameters:
             parts.append(f"({self.format_parameters(expr.parameters)[0]})")
         parts.append(expr.return_keyword)

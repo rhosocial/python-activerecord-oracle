@@ -1,5 +1,6 @@
 # src/rhosocial/activerecord/backend/impl/oracle/mixins/trigger.py
 from typing import Tuple, TYPE_CHECKING
+from ....expression.core import TableExpression
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..expression.trigger import DisableTriggerExpression, EnableTriggerExpression
@@ -143,7 +144,7 @@ class OracleTriggerMixin(object):
             from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
             raise UnsupportedFeatureError(self.name, "DISABLE TRIGGER")
 
-        parts = ["ALTER TRIGGER", self.format_identifier(expr.trigger_name), "DISABLE"]
+        parts = ["ALTER TRIGGER", TableExpression(self, expr.trigger_name, schema_name=expr.schema_name).to_sql()[0], "DISABLE"]
         return " ".join(parts), ()
 
     def format_enable_trigger_statement(self, expr: "EnableTriggerExpression") -> Tuple[str, tuple]:
@@ -152,5 +153,5 @@ class OracleTriggerMixin(object):
             from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
             raise UnsupportedFeatureError(self.name, "ENABLE TRIGGER")
 
-        parts = ["ALTER TRIGGER", self.format_identifier(expr.trigger_name), "ENABLE"]
+        parts = ["ALTER TRIGGER", TableExpression(self, expr.trigger_name, schema_name=expr.schema_name).to_sql()[0], "ENABLE"]
         return " ".join(parts), ()

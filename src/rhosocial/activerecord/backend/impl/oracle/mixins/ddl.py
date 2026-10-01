@@ -2,6 +2,7 @@
 """Oracle DDL formatting mixin (CREATE TABLE, column defs, table constraints)."""
 
 from typing import Any, List, Optional, Tuple, TYPE_CHECKING
+from ....expression.core import TableExpression
 
 if TYPE_CHECKING:
     from rhosocial.activerecord.backend.expression.statements import (
@@ -63,7 +64,7 @@ class OracleDDLMixin:
         if expr.temporary:
             parts.append("GLOBAL TEMPORARY")
         parts.append("TABLE")
-        parts.append(self.format_identifier(expr.table_name))
+        parts.append(TableExpression(self, expr.table_name, schema_name=expr.schema_name).to_sql()[0])
 
         column_parts: List[str] = []
         for col_def in expr.columns:

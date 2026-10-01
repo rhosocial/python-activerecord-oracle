@@ -2,6 +2,7 @@
 """Oracle SYNONYM DDL formatter mixin."""
 
 from typing import Tuple, TYPE_CHECKING
+from ....expression.core import TableExpression
 
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 
@@ -46,10 +47,10 @@ class OracleSynonymMixin:
         if expr.schema_name:
             target = (
                 f"{self.format_identifier(expr.schema_name)}."
-                f"{self.format_identifier(expr.table_name)}"
+                f"{TableExpression(self, expr.table_name, schema_name=expr.schema_name).to_sql()[0]}"
             )
         else:
-            target = self.format_identifier(expr.table_name)
+            target = TableExpression(self, expr.table_name, schema_name=expr.schema_name).to_sql()[0]
         parts.append(target)
         return " ".join(parts), ()
 
