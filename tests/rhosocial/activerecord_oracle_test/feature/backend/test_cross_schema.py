@@ -189,7 +189,12 @@ def cross_schema():
     if not scenarios:
         pytest.skip("no Oracle scenario registered for this job")
     backend_class, config = get_scenario(next(iter(scenarios)))
-    backend = backend_class(connection_config=config)
+    # Configure through a model rather than instantiating the backend
+    # directly: the DDL below runs as the session user, and a bare
+    # backend instance reaches Oracle without the identity the model
+    # configuration establishes, so CREATE USER fails with ORA-01031.
+    PlainSoftOrder.configure(config, backend_class)
+    backend = PlainSoftOrder.__backend__
     if not backend._connection:
         backend.connect()
     try:
@@ -285,7 +290,7 @@ def test_restore_writes_only_into_its_own_namespace(cross_schema):
     scoped.save()
     plain.save()
 
-    scoped.soft_delete()
+    scoped.delete()
     assert CrmSoftOrder.query_only_deleted().count() == 1
     assert PlainSoftOrder.query_only_deleted().count() == 0
 
@@ -348,7 +353,7 @@ async def test_async_restore_writes_only_into_its_own_namespace(cross_schema):
         await scoped.save()
         await plain.save()
 
-        await scoped.soft_delete()
+        await scoped.delete()
         assert await AsyncCrmSoftOrder.query_only_deleted().count() == 1
         assert await AsyncPlainSoftOrder.query_only_deleted().count() == 0
 
