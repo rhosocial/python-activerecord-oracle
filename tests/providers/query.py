@@ -415,7 +415,7 @@ class QuerySyncProvider(QueryProviderBase, IQuerySyncProvider, WorkerTestProtoco
 
     def setup_mixed_schema_fixtures(self, scenario_name: str):
         """(User, Order, MixedSchemaOrder): default users/orders plus orders in AR_CRM."""
-        from rhosocial.activerecord.testsuite.feature.query.cross_schema.mixed_schema_models import (
+        from activerecord_oracle_test.feature.query.cross_schema.models import (
             MixedSchemaOrder,
         )
         from rhosocial.activerecord.testsuite.feature.query.fixtures.models import Order, User
@@ -682,7 +682,7 @@ class QueryAsyncProvider(QueryProviderBase, IQueryAsyncProvider):
     async def setup_mixed_schema_fixtures(self, scenario_name: str):
         """(AsyncUser, AsyncOrder, AsyncMixedSchemaOrder) with orders also in AR_CRM."""
         from rhosocial.activerecord.backend.impl.oracle.backend.async_backend import AsyncOracleBackend
-        from rhosocial.activerecord.testsuite.feature.query.cross_schema.mixed_schema_models import (
+        from activerecord_oracle_test.feature.query.cross_schema.models import (
             AsyncMixedSchemaOrder,
         )
         from rhosocial.activerecord.testsuite.feature.query.fixtures.async_models import (
