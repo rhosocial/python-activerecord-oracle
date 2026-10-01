@@ -32,7 +32,7 @@ from rhosocial.activerecord.field.soft_delete import (
 )
 from rhosocial.activerecord.model import ActiveRecord, AsyncActiveRecord
 
-from providers.scenarios import get_enabled_scenarios, get_scenario
+from providers.scenarios import get_enabled_scenarios, get_scenario_raw
 
 # The users below are shared and dropped per module, so the whole file has to
 # land on a single xdist worker; --dist=loadgroup honours this mark.
@@ -91,8 +91,12 @@ def _provision(backend) -> None:
         "label VARCHAR2(100) NOT NULL, "
         "deleted_at TIMESTAMP NULL"
     )
-    statements = [f"DROP TABLE {SCHEMA_CRM}.{SOFT_TABLE.upper()}", f"DROP TABLE {SOFT_TABLE.upper()}"]
-    for owner in (None, SCHEMA_CRM):
+    statements = [
+        f"DROP TABLE {SCHEMA_CRM}.{SOFT_TABLE.upper()}",
+        f"DROP TABLE {SCHEMA_SHOP}.{SOFT_TABLE.upper()}",
+        f"DROP TABLE {SOFT_TABLE.upper()}",
+    ]
+    for owner in (None, SCHEMA_CRM, SCHEMA_SHOP):
         qualified = f"{owner.upper()}.{SOFT_TABLE.upper()}" if owner else SOFT_TABLE.upper()
         statements.append(f"CREATE TABLE {qualified} ({soft_columns})")
     statements.append(f"DROP TABLE {SCHEMA_CRM}.{CUSTOMER_TABLE.upper()}")
@@ -188,11 +192,12 @@ def cross_schema():
     scenarios = get_enabled_scenarios()
     if not scenarios:
         pytest.skip("no Oracle scenario registered for this job")
-    backend_class, config = get_scenario(next(iter(scenarios)))
-    # Configure through a model rather than instantiating the backend
-    # directly: the DDL below runs as the session user, and a bare
-    # backend instance reaches Oracle without the identity the model
-    # configuration establishes, so CREATE USER fails with ORA-01031.
+    # get_scenario_raw, not get_scenario: under a database pool the latter
+    # swaps in the worker's pooled user, which cannot create users, so every
+    # test in this module would skip on ORA-01031. The admin credentials are
+    # what CREATE USER needs, and the xdist_group mark keeps the shared users
+    # to one worker.
+    backend_class, config = get_scenario_raw(next(iter(scenarios)))
     PlainSoftOrder.configure(config, backend_class)
     backend = PlainSoftOrder.__backend__
     if not backend._connection:
@@ -341,7 +346,9 @@ async def test_async_restore_writes_only_into_its_own_namespace(cross_schema):
     )
 
     scenarios = get_enabled_scenarios()
-    backend_class, config = get_scenario(next(iter(scenarios)))
+    # Same credentials the module fixture provisioned under, so the async
+    # connection reaches the database that actually holds AR_CRM.
+    backend_class, config = get_scenario_raw(next(iter(scenarios)))
     backend = AsyncOracleBackend(connection_config=config)
     await backend.connect()
     try:
