@@ -139,6 +139,28 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         from ..introspection.executor import SyncOracleIntrospectorExecutor
         return SyncOracleIntrospector(self, SyncOracleIntrospectorExecutor(self))
 
+    def get_current_schema(self) -> Optional[str]:
+        """Get the namespace an unqualified reference resolves against.
+
+        Asks the server via SYS_CONTEXT('USERENV','CURRENT_SCHEMA').
+        Oracle has no bare CURRENT_SCHEMA function, and the value function
+        needs FROM DUAL to appear in a SELECT list.
+        """
+        from ....expression import core
+        from ....expression.statements.dql import QueryExpression
+        from ..functions.schema import current_schema
+
+        query = QueryExpression(
+            dialect=self.dialect,
+            select=[current_schema(self.dialect)],
+            from_=core.TableExpression(self.dialect, "DUAL"),
+        )
+        sql, params = query.to_sql()
+        row = self.fetch_one(sql, params)
+        if not row:
+            return None
+        return next(iter(row.values()), None)
+
     def introspect_and_adapt(self) -> None:
         """Introspect backend and adapt to actual server capabilities."""
         if not self._connection:

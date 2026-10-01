@@ -128,6 +128,28 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         except Exception as e:
             self.log(logging.WARNING, f"Failed to auto-commit: {str(e)}")
 
+    async def get_current_schema(self) -> Optional[str]:
+        """Get the namespace an unqualified reference resolves against.
+
+        Asks the server via SYS_CONTEXT('USERENV','CURRENT_SCHEMA'). Oracle has
+        no bare CURRENT_SCHEMA function, and the value function needs FROM DUAL
+        to appear in a SELECT list.
+        """
+        from ....expression import core
+        from ....expression.statements.dql import QueryExpression
+        from ..functions.schema import current_schema
+
+        query = QueryExpression(
+            dialect=self.dialect,
+            select=[current_schema(self.dialect)],
+            from_=core.TableExpression(self.dialect, "DUAL"),
+        )
+        sql, params = query.to_sql()
+        row = await self.fetch_one(sql, params)
+        if not row:
+            return None
+        return next(iter(row.values()), None)
+
     async def introspect_and_adapt(self) -> None:
         """Introspect backend and adapt to actual server capabilities."""
         if not self._connection:
