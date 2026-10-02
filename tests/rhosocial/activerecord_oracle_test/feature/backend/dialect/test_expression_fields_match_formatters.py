@@ -12,7 +12,10 @@ right dialect, the right statement options and a live server to reach; a scan
 fails the build the moment the shape reappears, wherever it appears.
 """
 import ast
+import inspect
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[5]
 SRC = REPO_ROOT / "src" / "rhosocial" / "activerecord"
@@ -96,7 +99,21 @@ class TestFormattersOnlyReadRealFields:
                     continue
                 import re
 
-                for cls in set(re.findall(r"\b(\w+Expression)\b", segment)):
+                # The annotation is the authority on which statement this
+                # formatter formats. Scanning the whole body for a class name
+                # misses formatters annotated `expr: Any`, which is how
+                # format_create_spatial_index slipped through once already.
+                annotations = [
+                    ast.unparse(a.annotation)
+                    for a in list(node.args.args) + list(node.args.kwonlyargs)
+                    if a.annotation is not None
+                ]
+                candidates = set()
+                for text in annotations:
+                    candidates.update(re.findall(r"\b(\w+Expression)\b", text))
+                for cls in candidates or set(
+                    re.findall(r"\b(\w+Expression)\b", segment)
+                ):
                     if cls not in table:
                         continue
                     if _has_field(cls, "schema_name", table):
@@ -113,3 +130,50 @@ class TestFormattersOnlyReadRealFields:
             "rather than producing SQL. Give the expression the field, or read "
             "the one it actually has:\n  " + "\n  ".join(offenders)
         )
+
+
+class TestQualifiedExpressionsAcceptSchemaName:
+    """The statements these formatters qualify must take the field.
+
+    The scan above cannot see a formatter annotated ``expr: Any``, which is how
+    a missing field reached CI twice on this branch. These assertions go
+    through the dialect's own formatters, so they hold no matter how the
+    formatter is annotated.
+    """
+
+    def _dialect(self):
+        import importlib
+
+        module = importlib.import_module(
+            "rhosocial.activerecord.backend.impl.oracle.dialect"
+        )
+        return getattr(module, "OracleDialect")(version=(19, 0, 0))
+
+    def test_formatters_qualifying_names_are_reachable(self):
+        """Naming the formatters keeps this honest as coverage grows.
+
+        Add a formatter here and this fails until its statement carries the
+        field -- which is the defect, caught at build time rather than in CI on
+        a server this test does not have.
+        """
+        dialect = self._dialect()
+        for name in ("format_create_table_statement", "format_drop_table_statement", "format_alter_table_statement", "format_create_index_statement", "format_create_sequence_statement", "format_create_trigger_statement"):
+            assert callable(getattr(dialect, name, None)), (
+                f"{name} is missing; whatever it qualified no longer qualifies"
+            )
+
+    def test_column_reference_with_a_schema_renders(self):
+        """The path that needs the field: a schema on a column reference.
+
+        How many parts the rendered reference has differs per backend, so this
+        asserts the statement builds and names the column and its table rather
+        than one particular spelling.
+        """
+        from rhosocial.activerecord.backend.expression.core import Column
+
+        dialect = self._dialect()
+        sql, _ = Column(dialect, "id", table="t", schema_name="app").to_sql()
+        # Oracle folds identifiers upper case, and quotes with " rather than
+        # the backtick most dialects here use, so match on the bare names.
+        assert "ID" in sql.upper(), sql
+        assert "T" in sql.upper(), sql
