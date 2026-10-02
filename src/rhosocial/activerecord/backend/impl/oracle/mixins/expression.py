@@ -22,6 +22,11 @@ class OracleExpressionMixin:
         Oracle-specific ``@dblink`` suffixes and flashback clauses carried on
         the expression are rendered after the name, then the optional alias.
         """
+        from rhosocial.activerecord.backend.dialect.protocols import SchemaSupport
+
+        if isinstance(self, SchemaSupport):
+            self.validate_schema_name(expr)
+
         schema_name = getattr(expr, "schema_name", None)
         alias = getattr(expr, "alias", None)
         dblink = getattr(expr, "dblink", None)

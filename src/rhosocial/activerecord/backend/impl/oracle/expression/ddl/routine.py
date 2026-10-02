@@ -25,7 +25,6 @@ All expressions delegate SQL generation to the dialect through the public
 ``format_*`` formatters implemented by ``OracleRoutineMixin``.
 """
 from __future__ import annotations
-from rhosocial.activerecord.backend.expression.core import _validate_schema_name
 
 from enum import Enum
 from typing import List, Optional, TYPE_CHECKING
@@ -173,7 +172,7 @@ class OracleCreateFunctionExpression(BaseExpression):
         if keyword not in ("AS", "IS"):
             raise ValueError("keyword must be 'AS' or 'IS'")
         self.function_name = function_name
-        self.schema_name = _validate_schema_name(schema_name, type(self).__name__)
+        self.schema_name = schema_name
         self.return_type = return_type
         self.body = body
         self.parameters = list(parameters) if parameters else []
