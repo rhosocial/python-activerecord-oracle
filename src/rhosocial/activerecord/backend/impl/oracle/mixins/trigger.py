@@ -1,6 +1,6 @@
 # src/rhosocial/activerecord/backend/impl/oracle/mixins/trigger.py
 from typing import Tuple, TYPE_CHECKING
-from ....expression.core import TableExpression
+from rhosocial.activerecord.backend.expression.core import TableExpression
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..expression.trigger import DisableTriggerExpression, EnableTriggerExpression

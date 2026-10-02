@@ -2,7 +2,7 @@
 """Oracle DDL formatting mixin (CREATE TABLE, column defs, table constraints)."""
 
 from typing import Any, List, Optional, Tuple, TYPE_CHECKING
-from ....expression.core import TableExpression
+from rhosocial.activerecord.backend.expression.core import TableExpression
 
 if TYPE_CHECKING:
     from rhosocial.activerecord.backend.expression.statements import (

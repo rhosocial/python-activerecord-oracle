@@ -2,7 +2,7 @@
 """Oracle TRUNCATE statement formatting mixin."""
 
 from typing import Tuple
-from ....expression.core import TableExpression
+from rhosocial.activerecord.backend.expression.core import TableExpression
 
 
 class OracleTruncateMixin:

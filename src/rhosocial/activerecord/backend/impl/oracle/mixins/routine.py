@@ -2,7 +2,7 @@
 """Oracle PL/SQL routine and package DDL formatter mixin."""
 
 from typing import Tuple, TYPE_CHECKING
-from ....expression.core import TableExpression
+from rhosocial.activerecord.backend.expression.core import TableExpression
 
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 

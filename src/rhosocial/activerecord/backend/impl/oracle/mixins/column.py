@@ -1,6 +1,6 @@
 # src/rhosocial/activerecord/backend/impl/oracle/mixins/column.py
 from typing import List, Tuple, Union, TYPE_CHECKING
-from ....expression.core import TableExpression
+from rhosocial.activerecord.backend.expression.core import TableExpression
 
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 

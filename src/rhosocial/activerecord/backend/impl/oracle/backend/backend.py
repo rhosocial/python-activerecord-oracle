@@ -146,8 +146,8 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         Oracle has no bare CURRENT_SCHEMA function, and the value function
         needs FROM DUAL to appear in a SELECT list.
         """
-        from ....expression import core
-        from ....expression.statements.dql import QueryExpression
+        from rhosocial.activerecord.backend.expression import core
+        from rhosocial.activerecord.backend.expression.statements.dql import QueryExpression
         from ..functions.schema import current_schema
 
         query = QueryExpression(
