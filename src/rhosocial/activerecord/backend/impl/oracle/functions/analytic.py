@@ -1,7 +1,7 @@
 # src/rhosocial/activerecord/backend/impl/oracle/functions/analytic.py
 """Oracle analytic function factories."""
 
-from typing import Union, Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from rhosocial.activerecord.backend.expression import bases
@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
 def listagg(
     dialect: "OracleDialect",
-    expr: Union[str, "bases.BaseExpression"],
+    expr: "bases.BaseExpression",
     delimiter: str = ",",
     within_group_order_by: Optional[str] = None,
     on_overflow: Optional[str] = None,
@@ -20,13 +20,22 @@ def listagg(
     Uses ``FunctionCall`` with Oracle-specific metadata so the dialect's
     ``format_function_call`` override can emit ``WITHIN GROUP`` and
     ``ON OVERFLOW`` clauses.
+
+    Args:
+        dialect: The Oracle dialect instance
+        expr: The expression whose values are aggregated
+        delimiter: Separator placed between values
+        within_group_order_by: Order applied inside ``WITHIN GROUP``
+        on_overflow: Action taken when the result overflows
+
+    Returns:
+        A FunctionCall instance representing LISTAGG
     """
     from rhosocial.activerecord.backend.expression import core
-    from ._convert import _convert_to_expression
 
     func = core.FunctionCall(
         dialect, "LISTAGG",
-        _convert_to_expression(dialect, expr),
+        expr,
         core.Literal(dialect, delimiter),
     )
     if within_group_order_by:
@@ -45,6 +54,14 @@ def percentile_cont(
 
     Uses ``FunctionCall`` with ``_oracle_within_group`` metadata so the
     ``format_function_call`` override emits the ``WITHIN GROUP (...)`` clause.
+
+    Args:
+        dialect: The Oracle dialect instance
+        fraction: Percentile fraction in [0, 1]
+        within_group_order_by: Order applied inside ``WITHIN GROUP``
+
+    Returns:
+        A FunctionCall instance representing PERCENTILE_CONT
     """
     from rhosocial.activerecord.backend.expression import core
 
@@ -63,6 +80,14 @@ def percentile_disc(
 
     Uses ``FunctionCall`` with ``_oracle_within_group`` metadata so the
     ``format_function_call`` override emits the ``WITHIN GROUP (...)`` clause.
+
+    Args:
+        dialect: The Oracle dialect instance
+        fraction: Percentile fraction in [0, 1]
+        within_group_order_by: Order applied inside ``WITHIN GROUP``
+
+    Returns:
+        A FunctionCall instance representing PERCENTILE_DISC
     """
     from rhosocial.activerecord.backend.expression import core
 

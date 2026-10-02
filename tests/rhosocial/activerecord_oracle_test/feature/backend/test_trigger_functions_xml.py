@@ -119,7 +119,7 @@ class TestDropAndToggleTriggers:
 
 class TestOracleFunctionFormatMixin:
     def test_listagg_plain(self, dialect):
-        func = analytic.listagg(dialect, "ename", ",")
+        func = analytic.listagg(dialect, core.Column(dialect, "ename"), ",")
         assert func.to_sql() == ('LISTAGG("ENAME", ?)', (",",))
 
     def test_listagg_distinct_within_group_overflow(self, dialect):
@@ -141,7 +141,7 @@ class TestOracleFunctionFormatMixin:
 
     def test_json_table_with_columns(self, dialect):
         func = json_funcs.json_table(
-            dialect, "doc", "$",
+            dialect, core.Column(dialect, "doc"), "$",
             "ROW PATH 'x' COLUMNS (a VARCHAR2(10))",
         )
         assert func.to_sql() == (
@@ -171,59 +171,62 @@ class TestOracleFunctionFormatMixin:
 
 class TestStringFunctionFactories:
     def test_decode_with_default(self, dialect):
-        call = string_funcs.decode_expr(dialect, "status", "A", 1, "B", 2, default=0)
+        call = string_funcs.decode_expr(dialect, core.Column(dialect, "status"),
+                                        "A", 1, "B", 2, default=0)
         assert call.to_sql() == ('DECODE("STATUS", ?, ?, ?, ?, ?)',
                                  ("A", 1, "B", 2, 0))
 
     def test_decode_without_default(self, dialect):
-        call = string_funcs.decode_expr(dialect, "status", "A", 1)
+        call = string_funcs.decode_expr(dialect, core.Column(dialect, "status"), "A", 1)
         assert call.to_sql() == ('DECODE("STATUS", ?, ?)', ("A", 1))
 
     def test_regexp_substr(self, dialect):
-        basic = string_funcs.regexp_substr(dialect, "name", "[0-9]+")
+        basic = string_funcs.regexp_substr(dialect, core.Column(dialect, "name"), "[0-9]+")
         assert basic.to_sql() == ('REGEXP_SUBSTR("NAME", ?, ?, ?)', ("[0-9]+", 1, 1))
-        full = string_funcs.regexp_substr(dialect, "name", "[0-9]+", 2, 3, "i")
+        full = string_funcs.regexp_substr(dialect, core.Column(dialect, "name"),
+                                          "[0-9]+", 2, 3, "i")
         assert full.to_sql() == ('REGEXP_SUBSTR("NAME", ?, ?, ?, ?)',
                                  ("[0-9]+", 2, 3, "i"))
 
     def test_regexp_instr(self, dialect):
-        call = string_funcs.regexp_instr(dialect, "col1", "x", 1, 1, 1)
+        call = string_funcs.regexp_instr(dialect, core.Column(dialect, "col1"), "x", 1, 1, 1)
         assert call.to_sql() == ('REGEXP_INSTR("COL1", ?, ?, ?, ?)', ("x", 1, 1, 1))
 
     def test_regexp_like(self, dialect):
-        plain = string_funcs.regexp_like(dialect, "email", ".+@.+")
+        plain = string_funcs.regexp_like(dialect, core.Column(dialect, "email"), ".+@.+")
         assert plain.to_sql() == ('REGEXP_LIKE("EMAIL", ?)', (".+@.+",))
-        flagged = string_funcs.regexp_like(dialect, "email", ".+@.+", "i")
+        flagged = string_funcs.regexp_like(dialect, core.Column(dialect, "email"), ".+@.+", "i")
         assert flagged.to_sql() == ('REGEXP_LIKE("EMAIL", ?, ?)', (".+@.+", "i"))
 
     def test_regexp_replace(self, dialect):
-        call = string_funcs.regexp_replace(dialect, "phone", "-", "", 1, 0)
+        call = string_funcs.regexp_replace(dialect, core.Column(dialect, "phone"), "-", "", 1, 0)
         assert call.to_sql() == ('REGEXP_REPLACE("PHONE", ?, ?, ?, ?)', ("-", "", 1, 0))
 
     def test_regexp_count(self, dialect):
-        call = string_funcs.regexp_count(dialect, "txt", "a", 1, "i")
+        call = string_funcs.regexp_count(dialect, core.Column(dialect, "txt"), "a", 1, "i")
         assert call.to_sql() == ('REGEXP_COUNT("TXT", ?, ?, ?)', ("a", 1, "i"))
 
 
 class TestJsonScalarFactories:
     def test_json_value(self, dialect):
-        call = json_funcs.json_value(dialect, "doc", "$.a")
+        call = json_funcs.json_value(dialect, core.Column(dialect, "doc"), "$.a")
         assert call.to_sql() == ('JSON_VALUE("DOC", ?)', ("$.a",))
 
     def test_json_query_and_exists(self, dialect):
-        query = json_funcs.json_query(dialect, "doc", "$.a[*]")
+        query = json_funcs.json_query(dialect, core.Column(dialect, "doc"), "$.a[*]")
         assert query.to_sql() == ('JSON_QUERY("DOC", ?)', ("$.a[*]",))
-        exists = json_funcs.json_exists(dialect, "doc", "$.a")
+        exists = json_funcs.json_exists(dialect, core.Column(dialect, "doc"), "$.a")
         assert exists.to_sql() == ('JSON_EXISTS("DOC", ?)', ("$.a",))
 
     def test_json_value_with_returning_clause(self, dialect):
-        call = json_funcs.json_value(dialect, "doc", "$.a", "VARCHAR2(100)")
+        call = json_funcs.json_value(dialect, core.Column(dialect, "doc"), "$.a",
+                                     "VARCHAR2(100)")
         assert call.to_sql() == (
             'JSON_VALUE("DOC", ? RETURNING VARCHAR2(100))', ("$.a",),
         )
 
     def test_json_query_with_returning_clause(self, dialect):
-        call = json_funcs.json_query(dialect, "doc", "$.a[*]", "CLOB")
+        call = json_funcs.json_query(dialect, core.Column(dialect, "doc"), "$.a[*]", "CLOB")
         assert call.to_sql() == (
             'JSON_QUERY("DOC", ? RETURNING CLOB)', ("$.a[*]",),
         )

@@ -69,16 +69,14 @@ def _coerce_returning_type(
 
 def json_value(
     dialect: "OracleDialect",
-    json_doc: Union[str, "bases.BaseExpression"],
+    json_doc: "bases.BaseExpression",
     path: str,
     returning: Union[str, "DataType", None] = None,
 ) -> "bases.BaseExpression":
     """Oracle JSON_VALUE: extract a scalar from a JSON document."""
     from rhosocial.activerecord.backend.expression import core
-    from ._convert import _convert_to_expression
-    doc_expr = _convert_to_expression(dialect, json_doc)
     path_expr = core.Literal(dialect, path)
-    func = core.FunctionCall(dialect, "JSON_VALUE", doc_expr, path_expr)
+    func = core.FunctionCall(dialect, "JSON_VALUE", json_doc, path_expr)
     if returning is not None:
         func._oracle_returning_type = _coerce_returning_type(dialect, returning)
     return func
@@ -86,16 +84,14 @@ def json_value(
 
 def json_query(
     dialect: "OracleDialect",
-    json_doc: Union[str, "bases.BaseExpression"],
+    json_doc: "bases.BaseExpression",
     path: str,
     returning: Union[str, "DataType", None] = None,
 ) -> "bases.BaseExpression":
     """Oracle JSON_QUERY: extract a JSON object/array from a document."""
     from rhosocial.activerecord.backend.expression import core
-    from ._convert import _convert_to_expression
-    doc_expr = _convert_to_expression(dialect, json_doc)
     path_expr = core.Literal(dialect, path)
-    func = core.FunctionCall(dialect, "JSON_QUERY", doc_expr, path_expr)
+    func = core.FunctionCall(dialect, "JSON_QUERY", json_doc, path_expr)
     if returning is not None:
         func._oracle_returning_type = _coerce_returning_type(dialect, returning)
     return func
@@ -103,15 +99,13 @@ def json_query(
 
 def json_exists(
     dialect: "OracleDialect",
-    json_doc: Union[str, "bases.BaseExpression"],
+    json_doc: "bases.BaseExpression",
     path: str,
 ) -> "bases.BaseExpression":
     """Oracle JSON_EXISTS: check if a path exists in a JSON document."""
     from rhosocial.activerecord.backend.expression import core
-    from ._convert import _convert_to_expression
-    doc_expr = _convert_to_expression(dialect, json_doc)
     path_expr = core.Literal(dialect, path)
-    return core.FunctionCall(dialect, "JSON_EXISTS", doc_expr, path_expr)
+    return core.FunctionCall(dialect, "JSON_EXISTS", json_doc, path_expr)
 
 
 def json_object_expr(
@@ -140,18 +134,16 @@ def json_array_expr(
 
 def json_serialize(
     dialect: "OracleDialect",
-    json_doc: Union[str, "bases.BaseExpression"],
+    json_doc: "bases.BaseExpression",
 ) -> "bases.BaseExpression":
     """Oracle JSON_SERIALIZE: serialize a JSON document to a string."""
     from rhosocial.activerecord.backend.expression import core
-    from ._convert import _convert_to_expression
-    doc_expr = _convert_to_expression(dialect, json_doc)
-    return core.FunctionCall(dialect, "JSON_SERIALIZE", doc_expr)
+    return core.FunctionCall(dialect, "JSON_SERIALIZE", json_doc)
 
 
 def json_table(
     dialect: "OracleDialect",
-    json_doc: Union[str, "bases.BaseExpression"],
+    json_doc: "bases.BaseExpression",
     path: str,
     columns: str,
 ) -> "bases.BaseExpression":
@@ -162,11 +154,9 @@ def json_table(
     sub-clause after the root path.
     """
     from rhosocial.activerecord.backend.expression import core
-    from ._convert import _convert_to_expression
-    doc_expr = _convert_to_expression(dialect, json_doc)
     func = core.FunctionCall(
         dialect, "JSON_TABLE",
-        doc_expr, core.Literal(dialect, path),
+        json_doc, core.Literal(dialect, path),
     )
     func._oracle_json_table_columns = columns
     return func
