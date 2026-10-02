@@ -154,6 +154,13 @@ class OracleCreateFunctionExpression(BaseExpression):
         keyword: str = "AS",
         schema_name: Optional[str] = None,
     ):
+        """
+        Args:
+            schema_name: Namespace to qualify the function with, e.g. ``app``.
+                None leaves the name unqualified. An empty string raises
+                ValueError, and a dialect with no namespace raises
+                UnsupportedFeatureError.
+        """
         super().__init__(dialect)
         if not isinstance(function_name, str) or not function_name.strip():
             raise ValueError("function_name must be a non-empty string")

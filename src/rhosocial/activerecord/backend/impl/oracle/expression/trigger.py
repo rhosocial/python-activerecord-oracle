@@ -37,6 +37,13 @@ class DisableTriggerExpression(BaseExpression):
         table_name: Optional[str] = None,
         schema_name: Optional[str] = None,
     ):
+        """
+        Args:
+            schema_name: Namespace to qualify the trigger with, e.g. ``app``.
+                None leaves the name unqualified. An empty string raises
+                ValueError, and a dialect with no namespace raises
+                UnsupportedFeatureError.
+        """
         super().__init__(dialect)
         self.trigger_name = trigger_name
         self.schema_name = _validate_schema_name(schema_name, type(self).__name__)
@@ -66,6 +73,13 @@ class EnableTriggerExpression(BaseExpression):
         table_name: Optional[str] = None,
         schema_name: Optional[str] = None,
     ):
+        """
+        Args:
+            schema_name: Namespace to qualify the trigger with, e.g. ``app``.
+                None leaves the name unqualified. An empty string raises
+                ValueError, and a dialect with no namespace raises
+                UnsupportedFeatureError.
+        """
         super().__init__(dialect)
         self.trigger_name = trigger_name
         self.schema_name = _validate_schema_name(schema_name, type(self).__name__)

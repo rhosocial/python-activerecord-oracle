@@ -1195,6 +1195,13 @@ class OracleCreateTypeBodyExpression(BaseExpression):
         keyword: str = "AS",
         editionable: Optional[bool] = None,
     ) -> None:
+        """
+        Args:
+            schema_name: Namespace to qualify the type body with, e.g. ``app``.
+                None leaves the name unqualified. An empty string raises
+                ValueError, and a dialect with no namespace raises
+                UnsupportedFeatureError.
+        """
         super().__init__(dialect)
         _validate_name(type_name, "type_name")
         if schema_name is not None and schema is not None and schema_name != schema:
@@ -1240,6 +1247,13 @@ class OracleDropTypeExpression(DropTypeExpression):
         force: bool = False,
         validate: bool = False,
     ) -> None:
+        """
+        Args:
+            schema_name: Namespace to qualify the type with, e.g. ``app``.
+                None leaves the name unqualified. An empty string raises
+                ValueError, and a dialect with no namespace raises
+                UnsupportedFeatureError.
+        """
         if schema_name is not None and schema is not None and schema_name != schema:
             raise ValueError("schema_name and schema are mutually exclusive")
         schema_name = schema_name if schema_name is not None else schema
@@ -1275,6 +1289,13 @@ class DropTypeBodyExpression(BaseExpression):
         schema: Optional[str] = None,
         if_exists: bool = False,
     ) -> None:
+        """
+        Args:
+            schema_name: Namespace to qualify the type body with, e.g. ``app``.
+                None leaves the name unqualified. An empty string raises
+                ValueError, and a dialect with no namespace raises
+                UnsupportedFeatureError.
+        """
         super().__init__(dialect)
         _validate_name(type_name, "type_name")
         if schema_name is not None and schema is not None and schema_name != schema:

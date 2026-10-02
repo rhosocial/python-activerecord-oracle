@@ -113,6 +113,13 @@ class OracleCreateSequenceExpression(BaseExpression):
         order: Optional[bool] = None,
         schema_name: Optional[str] = None,
     ):
+        """
+        Args:
+            schema_name: Namespace to qualify the sequence with, e.g. ``app``.
+                None leaves the name unqualified. An empty string raises
+                ValueError, and a dialect with no namespace raises
+                UnsupportedFeatureError.
+        """
         super().__init__(dialect)
         if not isinstance(sequence_name, str) or not sequence_name.strip():
             raise ValueError("sequence_name must be a non-empty string")
@@ -160,6 +167,13 @@ class OracleDropSequenceExpression(BaseExpression):
         if_exists: bool = False,
         schema_name: Optional[str] = None,
     ):
+        """
+        Args:
+            schema_name: Namespace to qualify the sequence with, e.g. ``app``.
+                None leaves the name unqualified. An empty string raises
+                ValueError, and a dialect with no namespace raises
+                UnsupportedFeatureError.
+        """
         super().__init__(dialect)
         if not isinstance(sequence_name, str) or not sequence_name.strip():
             raise ValueError("sequence_name must be a non-empty string")

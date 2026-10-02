@@ -94,6 +94,13 @@ class OracleCreateMaterializedViewExpression(BaseExpression):
         query_rewrite: Optional[bool] = None,
         schema_name: Optional[str] = None,
     ):
+        """
+        Args:
+            schema_name: Namespace to qualify the materialized view with, e.g. ``app``.
+                None leaves the name unqualified. An empty string raises
+                ValueError, and a dialect with no namespace raises
+                UnsupportedFeatureError.
+        """
         super().__init__(dialect)
         if not isinstance(view_name, str) or not view_name.strip():
             raise ValueError("view_name must be a non-empty string")
@@ -179,6 +186,13 @@ class OracleDropMaterializedViewExpression(BaseExpression):
         preserve_table: bool = False,
         schema_name: Optional[str] = None,
     ):
+        """
+        Args:
+            schema_name: Namespace to qualify the materialized view with, e.g. ``app``.
+                None leaves the name unqualified. An empty string raises
+                ValueError, and a dialect with no namespace raises
+                UnsupportedFeatureError.
+        """
         super().__init__(dialect)
         if not isinstance(view_name, str) or not view_name.strip():
             raise ValueError("view_name must be a non-empty string")
