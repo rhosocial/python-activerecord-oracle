@@ -9,6 +9,7 @@ partitioned table.
 Requires a live Oracle 11g+ instance via the ``oracle_backend`` fixture.
 """
 
+from rhosocial.activerecord.backend.expression.core import TableExpression
 import pytest
 
 from rhosocial.activerecord.backend.dialect.protocols import PartitionSupport
@@ -119,7 +120,7 @@ def test_create_range_partitioned_table_real(oracle_backend_single):
         )
         expr = CreateTableExpression(
             dialect=d,
-            table=table_name,
+            table=TableExpression(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
                     ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
@@ -162,7 +163,7 @@ def test_create_list_partitioned_table_real(oracle_backend_single):
         )
         expr = CreateTableExpression(
             dialect=d,
-            table=table_name,
+            table=TableExpression(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
                     ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
@@ -198,7 +199,7 @@ def test_create_hash_partitioned_table_real(oracle_backend_single):
         partition = OraclePartitionByHash(d, [Column(d, "ID")], partitions_count=4)
         expr = CreateTableExpression(
             dialect=d,
-            table=table_name,
+            table=TableExpression(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
                     ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
@@ -240,7 +241,7 @@ def test_explain_range_partitioned_table_real(oracle_backend_single):
         )
         expr = CreateTableExpression(
             dialect=d,
-            table=table_name,
+            table=TableExpression(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
                     ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),

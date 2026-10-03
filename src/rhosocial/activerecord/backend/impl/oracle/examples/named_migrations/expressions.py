@@ -16,6 +16,7 @@ Type usage follows issue #108: each column is given a concrete
 ``DataType`` instance rather than a free-form ``data_type`` string.
 """
 
+from rhosocial.activerecord.backend.expression.core import TableExpression
 from rhosocial.activerecord.backend.expression.statements.ddl_table import (
     CreateTableExpression,
     ColumnDefinition,
@@ -99,7 +100,7 @@ def create_custom_table(dialect, table_name: str = "custom_table"):
     """
     return CreateTableExpression(
         dialect,
-        table=table_name,
+        table=TableExpression(dialect, table_name),
         columns=[
             ColumnDefinition(
                 dialect,
@@ -120,4 +121,4 @@ def create_custom_table(dialect, table_name: str = "custom_table"):
 
 def drop_custom_table(dialect, table_name: str = "custom_table"):
     """DROP TABLE IF EXISTS <table_name>."""
-    return DropTableExpression(dialect, table=table_name, if_exists=True)
+    return DropTableExpression(dialect, table=TableExpression(dialect, table_name), if_exists=True)

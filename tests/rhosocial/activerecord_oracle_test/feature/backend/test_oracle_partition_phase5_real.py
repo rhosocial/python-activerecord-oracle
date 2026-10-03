@@ -13,6 +13,7 @@ fixture. The configured scenarios (18c / 21c / 23c) all satisfy the
 INTERVAL / REFERENCE / composite partitioning requirements.
 """
 
+from rhosocial.activerecord.backend.expression.core import TableExpression
 import pytest
 from datetime import date
 
@@ -158,7 +159,7 @@ def test_interval_partition_auto_creates_partition_real(oracle_backend_single):
         )
         expr = CreateTableExpression(
             dialect=d,
-            table=table_name,
+            table=TableExpression(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
                     ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
@@ -218,7 +219,7 @@ def test_reference_partitioning_inherits_parent_partitions_real(oracle_backend_s
         )
         parent_expr = CreateTableExpression(
             dialect=d,
-            table=parent_name,
+            table=TableExpression(d, parent_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
                     ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
@@ -248,7 +249,7 @@ def test_reference_partitioning_inherits_parent_partitions_real(oracle_backend_s
         child_partition = OracleReferencePartitionClause(d, "fk_child_parent")
         child_expr = CreateTableExpression(
             dialect=d,
-            table=child_name,
+            table=TableExpression(d, child_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
                     ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
@@ -313,7 +314,7 @@ def test_composite_range_hash_partitioning_real(oracle_backend_single):
         )
         expr = CreateTableExpression(
             dialect=d,
-            table=table_name,
+            table=TableExpression(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
                     ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
@@ -359,7 +360,7 @@ def test_add_and_drop_partition_real(oracle_backend_single):
         )
         expr = CreateTableExpression(
             dialect=d,
-            table=table_name,
+            table=TableExpression(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
                     ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
@@ -409,7 +410,7 @@ def test_split_partition_real(oracle_backend_single):
         )
         expr = CreateTableExpression(
             dialect=d,
-            table=table_name,
+            table=TableExpression(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
                     ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
@@ -456,7 +457,7 @@ def test_merge_partitions_real(oracle_backend_single):
         )
         expr = CreateTableExpression(
             dialect=d,
-            table=table_name,
+            table=TableExpression(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
                     ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
@@ -498,7 +499,7 @@ def test_truncate_partition_real(oracle_backend_single):
         )
         expr = CreateTableExpression(
             dialect=d,
-            table=table_name,
+            table=TableExpression(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
                     ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
@@ -552,7 +553,7 @@ def test_move_partition_real(oracle_backend_single):
         )
         expr = CreateTableExpression(
             dialect=d,
-            table=table_name,
+            table=TableExpression(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
                     ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
@@ -594,7 +595,7 @@ def test_exchange_partition_real(oracle_backend_single):
         )
         expr = CreateTableExpression(
             dialect=d,
-            table=table_name,
+            table=TableExpression(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
                     ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
@@ -608,7 +609,7 @@ def test_exchange_partition_real(oracle_backend_single):
         # Build a non-partitioned staging table with the same shape.
         staging_expr = CreateTableExpression(
             dialect=d,
-            table=staging_name,
+            table=TableExpression(d, staging_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
                     ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
