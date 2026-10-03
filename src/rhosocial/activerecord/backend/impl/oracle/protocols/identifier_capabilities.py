@@ -9,14 +9,17 @@ when mixins gain new public rendering methods.
 
 from typing import Any, Dict, List, Optional, Tuple
 
+from rhosocial.activerecord.backend.expression.bases import BaseExpression
+from rhosocial.activerecord.backend.expression.core import Column
+
 from typing import Protocol
 
 class OracleIdentifierSupport(Protocol):
     """Auto-generated capability protocol (P7)."""
 
-    def format_identifier(self, identifier: str) -> str:
+    def format_identifier(self, identifier: str, need_quote: bool = True) -> str:
         ...  # pragma: no cover
-    def format_column(self, name: str, table: Optional[str]=None, alias: Optional[str]=None, schema_name: Optional[str]=None) -> Tuple[str, Tuple]:
+    def format_column(self, expr: 'Column') -> Tuple[str, Tuple]:
         ...  # pragma: no cover
-    def format_table(self, table_name: str, alias: Optional[str]=None, schema_name: Optional[str]=None, dblink: Optional[str]=None, flashback: Optional[Any]=None) -> Tuple[str, Tuple]:
+    def format_table(self, expr: 'BaseExpression') -> Tuple[str, tuple]:
         ...  # pragma: no cover
