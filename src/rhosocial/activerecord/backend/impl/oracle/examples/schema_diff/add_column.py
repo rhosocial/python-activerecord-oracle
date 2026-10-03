@@ -63,6 +63,7 @@ from rhosocial.activerecord.backend.schema import (  # noqa: E402
 from rhosocial.activerecord.backend.impl.oracle.schema.differ import (  # noqa: E402
     OracleSchemaDiffer,
 )
+from rhosocial.activerecord.backend.expression.core import TableExpression  # noqa: E402
 from rhosocial.activerecord.backend.expression.statements.ddl_alter import (  # noqa: E402
     AlterTableExpression, AddColumn,
 )
@@ -72,7 +73,7 @@ snapshot_before = builder.build()
 
 # Add `AGE` column. Oracle appends at the end (no AFTER support).
 add_col = AddColumn(dialect, ColumnDefinition(dialect, "AGE", IntegerType(dialect)))
-alter_expr = AlterTableExpression(dialect, "USERS", [add_col])
+alter_expr = AlterTableExpression(dialect, TableExpression(dialect, "USERS"), [add_col])
 sql, params = alter_expr.to_sql()
 backend.execute(sql, params)
 

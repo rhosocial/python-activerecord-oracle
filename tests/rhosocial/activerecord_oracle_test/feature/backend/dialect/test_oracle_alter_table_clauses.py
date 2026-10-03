@@ -12,6 +12,7 @@ Pure-construction tests: no database connection is required.
 import pytest
 
 from rhosocial.activerecord.backend.dialect import UnsupportedFeatureError
+from rhosocial.activerecord.backend.expression.core import TableExpression
 from rhosocial.activerecord.backend.expression.statements import AlterTableExpression
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.expression import (
@@ -42,7 +43,7 @@ class TestOracleAlterTableCapabilities:
 class TestOracleSetUnusedColumnsAction:
     def test_set_unused(self, dialect):
         alter = AlterTableExpression(
-            dialect, "t", actions=[OracleSetUnusedColumnsAction(dialect, ["c1", "c2"])]
+            dialect, TableExpression(dialect, "t"), actions=[OracleSetUnusedColumnsAction(dialect, ["c1", "c2"])]
         )
         sql, params = alter.to_sql()
         assert sql == 'ALTER TABLE "T" SET UNUSED ("C1", "C2")'
@@ -50,7 +51,7 @@ class TestOracleSetUnusedColumnsAction:
 
     def test_set_unused_single_column(self, dialect):
         alter = AlterTableExpression(
-            dialect, "t", actions=[OracleSetUnusedColumnsAction(dialect, ["c1"])]
+            dialect, TableExpression(dialect, "t"), actions=[OracleSetUnusedColumnsAction(dialect, ["c1"])]
         )
         sql, params = alter.to_sql()
         assert sql == 'ALTER TABLE "T" SET UNUSED ("C1")'
@@ -64,7 +65,7 @@ class TestOracleSetUnusedColumnsAction:
 class TestOracleDropUnusedColumnsAction:
     def test_drop_unused_columns(self, dialect):
         alter = AlterTableExpression(
-            dialect, "t", actions=[OracleDropUnusedColumnsAction(dialect)]
+            dialect, TableExpression(dialect, "t"), actions=[OracleDropUnusedColumnsAction(dialect)]
         )
         sql, params = alter.to_sql()
         assert sql == 'ALTER TABLE "T" DROP UNUSED COLUMNS'
@@ -73,7 +74,7 @@ class TestOracleDropUnusedColumnsAction:
 
 class TestOracleMoveTableAction:
     def test_move(self, dialect):
-        alter = AlterTableExpression(dialect, "t", actions=[OracleMoveTableAction(dialect)])
+        alter = AlterTableExpression(dialect, TableExpression(dialect, "t"), actions=[OracleMoveTableAction(dialect)])
         sql, params = alter.to_sql()
         assert sql == 'ALTER TABLE "T" MOVE'
         assert params == ()
@@ -82,7 +83,7 @@ class TestOracleMoveTableAction:
 class TestOracleShrinkSpaceAction:
     def test_shrink_space(self, dialect):
         alter = AlterTableExpression(
-            dialect, "t", actions=[OracleShrinkSpaceAction(dialect)]
+            dialect, TableExpression(dialect, "t"), actions=[OracleShrinkSpaceAction(dialect)]
         )
         sql, params = alter.to_sql()
         assert sql == 'ALTER TABLE "T" SHRINK SPACE'
@@ -90,7 +91,7 @@ class TestOracleShrinkSpaceAction:
 
     def test_shrink_space_cascade(self, dialect):
         alter = AlterTableExpression(
-            dialect, "t", actions=[OracleShrinkSpaceAction(dialect, cascade=True)]
+            dialect, TableExpression(dialect, "t"), actions=[OracleShrinkSpaceAction(dialect, cascade=True)]
         )
         sql, params = alter.to_sql()
         assert sql == 'ALTER TABLE "T" SHRINK SPACE CASCADE'
@@ -99,14 +100,14 @@ class TestOracleShrinkSpaceAction:
 
 class TestOracleReadOnlyAction:
     def test_read_only(self, dialect):
-        alter = AlterTableExpression(dialect, "t", actions=[OracleReadOnlyAction(dialect)])
+        alter = AlterTableExpression(dialect, TableExpression(dialect, "t"), actions=[OracleReadOnlyAction(dialect)])
         sql, params = alter.to_sql()
         assert sql == 'ALTER TABLE "T" READ ONLY'
         assert params == ()
 
     def test_read_write(self, dialect):
         alter = AlterTableExpression(
-            dialect, "t", actions=[OracleReadOnlyAction(dialect, read_only=False)]
+            dialect, TableExpression(dialect, "t"), actions=[OracleReadOnlyAction(dialect, read_only=False)]
         )
         sql, params = alter.to_sql()
         assert sql == 'ALTER TABLE "T" READ WRITE'
@@ -116,7 +117,7 @@ class TestOracleReadOnlyAction:
 class TestOracleRowMovementAction:
     def test_enable_row_movement(self, dialect):
         alter = AlterTableExpression(
-            dialect, "t", actions=[OracleRowMovementAction(dialect, enable=True)]
+            dialect, TableExpression(dialect, "t"), actions=[OracleRowMovementAction(dialect, enable=True)]
         )
         sql, params = alter.to_sql()
         assert sql == 'ALTER TABLE "T" ENABLE ROW MOVEMENT'
@@ -124,7 +125,7 @@ class TestOracleRowMovementAction:
 
     def test_disable_row_movement(self, dialect):
         alter = AlterTableExpression(
-            dialect, "t", actions=[OracleRowMovementAction(dialect, enable=False)]
+            dialect, TableExpression(dialect, "t"), actions=[OracleRowMovementAction(dialect, enable=False)]
         )
         sql, params = alter.to_sql()
         assert sql == 'ALTER TABLE "T" DISABLE ROW MOVEMENT'
@@ -135,7 +136,7 @@ class TestOracleAlterTableVersionBoundary:
     def test_set_unused_below_9i_raises(self):
         d8 = OracleDialect(version=(8, 1, 0))
         alter = AlterTableExpression(
-            d8, "t", actions=[OracleSetUnusedColumnsAction(d8, ["c1"])]
+            d8, TableExpression(d8, "t"), actions=[OracleSetUnusedColumnsAction(d8, ["c1"])]
         )
         with pytest.raises(UnsupportedFeatureError, match="SET UNUSED"):
             alter.to_sql()
@@ -143,32 +144,32 @@ class TestOracleAlterTableVersionBoundary:
     def test_drop_unused_below_9i_raises(self):
         d8 = OracleDialect(version=(8, 1, 0))
         alter = AlterTableExpression(
-            d8, "t", actions=[OracleDropUnusedColumnsAction(d8)]
+            d8, TableExpression(d8, "t"), actions=[OracleDropUnusedColumnsAction(d8)]
         )
         with pytest.raises(UnsupportedFeatureError, match="DROP UNUSED COLUMNS"):
             alter.to_sql()
 
     def test_move_below_9i_raises(self):
         d8 = OracleDialect(version=(8, 1, 0))
-        alter = AlterTableExpression(d8, "t", actions=[OracleMoveTableAction(d8)])
+        alter = AlterTableExpression(d8, TableExpression(d8, "t"), actions=[OracleMoveTableAction(d8)])
         with pytest.raises(UnsupportedFeatureError, match="MOVE"):
             alter.to_sql()
 
     def test_shrink_below_10g_raises(self):
         d9 = OracleDialect(version=(9, 2, 0))
-        alter = AlterTableExpression(d9, "t", actions=[OracleShrinkSpaceAction(d9)])
+        alter = AlterTableExpression(d9, TableExpression(d9, "t"), actions=[OracleShrinkSpaceAction(d9)])
         with pytest.raises(UnsupportedFeatureError, match="SHRINK SPACE"):
             alter.to_sql()
 
     def test_read_only_below_11g_raises(self):
         d10 = OracleDialect(version=(10, 0, 0))
-        alter = AlterTableExpression(d10, "t", actions=[OracleReadOnlyAction(d10)])
+        alter = AlterTableExpression(d10, TableExpression(d10, "t"), actions=[OracleReadOnlyAction(d10)])
         with pytest.raises(UnsupportedFeatureError, match="READ ONLY"):
             alter.to_sql()
 
     def test_read_only_at_11g_works(self):
         d11 = OracleDialect(version=(11, 0, 0))
-        alter = AlterTableExpression(d11, "t", actions=[OracleReadOnlyAction(d11)])
+        alter = AlterTableExpression(d11, TableExpression(d11, "t"), actions=[OracleReadOnlyAction(d11)])
         sql, params = alter.to_sql()
         assert sql == 'ALTER TABLE "T" READ ONLY'
         assert params == ()
@@ -176,7 +177,7 @@ class TestOracleAlterTableVersionBoundary:
     def test_row_movement_below_9i_raises(self):
         d8 = OracleDialect(version=(8, 1, 0))
         alter = AlterTableExpression(
-            d8, "t", actions=[OracleRowMovementAction(d8, enable=True)]
+            d8, TableExpression(d8, "t"), actions=[OracleRowMovementAction(d8, enable=True)]
         )
         with pytest.raises(UnsupportedFeatureError, match="ROW MOVEMENT"):
             alter.to_sql()
@@ -191,5 +192,5 @@ class TestOracleAlterTableVersionBoundary:
             ([OracleRowMovementAction(d10, enable=False)], 'ALTER TABLE "T" DISABLE ROW MOVEMENT'),
         ]
         for actions, expected in cases:
-            alter = AlterTableExpression(d10, "t", actions=actions)
+            alter = AlterTableExpression(d10, TableExpression(d10, "t"), actions=actions)
             assert alter.to_sql()[0] == expected

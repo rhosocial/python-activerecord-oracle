@@ -1,6 +1,5 @@
 # src/rhosocial/activerecord/backend/impl/oracle/mixins/column.py
 from typing import List, Tuple, Union, TYPE_CHECKING
-from rhosocial.activerecord.backend.expression.core import TableExpression
 
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 
@@ -146,7 +145,7 @@ class OracleModifyColumnMixin:
         MOVE`` with a double space.
         """
         all_params: List = []
-        parts = [f"ALTER TABLE {TableExpression(self, expr.table_name, schema_name=expr.schema_name).to_sql()[0]}"]
+        parts = [f"ALTER TABLE {expr.table.to_sql()[0]}"]
         action_parts = []
         for action in expr.actions:
             action_part, action_params = action.to_sql()
