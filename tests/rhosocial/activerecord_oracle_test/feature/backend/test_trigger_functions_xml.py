@@ -210,25 +210,26 @@ class TestStringFunctionFactories:
 class TestJsonScalarFactories:
     def test_json_value(self, dialect):
         call = json_funcs.json_value(dialect, core.Column(dialect, "doc"), "$.a")
-        assert call.to_sql() == ('JSON_VALUE("DOC", ?)', ("$.a",))
+        # The path is inline: Oracle refuses a bound one with ORA-40454.
+        assert call.to_sql() == ("JSON_VALUE(\"DOC\", '$.a')", ())
 
     def test_json_query_and_exists(self, dialect):
         query = json_funcs.json_query(dialect, core.Column(dialect, "doc"), "$.a[*]")
-        assert query.to_sql() == ('JSON_QUERY("DOC", ?)', ("$.a[*]",))
+        assert query.to_sql() == ("JSON_QUERY(\"DOC\", '$.a[*]')", ())
         exists = json_funcs.json_exists(dialect, core.Column(dialect, "doc"), "$.a")
-        assert exists.to_sql() == ('JSON_EXISTS("DOC", ?)', ("$.a",))
+        assert exists.to_sql() == ("JSON_EXISTS(\"DOC\", '$.a')", ())
 
     def test_json_value_with_returning_clause(self, dialect):
         call = json_funcs.json_value(dialect, core.Column(dialect, "doc"), "$.a",
                                      "VARCHAR2(100)")
         assert call.to_sql() == (
-            'JSON_VALUE("DOC", ? RETURNING VARCHAR2(100))', ("$.a",),
+            "JSON_VALUE(\"DOC\", '$.a' RETURNING VARCHAR2(100))", (),
         )
 
     def test_json_query_with_returning_clause(self, dialect):
         call = json_funcs.json_query(dialect, core.Column(dialect, "doc"), "$.a[*]", "CLOB")
         assert call.to_sql() == (
-            'JSON_QUERY("DOC", ? RETURNING CLOB)', ("$.a[*]",),
+            "JSON_QUERY(\"DOC\", '$.a[*]' RETURNING CLOB)", (),
         )
 
 
