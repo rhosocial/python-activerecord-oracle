@@ -18,7 +18,7 @@ from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeature
 class TestOracleTableCapabilityGating:
     def test_table_declaration_defaults_are_absent(self):
         dialect = OracleDialect(version=(19, 0, 0))
-        expression = CreateTableExpression(dialect, "plain_table_defaults", [])
+        expression = CreateTableExpression(dialect, TableExpression(dialect, "plain_table_defaults"), [])
 
         assert expression.inherits == []
         assert expression.tablespace is None
@@ -27,7 +27,7 @@ class TestOracleTableCapabilityGating:
         dialect = OracleDialect(version=(19, 0, 0))
         expression = CreateTableExpression(
             dialect,
-            "inheriting_table",
+            TableExpression(dialect, "inheriting_table"),
             [],
             inherits=["parent_a", "parent_b"],
         )
@@ -41,7 +41,7 @@ class TestOracleTableCapabilityGating:
         dialect = OracleDialect(version=(19, 0, 0))
         expression = CreateTableExpression(
             dialect,
-            "tablespaced_table",
+            TableExpression(dialect, "tablespaced_table"),
             [],
             tablespace="ts_data",
         )

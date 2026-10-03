@@ -36,16 +36,18 @@ class TestOracleDropTableCascadeCapabilities:
 
 class TestOracleDropTableRendering:
     def test_cascade_true_renders_cascade_constraints(self, dialect):
-        expr = DropTableExpression(dialect, table="users", cascade=True)
+        from rhosocial.activerecord.backend.expression.core import TableExpression
+        expr = DropTableExpression(dialect, table=TableExpression(dialect, "users"), cascade=True)
         sql, params = expr.to_sql()
         assert sql.endswith(" CASCADE CONSTRAINTS")
         assert "PURGE" not in sql
         assert params == ()
 
     def test_cascade_true_with_purge_option(self, dialect):
+        from rhosocial.activerecord.backend.expression.core import TableExpression
         expr = DropTableExpression(
             dialect,
-            table="users",
+            table=TableExpression(dialect, "users"),
             cascade=True,
             purge=True,
         )
@@ -54,19 +56,22 @@ class TestOracleDropTableRendering:
         assert params == ()
 
     def test_purge_without_cascade(self, dialect):
-        expr = DropTableExpression(dialect, table="users", purge=True)
+        from rhosocial.activerecord.backend.expression.core import TableExpression
+        expr = DropTableExpression(dialect, table=TableExpression(dialect, "users"), purge=True)
         sql, params = expr.to_sql()
         assert sql.endswith(" PURGE")
         assert "CASCADE" not in sql
         assert params == ()
 
     def test_cascade_false_raises(self, dialect):
-        expr = DropTableExpression(dialect, table="users", cascade=False)
+        from rhosocial.activerecord.backend.expression.core import TableExpression
+        expr = DropTableExpression(dialect, table=TableExpression(dialect, "users"), cascade=False)
         with pytest.raises(UnsupportedFeatureError, match="DROP TABLE ... RESTRICT"):
             expr.to_sql()
 
     def test_cascade_none_omits_clause(self, dialect):
-        expr = DropTableExpression(dialect, table="users", cascade=None)
+        from rhosocial.activerecord.backend.expression.core import TableExpression
+        expr = DropTableExpression(dialect, table=TableExpression(dialect, "users"), cascade=None)
         sql, params = expr.to_sql()
         assert "CASCADE" not in sql
         assert "RESTRICT" not in sql
@@ -80,12 +85,14 @@ class TestOracleDropTableRendering:
         what the caller asked for.
         """
         assert dialect.supports_if_exists_table() is False
-        expr = DropTableExpression(dialect, table="users", if_exists=True)
+        from rhosocial.activerecord.backend.expression.core import TableExpression
+        expr = DropTableExpression(dialect, table=TableExpression(dialect, "users"), if_exists=True)
         with pytest.raises(UnsupportedFeatureError, match="DROP TABLE IF EXISTS"):
             expr.to_sql()
 
     def test_if_not_set_renders_plainly(self, dialect):
-        expr = DropTableExpression(dialect, table="users")
+        from rhosocial.activerecord.backend.expression.core import TableExpression
+        expr = DropTableExpression(dialect, table=TableExpression(dialect, "users"))
         sql, params = expr.to_sql()
         assert sql == 'DROP TABLE "USERS"'
         assert params == ()

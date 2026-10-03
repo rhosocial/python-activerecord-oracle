@@ -31,18 +31,19 @@ dialect = backend.dialect
 from rhosocial.activerecord.backend.expression import (  # noqa: E402
     DropTableExpression, CreateTableExpression, ColumnDefinition,
     ColumnConstraint, ColumnConstraintType,
+    TableExpression,
 )
 from rhosocial.activerecord.backend.expression.types import (  # noqa: E402
     IntegerType, VarCharType,
 )
 
-expr = DropTableExpression(dialect, "USERS", if_exists=True)
+expr = DropTableExpression(dialect, TableExpression(dialect, "USERS"), if_exists=True)
 sql, params = expr.to_sql()
 backend.execute(sql, params)
 
 # Baseline table: ID, NAME, EMAIL
 expr = CreateTableExpression(
-    dialect=dialect, table="USERS", columns=[
+    dialect=dialect, table=TableExpression(dialect, "USERS"), columns=[
         ColumnDefinition(dialect, "ID", IntegerType(dialect),
             constraints=[
                 ColumnConstraint(dialect, constraint_type=ColumnConstraintType.PRIMARY_KEY, is_auto_increment=True),
@@ -98,7 +99,7 @@ if "USERS" in diff.table_diffs:
 # ============================================================
 # SECTION: Teardown (necessary for execution, reference only)
 # ============================================================
-expr = DropTableExpression(dialect, "USERS", if_exists=True)
+expr = DropTableExpression(dialect, TableExpression(dialect, "USERS"), if_exists=True)
 sql, params = expr.to_sql()
 backend.execute(sql, params)
 backend.disconnect()

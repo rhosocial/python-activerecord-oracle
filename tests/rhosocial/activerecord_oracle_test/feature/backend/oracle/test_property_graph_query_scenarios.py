@@ -73,7 +73,7 @@ def social_graph_data(oracle_backend):
         ColumnDefinition(dialect, "email", VarCharType(length=200, dialect=dialect)),
         ColumnDefinition(dialect, "city", VarCharType(length=100, dialect=dialect)),
     ]
-    backend.execute(*CreateTableExpression(dialect, "people", people_cols).to_sql())
+    backend.execute(*CreateTableExpression(dialect, TableExpression(dialect, "people"), people_cols).to_sql())
 
     follows_cols = [
         ColumnDefinition(dialect, "id", IntegerType(dialect),
@@ -86,7 +86,7 @@ def social_graph_data(oracle_backend):
                                           foreign_key_reference=("people", ["id"]))]),
         ColumnDefinition(dialect, "since", VarCharType(length=20, dialect=dialect)),
     ]
-    backend.execute(*CreateTableExpression(dialect, "follows", follows_cols).to_sql())
+    backend.execute(*CreateTableExpression(dialect, TableExpression(dialect, "follows"), follows_cols).to_sql())
 
     posts_cols = [
         ColumnDefinition(dialect, "id", IntegerType(dialect),
@@ -97,7 +97,7 @@ def social_graph_data(oracle_backend):
         ColumnDefinition(dialect, "content", VarCharType(length=500, dialect=dialect)),
         ColumnDefinition(dialect, "created_at", VarCharType(length=20, dialect=dialect)),
     ]
-    backend.execute(*CreateTableExpression(dialect, "posts", posts_cols).to_sql())
+    backend.execute(*CreateTableExpression(dialect, TableExpression(dialect, "posts"), posts_cols).to_sql())
 
     likes_cols = [
         ColumnDefinition(dialect, "id", IntegerType(dialect),
@@ -110,7 +110,7 @@ def social_graph_data(oracle_backend):
                                           foreign_key_reference=("posts", ["id"]))]),
         ColumnDefinition(dialect, "created_at", VarCharType(length=20, dialect=dialect)),
     ]
-    backend.execute(*CreateTableExpression(dialect, "likes", likes_cols).to_sql())
+    backend.execute(*CreateTableExpression(dialect, TableExpression(dialect, "likes"), likes_cols).to_sql())
 
     people_data = ValuesSource(dialect, [
         [Literal(dialect, 1), Literal(dialect, "Alice"), Literal(dialect, "alice@x.com"), Literal(dialect, "NYC")],
@@ -431,7 +431,7 @@ class TestAsyncOracleSocialGraph:
                 constraints=[ColumnConstraint(dialect, ColumnConstraintType.PRIMARY_KEY)]),
             ColumnDefinition(dialect, "name", VarCharType(length=100, dialect=dialect)),
         ]
-        await backend.execute(*CreateTableExpression(dialect, "people", people_cols).to_sql())
+        await backend.execute(*CreateTableExpression(dialect, TableExpression(dialect, "people"), people_cols).to_sql())
 
         follows_cols = [
             ColumnDefinition(dialect, "id", IntegerType(dialect),
@@ -443,7 +443,10 @@ class TestAsyncOracleSocialGraph:
                 constraints=[ColumnConstraint(dialect, ColumnConstraintType.FOREIGN_KEY,
                                               foreign_key_reference=("people", ["id"]))]),
         ]
-        await backend.execute(*CreateTableExpression(dialect, "follows", follows_cols).to_sql())
+        await backend.execute(*CreateTableExpression(dialect, TableExpression(
+                                                                  dialect,
+                                                                  "follows",
+                                                              ), follows_cols).to_sql())
 
         people_data = ValuesSource(dialect, [
             [Literal(dialect, 1), Literal(dialect, "Alice")],

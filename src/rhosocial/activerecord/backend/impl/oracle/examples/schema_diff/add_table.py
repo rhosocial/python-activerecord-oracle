@@ -33,8 +33,9 @@ dialect = backend.dialect
 # Clean up any leftover tables
 from rhosocial.activerecord.backend.expression import (  # noqa: E402
     DropTableExpression,
+    TableExpression,
 )
-expr = DropTableExpression(dialect, "USERS", if_exists=True)
+expr = DropTableExpression(dialect, TableExpression(dialect, "USERS"), if_exists=True)
 sql, params = expr.to_sql()
 backend.execute(sql, params)
 
@@ -61,7 +62,7 @@ snapshot_before = builder.build()
 # Create a new table. Oracle 12c+ supports GENERATED AS IDENTITY for the
 # primary key column.
 expr = CreateTableExpression(
-    dialect=dialect, table="USERS", columns=[
+    dialect=dialect, table=TableExpression(dialect, "USERS"), columns=[
         ColumnDefinition(dialect, "ID", IntegerType(dialect),
             constraints=[
                 ColumnConstraint(dialect, constraint_type=ColumnConstraintType.PRIMARY_KEY, is_auto_increment=True),
@@ -88,7 +89,7 @@ print(f"Diff is empty:   {diff.is_empty}")
 # ============================================================
 # SECTION: Teardown (necessary for execution, reference only)
 # ============================================================
-expr = DropTableExpression(dialect, "USERS", if_exists=True)
+expr = DropTableExpression(dialect, TableExpression(dialect, "USERS"), if_exists=True)
 sql, params = expr.to_sql()
 backend.execute(sql, params)
 backend.disconnect()
