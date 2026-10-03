@@ -128,7 +128,10 @@ class TestOracleFunctionFormatMixin:
         func._oracle_within_group = "e"
         func._oracle_on_overflow = "TRUNCATE"
         sql, params = func.to_sql()
-        assert sql == ('LISTAGG(DISTINCT "E", ?) WITHIN GROUP (ORDER BY e) ON OVERFLOW TRUNCATE')
+        # ON OVERFLOW sits inside the argument list. Oracle's grammar puts it
+        # there and nowhere else -- the form with it after WITHIN GROUP is
+        # ORA-00923. See test_listagg_overflow_placement.py.
+        assert sql == ("LISTAGG(DISTINCT \"E\", ? ON OVERFLOW TRUNCATE) WITHIN GROUP (ORDER BY e)")
         assert params == (";",)
 
     def test_percentile_cont_and_disc(self, dialect):
