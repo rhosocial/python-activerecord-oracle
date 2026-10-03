@@ -110,12 +110,13 @@ class OracleTriggerMixin(object):
             raise NotImplementedError("Oracle WHEN clause templating requires dialect-specific context")
 
         body = getattr(trigger_expr, 'body', None)
-        if body is None and getattr(trigger_expr, 'function', None) is None:
+        function_name = getattr(trigger_expr, 'function_name', None)
+        if body is None and function_name is None:
             raise NotImplementedError("Oracle trigger body (PL/SQL block) templating requires dialect-specific context")
 
-        if getattr(trigger_expr, 'function', None):
+        if function_name is not None:
             parts.append("CALL")
-            parts.append(trigger_expr.function.to_sql()[0])
+            parts.append(function_name.to_sql()[0])
         elif body is not None:
             parts.append("BEGIN")
             parts.append(body)
