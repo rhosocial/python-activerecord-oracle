@@ -76,7 +76,7 @@ class OracleTriggerMixin(object):
                 raise ValueError("INSTEAD OF trigger requires at least one event")
             parts.append(event_values[0])
             parts.append("ON")
-            parts.append(self.format_identifier(trigger_expr.table_name))
+            parts.append(trigger_expr.table.to_sql()[0])
         else:
             if getattr(trigger_expr, 'update_columns', None):
                 if not event_values or event_values[0] != "UPDATE":
@@ -86,7 +86,7 @@ class OracleTriggerMixin(object):
             elif event_values:
                 parts.append(" OR ".join(event_values))
             parts.append("ON")
-            parts.append(self.format_identifier(trigger_expr.table_name))
+            parts.append(trigger_expr.table.to_sql()[0])
 
         level = getattr(trigger_expr, 'level', None)
         level_value = level.value if level is not None else None
@@ -110,12 +110,12 @@ class OracleTriggerMixin(object):
             raise NotImplementedError("Oracle WHEN clause templating requires dialect-specific context")
 
         body = getattr(trigger_expr, 'body', None)
-        if body is None and getattr(trigger_expr, 'function_name', None) is None:
+        if body is None and getattr(trigger_expr, 'function', None) is None:
             raise NotImplementedError("Oracle trigger body (PL/SQL block) templating requires dialect-specific context")
 
-        if getattr(trigger_expr, 'function_name', None):
+        if getattr(trigger_expr, 'function', None):
             parts.append("CALL")
-            parts.append(self.format_identifier(trigger_expr.function_name))
+            parts.append(trigger_expr.function.to_sql()[0])
         elif body is not None:
             parts.append("BEGIN")
             parts.append(body)

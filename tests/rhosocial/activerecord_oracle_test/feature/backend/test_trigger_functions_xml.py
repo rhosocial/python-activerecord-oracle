@@ -25,9 +25,10 @@ def dialect() -> OracleDialect:
 
 def _trigger(dialect: OracleDialect, **kwargs) -> CreateTriggerExpression:
     defaults = dict(
-        trigger_name="trg", table_name="t",
+        trigger_name="trg", table=core.TableExpression(dialect, "t"),
         timing=TriggerTiming.BEFORE, events=[TriggerEvent.INSERT],
-        function_name="proc", level=TriggerLevel.ROW,
+        function_name=core.TableExpression(dialect, "proc"),
+        level=TriggerLevel.ROW,
     )
     defaults.update(kwargs)
     return CreateTriggerExpression(dialect=dialect, **defaults)
@@ -50,24 +51,27 @@ class TestTriggerCapabilities:
 class TestCreateTriggerFormatting:
     def test_row_trigger_with_call(self, dialect):
         expr = _trigger(dialect, trigger_name="trg_audit",
-                        table_name="customers",
+                        table=core.TableExpression(dialect, "customers"),
                         events=[TriggerEvent.INSERT, TriggerEvent.UPDATE],
-                        function_name="audit_proc")
+                        function_name=core.TableExpression(dialect, "audit_proc"))
         sql, params = expr.to_sql()
         assert sql == ('CREATE OR REPLACE TRIGGER "TRG_AUDIT" BEFORE INSERT OR UPDATE ON "CUSTOMERS" FOR EACH ROW CALL "AUDIT_PROC"')
         assert params == ()
 
     def test_update_of_columns(self, dialect):
-        expr = _trigger(dialect, table_name="orders",
-                        events=[TriggerEvent.UPDATE], function_name="do_it",
+        expr = _trigger(dialect, table=core.TableExpression(dialect, "orders"),
+                        events=[TriggerEvent.UPDATE],
+                        function_name=core.TableExpression(dialect, "do_it"),
                         update_columns=["status", "note"])
         sql, _ = expr.to_sql()
         assert sql == ('CREATE OR REPLACE TRIGGER "TRG" BEFORE UPDATE OF "STATUS", "NOTE" ON "ORDERS" FOR EACH ROW CALL "DO_IT"')
 
     def test_instead_of_trigger_on_view(self, dialect):
-        expr = _trigger(dialect, trigger_name="TRG", table_name="v",
+        expr = _trigger(dialect, trigger_name="TRG",
+                        table=core.TableExpression(dialect, "v"),
                         timing=TriggerTiming.INSTEAD_OF,
-                        events=[TriggerEvent.INSERT], function_name="p",
+                        events=[TriggerEvent.INSERT],
+                        function_name=core.TableExpression(dialect, "p"),
                         level=TriggerLevel.STATEMENT)
         sql, _ = expr.to_sql()
         assert sql == 'CREATE OR REPLACE TRIGGER "TRG" INSTEAD OF INSERT ON "V" CALL "P"'
@@ -79,7 +83,8 @@ class TestCreateTriggerFormatting:
 
     def test_statement_level_before_11g_not_implemented(self):
         old = OracleDialect(version=(10, 2, 0))
-        expr = _trigger(old, function_name="proc", level=TriggerLevel.STATEMENT)
+        expr = _trigger(old, function_name=core.TableExpression(old, "proc"),
+                        level=TriggerLevel.STATEMENT)
         with pytest.raises(NotImplementedError):
             expr.to_sql()
 
