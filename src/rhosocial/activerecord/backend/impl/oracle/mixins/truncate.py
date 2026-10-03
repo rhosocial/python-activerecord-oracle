@@ -2,7 +2,6 @@
 """Oracle TRUNCATE statement formatting mixin."""
 
 from typing import Tuple
-from rhosocial.activerecord.backend.expression.core import TableExpression
 
 
 class OracleTruncateMixin:
@@ -10,5 +9,5 @@ class OracleTruncateMixin:
 
     def format_truncate_statement(self, expr) -> Tuple[str, tuple]:
         parts = ["TRUNCATE TABLE"]
-        parts.append(TableExpression(self, expr.table_name, schema_name=expr.schema_name).to_sql()[0])
+        parts.append(expr.table.to_sql()[0])
         return (" ".join(parts), ())

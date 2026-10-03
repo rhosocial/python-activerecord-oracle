@@ -22,11 +22,9 @@ import pytest
 
 #: Statement fields a formatter may read that some expression classes carry
 #: under a different name. Reading these by their own name is the defect.
-#: TruncateExpression and the PostgreSQL vacuum/statistics expressions name the
-#: field `schema`; the DDL statements name it `schema_name`.
-KNOWN_ALIASES = {
-    "schema": {"TruncateExpression"},
-}
+#: The DDL statements all name the field `schema_name`; TruncateExpression
+#: carries no schema field of its own and takes a TableExpression instead.
+KNOWN_ALIASES: dict = {}
 
 
 class TestQualifiedStatementsRender:
