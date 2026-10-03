@@ -67,6 +67,7 @@ from rhosocial.activerecord.backend.impl.oracle.schema.differ import (  # noqa: 
 from rhosocial.activerecord.backend.expression.statements.ddl_index import (  # noqa: E402
     CreateIndexExpression, DropIndexExpression,
 )
+from rhosocial.activerecord.backend.expression.core import TableExpression  # noqa: E402
 
 builder = SyncSchemaSnapshotBuilder(backend.introspector, dialect)
 snapshot_before = builder.build()
@@ -74,10 +75,10 @@ snapshot_before = builder.build()
 # Drop the non-unique IDX_EMAIL and add a unique IDX_EMAIL_UNIQUE
 # via standalone DROP INDEX / CREATE INDEX statements.
 backend.execute(*DropIndexExpression(
-    dialect, index_name="IDX_EMAIL", table_name="USERS"
+    dialect, index_name="IDX_EMAIL", table=TableExpression(dialect, "USERS")
 ).to_sql())
 backend.execute(*CreateIndexExpression(
-    dialect, index_name="IDX_EMAIL_UNIQUE", table_name="USERS",
+    dialect, index_name="IDX_EMAIL_UNIQUE", table=TableExpression(dialect, "USERS"),
     columns=["EMAIL"], unique=True,
 ).to_sql())
 
