@@ -61,8 +61,20 @@ class OracleTableCapabilityMixin:
         instead, the dialect-specific ``CASCADE CONSTRAINTS`` form (optionally
         followed by ``PURGE``) is emitted when ``expr.cascade is True``. The
         typed ``expr.purge`` flag appends PURGE.
+
+        Asking for IF EXISTS is refused rather than quietly dropped: a caller
+        that set the flag would otherwise get a statement that fails on a
+        missing table instead of the no-op it asked for.
         """
         from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
+
+        if expr.if_exists and not self.supports_if_exists_table():
+            raise UnsupportedFeatureError(
+                self.name,
+                "DROP TABLE IF EXISTS",
+                f"{self.name} has no IF EXISTS clause for DROP TABLE. "
+                f"Drop the flag, or guard the call yourself.",
+            )
 
         parts = ["DROP TABLE"]
         table_sql, table_params = expr.table.to_sql()
@@ -75,7 +87,7 @@ class OracleTableCapabilityMixin:
             parts.append("CASCADE CONSTRAINTS")
         elif expr.cascade is False:
             raise UnsupportedFeatureError(self.name, "DROP TABLE ... RESTRICT")
-        if getattr(expr, "purge", False) and self.supports_purge_on_drop_table():
+        if expr.purge and self.supports_purge_on_drop_table():
             parts.append("PURGE")
         return " ".join(parts), table_params
 

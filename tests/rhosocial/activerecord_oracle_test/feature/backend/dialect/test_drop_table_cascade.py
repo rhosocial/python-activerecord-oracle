@@ -9,7 +9,7 @@ SQL-standard CASCADE) and supports ``PURGE``. The dialect never emits an
 - ``supports_cascade_constraints() / supports_purge_on_drop_table()`` are True.
 - ``cascade=True`` renders ``CASCADE CONSTRAINTS`` (with optional ``PURGE``).
 - ``cascade=False`` raises ``UnsupportedFeatureError`` (Oracle has no RESTRICT).
-- ``cascade=None`` omits the clause; ``if_exists=True`` is NOT emitted.
+- ``cascade=None`` omits the clause; ``if_exists=True`` raises rather than being dropped.
 """
 
 import pytest
@@ -72,10 +72,20 @@ class TestOracleDropTableRendering:
         assert "RESTRICT" not in sql
         assert params == ()
 
-    def test_if_exists_not_emitted(self, dialect):
-        """Oracle has no IF EXISTS clause; the flag must be dropped silently."""
+    def test_if_exists_is_refused(self, dialect):
+        """Oracle has no IF EXISTS clause, so the flag is refused outright.
+
+        Emitting the statement without the clause would turn a requested
+        no-op into a failure on a missing table, which is the opposite of
+        what the caller asked for.
+        """
+        assert dialect.supports_if_exists_table() is False
         expr = DropTableExpression(dialect, table="users", if_exists=True)
+        with pytest.raises(UnsupportedFeatureError, match="DROP TABLE IF EXISTS"):
+            expr.to_sql()
+
+    def test_if_not_set_renders_plainly(self, dialect):
+        expr = DropTableExpression(dialect, table="users")
         sql, params = expr.to_sql()
-        assert "IF EXISTS" not in sql
-        assert sql.startswith("DROP TABLE")
+        assert sql == 'DROP TABLE "USERS"'
         assert params == ()
