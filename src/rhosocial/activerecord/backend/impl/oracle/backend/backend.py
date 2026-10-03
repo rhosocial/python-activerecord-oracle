@@ -1163,7 +1163,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         table_ref = (
             TableExpression(self.dialect, options.table, schema_name=options.schema_name)
             if options.schema_name
-            else options.table
+            else TableExpression(self.dialect, options.table)
         )
         update_expr = UpdateExpression(
             dialect=self.dialect,
