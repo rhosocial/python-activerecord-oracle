@@ -75,7 +75,11 @@ def json_value(
 ) -> "bases.BaseExpression":
     """Oracle JSON_VALUE: extract a scalar from a JSON document."""
     from rhosocial.activerecord.backend.expression import core
-    path_expr = core.Literal(dialect, path)
+    # Oracle rejects a bound path: ORA-40454 "path expression not a
+    # literal". mixins/json.py already inlines it on the expression path;
+    # this is the same requirement on the factory path, and inline_literals
+    # is the switch that does it, with format_literal escaping the value.
+    path_expr = core.Literal(dialect, path, inline_literals=True)
     func = core.FunctionCall(dialect, "JSON_VALUE", json_doc, path_expr)
     if returning is not None:
         func._oracle_returning_type = _coerce_returning_type(dialect, returning)
@@ -90,7 +94,11 @@ def json_query(
 ) -> "bases.BaseExpression":
     """Oracle JSON_QUERY: extract a JSON object/array from a document."""
     from rhosocial.activerecord.backend.expression import core
-    path_expr = core.Literal(dialect, path)
+    # Oracle rejects a bound path: ORA-40454 "path expression not a
+    # literal". mixins/json.py already inlines it on the expression path;
+    # this is the same requirement on the factory path, and inline_literals
+    # is the switch that does it, with format_literal escaping the value.
+    path_expr = core.Literal(dialect, path, inline_literals=True)
     func = core.FunctionCall(dialect, "JSON_QUERY", json_doc, path_expr)
     if returning is not None:
         func._oracle_returning_type = _coerce_returning_type(dialect, returning)
@@ -104,7 +112,11 @@ def json_exists(
 ) -> "bases.BaseExpression":
     """Oracle JSON_EXISTS: check if a path exists in a JSON document."""
     from rhosocial.activerecord.backend.expression import core
-    path_expr = core.Literal(dialect, path)
+    # Oracle rejects a bound path: ORA-40454 "path expression not a
+    # literal". mixins/json.py already inlines it on the expression path;
+    # this is the same requirement on the factory path, and inline_literals
+    # is the switch that does it, with format_literal escaping the value.
+    path_expr = core.Literal(dialect, path, inline_literals=True)
     return core.FunctionCall(dialect, "JSON_EXISTS", json_doc, path_expr)
 
 
