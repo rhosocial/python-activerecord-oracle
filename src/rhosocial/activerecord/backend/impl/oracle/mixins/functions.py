@@ -51,16 +51,27 @@ class OracleFunctionFormatMixin:
                 all_params.append(p)
 
         arg_list = ", ".join(args_sql)
-        func_sql = f"LISTAGG({distinct}{arg_list})"
 
         within_group: Optional[str] = getattr(expr, "_oracle_within_group", None)
         on_overflow: Optional[str] = getattr(expr, "_oracle_on_overflow", None)
 
-        if within_group or on_overflow:
-            if within_group:
-                func_sql += f" WITHIN GROUP (ORDER BY {within_group})"
-            if on_overflow:
-                func_sql += f" ON OVERFLOW {on_overflow}"
+        # ON OVERFLOW belongs to the aggregate's argument list, not after the
+        # sort clause:
+        #
+        #   LISTAGG(x, ';' ON OVERFLOW TRUNCATE) WITHIN GROUP (ORDER BY x)   ok
+        #   LISTAGG(x, ';') WITHIN GROUP (ORDER BY x) ON OVERFLOW TRUNCATE
+        #                                                                ORA-00923
+        #
+        # Which means the clause that decides what happens when the result is
+        # too long was being emitted somewhere the server refuses to look, and
+        # every aggregate large enough to overflow was the case that failed --
+        # the ones that fit worked and looked right.
+        if on_overflow:
+            arg_list = f"{arg_list} ON OVERFLOW {on_overflow}"
+
+        func_sql = f"LISTAGG({distinct}{arg_list})"
+        if within_group:
+            func_sql += f" WITHIN GROUP (ORDER BY {within_group})"
 
         return self._finish_function_call(func_sql, all_params, expr)
 
