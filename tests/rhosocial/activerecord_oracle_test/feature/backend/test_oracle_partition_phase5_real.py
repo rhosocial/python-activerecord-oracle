@@ -72,7 +72,7 @@ from rhosocial.activerecord.testsuite.utils.common import requires_protocol
 
 def _drop(backend, name: str):
     """Drop ``name`` if it exists; ignore ORA-00942."""
-    expr = DropTableExpression(backend.dialect, name)
+    expr = DropTableExpression(backend.dialect, TableExpression(backend.dialect, name))
     sql, params = expr.to_sql()
     try:
         backend.execute(sql, params)

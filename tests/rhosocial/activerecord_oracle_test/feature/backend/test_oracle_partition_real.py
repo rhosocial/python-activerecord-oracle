@@ -52,7 +52,7 @@ def _drop(backend, name: str):
     """Drop ``name`` if it exists. Oracle has no DROP TABLE IF EXISTS, so
     we attempt the drop and ignore the ORA-00942 'table or view does not
     exist' error."""
-    expr = DropTableExpression(backend.dialect, name)
+    expr = DropTableExpression(backend.dialect, TableExpression(backend.dialect, name))
     sql, params = expr.to_sql()
     try:
         backend.execute(sql, params)
