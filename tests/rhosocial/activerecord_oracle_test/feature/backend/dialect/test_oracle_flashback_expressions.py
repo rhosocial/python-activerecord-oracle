@@ -16,6 +16,7 @@ import pytest
 from rhosocial.activerecord.backend.dialect import UnsupportedFeatureError
 from rhosocial.activerecord.backend.expression.core import Literal, TableExpression
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
+from rhosocial.activerecord.backend.impl.oracle.expression.table import OracleTableExpression
 from rhosocial.activerecord.backend.impl.oracle.expression import (
     OracleAsOfClause,
     OracleAsOfMode,
@@ -68,24 +69,21 @@ class TestOracleAsOfClause:
         as_of = OracleAsOfClause(
             dialect, OracleAsOfMode.TIMESTAMP, "(SYSTIMESTAMP - INTERVAL '1' DAY)"
         )
-        table = TableExpression(dialect, "t")
-        table.flashback = as_of
+        table = OracleTableExpression(dialect, "t", flashback=as_of)
         sql, params = table.to_sql()
         assert sql == '"T" AS OF TIMESTAMP (SYSTIMESTAMP - INTERVAL \'1\' DAY)'
         assert params == ()
 
     def test_attached_with_alias(self, dialect):
         as_of = OracleAsOfClause(dialect, OracleAsOfMode.SCN, "100")
-        table = TableExpression(dialect, "t", alias="x")
-        table.flashback = as_of
+        table = OracleTableExpression(dialect, "t", alias="x", flashback=as_of)
         sql, params = table.to_sql()
         assert sql == '"T" AS OF SCN 100 "X"'
         assert params == ()
 
     def test_schema_qualified_with_flashback(self, dialect):
         as_of = OracleAsOfClause(dialect, OracleAsOfMode.SCN, "100")
-        table = TableExpression(dialect, "t", schema_name="scott")
-        table.flashback = as_of
+        table = OracleTableExpression(dialect, "t", schema_name="scott", flashback=as_of)
         sql, params = table.to_sql()
         assert sql == '"SCOTT"."T" AS OF SCN 100'
         assert params == ()
@@ -121,8 +119,7 @@ class TestOracleVersionsBetweenClause:
         versions = OracleVersionsBetweenClause(
             dialect, OracleVersionsBetweenMode.SCN, "100", "200"
         )
-        table = TableExpression(dialect, "t")
-        table.flashback = versions
+        table = OracleTableExpression(dialect, "t", flashback=versions)
         sql, params = table.to_sql()
         assert sql == '"T" VERSIONS BETWEEN SCN 100 AND 200'
         assert params == ()

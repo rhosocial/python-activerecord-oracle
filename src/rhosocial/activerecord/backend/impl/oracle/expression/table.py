@@ -10,9 +10,10 @@ point.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import Any, Dict, Optional, TYPE_CHECKING
 
 from rhosocial.activerecord.backend.expression.bases import BaseExpression
+from rhosocial.activerecord.backend.expression.core import TableExpression
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
@@ -67,3 +68,55 @@ class TablespaceClauseExpression(BaseExpression):
     def format_method(self) -> str:
         """The dialect formatting method that renders this expression."""
         return "format_tablespace_clause"
+
+
+class OracleTableExpression(TableExpression):
+    """A schema-qualified table reference carrying Oracle's own modifiers.
+
+    Oracle can hang two things off a table name that no other dialect has:
+    a database-link suffix (``schema.table@dblink``) and a flashback query
+    (``schema.table AS OF SCN ...``). They are declared here as real fields
+    rather than attached to a plain core
+    :class:`~...expression.core.TableExpression` after construction, so a
+    formatter can read them without guessing whether they exist.
+
+    Attributes:
+        dblink: Database-link suffix, or None when the table is local.
+        flashback: The flashback query expression, or None when the table is
+            read at the present.
+    """
+
+    def __init__(
+        self,
+        dialect: "OracleDialect",
+        name: str,
+        schema_name: Optional[str] = None,
+        alias: Optional[str] = None,
+        temporal_options: Optional[Dict[str, Any]] = None,
+        name_need_quote: bool = True,
+        alias_need_quote: bool = True,
+        schema_need_quote: bool = True,
+        dblink: Optional[str] = None,
+        flashback: Optional[BaseExpression] = None,
+    ):
+        """
+        Args:
+            schema_name: Namespace to qualify the table with, e.g. ``APP``.
+                None leaves the name unqualified. An empty string raises
+                ValueError, and a dialect with no namespace raises
+                UnsupportedFeatureError.
+            dblink: Database link through which to reach the table.
+            flashback: Flashback query clause limiting the rows read.
+        """
+        super().__init__(
+            dialect,
+            name,
+            schema_name=schema_name,
+            alias=alias,
+            temporal_options=temporal_options,
+            name_need_quote=name_need_quote,
+            alias_need_quote=alias_need_quote,
+            schema_need_quote=schema_need_quote,
+        )
+        self.dblink = dblink
+        self.flashback = flashback

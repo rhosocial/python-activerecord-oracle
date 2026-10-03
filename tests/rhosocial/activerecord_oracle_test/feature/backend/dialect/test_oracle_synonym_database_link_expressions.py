@@ -12,6 +12,7 @@ import pytest
 
 from rhosocial.activerecord.backend.dialect import UnsupportedFeatureError
 from rhosocial.activerecord.backend.expression.core import TableExpression
+from rhosocial.activerecord.backend.impl.oracle.expression.table import OracleTableExpression
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.expression import (
     OracleCreateDatabaseLinkExpression,
@@ -182,36 +183,31 @@ class TestOracleDropDatabaseLinkExpression:
 
 class TestOracleDblinkTableReference:
     def test_dblink_suffix(self, dialect):
-        table = TableExpression(dialect, "remote_table")
-        table.dblink = "dl"
+        table = OracleTableExpression(dialect, "remote_table", dblink="dl")
         sql, params = table.to_sql()
         assert sql == '"REMOTE_TABLE"@"DL"'
         assert params == ()
 
     def test_dblink_uppercased(self, dialect):
-        table = TableExpression(dialect, "remote_table")
-        table.dblink = "my_dl"
+        table = OracleTableExpression(dialect, "remote_table", dblink="my_dl")
         sql, params = table.to_sql()
         assert sql == '"REMOTE_TABLE"@"MY_DL"'
         assert params == ()
 
     def test_dblink_with_schema(self, dialect):
-        table = TableExpression(dialect, "remote_table", schema_name="scott")
-        table.dblink = "dl"
+        table = OracleTableExpression(dialect, "remote_table", schema_name="scott", dblink="dl")
         sql, params = table.to_sql()
         assert sql == '"SCOTT"."REMOTE_TABLE"@"DL"'
         assert params == ()
 
     def test_dblink_with_alias(self, dialect):
-        table = TableExpression(dialect, "remote_table", alias="r")
-        table.dblink = "dl"
+        table = OracleTableExpression(dialect, "remote_table", alias="r", dblink="dl")
         sql, params = table.to_sql()
         assert sql == '"REMOTE_TABLE"@"DL" "R"'
         assert params == ()
 
     def test_dblink_through_table_expression_to_sql(self, dialect):
-        table = TableExpression(dialect, "remote_table")
-        table.dblink = "dl"
+        table = OracleTableExpression(dialect, "remote_table", dblink="dl")
         sql, params = table.to_sql()
         assert sql == '"REMOTE_TABLE"@"DL"'
         assert params == ()

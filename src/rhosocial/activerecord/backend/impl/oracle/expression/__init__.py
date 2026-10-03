@@ -87,7 +87,7 @@ from .analyze import (
     OracleAnalyzeMode, OracleAnalyzeExpression,
 )
 from .vector import VectorLiteralExpression, VectorOperandExpression
-from .table import TableCompressionClauseExpression, TablespaceClauseExpression
+from .table import TableCompressionClauseExpression, TablespaceClauseExpression, OracleTableExpression
 from .trigger import DisableTriggerExpression, EnableTriggerExpression
 
 __all__ = [

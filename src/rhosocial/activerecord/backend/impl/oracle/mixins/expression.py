@@ -19,39 +19,35 @@ class OracleExpressionMixin:
     def format_table(self, expr: "BaseExpression") -> Tuple[str, tuple]:
         """Format a :class:`TableExpression` for Oracle.
 
-        Oracle-specific ``@dblink`` suffixes and flashback clauses carried on
-        the expression are rendered after the name, then the optional alias.
+        Oracle's own ``@dblink`` suffix and flashback clause are declared on
+        :class:`OracleTableExpression`. The branch is on the type, not on
+        attribute presence: a plain core table reference has neither, and is
+        rendered without them.
         """
         from rhosocial.activerecord.backend.dialect.protocols import SchemaSupport
+        from ..expression.table import OracleTableExpression
 
         if isinstance(self, SchemaSupport):
             self.validate_schema_name(expr)
 
-        schema_name = getattr(expr, "schema_name", None)
-        alias = getattr(expr, "alias", None)
-        dblink = getattr(expr, "dblink", None)
-        flashback = getattr(expr, "flashback", None)
-        name_need_quote = getattr(expr, "name_need_quote", True)
-        schema_need_quote = getattr(expr, "schema_need_quote", True)
-        alias_need_quote = getattr(expr, "alias_need_quote", True)
-
-        if schema_name:
+        if expr.schema_name:
             table_sql = (
-                f"{self.format_identifier(schema_name, schema_need_quote)}."
-                f"{self.format_identifier(expr.name, name_need_quote)}"
+                f"{self.format_identifier(expr.schema_name, expr.schema_need_quote)}."
+                f"{self.format_identifier(expr.name, expr.name_need_quote)}"
             )
         else:
-            table_sql = self.format_identifier(expr.name, name_need_quote)
+            table_sql = self.format_identifier(expr.name, expr.name_need_quote)
 
         table_params: Tuple[Any, ...] = ()
-        if dblink:
-            table_sql = f"{table_sql}@{self.format_identifier(dblink)}"
-        if flashback is not None:
-            flash_sql, flash_params = flashback.to_sql()
-            table_sql = f"{table_sql} {flash_sql}"
-            table_params = tuple(flash_params)
-        if alias:
-            table_sql = f"{table_sql} {self.format_identifier(alias, alias_need_quote)}"
+        if isinstance(expr, OracleTableExpression):
+            if expr.dblink:
+                table_sql = f"{table_sql}@{self.format_identifier(expr.dblink)}"
+            if expr.flashback is not None:
+                flash_sql, flash_params = expr.flashback.to_sql()
+                table_sql = f"{table_sql} {flash_sql}"
+                table_params = tuple(flash_params)
+        if expr.alias:
+            table_sql = f"{table_sql} {self.format_identifier(expr.alias, expr.alias_need_quote)}"
         return table_sql, table_params
 
     def format_connect_by(self, expr: "BaseExpression") -> Tuple[str, tuple]:
