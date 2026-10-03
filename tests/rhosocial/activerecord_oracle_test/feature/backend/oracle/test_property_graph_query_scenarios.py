@@ -170,7 +170,7 @@ def social_graph_data(oracle_backend):
     except Exception as e:
         for t in ("likes", "posts", "follows", "people"):
             try:
-                backend.execute(*DropTableExpression(dialect, t, if_exists=True, cascade=True).to_sql())
+                backend.execute(*DropTableExpression(dialect, TableExpression(dialect, t), if_exists=True, cascade=True).to_sql())
             except Exception:
                 pass
         raise e
