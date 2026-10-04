@@ -23,8 +23,11 @@
 PYTHONPATH=src .venv3.14-ubuntu26.04/bin/python
 ```
 
-对应的版本是 `rhosocial-activerecord` 1.0.0.dev30 与
-`rhosocial-activerecord-oracle` 1.0.0.dev3。
+对应的版本是 `fix/schema-name-propagation-gaps` 分支上的核心库
+`rhosocial-activerecord` 1.0.0.dev30 与 `rhosocial-activerecord-oracle`
+1.0.0.dev3。核心库这一项很关键：从 `main` 安装的 `python-activerecord` 早于下面
+描述的这套改写，DDL 与 DML 仍然接受裸的表名字符串，用它渲染出来的片段与文中所写并不
+相同。
 
 渲染出的语句都是一整行。本文为了阅读把较长的语句折了行，折行不属于输出的一部分。
 
@@ -64,6 +67,7 @@ dialect.supports_schema_if_not_exists()  # False
 dialect.supports_schema_if_exists()      # False
 dialect.supports_schema_cascade()        # False
 dialect.supports_schema_authorization()  # False
+dialect.supports_index_schema_qualification()  # True
 ```
 
 `supports_schema()` 回答的是名字能否被命名空间**限定**，在 Oracle 上可以。剩下几个
@@ -79,6 +83,11 @@ DropSchemaExpression(d, "ar_crm").to_sql()[0]
 # UnsupportedFeatureError: 'Oracle' dialect does not support DROP SCHEMA.
 #   Suggestion: Oracle does not support DROP SCHEMA.
 ```
+
+`supports_index_schema_qualification()` 回答的是另一个问题——索引**名**能不能带命名
+空间——Oracle 答 `True`，因为 Oracle 的 `CREATE INDEX` 确实接受带限定的索引名。语法上
+禁止这一形式的方言答 `False`，并在渲染时抛 `UnsupportedFeatureError`。见
+[索引各自选择命名空间](#索引各自选择命名空间)。
 
 ### 限定名如何渲染
 
@@ -239,7 +248,7 @@ QueryExpression(
 对象：
 
 ```
-ValueError: Oracle: cannot qualify column 'id' with schema 'APP' because no table
+ValueError: Oracle: cannot qualify column 'id' with schema 'app' because no table
 was given; a column reference needs a table (or an alias) to be
 schema-qualified
 ```
@@ -334,22 +343,61 @@ CTE 的名字与其他标识符一样折成大写。给它加限定会让 Oracle
 
 ## DDL 单独传 schema
 
-`__schema_name__` 决定的是读写的命名空间，构建 DDL 时**不读**它——迁移脚本要自己说
-明它指的是哪个 schema。凡是涉及带 schema 对象的语句都接受自己的 `schema_name`，不必
-再手工拼限定名。下面每个名字都与其他标识符一样折大写。
+凡是**指名一张表**的语句，收的都是 `TableExpression`；凡是**指名一个数据库对象**的
+语句，收的是属于那个对象自己的命名空间。传裸字符串会被拒绝——而且是在**构造期**就
+拒绝，不是渲染期，所以错误就出在写下它的那一行：
+
+| 表达式 | 参数 |
+|---|---|
+| `CreateTableExpression` | `table` |
+| `DropTableExpression` | `table` |
+| `TruncateExpression` | `table` |
+| `AlterTableExpression` | `table` |
+| `CreateIndexExpression` | `table` |
+| `DropIndexExpression` | `table`（可为 `None`） |
+| `CreateFulltextIndexExpression` | `table` |
+| `DropFulltextIndexExpression` | `table` |
+| `CreateTriggerExpression` | `table`、`function_name`（可为 `None`） |
+| `DropTriggerExpression` | `table`（可为 `None`） |
+| `InsertExpression` | `into` |
+| `DeleteExpression` | `tables`（单个或 list，逐元素检查） |
+| `UpdateExpression` | `table` |
+| `MergeExpression` | `target_table` |
+
+报错信息会指明是哪个参数，而且每条都不一样：
+
+```
+TypeError: table must be a TableExpression, got str
+TypeError: into must be a TableExpression, got str
+TypeError: tables must be a TableExpression, got str
+TypeError: every table in tables must be a TableExpression, got str
+TypeError: target_table must be a TableExpression, got str
+TypeError: function_name must be a TableExpression, got str
+```
+
+`DropTableExpression` 与 `TruncateExpression` **根本没有** `schema_name` 参数。
+`DropTableExpression(d, "orders", schema_name="app")` 会以
+`TypeError: ... got an unexpected keyword argument 'schema_name'` 失败——这两条语句
+的命名空间只有一个落点，就是传进去的表引用。
+
+下面每个名字都与其他标识符一样折大写：
 
 ```python
 DropTableExpression(d, TableExpression(d, "orders", schema_name="app")).to_sql()[0]
 # DROP TABLE "APP"."ORDERS"
 
-TruncateExpression(d, "orders", schema_name="app").to_sql()[0]
+TruncateExpression(d, TableExpression(d, "orders", schema_name="app")).to_sql()[0]
 # TRUNCATE TABLE "APP"."ORDERS"
 
-CreateIndexExpression(d, "idx_orders_id", "orders", ["id"], schema_name="app").to_sql()[0]
-# CREATE INDEX "APP"."IDX_ORDERS_ID" ON "APP"."ORDERS" ("ID")
+CreateTableExpression(
+    d, TableExpression(d, "orders", schema_name="app"),
+    [ColumnDefinition(d, "id", d.parse_type("NUMBER"))],
+).to_sql()[0]
+# CREATE TABLE "APP"."ORDERS" ("ID" NUMBER)
 
-DropIndexExpression(d, "idx_orders_id", schema_name="app").to_sql()[0]
-# DROP INDEX "APP"."IDX_ORDERS_ID"
+AlterTableExpression(d, TableExpression(d, "orders", schema_name="app"),
+                     [DropColumn(d, "legacy")]).to_sql()[0]
+# ALTER TABLE "APP"."ORDERS" DROP COLUMN "LEGACY"
 
 CreateSequenceExpression(d, "seq_orders", schema_name="app").to_sql()[0]
 # CREATE SEQUENCE "APP"."SEQ_ORDERS" NOCYCLE NOORDER
@@ -361,21 +409,113 @@ DropTypeExpression(d, "t_addr", schema_name="app").to_sql()[0]
 # DROP TYPE "APP"."T_ADDR"
 ```
 
-`CREATE INDEX` 只有一个 `schema_name`，同时覆盖两个名字：索引与它所依附的表落在同一个
-属主下。Oracle 要求如此——索引必须与它的表建在同一个 schema 里。
+手工拼装的表达式不会白拿 `__schema_name__`。模型上的 `build_*` 工厂会读它，
+除此之外没有别的地方读；自己拼的语句必须自己把命名空间递进去，见
+[从模型构建 DDL](#从模型构建-ddl)。
 
-`DROP TABLE` 有一处行为值得在第一次迁移前知道。传 `if_exists=True` 既不抛异常，渲染里
-也不带守卫条件，语句就是裸的：
+### 索引各自选择命名空间
+
+索引语句上的 `schema_name` 只限定**索引名**。表由它自己的 `TableExpression` 限定，
+两者互不影响，渲染器允许它们不同：
+
+```python
+CreateIndexExpression(
+    d, "idx_shared",
+    TableExpression(d, "orders", schema_name="sales"),
+    ["id"], schema_name="app",
+).to_sql()[0]
+# CREATE INDEX "APP"."IDX_SHARED" ON "SALES"."ORDERS" ("ID")
+```
+
+这一句渲染得出来，但 Oracle 会拒绝：索引必须与它的表同属一个属主。这是服务端的
+规则，不是渲染器的，渲染器也不检查——把两个属主写成不一样，得到的就是一条会失败的
+语句。要让两个名字落在同一个命名空间：
+
+```python
+CreateIndexExpression(
+    d, "idx_orders_id",
+    TableExpression(d, "orders", schema_name="app"),
+    ["id"], schema_name="app",
+).to_sql()[0]
+# CREATE INDEX "APP"."IDX_ORDERS_ID" ON "APP"."ORDERS" ("ID")
+```
+
+`DROP INDEX` 带着索引自己的命名空间；Oracle 的 `DROP INDEX` 没有 `ON` 子句，因此也
+不会渲染出 `ON`：
+
+```python
+DropIndexExpression(d, "idx_orders_id", schema_name="app").to_sql()[0]
+# DROP INDEX "APP"."IDX_ORDERS_ID"
+```
+
+### 触发器指名表与函数
+
+`CreateTriggerExpression` 把表与函数都作为 `TableExpression` 接收，各带各的命名
+空间。`schema_name` 会被接收并存下来，但本后端的渲染器不把它放在触发器名之前，
+因此渲染出的语句把触发器建在连接用户的 schema 里：
+
+```python
+CreateTriggerExpression(
+    d, "trg_orders",
+    TableExpression(d, "orders", schema_name="sales"),
+    TriggerTiming.BEFORE, [TriggerEvent.UPDATE],
+    function_name=TableExpression(d, "set_updated_at", schema_name="tools"),
+    schema_name="app",
+).to_sql()[0]
+# CREATE OR REPLACE TRIGGER "TRG_ORDERS" BEFORE UPDATE ON "SALES"."ORDERS"
+#   FOR EACH ROW CALL "TOOLS"."SET_UPDATED_AT"
+```
+
+这条语句真正渲染出来的两个命名空间是表的与函数的，彼此独立。`DropTriggerExpression`
+对触发器名也是同样的处理：
+
+```python
+DropTriggerExpression(d, "trg_orders", TableExpression(d, "orders", schema_name="app"),
+                      schema_name="app").to_sql()[0]
+# DROP TRIGGER "TRG_ORDERS"
+```
+
+两个参数各自按自己的名字做类型检查——关键字是 `function_name` 而不是 `function`，
+报错信息也各自指明被抓到的那个参数：
+
+```
+CreateTriggerExpression(d, "trg", "orders", timing, events)
+# TypeError: table must be a TableExpression, got str
+CreateTriggerExpression(d, "trg", table, timing, events, function_name="fn")
+# TypeError: function_name must be a TableExpression, got str
+```
+
+### `DROP TABLE IF EXISTS` 会被拒绝
+
+Oracle 的 `DROP TABLE` 没有 `IF EXISTS` 子句。要求一个会被拒绝，而不是被悄悄丢掉：
+否则设了标志的调用方拿到的是一条在表不存在时失败的语句，而不是他要的空操作。
 
 ```python
 dialect.supports_if_exists_table()                                  # False
 DropTableExpression(d, TableExpression(d, "o", schema_name="app"), if_exists=True).to_sql()[0]
-# DROP TABLE "APP"."O"
+# UnsupportedFeatureError: 'Oracle' dialect does not support DROP TABLE IF EXISTS.
+#   Suggestion: Oracle has no IF EXISTS clause for DROP TABLE. Drop the flag, or
+#   guard the call yourself.
 ```
 
-`DROP INDEX` 对同一个标志的处理方式不同，它会抛 `UnsupportedFeatureError`。要只在表存在
-时删除它，可以在迁移里查 `ALL_TABLES`，或者把这条 drop 放进吞掉 ORA-00942 的 PL/SQL
-块里——本后端自己的跨 schema 测试用的就是这个写法，见
+`DROP TABLE ... RESTRICT` 出于同样的理由被拒绝，而 `cascade=True` 渲染出的是本方言
+自己的 `CASCADE CONSTRAINTS` 形式：
+
+```python
+DropTableExpression(d, TableExpression(d, "orders", schema_name="app"),
+                    cascade=True).to_sql()[0]
+# DROP TABLE "APP"."ORDERS" CASCADE CONSTRAINTS
+```
+
+```python
+DropTableExpression(d, TableExpression(d, "orders", schema_name="app"), cascade=False)
+# UnsupportedFeatureError: 'Oracle' dialect does not support DROP TABLE ... RESTRICT.
+```
+
+`DROP INDEX` 对自己的 `if_exists` 也是同样的处理——它抛
+`UnsupportedFeatureError: 'Oracle' dialect does not support DROP INDEX IF
+EXISTS.`。要只在索引存在时删除它，可以在迁移里查数据字典，或者把这条 drop 放进吞掉
+ORA-00942 的 PL/SQL 块里——本后端自己的跨 schema 测试用的就是这个写法，见
 `tests/rhosocial/activerecord_oracle_test/feature/backend/test_cross_schema.py`。
 
 DML 的限定方式相同，传入带限定的 `TableExpression` 即可：
@@ -391,6 +531,20 @@ UpdateExpression(d, TableExpression(d, "users", schema_name="app"),
 
 DeleteExpression(d, TableExpression(d, "users", schema_name="app")).to_sql()[0]
 # DELETE FROM "APP"."USERS"
+```
+
+三条都拒绝裸字符串，并且各自在报错信息里写出自己的参数名——`INSERT` 写 `into`，
+`DELETE` 写 `tables`（传 list 时写 `every table in tables`），`UPDATE` 写 `table`：
+
+```
+InsertExpression(d, "users", source, columns=["id"])
+# TypeError: into must be a TableExpression, got str
+DeleteExpression(d, "users")
+# TypeError: tables must be a TableExpression, got str
+DeleteExpression(d, ["users"])
+# TypeError: every table in tables must be a TableExpression, got str
+UpdateExpression(d, "users", {"name": value})
+# TypeError: table must be a TableExpression, got str
 ```
 
 软删除的 `restore()` 会针对模型的范围重新构造一条 `UPDATE`，因此与 `delete()` 同样
@@ -420,42 +574,117 @@ OracleCreateSynonymExpression(d, "s_users", "users", schema_name="app", public=T
 
 ### 表引用上的 `@dblink` 与 flashback
 
-本方言覆盖了 `format_table`，追加两个核心表达式并不携带的子句。两者都是表表达式上的
-属性：
+本方言覆盖了 `format_table`，追加两个别的后端没有的子句。两者都声明在
+`OracleTableExpression` 上——它是核心库 `TableExpression` 的子类——并且是真正的
+构造参数，而不是构造之后补上去的属性：
 
 ```python
+from rhosocial.activerecord.backend.impl.oracle.expression import OracleTableExpression
 from rhosocial.activerecord.backend.impl.oracle.expression.flashback import (
     OracleAsOfClause, OracleAsOfMode,
 )
 
-t = TableExpression(d, "orders", schema_name="app", alias="o")
-t.dblink = "remotedb"
-t.to_sql()[0]
+OracleTableExpression(d, "orders", schema_name="app", alias="o",
+                      dblink="remotedb").to_sql()[0]
 # "APP"."ORDERS"@"REMOTEDB" "O"
 
-t2 = TableExpression(d, "orders", schema_name="app")
-t2.flashback = OracleAsOfClause(d, OracleAsOfMode.TIMESTAMP,
-                                "SYSTIMESTAMP - INTERVAL '1' DAY")
-t2.to_sql()[0]
+OracleTableExpression(d, "orders", schema_name="app",
+    flashback=OracleAsOfClause(d, OracleAsOfMode.TIMESTAMP,
+                               "SYSTIMESTAMP - INTERVAL '1' DAY")).to_sql()[0]
 # "APP"."ORDERS" AS OF TIMESTAMP SYSTIMESTAMP - INTERVAL '1' DAY
 ```
 
 三个都带上时，顺序是固定的：schema 与名字、`@dblink`、flashback 子句、别名。
 
 ```python
-t3 = TableExpression(d, "orders", schema_name="app", alias="o")
-t3.dblink = "dl"
-t3.flashback = OracleAsOfClause(d, OracleAsOfMode.SCN, 12345)
-t3.to_sql()[0]
+OracleTableExpression(d, "orders", schema_name="app", alias="o", dblink="dl",
+    flashback=OracleAsOfClause(d, OracleAsOfMode.SCN, 12345)).to_sql()[0]
 # "APP"."ORDERS"@"DL" AS OF SCN 12345 "O"
 ```
 
 `dblink` 的名字与其他标识符一样折大写，`dl` 变成 `"DL"`。
 
-有两点需要留意。`TableExpression` 没有 `dblink` 或 `flashback` 构造参数——只能在构造
-之后赋值，而不带这两个属性的表达式渲染时就没有相应子句。另外，自动生成的能力协议把
-`format_table` 声明成接受 `dblink` 与 `flashback` 关键字参数，而实现只接收一个表达式；
-用这些关键字调用会得到 `TypeError`。
+有两点需要留意。核心库的 `TableExpression` **根本没有** `dblink` 或 `flashback` 这两个
+属性——`hasattr(t, "dblink")` 是 `False`——而渲染器分支判断的是类型而不是属性是否
+存在，因此它渲染时不会有这两个子句。构造之后往一个普通表引用上赋值，只是加了一个
+没有任何地方读取的属性：
+
+```python
+t = TableExpression(d, "orders", schema_name="app")
+t.dblink = "dl"
+t.to_sql()[0]
+# "APP"."ORDERS"       -- 这个赋值不会被读取
+```
+
+自动生成的能力协议把 `format_table` 声明成 `format_table(self, expr)`——只有一个
+位置参数，没有 `dblink` 或 `flashback` 关键字——所以
+`d.format_table(expr, dblink="dl")` 同样是 `TypeError`。这两个值只存在于表达式自身的
+类型上，方言是从那里读到它们的。
+
+## 从模型构建 DDL
+
+模型的命名空间只经一个入口进入它的 DDL。`build_table_reference()` 返回带着
+`__schema_name__` 的表，其余每个工厂都经由它，因此一个只声明一次命名空间的模型会把它
+的所有对象放在那里，两条语句也不会各走各的。
+
+```python
+class Order(ActiveRecord):
+    __table_name__ = "orders"
+    __schema_name__ = "shop"
+
+Order.build_table_reference(dialect).to_sql()[0]       # "SHOP"."ORDERS"
+Order.build_table_reference(dialect, alias="o").to_sql()[0]
+# "SHOP"."ORDERS" "O"
+
+Order.build_create_table_statement(dialect, columns).to_sql()[0]
+# CREATE TABLE "SHOP"."ORDERS" (...)
+Order.build_truncate_statement(dialect).to_sql()[0]
+# TRUNCATE TABLE "SHOP"."ORDERS"
+Order.build_alter_table_statement(
+    dialect, [DropColumn(dialect, "legacy")]).to_sql()[0]
+# ALTER TABLE "SHOP"."ORDERS" DROP COLUMN "LEGACY"
+```
+
+`build_drop_table_statement` 带着 `if_exists`，而本后端拒绝渲染它——工厂把这个守卫
+交给方言，而不是悄悄省掉：
+
+```python
+Order.build_drop_table_statement(dialect, if_exists=True).to_sql()
+# UnsupportedFeatureError: 'Oracle' dialect does not support DROP TABLE IF EXISTS.
+```
+
+两个索引工厂单独接收索引的命名空间。默认值是模型自己的命名空间，这几乎总是调用方
+想要的；要放在别处就传 `index_schema_name`：
+
+```python
+Order.build_create_index_statement(
+    dialect, "idx_orders_email", ["email"]).to_sql()[0]
+# CREATE INDEX "SHOP"."IDX_ORDERS_EMAIL" ON "SHOP"."ORDERS" ("EMAIL")
+
+Order.build_create_index_statement(
+    dialect, "idx_orders_email", ["email"], index_schema_name="reporting").to_sql()[0]
+# CREATE INDEX "REPORTING"."IDX_ORDERS_EMAIL" ON "SHOP"."ORDERS" ("EMAIL")
+
+Order.build_drop_index_statement(dialect, "idx_orders_email").to_sql()[0]
+# DROP INDEX "SHOP"."IDX_ORDERS_EMAIL"
+```
+
+在本后端传 `index_schema_name` 会得到一条 Oracle 拒绝的语句，原因见
+[索引各自选择命名空间](#索引各自选择命名空间)。
+
+完整签名：
+
+```python
+Model.build_table_reference(dialect, alias=None)
+Model.build_create_table_statement(dialect, columns, ...)
+Model.build_drop_table_statement(dialect, if_exists=False)
+Model.build_truncate_statement(dialect, restart_identity=False, cascade=False)
+Model.build_alter_table_statement(dialect, actions)
+Model.build_create_index_statement(dialect, index_name, columns, *,
+                                   index_schema_name=None, **options)
+Model.build_drop_index_statement(dialect, index_name, *,
+                                 index_schema_name=None, if_exists=False, **options)
+```
 
 ## 不加限定的名字落在哪个 schema
 
@@ -594,8 +823,35 @@ TableExpression(d, "orders", schema_name="app.public").to_sql()[0]
 在 `FROM "APP"."ORDERS" "O"` 之下会产出 Oracle 拒绝的 SQL。请走
 `Model.c.<field>`。
 
-**指望构造时报错。** 在语句渲染出来之前，没有任何环节会拒绝不合法的 `schema_name`。
-模型上的错误因此能一路存活到查询构建完成的那一刻，在拼装 SQL 时才失败。
+**给 DDL 或 DML 语句传一个裸表名。** 它在构造期抛 `TypeError`，报错信息会指明是哪个
+参数——`table`、`into`、`tables` 或 `target_table`。解法是传入带限定的
+`TableExpression`，而不是字符串。
+
+**给 `DropTableExpression` 或 `TruncateExpression` 传 `schema_name`。** 这两个没有这个
+参数，会因为收到未知关键字而抛 `TypeError`。命名空间要放在作为表传进去的
+`TableExpression` 上。
+
+**用 `function=` 指名触发器的函数。** 关键字是 `function_name`，而且和其他表参数一样
+收 `TableExpression`：
+`TypeError: function_name must be a TableExpression, got str`。
+
+**手工拼 DDL 并指望 `__schema_name__` 自己流进去。** 只有模型上的 `build_*` 工厂读这个
+声明。手工拼装的表达式只带着你给它的命名空间。
+
+**把索引语句上的 `schema_name` 当成表的命名空间。** 它只限定索引名；表的命名空间来自
+它自己的 `TableExpression`，两者互相独立，见
+[索引各自选择命名空间](#索引各自选择命名空间)。
+
+**把索引放进与它的表不同的属主。** 渲染器照样产出这条语句，Oracle 会拒绝。两个命名
+空间保持一致，见[索引各自选择命名空间](#索引各自选择命名空间)。
+
+**把 `@dblink` 或 flashback 挂到普通的 `TableExpression` 上。** 这两个字段属于
+`OracleTableExpression`，渲染器分支判断的是类型。普通表引用没有这两个属性，往上赋值
+也不会被读取。
+
+**指望构造时报错。** 表目标是例外：不合法的表目标在**构造期**就抛 `TypeError`。
+但不合法的 `schema_name` 要等到语句渲染出来才会被拒绝，模型上的这类错误能一路存活到
+查询构建完成的那一刻，在拼装 SQL 时才失败。
 
 **去用 `CREATE SCHEMA` 或 `DROP SCHEMA`。** 两者都会抛 `UnsupportedFeatureError`。
 用 `CREATE USER` 开通命名空间，用 `DROP USER ... CASCADE` 回收。
@@ -604,8 +860,8 @@ TableExpression(d, "orders", schema_name="app.public").to_sql()[0]
 `ALTER SESSION SET CURRENT_SCHEMA` 之后就会分开。`get_session_info()` 同时报告两者，
 `get_current_schema()` 只报告用于解析名字的那一个。
 
-**指望 `DROP TABLE` 的 `if_exists` 渲染出守卫条件。** 它会被接受然后丢弃，而
-`DROP INDEX` 会直接抛异常，见[DDL 单独传 schema](#ddl-单独传-schema)。
+**指望 `DROP TABLE` 的 `if_exists` 渲染出守卫条件。** 它会抛异常，`DROP INDEX` 的
+`if_exists` 同样如此，见[`DROP TABLE IF EXISTS` 会被拒绝](#drop-table-if-exists-会被拒绝)。
 
 ## 建议的分层方式
 

@@ -25,8 +25,11 @@ Every SQL fragment below was rendered by the expression layer with
 PYTHONPATH=src .venv3.14-ubuntu26.04/bin/python
 ```
 
-Measured against `rhosocial-activerecord` 1.0.0.dev30 and
-`rhosocial-activerecord-oracle` 1.0.0.dev3.
+Measured against the `fix/schema-name-propagation-gaps` core —
+`rhosocial-activerecord` 1.0.0.dev30 — and `rhosocial-activerecord-oracle`
+1.0.0.dev3. The core matters: an installed `python-activerecord` from `main`
+predates the rewrite below and still accepts bare table-name strings in DDL and
+DML, so the fragments rendered against it differ from the ones shown here.
 
 Every statement comes out on a single line. Long ones are wrapped below for
 reading; the line breaks are not part of the output.
@@ -279,7 +282,7 @@ Two further boundaries hold. A column carrying a schema but no table is
 refused, because there is nothing to resolve the prefix against:
 
 ```
-ValueError: Oracle: cannot qualify column 'id' with schema 'APP' because no table
+ValueError: Oracle: cannot qualify column 'id' with schema 'app' because no table
 was given; a column reference needs a table (or an alias) to be
 schema-qualified
 ```
@@ -385,11 +388,41 @@ does not exist.
 
 Every statement that names a table takes a `TableExpression`, and every
 statement that names a database object takes a namespace for that object alone.
-A bare string is refused:
+A bare string is refused — at construction, not at render time, so the mistake
+surfaces at the call site that made it:
+
+| Expression | Argument |
+|---|---|
+| `CreateTableExpression` | `table` |
+| `DropTableExpression` | `table` |
+| `TruncateExpression` | `table` |
+| `AlterTableExpression` | `table` |
+| `CreateIndexExpression` | `table` |
+| `DropIndexExpression` | `table` (may be `None`) |
+| `CreateFulltextIndexExpression` | `table` |
+| `DropFulltextIndexExpression` | `table` |
+| `CreateTriggerExpression` | `table`, `function_name` (may be `None`) |
+| `DropTriggerExpression` | `table` (may be `None`) |
+| `InsertExpression` | `into` |
+| `DeleteExpression` | `tables` (one or a list, checked element by element) |
+| `UpdateExpression` | `table` |
+| `MergeExpression` | `target_table` |
+
+The message names the argument at fault, and each one reads differently:
 
 ```
 TypeError: table must be a TableExpression, got str
+TypeError: into must be a TableExpression, got str
+TypeError: tables must be a TableExpression, got str
+TypeError: every table in tables must be a TableExpression, got str
+TypeError: target_table must be a TableExpression, got str
+TypeError: function_name must be a TableExpression, got str
 ```
+
+`DropTableExpression` and `TruncateExpression` have no `schema_name` parameter at
+all — `DropTableExpression(d, "orders", schema_name="app")` fails with
+`TypeError: ... got an unexpected keyword argument 'schema_name'`, because the
+namespace has exactly one home on those two, and it is the table reference.
 
 ```python
 DropTableExpression(d, TableExpression(d, "orders", schema_name="app")).to_sql()[0]
@@ -484,6 +517,16 @@ DropTriggerExpression(d, "trg_orders", TableExpression(d, "orders", schema_name=
 # DROP TRIGGER "TRG_ORDERS"
 ```
 
+Both arguments are type-checked under their own names — the keyword is
+`function_name`, not `function`, and each message names the argument it caught:
+
+```
+CreateTriggerExpression(d, "trg", "orders", timing, events)
+# TypeError: table must be a TableExpression, got str
+CreateTriggerExpression(d, "trg", table, timing, events, function_name="fn")
+# TypeError: function_name must be a TableExpression, got str
+```
+
 ### A synonym qualifies its target, not itself
 
 `OracleCreateSynonymExpression` takes the synonym's name and the target's name as
@@ -508,8 +551,10 @@ the synonym resolves to, not the synonym.
 
 ### DML targets
 
-`UPDATE` and `DELETE` take the table as a qualified `TableExpression`, and a
-bare string is refused with the same message:
+`INSERT`, `UPDATE` and `DELETE` take the table as a qualified `TableExpression`.
+Each refuses a bare string, and each names its own argument in the message —
+`INSERT` says `into`, `DELETE` says `tables` (and, given a list, says `every
+table in tables`), `UPDATE` says `table`:
 
 ```python
 InsertExpression(d, TableExpression(d, "users", schema_name="app"), source,
@@ -522,6 +567,19 @@ UpdateExpression(d, TableExpression(d, "users", schema_name="app"),
 
 DeleteExpression(d, TableExpression(d, "users", schema_name="app")).to_sql()[0]
 # DELETE FROM "APP"."USERS"
+```
+
+The three refusals, measured:
+
+```
+InsertExpression(d, "users", source, columns=["id"])
+# TypeError: into must be a TableExpression, got str
+DeleteExpression(d, "users")
+# TypeError: tables must be a TableExpression, got str
+DeleteExpression(d, ["users"])
+# TypeError: every table in tables must be a TableExpression, got str
+UpdateExpression(d, "users", {"name": value})
+# TypeError: table must be a TableExpression, got str
 ```
 
 Because soft delete rebuilds an `UPDATE` against the model's range, `restore()`
@@ -552,10 +610,17 @@ DropTableExpression(d, TableExpression(d, "orders", schema_name="app"),
 # DROP TABLE "APP"."ORDERS" CASCADE CONSTRAINTS
 ```
 
+`cascade=False`, which would render `RESTRICT`, raises instead:
+
+```
+UnsupportedFeatureError: 'Oracle' dialect does not support DROP TABLE ... RESTRICT.
+```
+
 `DROP INDEX` treats its own `if_exists` the same way — it raises
-`UnsupportedFeatureError`. To drop an index only when it is there, test the data
-dictionary in the migration, or issue the drop inside a PL/SQL block that
-swallows ORA-00942 — the pattern this backend's own cross-schema tests use in
+`UnsupportedFeatureError: 'Oracle' dialect does not support DROP INDEX IF
+EXISTS.` To drop an index only when it is there, test the data dictionary in the
+migration, or issue the drop inside a PL/SQL block that swallows ORA-00942 — the
+pattern this backend's own cross-schema tests use in
 `tests/rhosocial/activerecord_oracle_test/feature/backend/test_cross_schema.py`.
 
 ### When a namespace is judged
@@ -597,7 +662,7 @@ render — the factory therefore hands the guard to the dialect rather than
 quietly leaving it out:
 
 ```python
-Order.build_drop_table_statement(dialect, if_exists=True)
+Order.build_drop_table_statement(dialect, if_exists=True).to_sql()
 # UnsupportedFeatureError: 'Oracle' dialect does not support DROP TABLE IF EXISTS.
 ```
 
@@ -682,10 +747,11 @@ OracleTableExpression(d, "orders", schema_name="app", alias="o", dblink="dl",
 The `dblink` name is folded like any other identifier, so `dl` becomes `"DL"`.
 
 Two points follow from the fields being declared on the subclass. A plain core
-`TableExpression` has neither attribute, and the formatter branches on the type
-rather than on attribute presence, so it renders without the clauses. And
-assigning `dblink` or `flashback` onto a plain core `TableExpression` after
-construction has no effect on the output:
+`TableExpression` has neither attribute at all — `hasattr(t, "dblink")` is
+`False` — and the formatter branches on the type rather than on attribute
+presence, so it renders without the clauses. And assigning `dblink` or
+`flashback` onto a plain core `TableExpression` after construction adds an
+attribute nothing reads:
 
 ```python
 t = TableExpression(d, "orders", schema_name="app")
@@ -693,6 +759,12 @@ t.dblink = "dl"
 t.to_sql()[0]
 # "APP"."ORDERS"       -- the assignment is not read
 ```
+
+The generated capability protocol declares `format_table(self, expr)` — a single
+positional argument, no `dblink` or `flashback` keyword — so
+`d.format_table(expr, dblink="dl")` is a `TypeError` as well. The dialect reads
+the two values off the expression's own type, which is the only place they
+exist.
 
 ## Which schema an unqualified name resolves against
 
@@ -853,24 +925,42 @@ of the schema on an aliased range happens in `FieldProxy`, not in the renderer,
 so `Column(d, "id", table="orders", schema_name="app")` produces SQL Oracle
 rejects under `FROM "APP"."ORDERS" "O"`. Go through `Model.c.<field>`.
 
-**Handing a DDL statement a bare table name.** It raises `TypeError` at
-construction, and the message names the argument at fault. The fix is a qualified
-`TableExpression`, not a string.
+**Handing a DDL or DML statement a bare table name.** It raises `TypeError` at
+construction, and the message names the argument at fault — `table`, `into`,
+`tables` or `target_table`. The fix is a qualified `TableExpression`, not a
+string.
+
+**Passing `schema_name` to `DropTableExpression` or `TruncateExpression`.** Those
+two have no such parameter and raise `TypeError` for the unexpected keyword. Put
+the namespace on the `TableExpression` you pass as the table.
+
+**Naming a trigger's function with `function=`.** The keyword is `function_name`,
+and it takes a `TableExpression` like every other table argument:
+`TypeError: function_name must be a TableExpression, got str`.
 
 **Building DDL by hand and expecting `__schema_name__` to reach it.** Only the
 model factories read the declaration. An expression assembled at a call site
 carries whatever namespaces it was given.
 
-**Expecting construction to raise for a bad `schema_name`.** Nothing rejects a
-bad value until the statement renders. A model-level mistake survives every step
-up to and including query building and fails when the SQL is assembled.
+**Reading a `schema_name` on an index statement as the table's namespace.** It
+qualifies the index name only; the table's namespace comes from its own
+`TableExpression`, and the two are independent. See
+[Indexes choose a namespace](#indexes-choose-a-namespace-and-oracle-constrains-them).
+
+**Expecting construction to raise for a bad `schema_name`.** A table *target* is
+the exception — a bare string there raises `TypeError` at construction. A bad
+`schema_name` value is not: nothing rejects it until the statement renders, so a
+model-level mistake survives every step up to and including query building and
+fails when the SQL is assembled. See
+[When a namespace is judged](#when-a-namespace-is-judged).
 
 **Putting an index in a different owner than its table.** The renderer emits the
 statement; Oracle refuses it. Keep both namespaces the same. See
 [Indexes choose a namespace](#indexes-choose-a-namespace-and-oracle-constrains-them).
 
 **Attaching `@dblink` or flashback to a plain `TableExpression`.** Those fields
-belong to `OracleTableExpression`, and the formatter branches on the type.
+belong to `OracleTableExpression`, and the formatter branches on the type. A
+plain reference has neither attribute, and an assignment onto one is never read.
 
 **Reaching for `CREATE SCHEMA` or `DROP SCHEMA`.** Both raise
 `UnsupportedFeatureError`. Provision a namespace with `CREATE USER` and retire it
