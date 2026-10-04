@@ -119,7 +119,7 @@ def social_graph_data(oracle_backend):
         [Literal(dialect, 4), Literal(dialect, "Diana"), Literal(dialect, "diana@x.com"), Literal(dialect, "NYC")],
         [Literal(dialect, 5), Literal(dialect, "Eve"), Literal(dialect, "eve@x.com"), Literal(dialect, "LA")],
     ])
-    backend.execute(*InsertExpression(dialect, "people", source=people_data).to_sql())
+    backend.execute(*InsertExpression(dialect, TableExpression(dialect, "people"), source=people_data).to_sql())
 
     follows_data = ValuesSource(dialect, [
         [Literal(dialect, 1), Literal(dialect, 1), Literal(dialect, 2), Literal(dialect, "2024-01-01")],
@@ -128,7 +128,7 @@ def social_graph_data(oracle_backend):
         [Literal(dialect, 4), Literal(dialect, 4), Literal(dialect, 1), Literal(dialect, "2024-04-01")],
         [Literal(dialect, 5), Literal(dialect, 3), Literal(dialect, 5), Literal(dialect, "2024-05-01")],
     ])
-    backend.execute(*InsertExpression(dialect, "follows", source=follows_data).to_sql())
+    backend.execute(*InsertExpression(dialect, TableExpression(dialect, "follows"), source=follows_data).to_sql())
 
     posts_data = ValuesSource(dialect, [
         [Literal(dialect, 1), Literal(dialect, 2), Literal(dialect, "Hello world"), Literal(dialect, "2024-06-01")],
@@ -136,7 +136,7 @@ def social_graph_data(oracle_backend):
         [Literal(dialect, 3), Literal(dialect, 3), Literal(dialect, "Graph databases"), Literal(dialect, "2024-06-03")],
         [Literal(dialect, 4), Literal(dialect, 1), Literal(dialect, "My first post"), Literal(dialect, "2024-06-04")],
     ])
-    backend.execute(*InsertExpression(dialect, "posts", source=posts_data).to_sql())
+    backend.execute(*InsertExpression(dialect, TableExpression(dialect, "posts"), source=posts_data).to_sql())
 
     likes_data = ValuesSource(dialect, [
         [Literal(dialect, 1), Literal(dialect, 1), Literal(dialect, 1), Literal(dialect, "2024-06-02")],
@@ -145,7 +145,7 @@ def social_graph_data(oracle_backend):
         [Literal(dialect, 4), Literal(dialect, 4), Literal(dialect, 4), Literal(dialect, "2024-06-05")],
         [Literal(dialect, 5), Literal(dialect, 5), Literal(dialect, 1), Literal(dialect, "2024-06-06")],
     ])
-    backend.execute(*InsertExpression(dialect, "likes", source=likes_data).to_sql())
+    backend.execute(*InsertExpression(dialect, TableExpression(dialect, "likes"), source=likes_data).to_sql())
 
     vt_people = VertexTable(dialect, "people",
                             labels=["person"],
@@ -452,12 +452,12 @@ class TestAsyncOracleSocialGraph:
             [Literal(dialect, 1), Literal(dialect, "Alice")],
             [Literal(dialect, 2), Literal(dialect, "Bob")],
         ])
-        await backend.execute(*InsertExpression(dialect, "people", source=people_data).to_sql())
+        await backend.execute(*InsertExpression(dialect, TableExpression(dialect, "people"), source=people_data).to_sql())
 
         follows_data = ValuesSource(dialect, [
             [Literal(dialect, 1), Literal(dialect, 1), Literal(dialect, 2)],
         ])
-        await backend.execute(*InsertExpression(dialect, "follows", source=follows_data).to_sql())
+        await backend.execute(*InsertExpression(dialect, TableExpression(dialect, "follows"), source=follows_data).to_sql())
 
         vt = VertexTable(dialect, "people", labels=["person"])
         et = EdgeTable(dialect, "follows", ["follower_id"], ["followed_id"],

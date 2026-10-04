@@ -3,17 +3,18 @@
 # Oracle Schema Namespaces
 
 > This page covers what is specific to this backend: what a `schema_name` names
-> here, why identifiers come out upper case, how a qualified reference is built
-> from three parts instead of two, why Oracle emits no `AS` before a table
-> alias, which namespace an unqualified name resolves against, what a synonym
-> qualifies, and where the dialect's `format_table` adds clauses of its own.
+> here, why identifiers come out upper case, why a qualified column reference is
+> three parts instead of two, why Oracle emits no `AS` before a table alias,
+> which namespace an unqualified name resolves against, what a synonym
+> qualifies, where `@dblink` and flashback live, and which guards this backend
+> refuses.
 >
-> The model-level API — declaring `__schema_name__`, when the schema reaches
-> the SQL, the DDL boundary, the cross-backend support matrix — is documented in
+> The model-level API — declaring `__schema_name__`, the DDL factories that
+> build a model's statements, the cross-backend support matrix — is documented in
 > the core library guide, which lives in the `python-activerecord` repository as
 > [`docs/en_US/modeling/schema_namespace.md`][core-en].
 
-[core-en]: https://github.com/rhosocial/python-activerecord/tree/main/docs/en_US/modeling/schema_namespace.md
+[core-en]: https://github.com/Rhosocial/python-activerecord/tree/main/docs/en_US/modeling/schema_namespace.md
 
 ## How this page was verified
 
@@ -31,10 +32,11 @@ Every statement comes out on a single line. Long ones are wrapped below for
 reading; the line breaks are not part of the output.
 
 Statements that describe the server rather than the renderer — `CURRENT_SCHEMA`
-against `SESSION_USER`, the requirement of a `FROM` clause, the synonym target —
-are Oracle's own documented behaviour and were not exercised against a live
-instance in this repository. Each is marked where it appears, and every point
-left open by the absence of an instance says so in place.
+against `SESSION_USER`, the requirement of a `FROM` clause, the synonym target,
+the rule that an index belongs to its table's owner — are Oracle's own
+documented behaviour and were not exercised against a live instance in this
+repository. Each is marked where it appears, and every point left open by the
+absence of an instance says so in place.
 
 ## What a `schema_name` names here
 
@@ -71,11 +73,12 @@ dialect.supports_schema_if_not_exists()  # False
 dialect.supports_schema_if_exists()      # False
 dialect.supports_schema_cascade()        # False
 dialect.supports_schema_authorization()  # False
+dialect.supports_index_schema_qualification()  # True
 ```
 
 `supports_schema()` answers whether a name can be *qualified* with a namespace,
-and on Oracle it can. The remaining flags answer whether a namespace can be
-created and dropped by schema DDL, and it cannot: both statements raise rather
+and on Oracle it can. The remaining schema flags answer whether a namespace can
+be created and dropped by schema DDL, and it cannot: both statements raise rather
 than render.
 
 ```python
@@ -88,9 +91,17 @@ DropSchemaExpression(d, "ar_crm").to_sql()[0]
 #   Suggestion: Oracle does not support DROP SCHEMA.
 ```
 
+`supports_index_schema_qualification()` answers a separate question — whether an
+index *name* may carry a namespace — and Oracle answers `True`, because Oracle's
+`CREATE INDEX` does accept a qualified index name. A dialect whose grammar forbids
+it answers `False` and raises `UnsupportedFeatureError` while rendering. See
+[Indexes choose a namespace, and Oracle constrains them](#indexes-choose-a-namespace-and-oracle-constrains-them).
+
 ### How a qualified name is rendered
 
-Two double-quoted identifiers separated by a dot:
+`TableExpression` is the single carrier of a qualified name, for a range in a
+`FROM` clause and for the objects that DDL names rather than selects alike. It
+renders as two double-quoted identifiers separated by a dot:
 
 | Expression | SQL |
 |---|---|
@@ -222,8 +233,8 @@ TableExpression(
 ```
 
 A value that is a reserved word then goes out unquoted, and the dialect emits an
-`IdentifierQuotingWarning` rather than failing quietly. Use this only for a name
-that genuinely exists with mixed case.
+`IdentifierQuotingWarning` rather than passing it through unnoticed. Use this only
+for a name that genuinely exists with mixed case.
 
 ## Columns take three parts
 
@@ -370,26 +381,32 @@ The CTE's name is folded to upper case like any other identifier. Qualifying it
 would make Oracle look for a table called `RECENT_ORDERS` in the schema, which
 does not exist.
 
-## DDL takes a schema of its own
+## DDL names its objects independently
 
-`__schema_name__` selects the read/write namespace. It is **not** consulted when
-DDL is built — a migration has to name the schema it means — but every statement
-that names a schema-bearing object accepts a `schema_name` of its own, so
-qualification no longer has to be assembled by hand. Every name below is folded
-like any other identifier.
+Every statement that names a table takes a `TableExpression`, and every
+statement that names a database object takes a namespace for that object alone.
+A bare string is refused:
+
+```
+TypeError: table must be a TableExpression, got str
+```
 
 ```python
 DropTableExpression(d, TableExpression(d, "orders", schema_name="app")).to_sql()[0]
 # DROP TABLE "APP"."ORDERS"
 
-TruncateExpression(d, "orders", schema_name="app").to_sql()[0]
+TruncateExpression(d, TableExpression(d, "orders", schema_name="app")).to_sql()[0]
 # TRUNCATE TABLE "APP"."ORDERS"
 
-CreateIndexExpression(d, "idx_orders_id", "orders", ["id"], schema_name="app").to_sql()[0]
-# CREATE INDEX "APP"."IDX_ORDERS_ID" ON "APP"."ORDERS" ("ID")
+CreateTableExpression(
+    d, TableExpression(d, "orders", schema_name="app"),
+    [ColumnDefinition(d, "id", d.parse_type("NUMBER"))],
+).to_sql()[0]
+# CREATE TABLE "APP"."ORDERS" ("ID" NUMBER)
 
-DropIndexExpression(d, "idx_orders_id", schema_name="app").to_sql()[0]
-# DROP INDEX "APP"."IDX_ORDERS_ID"
+AlterTableExpression(d, TableExpression(d, "orders", schema_name="app"),
+                     [DropColumn(d, "legacy")]).to_sql()[0]
+# ALTER TABLE "APP"."ORDERS" DROP COLUMN "LEGACY"
 
 CreateSequenceExpression(d, "seq_orders", schema_name="app").to_sql()[0]
 # CREATE SEQUENCE "APP"."SEQ_ORDERS" NOCYCLE NOORDER
@@ -401,45 +418,71 @@ DropTypeExpression(d, "t_addr", schema_name="app").to_sql()[0]
 # DROP TYPE "APP"."T_ADDR"
 ```
 
-`CREATE INDEX` has one `schema_name` and it covers both names: the index and the
-table it is built on land in the same owner. That is required on Oracle, because
-an index must live in the same schema as its table.
+### Indexes choose a namespace, and Oracle constrains them
 
-`DROP TABLE` has a quirk worth knowing before the first migration runs on this
-backend. Passing `if_exists=True` does not raise and does not render the guard;
-the statement comes out bare:
+`schema_name` on an index statement qualifies **the index name**. The table is
+qualified by its own `TableExpression`, so the renderer lets the two differ:
 
 ```python
-dialect.supports_if_exists_table()                                  # False
-DropTableExpression(d, TableExpression(d, "o", schema_name="app"), if_exists=True).to_sql()[0]
-# DROP TABLE "APP"."O"
+CreateIndexExpression(
+    d, "idx_shared",
+    TableExpression(d, "orders", schema_name="sales"),
+    ["id"], schema_name="app",
+).to_sql()[0]
+# CREATE INDEX "APP"."IDX_SHARED" ON "SALES"."ORDERS" ("ID")
 ```
 
-`DROP INDEX` treats the same flag differently and raises
-`UnsupportedFeatureError`. To drop a table only when it is there, test
-`ALL_TABLES` in the migration, or issue the drop inside a PL/SQL block that
-swallows ORA-00942 — the pattern this backend's own cross-schema tests use in
-`tests/rhosocial/activerecord_oracle_test/feature/backend/test_cross_schema.py`.
-
-DML takes a qualified `TableExpression`:
+That renders, and Oracle will refuse it: an index must belong to the same owner
+as its table. This is the server's rule rather than the renderer's, and the
+renderer does not check it — passing two different owners produces a statement
+that fails. Give both names the same namespace:
 
 ```python
-InsertExpression(d, TableExpression(d, "users", schema_name="app"), source,
-                 columns=["id", "name"]).to_sql()[0]
-# INSERT INTO "APP"."USERS" ("ID", "NAME") VALUES (?, ?)
-
-UpdateExpression(d, TableExpression(d, "users", schema_name="app"),
-                 {"name": value}).to_sql()[0]
-# UPDATE "APP"."USERS" SET "NAME" = ?
-
-DeleteExpression(d, TableExpression(d, "users", schema_name="app")).to_sql()[0]
-# DELETE FROM "APP"."USERS"
+CreateIndexExpression(
+    d, "idx_orders_id",
+    TableExpression(d, "orders", schema_name="app"),
+    ["id"], schema_name="app",
+).to_sql()[0]
+# CREATE INDEX "APP"."IDX_ORDERS_ID" ON "APP"."ORDERS" ("ID")
 ```
 
-Because soft delete rebuilds an `UPDATE` against the model's range, `restore()`
-carries the namespace down the same way `delete()` does. Without it, a restore
-would clear `deleted_at` on the same-named table in the connected user's schema
-and leave the intended row soft-deleted.
+`DROP INDEX` carries the index's own namespace, and renders no `ON` clause
+because Oracle's `DROP INDEX` has none:
+
+```python
+DropIndexExpression(d, "idx_orders_id", schema_name="app").to_sql()[0]
+# DROP INDEX "APP"."IDX_ORDERS_ID"
+```
+
+### Triggers name a table and a function
+
+`CreateTriggerExpression` takes the table and the function as `TableExpression`
+values, each with its own namespace. `schema_name` is accepted and stored on the
+expression, but this backend's formatter does not place it before the trigger
+name, so the rendered statement creates the trigger in the connected user's
+schema:
+
+```python
+CreateTriggerExpression(
+    d, "trg_orders",
+    TableExpression(d, "orders", schema_name="sales"),
+    TriggerTiming.BEFORE, [TriggerEvent.UPDATE],
+    function_name=TableExpression(d, "set_updated_at", schema_name="tools"),
+    schema_name="app",
+).to_sql()[0]
+# CREATE OR REPLACE TRIGGER "TRG_ORDERS" BEFORE UPDATE ON "SALES"."ORDERS"
+#   FOR EACH ROW CALL "TOOLS"."SET_UPDATED_AT"
+```
+
+The two namespaces the statement does render are the table's and the function's,
+and they are independent of each other. `DropTriggerExpression` behaves the same
+way for the trigger name:
+
+```python
+DropTriggerExpression(d, "trg_orders", TableExpression(d, "orders", schema_name="app"),
+                      schema_name="app").to_sql()[0]
+# DROP TRIGGER "TRG_ORDERS"
+```
 
 ### A synonym qualifies its target, not itself
 
@@ -463,25 +506,167 @@ a synonym is created in the connected user's schema unless `PUBLIC` is given,
 and its name is not something a `schema_name` can select. It reaches the object
 the synonym resolves to, not the synonym.
 
-### `@dblink` and flashback on a table reference
+### DML targets
 
-The dialect overrides `format_table` to append two clauses that the core
-expression does not carry. Both hang off attributes on the table expression:
+`UPDATE` and `DELETE` take the table as a qualified `TableExpression`, and a
+bare string is refused with the same message:
 
 ```python
+InsertExpression(d, TableExpression(d, "users", schema_name="app"), source,
+                 columns=["id", "name"]).to_sql()[0]
+# INSERT INTO "APP"."USERS" ("ID", "NAME") VALUES (?, ?)
+
+UpdateExpression(d, TableExpression(d, "users", schema_name="app"),
+                 {"name": value}).to_sql()[0]
+# UPDATE "APP"."USERS" SET "NAME" = ?
+
+DeleteExpression(d, TableExpression(d, "users", schema_name="app")).to_sql()[0]
+# DELETE FROM "APP"."USERS"
+```
+
+Because soft delete rebuilds an `UPDATE` against the model's range, `restore()`
+carries the namespace down the same way `delete()` does. Without it, a restore
+would clear `deleted_at` on the same-named table in the connected user's schema
+and leave the intended row soft-deleted.
+
+### `DROP TABLE IF EXISTS` is refused
+
+Oracle has no `IF EXISTS` clause for `DROP TABLE`. Asking for one is refused
+rather than discarded: a caller that set the flag would otherwise get a
+statement that fails on a missing table instead of the no-op it asked for.
+
+```python
+dialect.supports_if_exists_table()                                  # False
+DropTableExpression(d, TableExpression(d, "o", schema_name="app"), if_exists=True).to_sql()[0]
+# UnsupportedFeatureError: 'Oracle' dialect does not support DROP TABLE IF EXISTS.
+#   Suggestion: Oracle has no IF EXISTS clause for DROP TABLE. Drop the flag, or
+#   guard the call yourself.
+```
+
+`DROP TABLE ... RESTRICT` is refused on the same grounds, and `cascade=True`
+renders the dialect's own `CASCADE CONSTRAINTS` form:
+
+```python
+DropTableExpression(d, TableExpression(d, "orders", schema_name="app"),
+                    cascade=True).to_sql()[0]
+# DROP TABLE "APP"."ORDERS" CASCADE CONSTRAINTS
+```
+
+`DROP INDEX` treats its own `if_exists` the same way — it raises
+`UnsupportedFeatureError`. To drop an index only when it is there, test the data
+dictionary in the migration, or issue the drop inside a PL/SQL block that
+swallows ORA-00942 — the pattern this backend's own cross-schema tests use in
+`tests/rhosocial/activerecord_oracle_test/feature/backend/test_cross_schema.py`.
+
+### When a namespace is judged
+
+Construction only collects parameters, and that is where a `TableExpression`
+argument is type-checked. A namespace value, on the other hand, is judged while
+the statement is rendered, by the dialect, at the point where the statement is
+known to be whole. A dialect that implements `SchemaSupport` and answers
+`supports_schema()` with `False` refuses explicitly; one that does not implement
+the protocol ignores the namespace altogether.
+
+## DDL built from a model
+
+A model's namespace reaches its DDL through one place. `build_table_reference()`
+returns the model's table carrying `__schema_name__`, and every other factory is
+reached through it, so a model that declares the namespace once places all of
+its objects there and no two statements can drift apart.
+
+```python
+class Order(ActiveRecord):
+    __table_name__ = "orders"
+    __schema_name__ = "shop"
+
+Order.build_table_reference(dialect).to_sql()[0]       # "SHOP"."ORDERS"
+Order.build_table_reference(dialect, alias="o").to_sql()[0]
+# "SHOP"."ORDERS" "O"
+
+Order.build_create_table_statement(dialect, columns).to_sql()[0]
+# CREATE TABLE "SHOP"."ORDERS" (...)
+Order.build_truncate_statement(dialect).to_sql()[0]
+# TRUNCATE TABLE "SHOP"."ORDERS"
+Order.build_alter_table_statement(
+    dialect, [DropColumn(dialect, "legacy")]).to_sql()[0]
+# ALTER TABLE "SHOP"."ORDERS" DROP COLUMN "LEGACY"
+```
+
+`build_drop_table_statement` carries `if_exists`, which this backend refuses to
+render — the factory therefore hands the guard to the dialect rather than
+quietly leaving it out:
+
+```python
+Order.build_drop_table_statement(dialect, if_exists=True)
+# UnsupportedFeatureError: 'Oracle' dialect does not support DROP TABLE IF EXISTS.
+```
+
+The index factories take the index's namespace separately. It defaults to the
+model's own, which is what a caller almost always wants; pass
+`index_schema_name` to place the index elsewhere:
+
+```python
+Order.build_create_index_statement(
+    dialect, "idx_orders_email", ["email"]).to_sql()[0]
+# CREATE INDEX "SHOP"."IDX_ORDERS_EMAIL" ON "SHOP"."ORDERS" ("EMAIL")
+
+Order.build_create_index_statement(
+    dialect, "idx_orders_email", ["email"], index_schema_name="reporting").to_sql()[0]
+# CREATE INDEX "REPORTING"."IDX_ORDERS_EMAIL" ON "SHOP"."ORDERS" ("EMAIL")
+
+Order.build_drop_index_statement(dialect, "idx_orders_email").to_sql()[0]
+# DROP INDEX "SHOP"."IDX_ORDERS_EMAIL"
+```
+
+Passing `index_schema_name` on this backend produces a statement Oracle refuses,
+for the reason given in
+[Indexes choose a namespace](#indexes-choose-a-namespace-and-oracle-constrains-them).
+
+The full signatures are:
+
+```python
+Model.build_table_reference(dialect, alias=None)
+Model.build_create_table_statement(dialect, columns, ...)
+Model.build_drop_table_statement(dialect, if_exists=False)
+Model.build_truncate_statement(dialect, restart_identity=False, cascade=False)
+Model.build_alter_table_statement(dialect, actions)
+Model.build_create_index_statement(dialect, index_name, columns, *,
+                                   index_schema_name=None, **options)
+Model.build_drop_index_statement(dialect, index_name, *,
+                                 index_schema_name=None, if_exists=False, **options)
+```
+
+A hand-assembled expression does not get `__schema_name__` for free. It is
+reached from a dialect, not from a model, so a statement built that way has to be
+handed the namespaces it needs:
+
+```python
+# Reaches "SHOP"."ORDERS" only because the reference was built that way.
+DropTableExpression(
+    d, TableExpression(d, "orders", schema_name="shop")).to_sql()[0]
+# DROP TABLE "SHOP"."ORDERS"
+```
+
+## `@dblink` and flashback on a table reference
+
+The dialect's `format_table` can append two clauses that no other backend has.
+Both are declared on `OracleTableExpression`, a subclass of the core
+`TableExpression`, as real constructor fields rather than attributes attached
+after the fact:
+
+```python
+from rhosocial.activerecord.backend.impl.oracle.expression import OracleTableExpression
 from rhosocial.activerecord.backend.impl.oracle.expression.flashback import (
     OracleAsOfClause, OracleAsOfMode,
 )
 
-t = TableExpression(d, "orders", schema_name="app", alias="o")
-t.dblink = "remotedb"
-t.to_sql()[0]
+OracleTableExpression(d, "orders", schema_name="app", alias="o",
+                      dblink="remotedb").to_sql()[0]
 # "APP"."ORDERS"@"REMOTEDB" "O"
 
-t2 = TableExpression(d, "orders", schema_name="app")
-t2.flashback = OracleAsOfClause(d, OracleAsOfMode.TIMESTAMP,
-                                "SYSTIMESTAMP - INTERVAL '1' DAY")
-t2.to_sql()[0]
+OracleTableExpression(d, "orders", schema_name="app",
+    flashback=OracleAsOfClause(d, OracleAsOfMode.TIMESTAMP,
+                               "SYSTIMESTAMP - INTERVAL '1' DAY")).to_sql()[0]
 # "APP"."ORDERS" AS OF TIMESTAMP SYSTIMESTAMP - INTERVAL '1' DAY
 ```
 
@@ -489,21 +674,25 @@ With all three carried at once, the order holds: schema and name, `@dblink`,
 flashback clause, alias.
 
 ```python
-t3 = TableExpression(d, "orders", schema_name="app", alias="o")
-t3.dblink = "dl"
-t3.flashback = OracleAsOfClause(d, OracleAsOfMode.SCN, 12345)
-t3.to_sql()[0]
+OracleTableExpression(d, "orders", schema_name="app", alias="o", dblink="dl",
+    flashback=OracleAsOfClause(d, OracleAsOfMode.SCN, 12345)).to_sql()[0]
 # "APP"."ORDERS"@"DL" AS OF SCN 12345 "O"
 ```
 
 The `dblink` name is folded like any other identifier, so `dl` becomes `"DL"`.
 
-Two cautions. `TableExpression` has no `dblink` or `flashback` constructor
-argument — the attributes have to be assigned after construction, and an
-expression that lacks them renders without the clauses. And the auto-generated
-capability protocol declares `format_table` as taking `dblink` and `flashback`
-keyword arguments, while the implementation takes a single expression; calling
-it with those keywords raises `TypeError`.
+Two points follow from the fields being declared on the subclass. A plain core
+`TableExpression` has neither attribute, and the formatter branches on the type
+rather than on attribute presence, so it renders without the clauses. And
+assigning `dblink` or `flashback` onto a plain core `TableExpression` after
+construction has no effect on the output:
+
+```python
+t = TableExpression(d, "orders", schema_name="app")
+t.dblink = "dl"
+t.to_sql()[0]
+# "APP"."ORDERS"       -- the assignment is not read
+```
 
 ## Which schema an unqualified name resolves against
 
@@ -586,7 +775,7 @@ would expect:
 
 ```python
 class Bad(ActiveRecord):
-    __table_name__ = "empties"
+    __table_name__ = "orders"
     __schema_name__ = ""
 
 Bad.schema_name()                        # ''           -- no error
@@ -664,9 +853,24 @@ of the schema on an aliased range happens in `FieldProxy`, not in the renderer,
 so `Column(d, "id", table="orders", schema_name="app")` produces SQL Oracle
 rejects under `FROM "APP"."ORDERS" "O"`. Go through `Model.c.<field>`.
 
-**Expecting construction to raise.** Nothing rejects a bad `schema_name` until
-the statement renders. A model-level mistake survives every step up to and
-including query building and fails when the SQL is assembled.
+**Handing a DDL statement a bare table name.** It raises `TypeError` at
+construction, and the message names the argument at fault. The fix is a qualified
+`TableExpression`, not a string.
+
+**Building DDL by hand and expecting `__schema_name__` to reach it.** Only the
+model factories read the declaration. An expression assembled at a call site
+carries whatever namespaces it was given.
+
+**Expecting construction to raise for a bad `schema_name`.** Nothing rejects a
+bad value until the statement renders. A model-level mistake survives every step
+up to and including query building and fails when the SQL is assembled.
+
+**Putting an index in a different owner than its table.** The renderer emits the
+statement; Oracle refuses it. Keep both namespaces the same. See
+[Indexes choose a namespace](#indexes-choose-a-namespace-and-oracle-constrains-them).
+
+**Attaching `@dblink` or flashback to a plain `TableExpression`.** Those fields
+belong to `OracleTableExpression`, and the formatter branches on the type.
 
 **Reaching for `CREATE SCHEMA` or `DROP SCHEMA`.** Both raise
 `UnsupportedFeatureError`. Provision a namespace with `CREATE USER` and retire it
@@ -676,9 +880,9 @@ with `DROP USER ... CASCADE`.
 come apart after `ALTER SESSION SET CURRENT_SCHEMA`. `get_session_info()` reports
 both; `get_current_schema()` reports only the one that resolves names.
 
-**Expecting `if_exists` on `DROP TABLE` to render a guard.** It is accepted and
-then dropped. `DROP INDEX` raises instead. See
-[DDL takes a schema of its own](#ddl-takes-a-schema-of-its-own).
+**Expecting `if_exists` on `DROP TABLE` to render a guard.** It raises instead,
+as does `if_exists` on `DROP INDEX`. See
+[`DROP TABLE IF EXISTS` is refused](#drop-table-if-exists-is-refused).
 
 ## Recommended layering
 

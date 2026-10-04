@@ -124,7 +124,7 @@ def _insert_row(backend, table_name: str, columns: dict):
     values = [Literal(d, v) for v in columns.values()]
     expr = InsertExpression(
         d,
-        into=table_name,
+        into=TableExpression(d, table_name),
         source=ValuesSource(d, [values]),
         columns=col_names,
     )

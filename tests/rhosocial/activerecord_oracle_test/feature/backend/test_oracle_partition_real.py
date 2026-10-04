@@ -258,7 +258,7 @@ def test_explain_range_partitioned_table_real(oracle_backend_single):
         from rhosocial.activerecord.backend.expression.statements import ValuesSource
         insert = InsertExpression(
             d,
-            into=table_name,
+            into=TableExpression(d, table_name),
             source=ValuesSource(d, [[Literal(d, 1), Literal(d, 25)]]),
             columns=["ID", "AGE"],
         )

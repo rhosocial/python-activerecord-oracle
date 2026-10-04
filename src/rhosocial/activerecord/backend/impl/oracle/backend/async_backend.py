@@ -904,11 +904,7 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
 
         # Create InsertExpression and generate SQL. Pass the schema separately
         # via TableExpression so qualified identifiers are quoted per segment.
-        table_ref = (
-            TableExpression(self.dialect, options.table, schema_name=options.schema_name)
-            if options.schema_name
-            else options.table
-        )
+        table_ref = TableExpression(self.dialect, options.table, schema_name=options.schema_name)
         insert_expr = InsertExpression(
             dialect=self.dialect,
             into=table_ref,
@@ -1055,11 +1051,7 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
 
         # Create DeleteExpression and generate SQL. Pass the schema separately
         # via TableExpression so qualified identifiers are quoted per segment.
-        table_ref = (
-            TableExpression(self.dialect, options.table, schema_name=options.schema_name)
-            if options.schema_name
-            else options.table
-        )
+        table_ref = TableExpression(self.dialect, options.table, schema_name=options.schema_name)
         delete_expr = DeleteExpression(
             dialect=self.dialect,
             tables=table_ref,

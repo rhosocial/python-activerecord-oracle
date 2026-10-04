@@ -79,7 +79,7 @@ class TestOracleSequenceValueExpression:
     def test_nextval_in_insert(self, dialect):
         value = OracleSequenceValueExpression(dialect, "user_seq")
         source = ValuesSource(dialect, values_list=[[value, Literal(dialect, "x")]])
-        expr = InsertExpression(dialect, into="t", source=source, columns=["id", "name"])
+        expr = InsertExpression(dialect, into=TableExpression(dialect, "t"), source=source, columns=["id", "name"])
         sql, params = expr.to_sql()
         assert sql == 'INSERT INTO "T" ("ID", "NAME") VALUES ("USER_SEQ".NEXTVAL, ?)'
         assert params == ("x",)
