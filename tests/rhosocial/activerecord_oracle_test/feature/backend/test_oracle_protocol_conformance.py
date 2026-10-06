@@ -110,7 +110,11 @@ ORACLE_PROTOCOLS = [
     dialect_protocols.AlterTableModifierSupport,
     dialect_protocols.AlterTableSupport,
     dialect_protocols.AlterTypeSupport,
-    dialect_protocols.AutoIncrementSupport,
+    # Two mechanisms, two protocols: the bare AUTO_INCREMENT marker and the
+    # parameterised GENERATED ... AS IDENTITY clause. Oracle accepts only the
+    # latter, and declares it True from 12c on.
+    dialect_protocols.AutoIncrementColumnSupport,
+    dialect_protocols.IdentityColumnSupport,
     dialect_protocols.ColumnAttributeSupport,
     dialect_protocols.CommentSupport,
     dialect_protocols.ConstraintSupport,

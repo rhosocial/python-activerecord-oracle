@@ -160,9 +160,54 @@ class OracleFeaturesMixin:
         """Oracle supports FETCH FIRST ... WITH TIES since 12c."""
         return self.version >= (12, 0, 0)
 
-    # --- Auto-increment / Generated columns ---------------------------
-    def supports_auto_increment(self) -> bool:
+    # --- Identity / Auto-increment columns ----------------------------
+    def supports_identity_column(self) -> bool:
+        """Oracle accepts ``GENERATED ... AS IDENTITY`` from 12c onward."""
         return self.version >= (12, 0, 0)
+
+    def supports_identity_generation_always(self) -> bool:
+        """Oracle can express ``GENERATED ALWAYS AS IDENTITY``."""
+        return True
+
+    def supports_identity_start(self) -> bool:
+        """Oracle accepts the ``START WITH`` identity option."""
+        return True
+
+    def supports_identity_increment(self) -> bool:
+        """Oracle accepts the ``INCREMENT BY`` identity option."""
+        return True
+
+    def supports_identity_minvalue(self) -> bool:
+        """Oracle accepts the ``MINVALUE`` identity option."""
+        return True
+
+    def supports_identity_maxvalue(self) -> bool:
+        """Oracle accepts the ``MAXVALUE`` identity option."""
+        return True
+
+    def supports_identity_cycle(self) -> bool:
+        """Oracle accepts the ``CYCLE`` identity option.
+
+        Oracle spells the negative form ``NOCYCLE``; core's spaced ``NO CYCLE``
+        is refused (ORA-02000), and Oracle uses core's formatter unchanged in
+        this round. The probe gates the option, not the spelling, so
+        ``cycle=True`` renders and executes while ``cycle=False`` is the one
+        option combination whose rendered bytes the server rejects. That
+        boundary is measured and recorded, not papered over: see
+        ``test_oracle_identity_conformance.py``.
+        """
+        return True
+
+    def supports_auto_increment_column(self) -> bool:
+        """Oracle has no ``AUTO_INCREMENT`` marker; identity is its mechanism.
+
+        ``AUTO_INCREMENT`` is a different mechanism from the parameterised
+        ``GENERATED ... AS IDENTITY`` clause -- it is parameterless, and its
+        seed is a table-level option -- and Oracle spells neither. The answer
+        is ``False``; this replaces the old ``supports_auto_increment``, whose
+        version check answered a question no renderer asked.
+        """
+        return False
 
     def supports_column_collation(self) -> bool:
         """Oracle supports column-level COLLATE since 12.2."""
