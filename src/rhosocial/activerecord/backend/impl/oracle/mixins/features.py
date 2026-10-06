@@ -186,17 +186,63 @@ class OracleFeaturesMixin:
         return True
 
     def supports_identity_cycle(self) -> bool:
-        """Oracle accepts the ``CYCLE`` identity option.
+        """Oracle accepts the ``CYCLE`` / ``NOCYCLE`` identity option.
 
-        Oracle spells the negative form ``NOCYCLE``; core's spaced ``NO CYCLE``
-        is refused (ORA-02000), and Oracle uses core's formatter unchanged in
-        this round. The probe gates the option, not the spelling, so
-        ``cycle=True`` renders and executes while ``cycle=False`` is the one
-        option combination whose rendered bytes the server rejects. That
-        boundary is measured and recorded, not papered over: see
-        ``test_oracle_identity_conformance.py``.
+        Measured on 18c / 21c / 23c: both spellings are accepted inside an
+        identity clause. A bare ``CYCLE`` additionally needs a ``MAXVALUE``
+        (ORA-04015), which is a value constraint, not a missing clause. The
+        negative spelling is Oracle's own and comes from
+        :meth:`identity_cycle_keyword`: core's SQL-standard ``NO CYCLE`` is
+        refused (ORA-02000) on every measured server.
         """
         return True
+
+    def supports_identity_order(self) -> bool:
+        """Oracle accepts the ``ORDER`` / ``NOORDER`` identity option.
+
+        Measured on 18c / 21c / 23c: both spellings are accepted inside an
+        identity clause, so the option is expressible; the negative form is
+        spelled by :meth:`identity_order_keyword`.
+        """
+        return True
+
+    def supports_identity_cache(self) -> bool:
+        """Oracle accepts the ``CACHE n`` / ``NOCACHE`` identity option.
+
+        Measured on 18c / 21c / 23c: ``CACHE 10`` and ``NOCACHE`` are both
+        accepted inside an identity clause. ``CACHE 0`` is refused
+        (ORA-04010), which is why :meth:`identity_cache_keyword` spells a
+        falsy count as ``NOCACHE`` -- the count that cannot be expressed is
+        not the option that cannot be expressed.
+        """
+        return True
+
+    def identity_cycle_keyword(self, cycle: bool) -> str:
+        """Oracle spells the negative cycle form ``NOCYCLE``.
+
+        Core's SQL-standard ``NO CYCLE`` is refused (ORA-02000) on every
+        measured server; ``NOCYCLE`` is accepted. This answers spelling only:
+        the gate stays in core's formatter, which is not overridden here.
+        """
+        return "CYCLE" if cycle else "NOCYCLE"
+
+    def identity_order_keyword(self, order: bool) -> str:
+        """Oracle spells the negative order form ``NOORDER``.
+
+        Core's SQL-standard ``NO ORDER`` is refused (ORA-02000);
+        ``NOORDER`` is accepted.
+        """
+        return "ORDER" if order else "NOORDER"
+
+    def identity_cache_keyword(self, cache: int) -> str:
+        """Oracle spells the negative cache form ``NOCACHE``.
+
+        Core's SQL-standard ``NO CACHE`` is refused (ORA-02000);
+        ``NOCACHE`` is accepted. A falsy count means the negative form:
+        Oracle refuses ``CACHE 0`` (ORA-04010), so ``NOCACHE`` is the only
+        expressible spelling of "no cache".
+        """
+        return f"CACHE {cache}" if cache else "NOCACHE"
 
     def supports_auto_increment_column(self) -> bool:
         """Oracle has no ``AUTO_INCREMENT`` marker; identity is its mechanism.
