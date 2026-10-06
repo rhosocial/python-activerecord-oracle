@@ -259,8 +259,13 @@ The SQL Dialect is the backend's "translator" for database-specific syntax. This
 
 The dialect system uses a **Protocol-Mixin** architecture:
 
-- **Protocols** (`protocols.py`): Define the interface contract - what methods a dialect must implement
-- **Mixins** (`mixins.py`): Provide default SQL standard implementations that dialects can override
+- **Protocols** (`dialect/protocols/`): Define the interface contract - what methods a dialect must implement
+- **Mixins** (`dialect/mixins/`): Provide default SQL standard implementations that dialects can override
+
+Both are packages, not single modules, and both are grouped by concern: `protocols/ddl/`,
+`protocols/object/`, `protocols/query/`, `protocols/introspect/`, `protocols/sqlxml/`, and
+matching `mixins/` sub-modules. Import from the package root
+(`from ...backend.dialect import protocols, mixins`), not from a leaf module.
 
 Every dialect inherits from:
 1. `SQLDialectBase` - Core dialect functionality
@@ -273,31 +278,74 @@ Every dialect inherits from:
 |----------|-------|-------------|
 | `WindowFunctionSupport` | `WindowFunctionMixin` | Window functions (OVER, PARTITION BY) |
 | `CTESupport` | `CTEMixin` | Common Table Expressions (WITH clause) |
-| `AdvancedGroupingSupport` | `AdvancedGroupingMixin` | ROLLUP, CUBE, GROUPING SETS |
-| `ReturningSupport` | `ReturningMixin` | RETURNING clause |
+| `AdvancedGroupingSupport` | `DQLMixin` | ROLLUP, CUBE, GROUPING SETS |
+| `ReturningSupport` | `DMLMixin` | RETURNING clause |
 | `UpsertSupport` | `UpsertMixin` | UPSERT operations (ON CONFLICT) |
 | `LateralJoinSupport` | `LateralJoinMixin` | LATERAL joins |
 | `ArraySupport` | `ArrayMixin` | Array types and operations |
 | `JSONSupport` | `JSONMixin` | JSON types and operations |
 | `ExplainSupport` | `ExplainMixin` | EXPLAIN statement |
-| `FilterClauseSupport` | `FilterClauseMixin` | FILTER clause for aggregates |
-| `OrderedSetAggregationSupport` | `OrderedSetAggregationMixin` | WITHIN GROUP (ORDER BY) |
+| `FilterClauseSupport` | `ExpressionMixin` | FILTER clause for aggregates |
+| `OrderedSetAggregationSupport` | `ExpressionMixin` | WITHIN GROUP (ORDER BY) |
 | `MergeSupport` | `MergeMixin` | MERGE statement |
 | `TemporalTableSupport` | `TemporalTableMixin` | FOR SYSTEM_TIME queries |
-| `QualifyClauseSupport` | `QualifyClauseMixin` | QUALIFY clause |
-| `LockingSupport` | `LockingMixin` | FOR UPDATE, SKIP LOCKED |
+| `QualifyClauseSupport` | `DQLMixin` | QUALIFY clause |
+| `LockingSupport` | `DQLMixin` | FOR UPDATE, SKIP LOCKED |
 | `GraphSupport` | `GraphMixin` | Graph queries (MATCH) |
 | `JoinSupport` | `JoinMixin` | JOIN operations |
 | `SetOperationSupport` | `SetOperationMixin` | UNION, INTERSECT, EXCEPT |
 | `ILIKESupport` | `ILIKEMixin` | Case-insensitive LIKE |
-| `TableSupport` | `TableMixin` | CREATE/DROP/ALTER TABLE |
-| `ViewSupport` | `ViewMixin` | CREATE/DROP VIEW |
+| `CreateTableSupport` + `DropTableSupport` + `AlterTableSupport` | `TableMixin` | CREATE/DROP/ALTER TABLE |
 | `TruncateSupport` | `TruncateMixin` | TRUNCATE TABLE |
-| `SchemaSupport` | `SchemaMixin` | CREATE/DROP SCHEMA |
-| `IndexSupport` | `IndexMixin` | CREATE/DROP INDEX |
-| `SequenceSupport` | `SequenceMixin` | CREATE/DROP/ALTER SEQUENCE |
-| `TriggerSupport` | `TriggerMixin` | CREATE/DROP TRIGGER (SQL:1999) |
-| `FunctionSupport` | `FunctionMixin` | CREATE/DROP FUNCTION (SQL/PSM) |
+| `CreateViewSupport` + `DropViewSupport` | `ViewMixin` | CREATE/DROP VIEW |
+| `CreateIndexSupport` + `DropIndexSupport` | `IndexMixin` | CREATE/DROP INDEX |
+| `CreateSequenceSupport` + `DropSequenceSupport` + `AlterSequenceSupport` | `SequenceMixin` | CREATE/DROP/ALTER SEQUENCE |
+| `CreateTriggerSupport` + `DropTriggerSupport` | `TriggerMixin` | CREATE/DROP TRIGGER (SQL:1999) |
+| `CreateRoutineSupport` + `DropRoutineSupport` | `FunctionMixin` | CREATE/DROP FUNCTION/PROCEDURE (SQL/PSM) |
+| `CreateSchemaSupport` + `DropSchemaSupport` | `SchemaMixin` | CREATE/DROP SCHEMA |
+
+**There is no single `TableSupport` / `ViewSupport` / `IndexSupport` / `SequenceSupport` /
+`TriggerSupport` / `SchemaSupport` / `FunctionSupport`.** Each DDL verb is its own protocol, so
+a backend can implement `DROP TABLE` without `CREATE TABLE` and the type check reflects that.
+
+Object *naming* is a separate axis, and it is where `NamespaceSupport` lives:
+
+| Protocol | Mixin | Description |
+|----------|-------|-------------|
+Naming protocols are served by the `*NameMixin` family, not by the DDL mixins:
+
+| Protocol | Mixin | Per-object method |
+|----------|-------|-------------------|
+| `NamespaceSupport` | `NamespaceMixin` | `format_qualified_name`, `validate_namespace` |
+| `TableObjectSupport` | `TableNameMixin` | `format_table_object` |
+| `ViewObjectSupport` | `ViewNameMixin` | `format_view_object` |
+| `IndexObjectSupport` | `IndexNameMixin` | `format_index_object` |
+| `SequenceObjectSupport` | `SequenceNameMixin` | `format_sequence_object` |
+| `TriggerObjectSupport` | `TriggerNameMixin` | `format_trigger_object` |
+| `RoutineObjectSupport` | `FunctionNameMixin` | `format_function_object`, `format_procedure_object` |
+
+Each `*ObjectSupport` protocol declares the full namespace surface — `validate_catalog_name`,
+`validate_schema_name`, `supports_schema_qualification`, `supports_catalog`,
+`supports_catalog_qualification` — plus its one `format_<kind>_object`. The `*NameMixin`
+classes inherit the namespace half from `NamespaceMixin`, so an object mixin only has to supply
+its own renderer. `NamespaceSupport` is that shared base and is what a backend implements once
+to answer for every object kind.
+
+Oracle supplies all of these from one place: `OracleNamespaceMixin` overrides
+`format_qualified_name` and every `format_<kind>_object` in a single class. That is the shape to
+copy.
+
+A naming protocol is not a DDL protocol. `supports_schema_qualification` says whether a name
+*may* be qualified; `CreateSchemaSupport` says whether the engine can *create* one. Oracle
+answers both, but they are answered on separate mixins — `OracleNamespaceMixin` carries naming,
+`OracleSchemaMixin` carries DDL — so a backend can legitimately disagree with itself.
+
+Not every protocol has a mixin named after it. `AdvancedGroupingSupport` and
+`QualifyClauseSupport` are satisfied by `DQLMixin`, `ReturningSupport` by `DMLMixin`, and
+`FilterClauseSupport` and `OrderedSetAggregationSupport` by `ExpressionMixin`. `LockingSupport`
+is also a `DQLMixin` protocol: there is no `LockingMixin` in core, and Oracle layers
+`OracleLockingMixin` on top. When looking for the default implementation, search the mixins
+for the *method* the protocol declares, not for a same-named class.
 
 ##### Principles for Adding New Protocols/Mixins
 
@@ -315,8 +363,8 @@ Every dialect inherits from:
 
 | Feature | SQL Standard? | Location |
 |---------|---------------|----------|
-| `CREATE TRIGGER` | Yes (SQL:1999) | Main Package (`TriggerSupport`) |
-| `CREATE FUNCTION` | Yes (SQL/PSM) | Main Package (`FunctionSupport`) |
+| `CREATE TRIGGER` | Yes (SQL:1999) | Main Package (`CreateTriggerSupport`) |
+| `CREATE FUNCTION` | Yes (SQL/PSM) | Main Package (`CreateRoutineSupport`) |
 | `COMMENT ON` | No (PostgreSQL/Oracle) | PostgreSQL Extension |
 | `CREATE TYPE ... AS ENUM` | No (PostgreSQL-specific) | PostgreSQL Extension |
 | `AUTO_INCREMENT` | No (MySQL-specific) | MySQL Extension |

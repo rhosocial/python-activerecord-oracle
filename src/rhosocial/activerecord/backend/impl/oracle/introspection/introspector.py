@@ -94,9 +94,22 @@ class OracleIntrospectorMixin(IntrospectorMixin):
             (),
         )
 
-    def _build_columns_sql(self, table_name: str, schema: str) -> str:
-        """Build SQL to get columns for a table."""
-        return f"""
+    def _build_columns_sql(self, table_name: str, schema: str) -> tuple:
+        """Build SQL to get columns for a table.
+
+        Args:
+            table_name: Table to describe.
+            schema: Owner (Oracle's schema) of that table.
+
+        Returns:
+            Tuple of (SQL, params). The names travel as bind values rather
+            than as interpolated string literals: the data dictionary stores
+            them in upper case, so the caller still folds them, but a table
+            name is caller-supplied data and must never be concatenated into
+            SQL text.
+        """
+        return (
+            """
             SELECT
                 column_name,
                 data_type,
@@ -134,23 +147,33 @@ class OracleIntrospectorMixin(IntrospectorMixin):
                 unusable_beginning,
                 collation
             FROM all_tab_columns
-            WHERE table_name = '{table_name.upper()}'
-              AND owner = '{schema.upper()}'
+            WHERE table_name = ?
+              AND owner = ?
             ORDER BY column_id
-        """
+        """,
+            (table_name.upper(), schema.upper()),
+        )
 
-    def _build_primary_key_sql(self, table_name: str, schema: str) -> str:
-        """Build SQL to get primary key columns."""
-        return f"""
+    def _build_primary_key_sql(self, table_name: str, schema: str) -> tuple:
+        """Build SQL to get primary key columns.
+
+        Returns:
+            Tuple of (SQL, params). See :meth:`_build_columns_sql` for why the
+            names are bound rather than interpolated.
+        """
+        return (
+            """
             SELECT cols.column_name
             FROM all_constraints cons
             JOIN all_cons_columns cols ON cons.constraint_name = cols.constraint_name
                 AND cons.owner = cols.owner
-            WHERE cons.table_name = '{table_name.upper()}'
-              AND cons.owner = '{schema.upper()}'
+            WHERE cons.table_name = ?
+              AND cons.owner = ?
               AND cons.constraint_type = 'P'
             ORDER BY cols.position
-        """
+        """,
+            (table_name.upper(), schema.upper()),
+        )
 
     # ------------------------------------------------------------------ #
     # Parse methods — pure Python, no I/O
@@ -450,12 +473,14 @@ class SyncOracleIntrospector(OracleIntrospectorMixin, SyncAbstractIntrospector):
             return cached
 
         # Get primary key columns first
-        pk_sql = self._build_primary_key_sql(table_name, target_schema)
-        primary_keys = [row.get("COLUMN_NAME") for row in self._executor.execute(pk_sql)]
+        pk_sql, pk_params = self._build_primary_key_sql(table_name, target_schema)
+        primary_keys = [
+            row.get("COLUMN_NAME") for row in self._executor.execute(pk_sql, pk_params)
+        ]
 
         # Get columns
-        sql = self._build_columns_sql(table_name, target_schema)
-        rows = self._executor.execute(sql)
+        sql, params = self._build_columns_sql(table_name, target_schema)
+        rows = self._executor.execute(sql, params)
         columns = self._parse_columns(rows, table_name, target_schema, primary_keys)
 
         self._set_cached(key, columns)
@@ -526,12 +551,15 @@ class AsyncOracleIntrospector(OracleIntrospectorMixin, AsyncAbstractIntrospector
             return cached
 
         # Get primary key columns first
-        pk_sql = self._build_primary_key_sql(table_name, target_schema)
-        primary_keys = [row.get("COLUMN_NAME") for row in await self._executor.execute(pk_sql)]
+        pk_sql, pk_params = self._build_primary_key_sql(table_name, target_schema)
+        primary_keys = [
+            row.get("COLUMN_NAME")
+            for row in await self._executor.execute(pk_sql, pk_params)
+        ]
 
         # Get columns
-        sql = self._build_columns_sql(table_name, target_schema)
-        rows = await self._executor.execute(sql)
+        sql, params = self._build_columns_sql(table_name, target_schema)
+        rows = await self._executor.execute(sql, params)
         columns = self._parse_columns(rows, table_name, target_schema, primary_keys)
 
         self._set_cached(key, columns)

@@ -28,11 +28,30 @@ class OracleViewMixin:
     def format_create_view_statement(
         self, expr: "CreateViewExpression"
     ) -> Tuple[str, tuple]:
+        """Format ``CREATE [OR REPLACE] VIEW`` for Oracle.
+
+        Raises:
+            TypeError: ``expr.view`` is not a
+                :class:`~rhosocial.activerecord.backend.expression.objects.View`.
+                A materialized view or a table would each render its own name,
+                producing a well-formed CREATE VIEW over that object's name.
+        """
+        from rhosocial.activerecord.backend.expression.objects import View
+
+        if not isinstance(expr.view, View):
+            raise TypeError(
+                f"CreateViewExpression.view must be a View, "
+                f"got {type(expr.view).__name__}"
+            )
+
         parts = ["CREATE"]
         if expr.replace and self.supports_create_or_replace_view():
             parts.append("OR REPLACE")
         parts.append("VIEW")
-        parts.append(self.format_identifier(expr.view_name))
+        # The view is a catalogue object on the expression, so an owner -- when
+        # it carries one -- is quoted by its own protocol, the same rules as
+        # every other Oracle schema object.
+        parts.append(expr.view.to_sql()[0])
         if expr.column_aliases:
             cols = ", ".join(self.format_identifier(c) for c in expr.column_aliases)
             parts.append(f"({cols})")
@@ -52,6 +71,22 @@ class OracleViewMixin:
     def format_drop_view_statement(
         self, expr: "DropViewExpression"
     ) -> Tuple[str, tuple]:
+        """Format ``DROP VIEW`` for Oracle.
+
+        Raises:
+            TypeError: ``expr.view`` is not a
+                :class:`~rhosocial.activerecord.backend.expression.objects.View`.
+                Another catalogue object would render its own name, so the
+                statement would drop something else and name a view.
+        """
+        from rhosocial.activerecord.backend.expression.objects import View
+
+        if not isinstance(expr.view, View):
+            raise TypeError(
+                f"DropViewExpression.view must be a View, "
+                f"got {type(expr.view).__name__}"
+            )
+
         parts = ["DROP VIEW"]
-        parts.append(self.format_identifier(expr.view_name))
+        parts.append(expr.view.to_sql()[0])
         return " ".join(parts), ()

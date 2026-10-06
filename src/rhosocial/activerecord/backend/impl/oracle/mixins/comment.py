@@ -5,6 +5,7 @@ from typing import Tuple
 
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 
+
 class OracleCommentMixin:
     """Oracle ``COMMENT ON`` capability check and formatter.
 
@@ -28,9 +29,28 @@ class OracleCommentMixin:
     ) -> Tuple[str, tuple]:
         """Format a standalone ``COMMENT ON`` statement.
 
-        Accepts any comment expression carrying ``object_type``,
-        ``object_name`` and ``comment``.
+        Accepts the Oracle expression and the core
+        :class:`~rhosocial.activerecord.backend.expression.statements.CommentOnExpression`,
+        which carry the same fields.
+
+        The annotated object is rendered by its own protocol, and a column --
+        which has no namespace of its own -- is appended to it, because Oracle's
+        ``COMMENT ON COLUMN`` names a column of the object named before it.
+
+        Raises:
+            TypeError: ``expr.object`` is not a ``SchemaObject``. The annotated
+                object renders itself, so a value of another kind would be named
+                by whatever protocol that value carries.
+            UnsupportedFeatureError: The Oracle version is below 9i.
         """
+        from rhosocial.activerecord.backend.expression.objects import SchemaObject
+
+        if not isinstance(expr.object, SchemaObject):
+            raise TypeError(
+                f"{type(expr).__name__}.object must be a SchemaObject, "
+                f"got {type(expr.object).__name__}"
+            )
+
         if self.version < (9, 0, 0):
             raise UnsupportedFeatureError(
                 self.name,
@@ -40,11 +60,10 @@ class OracleCommentMixin:
                     "it requires Oracle 9i or later."
                 ),
             )
-        # Qualified names (schema.table[.column]) are quoted segment-by-segment
-        # so dotted COLUMN targets stay valid Oracle references.
-        object_sql = ".".join(
-            self.format_identifier(part) for part in expr.object_name.split(".")
-        )
+        object_sql = expr.object.to_sql()[0]
+        column = getattr(expr, "column", None)
+        if column is not None:
+            object_sql = f"{object_sql}.{self.format_identifier(column)}"
         object_type = getattr(expr.object_type, "value", expr.object_type)
         head = f"COMMENT ON {object_type} {object_sql} IS"
         if expr.comment is None:

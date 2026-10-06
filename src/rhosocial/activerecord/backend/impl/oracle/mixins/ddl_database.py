@@ -19,6 +19,14 @@ class OracleDatabaseMixin:
 
     Oracle supports CREATE DATABASE (requires SYSDBA) and DROP DATABASE.
     ALTER DATABASE is primarily for instance-level operations.
+
+    Not composed into ``OracleDialect`` today: the backend puts
+    ``CreateDatabaseSupport`` / ``DropDatabaseSupport`` / ``AlterDatabaseSupport``
+    in its declared-unsupported list, because Oracle databases are instances
+    rather than objects an application creates. The mixin is kept -- and kept
+    correct -- because a backend that later enables the feature should not
+    discover that the formatters here were never run. Nothing here executes on
+    any path the dialect currently reaches.
     """
 
     def supports_database(self) -> bool:
@@ -39,8 +47,32 @@ class OracleDatabaseMixin:
     def format_create_database_statement(
         self, expr: CreateDatabaseExpression
     ) -> Tuple[str, tuple]:
+        """Render ``CREATE DATABASE`` for Oracle.
+
+        Reads the name off ``expr.database``, the
+        :class:`~rhosocial.activerecord.backend.expression.objects.Database`
+        object the expression carries, and renders it through that object's own
+        protocol rather than re-quoting a string here. The attribute used to be
+        ``database_name`` and was renamed when statements began carrying objects
+        instead of names; because this mixin sits behind
+        :class:`CreateDatabaseSupport`, which Oracle declares unsupported, the
+        stale read could not fail anything -- which is exactly why a latent
+        ``AttributeError`` is worth fixing rather than deleting: the day CREATE
+        DATABASE is enabled, this line is the first thing that runs.
+
+        Raises:
+            TypeError: ``expr.database`` is not a ``Database``. Another object
+                carries its own ``format_method`` and would render its own name.
+        """
+        from rhosocial.activerecord.backend.expression.objects import Database
+
+        if not isinstance(expr.database, Database):
+            raise TypeError(
+                f"CreateDatabaseExpression.database must be a Database, "
+                f"got {type(expr.database).__name__}"
+            )
         parts = ["CREATE DATABASE"]
-        parts.append(self.format_identifier(expr.database_name))
+        parts.append(expr.database.to_sql()[0])
         if expr.encoding:
             parts.append(f"CHARACTER SET {expr.encoding}")
         return " ".join(parts), ()

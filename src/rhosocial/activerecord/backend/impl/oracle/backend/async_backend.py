@@ -719,12 +719,12 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         if not self._connection:
             await self.connect()
 
-        table_name = f"{options.schema_name}.{options.table}" if options.schema_name else options.table
-        columns_sql = ", ".join(options.columns)
+        table_name = self._qualified_name(options.table, options.schema_name)
+        columns_sql = self._identifier_list(options.columns)
         placeholders = ", ".join([self.dialect.p()] * len(options.columns))
         sql = f"INSERT INTO {table_name} ({columns_sql}) VALUES ({placeholders})"
         if options.returning_columns:
-            returning_sql = ", ".join(options.returning_columns)
+            returning_sql = self._identifier_list(options.returning_columns)
             into_placeholders = ", ".join([self.dialect.p()] * len(options.returning_columns))
             sql = f"{sql} RETURNING {returning_sql} INTO {into_placeholders}"
 
@@ -850,11 +850,8 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         This method uses the Expression-Dialect pattern to generate proper Oracle SQL.
         """
         from rhosocial.activerecord.backend.base.operations import _is_sql_expression
-        from rhosocial.activerecord.backend.expression import (
-            InsertExpression,
-            Literal,
-            TableExpression,
-        )
+        from rhosocial.activerecord.backend.expression import InsertExpression, Literal
+        from rhosocial.activerecord.backend.expression.objects import Table
         from rhosocial.activerecord.backend.expression.statements import ValuesSource, ReturningClause
         from rhosocial.activerecord.backend.expression import Column as ExprColumn
         from rhosocial.activerecord.backend.options import ExecutionOptions, StatementType
@@ -880,16 +877,14 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             returning_expressions = [ExprColumn(self.dialect, col) for col in options.returning_columns]
             returning_clause = ReturningClause(self.dialect, returning_expressions)
 
-        # Create InsertExpression and generate SQL. Pass the schema separately
-        # via TableExpression so qualified identifiers are quoted per segment.
-        table_ref = (
-            TableExpression(self.dialect, options.table, schema_name=options.schema_name)
-            if options.schema_name
-            else options.table
-        )
+        # Create InsertExpression and generate SQL. The target is the table
+        # object, so its owner -- when there is one -- is quoted by the same
+        # rules as every other Oracle name rather than being spliced in here.
         insert_expr = InsertExpression(
             dialect=self.dialect,
-            into=table_ref,
+            into=Table(
+                self.dialect, options.table, schema_name=options.schema_name
+            ),
             source=values_source,
             columns=list(options.data.keys()),
             returning=returning_clause,
@@ -950,7 +945,8 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         This method uses the Expression-Dialect pattern to generate proper Oracle SQL.
         """
         from rhosocial.activerecord.backend.base.operations import _is_sql_expression
-        from rhosocial.activerecord.backend.expression import UpdateExpression, Literal, TableExpression
+        from rhosocial.activerecord.backend.expression import UpdateExpression, Literal
+        from rhosocial.activerecord.backend.expression.objects import Table
         from rhosocial.activerecord.backend.expression.statements import ReturningClause
         from rhosocial.activerecord.backend.expression import Column as ExprColumn
         from rhosocial.activerecord.backend.options import ExecutionOptions, StatementType
@@ -969,16 +965,14 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             returning_expressions = [ExprColumn(self.dialect, col) for col in options.returning_columns]
             returning_clause = ReturningClause(self.dialect, returning_expressions)
 
-        # Create UpdateExpression and generate SQL. Pass the schema separately
-        # via TableExpression so qualified identifiers are quoted per segment.
-        table_ref = (
-            TableExpression(self.dialect, options.table, schema_name=options.schema_name)
-            if options.schema_name
-            else options.table
-        )
+        # Create UpdateExpression and generate SQL. The target is the table
+        # object, so its owner -- when there is one -- is quoted by the same
+        # rules as every other Oracle name rather than being spliced in here.
         update_expr = UpdateExpression(
             dialect=self.dialect,
-            table=table_ref,
+            table=Table(
+                self.dialect, options.table, schema_name=options.schema_name
+            ),
             assignments=assignments,
             where=options.where,
             returning=returning_clause,
@@ -1020,7 +1014,8 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         Oracle requires RETURNING ... INTO syntax with output bind variables.
         This method uses the Expression-Dialect pattern to generate proper Oracle SQL.
         """
-        from rhosocial.activerecord.backend.expression import DeleteExpression, TableExpression
+        from rhosocial.activerecord.backend.expression import DeleteExpression
+        from rhosocial.activerecord.backend.expression.objects import Table
         from rhosocial.activerecord.backend.expression.statements import ReturningClause
         from rhosocial.activerecord.backend.expression import Column as ExprColumn
         from rhosocial.activerecord.backend.options import ExecutionOptions, StatementType
@@ -1031,16 +1026,14 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             returning_expressions = [ExprColumn(self.dialect, col) for col in options.returning_columns]
             returning_clause = ReturningClause(self.dialect, returning_expressions)
 
-        # Create DeleteExpression and generate SQL. Pass the schema separately
-        # via TableExpression so qualified identifiers are quoted per segment.
-        table_ref = (
-            TableExpression(self.dialect, options.table, schema_name=options.schema_name)
-            if options.schema_name
-            else options.table
-        )
+        # Create DeleteExpression and generate SQL. The target is the table
+        # object, so its owner -- when there is one -- is quoted by the same
+        # rules as every other Oracle name rather than being spliced in here.
         delete_expr = DeleteExpression(
             dialect=self.dialect,
-            tables=table_ref,
+            tables=Table(
+                self.dialect, options.table, schema_name=options.schema_name
+            ),
             where=options.where,
             returning=returning_clause,
         )

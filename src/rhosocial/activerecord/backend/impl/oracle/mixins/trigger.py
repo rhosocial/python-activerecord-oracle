@@ -14,6 +14,19 @@ class OracleTriggerMixin(object):
     and DDL/database event (system) triggers.
     """
 
+    def _trigger_name_sql(self, expr) -> str:
+        """Render a trigger name through its own object protocol."""
+        return expr.trigger.to_sql()[0]
+
+    def _trigger_target_sql(self, expr) -> str:
+        """Render the relation a trigger fires on through its own object protocol.
+
+        A trigger's target is a table, so it is rendered as a ``Table`` -- which
+        means the owner, when the expression carries one, is quoted by the same
+        rules as the trigger's own name.
+        """
+        return expr.table.to_sql()[0]
+
     def supports_trigger(self) -> bool:
         """Oracle has supported triggers since ancient versions."""
         return True
@@ -62,7 +75,7 @@ class OracleTriggerMixin(object):
             raise UnsupportedFeatureError(self.name, "INSTEAD OF triggers")
 
         parts = ["CREATE OR REPLACE TRIGGER"]
-        parts.append(self.format_identifier(trigger_expr.trigger_name))
+        parts.append(self._trigger_name_sql(trigger_expr))
 
         if timing_value is not None:
             parts.append(timing_value)
@@ -75,7 +88,7 @@ class OracleTriggerMixin(object):
                 raise ValueError("INSTEAD OF trigger requires at least one event")
             parts.append(event_values[0])
             parts.append("ON")
-            parts.append(self.format_identifier(trigger_expr.table_name))
+            parts.append(self._trigger_target_sql(trigger_expr))
         else:
             if getattr(trigger_expr, 'update_columns', None):
                 if not event_values or event_values[0] != "UPDATE":
@@ -85,7 +98,7 @@ class OracleTriggerMixin(object):
             elif event_values:
                 parts.append(" OR ".join(event_values))
             parts.append("ON")
-            parts.append(self.format_identifier(trigger_expr.table_name))
+            parts.append(self._trigger_target_sql(trigger_expr))
 
         level = getattr(trigger_expr, 'level', None)
         level_value = level.value if level is not None else None
@@ -109,12 +122,12 @@ class OracleTriggerMixin(object):
             raise NotImplementedError("Oracle WHEN clause templating requires dialect-specific context")
 
         body = getattr(trigger_expr, 'body', None)
-        if body is None and getattr(trigger_expr, 'function_name', None) is None:
+        if body is None and getattr(trigger_expr, 'function', None) is None:
             raise NotImplementedError("Oracle trigger body (PL/SQL block) templating requires dialect-specific context")
 
-        if getattr(trigger_expr, 'function_name', None):
+        if getattr(trigger_expr, 'function', None) is not None:
             parts.append("CALL")
-            parts.append(self.format_identifier(trigger_expr.function_name))
+            parts.append(trigger_expr.function.to_sql()[0])
         elif body is not None:
             parts.append("BEGIN")
             parts.append(body)
@@ -133,7 +146,7 @@ class OracleTriggerMixin(object):
         if getattr(drop_expr, 'if_exists', False):
             raise NotImplementedError("Oracle does not support IF EXISTS on DROP TRIGGER")
 
-        parts.append(self.format_identifier(drop_expr.trigger_name))
+        parts.append(self._trigger_name_sql(drop_expr))
 
         return " ".join(parts), ()
 
@@ -143,7 +156,7 @@ class OracleTriggerMixin(object):
             from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
             raise UnsupportedFeatureError(self.name, "DISABLE TRIGGER")
 
-        parts = ["ALTER TRIGGER", self.format_identifier(expr.trigger_name), "DISABLE"]
+        parts = ["ALTER TRIGGER", self._trigger_name_sql(expr), "DISABLE"]
         return " ".join(parts), ()
 
     def format_enable_trigger_statement(self, expr: "EnableTriggerExpression") -> Tuple[str, tuple]:
@@ -152,5 +165,5 @@ class OracleTriggerMixin(object):
             from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
             raise UnsupportedFeatureError(self.name, "ENABLE TRIGGER")
 
-        parts = ["ALTER TRIGGER", self.format_identifier(expr.trigger_name), "ENABLE"]
+        parts = ["ALTER TRIGGER", self._trigger_name_sql(expr), "ENABLE"]
         return " ".join(parts), ()

@@ -24,7 +24,14 @@ from rhosocial.activerecord.backend.expression.types import IntegerType, VarChar
 from rhosocial.activerecord.backend.expression.query_parts import (
     WhereClause, OrderByClause, GroupByHavingClause, JoinClause,
 )
-from rhosocial.activerecord.backend.expression.core import Column, TableExpression
+from rhosocial.activerecord.backend.expression.core import Column
+from rhosocial.activerecord.backend.expression.objects import (
+    EdgeTable as EdgeTableObject,
+    NodeTable,
+    PropertyGraph,
+    Table,
+)
+from rhosocial.activerecord.backend.expression.sources import NamedRelationRef
 
 
 GRAPH_NAME = "pgq_scenario_graph"
@@ -73,7 +80,7 @@ def social_graph_data(oracle_backend):
         ColumnDefinition(dialect, "email", VarCharType(length=200, dialect=dialect)),
         ColumnDefinition(dialect, "city", VarCharType(length=100, dialect=dialect)),
     ]
-    backend.execute(*CreateTableExpression(dialect, "people", people_cols).to_sql())
+    backend.execute(*CreateTableExpression(dialect, Table(dialect, "people"), people_cols).to_sql())
 
     follows_cols = [
         ColumnDefinition(dialect, "id", IntegerType(dialect),
@@ -86,7 +93,7 @@ def social_graph_data(oracle_backend):
                                           foreign_key_reference=("people", ["id"]))]),
         ColumnDefinition(dialect, "since", VarCharType(length=20, dialect=dialect)),
     ]
-    backend.execute(*CreateTableExpression(dialect, "follows", follows_cols).to_sql())
+    backend.execute(*CreateTableExpression(dialect, Table(dialect, "follows"), follows_cols).to_sql())
 
     posts_cols = [
         ColumnDefinition(dialect, "id", IntegerType(dialect),
@@ -97,7 +104,7 @@ def social_graph_data(oracle_backend):
         ColumnDefinition(dialect, "content", VarCharType(length=500, dialect=dialect)),
         ColumnDefinition(dialect, "created_at", VarCharType(length=20, dialect=dialect)),
     ]
-    backend.execute(*CreateTableExpression(dialect, "posts", posts_cols).to_sql())
+    backend.execute(*CreateTableExpression(dialect, Table(dialect, "posts"), posts_cols).to_sql())
 
     likes_cols = [
         ColumnDefinition(dialect, "id", IntegerType(dialect),
@@ -110,7 +117,7 @@ def social_graph_data(oracle_backend):
                                           foreign_key_reference=("posts", ["id"]))]),
         ColumnDefinition(dialect, "created_at", VarCharType(length=20, dialect=dialect)),
     ]
-    backend.execute(*CreateTableExpression(dialect, "likes", likes_cols).to_sql())
+    backend.execute(*CreateTableExpression(dialect, Table(dialect, "likes"), likes_cols).to_sql())
 
     people_data = ValuesSource(dialect, [
         [Literal(dialect, 1), Literal(dialect, "Alice"), Literal(dialect, "alice@x.com"), Literal(dialect, "NYC")],
@@ -119,7 +126,7 @@ def social_graph_data(oracle_backend):
         [Literal(dialect, 4), Literal(dialect, "Diana"), Literal(dialect, "diana@x.com"), Literal(dialect, "NYC")],
         [Literal(dialect, 5), Literal(dialect, "Eve"), Literal(dialect, "eve@x.com"), Literal(dialect, "LA")],
     ])
-    backend.execute(*InsertExpression(dialect, "people", source=people_data).to_sql())
+    backend.execute(*InsertExpression(dialect, Table(dialect, "people"), source=people_data).to_sql())
 
     follows_data = ValuesSource(dialect, [
         [Literal(dialect, 1), Literal(dialect, 1), Literal(dialect, 2), Literal(dialect, "2024-01-01")],
@@ -128,7 +135,7 @@ def social_graph_data(oracle_backend):
         [Literal(dialect, 4), Literal(dialect, 4), Literal(dialect, 1), Literal(dialect, "2024-04-01")],
         [Literal(dialect, 5), Literal(dialect, 3), Literal(dialect, 5), Literal(dialect, "2024-05-01")],
     ])
-    backend.execute(*InsertExpression(dialect, "follows", source=follows_data).to_sql())
+    backend.execute(*InsertExpression(dialect, Table(dialect, "follows"), source=follows_data).to_sql())
 
     posts_data = ValuesSource(dialect, [
         [Literal(dialect, 1), Literal(dialect, 2), Literal(dialect, "Hello world"), Literal(dialect, "2024-06-01")],
@@ -136,7 +143,7 @@ def social_graph_data(oracle_backend):
         [Literal(dialect, 3), Literal(dialect, 3), Literal(dialect, "Graph databases"), Literal(dialect, "2024-06-03")],
         [Literal(dialect, 4), Literal(dialect, 1), Literal(dialect, "My first post"), Literal(dialect, "2024-06-04")],
     ])
-    backend.execute(*InsertExpression(dialect, "posts", source=posts_data).to_sql())
+    backend.execute(*InsertExpression(dialect, Table(dialect, "posts"), source=posts_data).to_sql())
 
     likes_data = ValuesSource(dialect, [
         [Literal(dialect, 1), Literal(dialect, 1), Literal(dialect, 1), Literal(dialect, "2024-06-02")],
@@ -145,32 +152,32 @@ def social_graph_data(oracle_backend):
         [Literal(dialect, 4), Literal(dialect, 4), Literal(dialect, 4), Literal(dialect, "2024-06-05")],
         [Literal(dialect, 5), Literal(dialect, 5), Literal(dialect, 1), Literal(dialect, "2024-06-06")],
     ])
-    backend.execute(*InsertExpression(dialect, "likes", source=likes_data).to_sql())
+    backend.execute(*InsertExpression(dialect, Table(dialect, "likes"), source=likes_data).to_sql())
 
-    vt_people = VertexTable(dialect, "people",
+    vt_people = VertexTable(dialect, NodeTable(dialect, "people"),
                             labels=["person"],
                             properties=TablePropertiesClause(dialect, columns=["id", "name", "city"]))
-    et_follows = EdgeTable(dialect, "follows", ["follower_id"], ["followed_id"],
+    et_follows = EdgeTable(dialect, EdgeTableObject(dialect, "follows"), ["follower_id"], ["followed_id"],
                            references_source=("people", ["id"]),
                            references_destination=("people", ["id"]),
                            labels=["follows"])
-    et_posts = EdgeTable(dialect, "posts", ["author_id"], ["id"],
+    et_posts = EdgeTable(dialect, EdgeTableObject(dialect, "posts"), ["author_id"], ["id"],
                          references_source=("people", ["id"]),
                          references_destination=("posts", ["id"]),
                          labels=["posts"])
-    et_likes = EdgeTable(dialect, "likes", ["user_id"], ["post_id"],
+    et_likes = EdgeTable(dialect, EdgeTableObject(dialect, "likes"), ["user_id"], ["post_id"],
                          references_source=("people", ["id"]),
                          references_destination=("posts", ["id"]),
                          labels=["likes"])
     create_expr = CreatePropertyGraphExpression(
-        dialect, GRAPH_NAME, [vt_people], [et_follows, et_posts, et_likes]
+        dialect, PropertyGraph(dialect, GRAPH_NAME), [vt_people], [et_follows, et_posts, et_likes]
     )
     try:
         backend.execute(*create_expr.to_sql())
     except Exception as e:
         for t in ("likes", "posts", "follows", "people"):
             try:
-                backend.execute(*DropTableExpression(dialect, t, if_exists=True, cascade=True).to_sql())
+                backend.execute(*DropTableExpression(dialect, Table(dialect, t), if_exists=True, cascade=True).to_sql())
             except Exception:
                 pass
         raise e
@@ -199,13 +206,13 @@ class TestOracleSocialGraph:
     def test_single_hop_followers(self, oracle_backend, social_graph_data):
         """Q1: Who does Alice follow?"""
         dialect = oracle_backend.dialect
-        a = GraphVertex(dialect, "a", "person",
+        a = GraphVertex(dialect, "a", NodeTable(dialect, "person"),
                         where=WhereClause(dialect, condition=Column(dialect, "name") == Literal(dialect, "Alice")))
-        f = GraphEdge(dialect, "f", "follows", GraphEdgeDirection.RIGHT)
-        b = GraphVertex(dialect, "b", "person")
+        f = GraphEdge(dialect, "f", EdgeTableObject(dialect, "follows"), GraphEdgeDirection.RIGHT)
+        b = GraphVertex(dialect, "b", NodeTable(dialect, "person"))
         match = MatchClause(dialect, a, f, b)
         cols = ColumnsClause(dialect, GraphColumn("b", "name", "b_name"))
-        gt = GraphTableExpression(dialect, GRAPH_NAME, match, cols, alias="g")
+        gt = GraphTableExpression(dialect, PropertyGraph(dialect, GRAPH_NAME), match, cols, alias="g")
 
         query = QueryExpression(dialect,
             select=[Column(dialect, "b_name")],
@@ -220,15 +227,15 @@ class TestOracleSocialGraph:
     def test_two_hop_recommendation(self, oracle_backend, social_graph_data):
         """Q2: Friends of friends."""
         dialect = oracle_backend.dialect
-        a = GraphVertex(dialect, "a", "person",
+        a = GraphVertex(dialect, "a", NodeTable(dialect, "person"),
                         where=WhereClause(dialect, condition=Column(dialect, "name") == Literal(dialect, "Alice")))
-        f1 = GraphEdge(dialect, "f1", "follows", GraphEdgeDirection.RIGHT)
-        b = GraphVertex(dialect, "b", "person")
-        f2 = GraphEdge(dialect, "f2", "follows", GraphEdgeDirection.RIGHT)
-        c = GraphVertex(dialect, "c", "person")
+        f1 = GraphEdge(dialect, "f1", EdgeTableObject(dialect, "follows"), GraphEdgeDirection.RIGHT)
+        b = GraphVertex(dialect, "b", NodeTable(dialect, "person"))
+        f2 = GraphEdge(dialect, "f2", EdgeTableObject(dialect, "follows"), GraphEdgeDirection.RIGHT)
+        c = GraphVertex(dialect, "c", NodeTable(dialect, "person"))
         match = MatchClause(dialect, a, f1, b, f2, c)
         cols = ColumnsClause(dialect, GraphColumn("c", "name", "c_name"))
-        gt = GraphTableExpression(dialect, GRAPH_NAME, match, cols, alias="g")
+        gt = GraphTableExpression(dialect, PropertyGraph(dialect, GRAPH_NAME), match, cols, alias="g")
 
         query = QueryExpression(dialect,
             select=[Column(dialect, "c_name")],
@@ -243,15 +250,15 @@ class TestOracleSocialGraph:
     def test_likes_on_posts(self, oracle_backend, social_graph_data):
         """Q3: Who liked Alice's posts?"""
         dialect = oracle_backend.dialect
-        a = GraphVertex(dialect, "a", "person",
+        a = GraphVertex(dialect, "a", NodeTable(dialect, "person"),
                         where=WhereClause(dialect, condition=Column(dialect, "name") == Literal(dialect, "Alice")))
-        p = GraphEdge(dialect, "p", "posts", GraphEdgeDirection.RIGHT)
-        post = GraphVertex(dialect, "post", "posts")
-        lk = GraphEdge(dialect, "l", "likes", GraphEdgeDirection.LEFT)
-        liker = GraphVertex(dialect, "liker", "person")
+        p = GraphEdge(dialect, "p", EdgeTableObject(dialect, "posts"), GraphEdgeDirection.RIGHT)
+        post = GraphVertex(dialect, "post", NodeTable(dialect, "posts"))
+        lk = GraphEdge(dialect, "l", EdgeTableObject(dialect, "likes"), GraphEdgeDirection.LEFT)
+        liker = GraphVertex(dialect, "liker", NodeTable(dialect, "person"))
         match = MatchClause(dialect, a, p, post, lk, liker)
         cols = ColumnsClause(dialect, GraphColumn("liker", "name", "liker_name"))
-        gt = GraphTableExpression(dialect, GRAPH_NAME, match, cols, alias="g")
+        gt = GraphTableExpression(dialect, PropertyGraph(dialect, GRAPH_NAME), match, cols, alias="g")
 
         query = QueryExpression(dialect,
             select=[Column(dialect, "liker_name")],
@@ -265,16 +272,16 @@ class TestOracleSocialGraph:
     def test_graph_table_with_group_by(self, oracle_backend, social_graph_data):
         """GRAPH_TABLE + GROUP BY."""
         dialect = oracle_backend.dialect
-        a = GraphVertex(dialect, "a", "person")
-        p = GraphEdge(dialect, "p", "posts", GraphEdgeDirection.RIGHT)
-        post = GraphVertex(dialect, "post", "posts")
-        lk = GraphEdge(dialect, "l", "likes", GraphEdgeDirection.LEFT)
-        liker = GraphVertex(dialect, "liker", "person")
+        a = GraphVertex(dialect, "a", NodeTable(dialect, "person"))
+        p = GraphEdge(dialect, "p", EdgeTableObject(dialect, "posts"), GraphEdgeDirection.RIGHT)
+        post = GraphVertex(dialect, "post", NodeTable(dialect, "posts"))
+        lk = GraphEdge(dialect, "l", EdgeTableObject(dialect, "likes"), GraphEdgeDirection.LEFT)
+        liker = GraphVertex(dialect, "liker", NodeTable(dialect, "person"))
         match = MatchClause(dialect, a, p, post, lk, liker)
         cols = ColumnsClause(dialect,
                              GraphColumn("a", "name", "author"),
                              GraphColumn("liker", "name", "liker_name"))
-        gt = GraphTableExpression(dialect, GRAPH_NAME, match, cols, alias="g")
+        gt = GraphTableExpression(dialect, PropertyGraph(dialect, GRAPH_NAME), match, cols, alias="g")
 
         query = QueryExpression(dialect,
             select=[
@@ -293,13 +300,13 @@ class TestOracleSocialGraph:
     def test_abbreviated_edge_syntax(self, oracle_backend, social_graph_data):
         """Abbreviated edge expression: -> (no variable, no table)."""
         dialect = oracle_backend.dialect
-        a = GraphVertex(dialect, "a", "person",
+        a = GraphVertex(dialect, "a", NodeTable(dialect, "person"),
                         where=WhereClause(dialect, condition=Column(dialect, "name") == Literal(dialect, "Alice")))
         e = GraphEdge(dialect, direction=GraphEdgeDirection.RIGHT)
-        b = GraphVertex(dialect, "b", "person")
+        b = GraphVertex(dialect, "b", NodeTable(dialect, "person"))
         match = MatchClause(dialect, a, e, b)
         cols = ColumnsClause(dialect, GraphColumn("b", "name", "b_name"))
-        gt = GraphTableExpression(dialect, GRAPH_NAME, match, cols, alias="g")
+        gt = GraphTableExpression(dialect, PropertyGraph(dialect, GRAPH_NAME), match, cols, alias="g")
 
         query = QueryExpression(dialect,
             select=[Column(dialect, "b_name")],
@@ -314,15 +321,15 @@ class TestOracleSocialGraph:
     def test_anonymous_vertex(self, oracle_backend, social_graph_data):
         """Anonymous vertex: () (no variable)."""
         dialect = oracle_backend.dialect
-        a = GraphVertex(dialect, "a", "person",
+        a = GraphVertex(dialect, "a", NodeTable(dialect, "person"),
                         where=WhereClause(dialect, condition=Column(dialect, "name") == Literal(dialect, "Alice")))
-        f = GraphEdge(dialect, "f", "follows", GraphEdgeDirection.RIGHT)
-        anon = GraphVertex(dialect, "", "person")
+        f = GraphEdge(dialect, "f", EdgeTableObject(dialect, "follows"), GraphEdgeDirection.RIGHT)
+        anon = GraphVertex(dialect, "", NodeTable(dialect, "person"))
         match = MatchClause(dialect, a, f, anon)
         cols = ColumnsClause(dialect,
                              GraphColumn("a", "name", "a_name"),
                              GraphColumn("f", "since", "since"))
-        gt = GraphTableExpression(dialect, GRAPH_NAME, match, cols, alias="g")
+        gt = GraphTableExpression(dialect, PropertyGraph(dialect, GRAPH_NAME), match, cols, alias="g")
 
         query = QueryExpression(dialect,
             select=[Column(dialect, "a_name"), Column(dialect, "since")],
@@ -336,17 +343,17 @@ class TestOracleSocialGraph:
     def test_graph_table_join_regular_table(self, oracle_backend, social_graph_data):
         """GRAPH_TABLE joined with regular table."""
         dialect = oracle_backend.dialect
-        a = GraphVertex(dialect, "a", "person")
-        f = GraphEdge(dialect, "f", "follows", GraphEdgeDirection.RIGHT)
-        b = GraphVertex(dialect, "b", "person")
+        a = GraphVertex(dialect, "a", NodeTable(dialect, "person"))
+        f = GraphEdge(dialect, "f", EdgeTableObject(dialect, "follows"), GraphEdgeDirection.RIGHT)
+        b = GraphVertex(dialect, "b", NodeTable(dialect, "person"))
         match = MatchClause(dialect, a, f, b)
         cols = ColumnsClause(dialect,
                              GraphColumn("a", "name", "follower"),
                              GraphColumn("b", "name", "followed"),
                              GraphColumn("f", "since", "since"))
-        gt = GraphTableExpression(dialect, GRAPH_NAME, match, cols, alias="g")
+        gt = GraphTableExpression(dialect, PropertyGraph(dialect, GRAPH_NAME), match, cols, alias="g")
 
-        people = TableExpression(dialect, "people", alias="p")
+        people = NamedRelationRef(dialect, Table(dialect, "people"), alias="p")
         condition = Column(dialect, "follower", "g") == Column(dialect, "name", "p")
         join = JoinClause(dialect,
             left_table=gt,
@@ -368,23 +375,23 @@ class TestOracleSocialGraph:
         backend = oracle_backend
         dialect = backend.dialect
 
-        backend.execute(*DropPropertyGraphExpression(dialect, GRAPH_NAME).to_sql())
+        backend.execute(*DropPropertyGraphExpression(dialect, PropertyGraph(dialect, GRAPH_NAME)).to_sql())
 
-        vt = VertexTable(dialect, "people", labels=["person"])
-        et = EdgeTable(dialect, "follows", ["follower_id"], ["followed_id"],
+        vt = VertexTable(dialect, NodeTable(dialect, "people"), labels=["person"])
+        et = EdgeTable(dialect, EdgeTableObject(dialect, "follows"), ["follower_id"], ["followed_id"],
                        references_source=("people", ["id"]),
                        references_destination=("people", ["id"]),
                        labels=["follows"])
-        create_expr = CreatePropertyGraphExpression(dialect, GRAPH_NAME, [vt], [et])
+        create_expr = CreatePropertyGraphExpression(dialect, PropertyGraph(dialect, GRAPH_NAME), [vt], [et])
         backend.execute(*create_expr.to_sql())
 
-        a = GraphVertex(dialect, "a", "person",
+        a = GraphVertex(dialect, "a", NodeTable(dialect, "person"),
                         where=WhereClause(dialect, condition=Column(dialect, "name") == Literal(dialect, "Alice")))
-        f = GraphEdge(dialect, "f", "follows", GraphEdgeDirection.RIGHT)
-        b = GraphVertex(dialect, "b", "person")
+        f = GraphEdge(dialect, "f", EdgeTableObject(dialect, "follows"), GraphEdgeDirection.RIGHT)
+        b = GraphVertex(dialect, "b", NodeTable(dialect, "person"))
         match = MatchClause(dialect, a, f, b)
         cols = ColumnsClause(dialect, GraphColumn("b", "name", "b_name"))
-        gt = GraphTableExpression(dialect, GRAPH_NAME, match, cols, alias="g")
+        gt = GraphTableExpression(dialect, PropertyGraph(dialect, GRAPH_NAME), match, cols, alias="g")
 
         query = QueryExpression(dialect,
             select=[Column(dialect, "b_name")],
@@ -431,7 +438,7 @@ class TestAsyncOracleSocialGraph:
                 constraints=[ColumnConstraint(dialect, ColumnConstraintType.PRIMARY_KEY)]),
             ColumnDefinition(dialect, "name", VarCharType(length=100, dialect=dialect)),
         ]
-        await backend.execute(*CreateTableExpression(dialect, "people", people_cols).to_sql())
+        await backend.execute(*CreateTableExpression(dialect, Table(dialect, "people"), people_cols).to_sql())
 
         follows_cols = [
             ColumnDefinition(dialect, "id", IntegerType(dialect),
@@ -443,25 +450,25 @@ class TestAsyncOracleSocialGraph:
                 constraints=[ColumnConstraint(dialect, ColumnConstraintType.FOREIGN_KEY,
                                               foreign_key_reference=("people", ["id"]))]),
         ]
-        await backend.execute(*CreateTableExpression(dialect, "follows", follows_cols).to_sql())
+        await backend.execute(*CreateTableExpression(dialect, Table(dialect, "follows"), follows_cols).to_sql())
 
         people_data = ValuesSource(dialect, [
             [Literal(dialect, 1), Literal(dialect, "Alice")],
             [Literal(dialect, 2), Literal(dialect, "Bob")],
         ])
-        await backend.execute(*InsertExpression(dialect, "people", source=people_data).to_sql())
+        await backend.execute(*InsertExpression(dialect, Table(dialect, "people"), source=people_data).to_sql())
 
         follows_data = ValuesSource(dialect, [
             [Literal(dialect, 1), Literal(dialect, 1), Literal(dialect, 2)],
         ])
-        await backend.execute(*InsertExpression(dialect, "follows", source=follows_data).to_sql())
+        await backend.execute(*InsertExpression(dialect, Table(dialect, "follows"), source=follows_data).to_sql())
 
-        vt = VertexTable(dialect, "people", labels=["person"])
-        et = EdgeTable(dialect, "follows", ["follower_id"], ["followed_id"],
+        vt = VertexTable(dialect, NodeTable(dialect, "people"), labels=["person"])
+        et = EdgeTable(dialect, EdgeTableObject(dialect, "follows"), ["follower_id"], ["followed_id"],
                        references_source=("people", ["id"]),
                        references_destination=("people", ["id"]),
                        labels=["follows"])
-        create_expr = CreatePropertyGraphExpression(dialect, "async_graph", [vt], [et])
+        create_expr = CreatePropertyGraphExpression(dialect, PropertyGraph(dialect, "async_graph"), [vt], [et])
         await backend.execute(*create_expr.to_sql())
         yield "async_graph"
         try:
@@ -486,14 +493,14 @@ class TestAsyncOracleSocialGraph:
     @pytest.mark.asyncio
     async def test_async_single_hop(self, async_oracle_backend, async_social_data):
         dialect = async_oracle_backend.dialect
-        a = GraphVertex(dialect, "a", "person",
+        a = GraphVertex(dialect, "a", NodeTable(dialect, "person"),
                         where=WhereClause(dialect, condition=Column(dialect, "name") == Literal(dialect, "Alice")))
-        f = GraphEdge(dialect, "f", "follows", GraphEdgeDirection.RIGHT)
-        b = GraphVertex(dialect, "b", "person")
+        f = GraphEdge(dialect, "f", EdgeTableObject(dialect, "follows"), GraphEdgeDirection.RIGHT)
+        b = GraphVertex(dialect, "b", NodeTable(dialect, "person"))
         match = MatchClause(dialect, a, f, b)
         cols = ColumnsClause(dialect, GraphColumn("b", "name", "b_name"))
 
-        gt = GraphTableExpression(dialect, "async_graph", match, cols, alias="g")
+        gt = GraphTableExpression(dialect, PropertyGraph(dialect, "async_graph"), match, cols, alias="g")
 
         query = QueryExpression(dialect,
             select=[Column(dialect, "b_name")],

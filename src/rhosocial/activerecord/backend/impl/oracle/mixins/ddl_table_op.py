@@ -61,8 +61,21 @@ class OracleTableCapabilityMixin:
         instead, the dialect-specific ``CASCADE CONSTRAINTS`` form (optionally
         followed by ``PURGE``) is emitted when ``expr.cascade is True``. The
         typed ``expr.purge`` flag appends PURGE.
+
+        Raises:
+            TypeError: ``expr.table`` is not a
+                :class:`~rhosocial.activerecord.backend.expression.objects.Table`.
+                Another catalogue object renders its own name, so the statement
+                would drop an index and name a table.
         """
         from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
+        from rhosocial.activerecord.backend.expression.objects import Table
+
+        if not isinstance(expr.table, Table):
+            raise TypeError(
+                f"DropTableExpression.table must be a Table, "
+                f"got {type(expr.table).__name__}"
+            )
 
         parts = ["DROP TABLE"]
         table_sql, table_params = expr.table.to_sql()

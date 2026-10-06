@@ -8,8 +8,8 @@ from rhosocial.activerecord.backend.expression import (
     CreateTableExpression,
     CreateViewExpression,
     QueryExpression,
-    TableExpression,
 )
+from rhosocial.activerecord.backend.expression.objects import Table, View
 from rhosocial.activerecord.backend.expression.statements import ViewOptions, ViewCheckOption
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
@@ -18,7 +18,9 @@ from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeature
 class TestOracleTableCapabilityGating:
     def test_table_declaration_defaults_are_absent(self):
         dialect = OracleDialect(version=(19, 0, 0))
-        expression = CreateTableExpression(dialect, "plain_table_defaults", [])
+        expression = CreateTableExpression(
+            dialect, Table(dialect, "plain_table_defaults"), []
+        )
 
         assert expression.inherits == []
         assert expression.tablespace is None
@@ -27,7 +29,7 @@ class TestOracleTableCapabilityGating:
         dialect = OracleDialect(version=(19, 0, 0))
         expression = CreateTableExpression(
             dialect,
-            "inheriting_table",
+            Table(dialect, "inheriting_table"),
             [],
             inherits=["parent_a", "parent_b"],
         )
@@ -41,7 +43,7 @@ class TestOracleTableCapabilityGating:
         dialect = OracleDialect(version=(19, 0, 0))
         expression = CreateTableExpression(
             dialect,
-            "tablespaced_table",
+            Table(dialect, "tablespaced_table"),
             [],
             tablespace="ts_data",
         )
@@ -60,11 +62,11 @@ class TestOracleViewCapabilityGating:
         """WITH CHECK OPTION must fail fast when the capability is off."""
         dialect = OracleDialect()
         query = QueryExpression(
-            dialect, select=[Column(dialect, "id")], from_=TableExpression(dialect, "t")
+            dialect, select=[Column(dialect, "id")], from_=Table(dialect, "t")
         )
         expr = CreateViewExpression(
             dialect,
-            view_name="v",
+            view=View(dialect, "v"),
             query=query,
             options=ViewOptions(check_option=ViewCheckOption.CASCADED),
         )

@@ -13,8 +13,9 @@ Oracle Version Support: 12c+
 import os
 import re
 
-from rhosocial.activerecord.backend.expression import QueryExpression, TableExpression, WhereClause
+from rhosocial.activerecord.backend.expression import QueryExpression, WhereClause
 from rhosocial.activerecord.backend.expression.core import Column, Literal
+from rhosocial.activerecord.backend.expression.objects import Table
 from rhosocial.activerecord.backend.expression.predicates import ComparisonPredicate
 from rhosocial.activerecord.backend.impl.oracle.backend import OracleBackend
 from rhosocial.activerecord.backend.impl.oracle.config import OracleConnectionConfig
@@ -85,7 +86,7 @@ for row in result.data:
     print(f"  {row['product']} ${row['price']}")
 
 print("\n[3] Expression-based SELECT (build -> print -> execute)")
-src = TableExpression(dialect, "eg_query_basic")
+src = Table(dialect, "eg_query_basic")
 pred = ComparisonPredicate(dialect, "=", Column(dialect, "category"), Literal(dialect, "gadgets"))
 qry = QueryExpression(
     dialect=dialect,

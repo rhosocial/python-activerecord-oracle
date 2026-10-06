@@ -31,6 +31,7 @@ from .optimizer_hint import OracleOptimizerHintMixin
 from .pagination import OraclePaginationMixin
 from .partition import OraclePartitionMixin
 from .pivot import OraclePivotMixin
+from .namespace import OracleNamespaceMixin
 from .routine import OracleRoutineMixin
 from .schema import OracleSchemaMixin
 from .sequence import OracleSequenceMixin
@@ -45,7 +46,6 @@ from .truncate import OracleTruncateMixin
 from .types import OracleTypeSupportMixin, OracleTypeSuggestionMixin
 from .vector import OracleVectorMixin
 from .ddl_view import OracleViewMixin
-from .identifier import OracleIdentifierMixin
 from .explain import OracleExplainMixin
 
 __all__ = [
@@ -75,6 +75,7 @@ __all__ = [
     "OraclePaginationMixin",
     "OraclePartitionMixin",
     "OraclePivotMixin",
+    "OracleNamespaceMixin",
     "OracleRoutineMixin",
     "OracleSchemaMixin",
     "OracleSequenceMixin",
@@ -90,6 +91,5 @@ __all__ = [
     "OracleTypeSuggestionMixin",
     "OracleVectorMixin",
     "OracleViewMixin",
-    "OracleIdentifierMixin",
     "OracleExplainMixin",
 ]

@@ -13,7 +13,8 @@ Pure-construction tests: no database connection is required.
 import pytest
 
 from rhosocial.activerecord.backend.dialect import UnsupportedFeatureError
-from rhosocial.activerecord.backend.expression.core import Column, Literal, TableExpression
+from rhosocial.activerecord.backend.expression.core import Column, Literal
+from rhosocial.activerecord.backend.expression.objects import Table
 from rhosocial.activerecord.backend.expression.statements import QueryExpression
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
@@ -27,7 +28,7 @@ def build_query(dialect):
     query = QueryExpression(
         dialect,
         select=[Column(dialect, "a"), Column(dialect, "b")],
-        from_=TableExpression(dialect, "src"),
+        from_=Table(dialect, "src"),
     )
     return query.to_sql()[0]
 

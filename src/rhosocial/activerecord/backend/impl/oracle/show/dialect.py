@@ -213,9 +213,5 @@ class OracleShowDialectMixin:
             return "user_objects"
         return "all_objects"
 
-    # type helper to acknowledge attribute is provided by the host dialect
-    def format_identifier(self, identifier: str) -> str:  # pragma: no cover
-        raise NotImplementedError("format_identifier must be supplied by host dialect")
-
 
 __all__ = ["OracleShowDialectMixin"]

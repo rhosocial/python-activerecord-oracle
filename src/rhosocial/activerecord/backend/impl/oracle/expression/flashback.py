@@ -25,6 +25,7 @@ from enum import Enum
 from typing import Any, Optional, TYPE_CHECKING
 
 from rhosocial.activerecord.backend.expression.bases import BaseExpression
+from rhosocial.activerecord.backend.expression.objects import Index, Table
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
@@ -47,9 +48,11 @@ class OracleVersionsBetweenMode(Enum):
 class OracleAsOfClause(BaseExpression):
     """Oracle ``AS OF { SCN | TIMESTAMP } ...`` flashback query clause.
 
-    Attaches to a table reference in a ``SELECT`` (through
-    ``format_table(..., flashback=...)``) to read the
-    table as it was at a specified SCN or timestamp.
+    Attaches to a table reference in a ``SELECT`` -- as the ``flashback``
+    argument of an
+    :class:`~...impl.oracle.expression.sources.OracleNamedRelationRef` -- to
+    read the table as it was at a specified SCN or timestamp. It is a clause
+    on the statement, not part of the table's name.
 
     Args:
         dialect: the Oracle dialect instance.
@@ -132,8 +135,8 @@ class OracleFlashbackTableExpression(BaseExpression):
 
     Args:
         dialect: the Oracle dialect instance.
-        table: name of the table to flash back (a string or a
-            ``TableExpression``).
+        table: the table to flash back. The object carries its owner, so the
+            name is rendered by the dialect rather than concatenated here.
         to_scn: restore to this SCN.
         to_timestamp: restore to this timestamp (a ``BaseExpression`` or raw
             SQL fragment string).
@@ -143,7 +146,8 @@ class OracleFlashbackTableExpression(BaseExpression):
         disable_triggers: append ``DISABLE TRIGGERS``.
 
     Raises:
-        ValueError: if ``table`` is empty, if no flashback target clause is
+        TypeError: if ``table`` is not a :class:`Table`.
+        ValueError: if no flashback target clause is
             supplied, if ``rename_to`` is used without ``to_before_drop``, or
             if ``enable_triggers`` and ``disable_triggers`` are both set.
     """
@@ -151,7 +155,7 @@ class OracleFlashbackTableExpression(BaseExpression):
     def __init__(
         self,
         dialect: "OracleDialect",
-        table: str,
+        table: Table,
         to_scn: Optional[int] = None,
         to_timestamp: Any = None,
         to_before_drop: bool = False,
@@ -160,8 +164,10 @@ class OracleFlashbackTableExpression(BaseExpression):
         disable_triggers: bool = False,
     ):
         super().__init__(dialect)
-        if not isinstance(table, str) or not table.strip():
-            raise ValueError("table must be a non-empty string")
+        if not isinstance(table, Table):
+            raise TypeError(
+                f"table must be a Table, got {type(table).__name__}"
+            )
         targets = sum(
             [
                 to_scn is not None,
@@ -209,20 +215,22 @@ class OraclePurgeExpression(BaseExpression):
     Args:
         dialect: the Oracle dialect instance.
         object_type: ``TABLE``, ``INDEX`` or ``RECYCLEBIN``.
-        object_name: the object name; required for ``TABLE``/``INDEX`` and
-            must be ``None`` for ``RECYCLEBIN``.
+        target: the object being purged, carrying its owner; required for
+            ``TABLE``/``INDEX`` and must be ``None`` for ``RECYCLEBIN``. Its
+            kind must agree with ``object_type``.
 
     Raises:
-        ValueError: if ``object_type`` is ``TABLE``/``INDEX`` without an
-            object name, or ``RECYCLEBIN`` with one.
-        TypeError: if ``object_type`` is not an :class:`OraclePurgeObjectType`.
+        TypeError: if ``object_type`` is not an :class:`OraclePurgeObjectType`,
+            or ``target`` is not the kind ``object_type`` names.
+        ValueError: if ``object_type`` is ``TABLE``/``INDEX`` without a
+            target, or ``RECYCLEBIN`` with one.
     """
 
     def __init__(
         self,
         dialect: "OracleDialect",
         object_type: OraclePurgeObjectType,
-        object_name: Optional[str] = None,
+        target: Optional[object] = None,
     ):
         super().__init__(dialect)
         if not isinstance(object_type, OraclePurgeObjectType):
@@ -231,12 +239,20 @@ class OraclePurgeExpression(BaseExpression):
                 f"got {type(object_type).__name__}"
             )
         if object_type is OraclePurgeObjectType.RECYCLEBIN:
-            if object_name is not None:
-                raise ValueError("RECYCLEBIN purge does not take an object name")
-        elif not isinstance(object_name, str) or not object_name.strip():
-            raise ValueError("object_name must be a non-empty string")
+            if target is not None:
+                raise ValueError("RECYCLEBIN purge does not take a target object")
+        else:
+            expected = {
+                OraclePurgeObjectType.TABLE: Table,
+                OraclePurgeObjectType.INDEX: Index,
+            }[object_type]
+            if not isinstance(target, expected):
+                raise TypeError(
+                    f"target must be a {expected.__name__}, "
+                    f"got {type(target).__name__}"
+                )
         self.object_type = object_type
-        self.object_name = object_name
+        self.target = target
 
     @property
     def format_method(self) -> str:

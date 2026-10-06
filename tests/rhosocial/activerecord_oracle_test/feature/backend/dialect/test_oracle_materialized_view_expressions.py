@@ -18,7 +18,8 @@ from rhosocial.activerecord.backend.expression import (
     CreateMaterializedViewExpression,
     QueryExpression,
 )
-from rhosocial.activerecord.backend.expression.core import Column, TableExpression
+from rhosocial.activerecord.backend.expression.core import Column
+from rhosocial.activerecord.backend.expression.objects import MaterializedView, Table
 from rhosocial.activerecord.backend.expression.statements.ddl_view import (
     RefreshMaterializedViewExpression,
 )
@@ -44,7 +45,7 @@ def build_query(dialect):
     return QueryExpression(
         dialect,
         select=[Column(dialect, "id"), Column(dialect, "name")],
-        from_=TableExpression(dialect, "t"),
+        from_=Table(dialect, "t"),
     )
 
 
@@ -58,7 +59,7 @@ class TestOracleMaterializedViewCapabilities:
 class TestOracleCreateMaterializedViewExpression:
     def test_basic_create(self, dialect):
         expr = OracleCreateMaterializedViewExpression(
-            dialect, view_name="mv", query=build_query(dialect)
+            dialect, view=MaterializedView(dialect, "mv"), query=build_query(dialect)
         )
         sql, params = expr.to_sql()
         assert sql.startswith('CREATE MATERIALIZED VIEW "MV"')
@@ -68,7 +69,7 @@ class TestOracleCreateMaterializedViewExpression:
     def test_full_options(self, dialect):
         expr = OracleCreateMaterializedViewExpression(
             dialect,
-            view_name="mv",
+            view=MaterializedView(dialect, "mv"),
             query=build_query(dialect),
             column_aliases=["id", "name"],
             tablespace="ts_data",
@@ -88,7 +89,7 @@ class TestOracleCreateMaterializedViewExpression:
     def test_refresh_complete_on_demand_disable_rewrite(self, dialect):
         expr = OracleCreateMaterializedViewExpression(
             dialect,
-            view_name="mv",
+            view=MaterializedView(dialect, "mv"),
             query=build_query(dialect),
             refresh_method=MaterializedViewRefreshMethod.COMPLETE,
             refresh_trigger=MaterializedViewRefreshTrigger.ON_DEMAND,
@@ -104,7 +105,7 @@ class TestOracleCreateMaterializedViewExpression:
     def test_refresh_force_and_build_deferred(self, dialect):
         expr = OracleCreateMaterializedViewExpression(
             dialect,
-            view_name="mv",
+            view=MaterializedView(dialect, "mv"),
             query=build_query(dialect),
             refresh_method=MaterializedViewRefreshMethod.FORCE,
             build_mode=MaterializedViewBuildMode.DEFERRED,
@@ -118,7 +119,7 @@ class TestOracleCreateMaterializedViewExpression:
 
     def test_core_create_materialized_view_expression(self, dialect):
         expr = CreateMaterializedViewExpression(
-            dialect, view_name="mv", query=build_query(dialect), with_data=False
+            dialect, view=MaterializedView(dialect, "mv"), query=build_query(dialect), with_data=False
         )
         sql, params = expr.to_sql()
         assert sql.startswith('CREATE MATERIALIZED VIEW "MV"')
@@ -128,7 +129,7 @@ class TestOracleCreateMaterializedViewExpression:
 
     def test_identifier_upper_cased(self, dialect):
         expr = OracleCreateMaterializedViewExpression(
-            dialect, view_name="Sales_MV", query=build_query(dialect)
+            dialect, view=MaterializedView(dialect, "Sales_MV"), query=build_query(dialect)
         )
         sql, params = expr.to_sql()
         assert sql.startswith('CREATE MATERIALIZED VIEW "SALES_MV"')
@@ -136,15 +137,24 @@ class TestOracleCreateMaterializedViewExpression:
 
     def test_invalid_query_type_rejected(self, dialect):
         with pytest.raises(TypeError, match="query must be a BaseExpression"):
-            OracleCreateMaterializedViewExpression(dialect, view_name="mv", query="select")
+            OracleCreateMaterializedViewExpression(dialect, view=MaterializedView(dialect, "mv"), query="select")
 
     def test_empty_view_name_rejected(self, dialect):
-        with pytest.raises(ValueError, match="view_name must be a non-empty string"):
-            OracleCreateMaterializedViewExpression(dialect, view_name="  ", query=build_query(dialect))
+        """The name is rejected by the object itself, which owns the slot."""
+        with pytest.raises(ValueError, match="name must be a non-empty string"):
+            OracleCreateMaterializedViewExpression(
+                dialect, view=MaterializedView(dialect, "  "), query=build_query(dialect)
+            )
+
+    def test_view_object_required(self, dialect):
+        with pytest.raises(TypeError, match="view must be a MaterializedView"):
+            OracleCreateMaterializedViewExpression(
+                dialect, view="mv", query=build_query(dialect)
+            )
 
     def test_if_not_exists_pre_23ai_raises(self, dialect):
         expr = OracleCreateMaterializedViewExpression(
-            dialect, view_name="mv", query=build_query(dialect), if_not_exists=True
+            dialect, view=MaterializedView(dialect, "mv"), query=build_query(dialect), if_not_exists=True
         )
         with pytest.raises(UnsupportedFeatureError, match="IF NOT EXISTS"):
             expr.to_sql()
@@ -152,7 +162,7 @@ class TestOracleCreateMaterializedViewExpression:
     def test_if_not_exists_23ai(self):
         d23 = OracleDialect(version=(23, 0, 0))
         expr = OracleCreateMaterializedViewExpression(
-            d23, view_name="mv", query=build_query(d23), if_not_exists=True
+            d23, view=MaterializedView(d23, "mv"), query=build_query(d23), if_not_exists=True
         )
         sql, params = expr.to_sql()
         assert sql.startswith('CREATE MATERIALIZED VIEW IF NOT EXISTS "MV"')
@@ -162,21 +172,21 @@ class TestOracleCreateMaterializedViewExpression:
 class TestOracleCreateMaterializedViewLogExpression:
     def test_with_primary_key(self, dialect):
         expr = OracleCreateMaterializedViewLogExpression(
-            dialect, table="orders", with_primary_key=True
+            dialect, table=Table(dialect, "orders"), with_primary_key=True
         )
         sql, params = expr.to_sql()
         assert sql == 'CREATE MATERIALIZED VIEW LOG ON "ORDERS" WITH PRIMARY KEY'
         assert params == ()
 
     def test_with_rowid(self, dialect):
-        expr = OracleCreateMaterializedViewLogExpression(dialect, table="orders", with_rowid=True)
+        expr = OracleCreateMaterializedViewLogExpression(dialect, table=Table(dialect, "orders"), with_rowid=True)
         sql, params = expr.to_sql()
         assert sql == 'CREATE MATERIALIZED VIEW LOG ON "ORDERS" WITH ROWID'
         assert params == ()
 
     def test_with_both(self, dialect):
         expr = OracleCreateMaterializedViewLogExpression(
-            dialect, table="orders", with_rowid=True, with_primary_key=True
+            dialect, table=Table(dialect, "orders"), with_rowid=True, with_primary_key=True
         )
         sql, params = expr.to_sql()
         assert sql == 'CREATE MATERIALIZED VIEW LOG ON "ORDERS" WITH ROWID, PRIMARY KEY'
@@ -184,67 +194,79 @@ class TestOracleCreateMaterializedViewLogExpression:
 
     def test_with_clause_required(self, dialect):
         with pytest.raises(ValueError, match="requires WITH ROWID and/or WITH PRIMARY KEY"):
-            OracleCreateMaterializedViewLogExpression(dialect, table="orders")
+            OracleCreateMaterializedViewLogExpression(dialect, table=Table(dialect, "orders"))
 
-    def test_empty_table_rejected(self, dialect):
-        with pytest.raises(ValueError, match="table must be a non-empty string"):
-            OracleCreateMaterializedViewLogExpression(dialect, table="  ", with_rowid=True)
+    def test_empty_table_name_rejected(self, dialect):
+        """The name is rejected by the object itself, which owns the slot."""
+        with pytest.raises(ValueError, match="name must be a non-empty string"):
+            OracleCreateMaterializedViewLogExpression(
+                dialect, table=Table(dialect, "  "), with_rowid=True
+            )
+
+    def test_table_object_required(self, dialect):
+        with pytest.raises(TypeError, match="table must be a Table"):
+            OracleCreateMaterializedViewLogExpression(
+                dialect, table="orders", with_rowid=True
+            )
 
 
 class TestOracleDropMaterializedViewExpression:
     def test_basic_drop(self, dialect):
-        expr = OracleDropMaterializedViewExpression(dialect, view_name="mv")
+        expr = OracleDropMaterializedViewExpression(dialect, view=MaterializedView(dialect, "mv"))
         sql, params = expr.to_sql()
         assert sql == 'DROP MATERIALIZED VIEW "MV"'
         assert params == ()
 
     def test_preserve_table(self, dialect):
-        expr = OracleDropMaterializedViewExpression(dialect, view_name="mv", preserve_table=True)
+        expr = OracleDropMaterializedViewExpression(dialect, view=MaterializedView(dialect, "mv"), preserve_table=True)
         sql, params = expr.to_sql()
         assert sql == 'DROP MATERIALIZED VIEW "MV" PRESERVE TABLE'
         assert params == ()
 
     def test_if_exists_pre_23ai_raises(self, dialect):
-        expr = OracleDropMaterializedViewExpression(dialect, view_name="mv", if_exists=True)
+        expr = OracleDropMaterializedViewExpression(dialect, view=MaterializedView(dialect, "mv"), if_exists=True)
         with pytest.raises(UnsupportedFeatureError, match="IF EXISTS"):
             expr.to_sql()
 
     def test_if_exists_23ai(self):
         d23 = OracleDialect(version=(23, 0, 0))
-        expr = OracleDropMaterializedViewExpression(d23, view_name="mv", if_exists=True)
+        expr = OracleDropMaterializedViewExpression(d23, view=MaterializedView(d23, "mv"), if_exists=True)
         sql, params = expr.to_sql()
         assert sql == 'DROP MATERIALIZED VIEW IF EXISTS "MV"'
         assert params == ()
 
     def test_empty_view_name_rejected(self, dialect):
-        with pytest.raises(ValueError, match="view_name must be a non-empty string"):
-            OracleDropMaterializedViewExpression(dialect, view_name="  ")
+        """The name is rejected by the object itself, which owns the slot."""
+        with pytest.raises(ValueError, match="name must be a non-empty string"):
+            OracleDropMaterializedViewExpression(
+                dialect, view=MaterializedView(dialect, "  ")
+            )
 
 
 class TestOracleMaterializedViewVersionBoundary:
     def test_create_below_9i_raises(self):
         d8 = OracleDialect(version=(8, 1, 0))
         expr = OracleCreateMaterializedViewExpression(
-            d8, view_name="mv", query=build_query(d8)
+            d8, view=MaterializedView(d8, "mv"), query=build_query(d8)
         )
         with pytest.raises(UnsupportedFeatureError, match="CREATE MATERIALIZED VIEW"):
             expr.to_sql()
 
     def test_log_below_9i_raises(self):
         d8 = OracleDialect(version=(8, 1, 0))
-        expr = OracleCreateMaterializedViewLogExpression(d8, table="t", with_rowid=True)
+        expr = OracleCreateMaterializedViewLogExpression(d8, table=Table(d8, "t"), with_rowid=True)
         with pytest.raises(UnsupportedFeatureError, match="MATERIALIZED VIEW LOG"):
             expr.to_sql()
 
     def test_drop_below_9i_raises(self):
         d8 = OracleDialect(version=(8, 1, 0))
-        expr = OracleDropMaterializedViewExpression(d8, view_name="mv")
+        expr = OracleDropMaterializedViewExpression(d8, view=MaterializedView(d8, "mv"))
         with pytest.raises(UnsupportedFeatureError, match="DROP MATERIALIZED VIEW"):
             expr.to_sql()
 
     def test_at_9i_works(self):
         d9 = OracleDialect(version=(9, 0, 0))
-        expr = OracleCreateMaterializedViewExpression(d9, view_name="mv", query=build_query(d9))
+        expr = OracleCreateMaterializedViewExpression(d9, view=MaterializedView(d9, "mv"), query=build_query(d9))
         assert expr.to_sql()[0].startswith('CREATE MATERIALIZED VIEW "MV"')
 
 
@@ -252,23 +274,25 @@ class TestOracleRefreshMaterializedViewExpression:
     """``DBMS_MVIEW.REFRESH`` — Oracle has no REFRESH MATERIALIZED VIEW statement."""
 
     def test_minimal_block(self, dialect):
-        expr = OracleRefreshMaterializedViewExpression(dialect, "sales_summary")
+        expr = OracleRefreshMaterializedViewExpression(dialect, MaterializedView(dialect, "sales_summary"))
         sql, params = expr.to_sql()
         assert sql == "BEGIN DBMS_MVIEW.REFRESH('SALES_SUMMARY'); END;"
         assert params == ()
 
     def test_name_is_upper_cased(self, dialect):
-        expr = OracleRefreshMaterializedViewExpression(dialect, "Sales_Summary")
+        expr = OracleRefreshMaterializedViewExpression(dialect, MaterializedView(dialect, "Sales_Summary"))
         assert "'SALES_SUMMARY'" in expr.to_sql()[0]
 
     def test_single_quote_in_name_is_escaped(self, dialect):
-        expr = OracleRefreshMaterializedViewExpression(dialect, "o'brien_mv")
+        expr = OracleRefreshMaterializedViewExpression(dialect, MaterializedView(dialect, "o'brien_mv"))
         sql, _ = expr.to_sql()
         assert "'O''BRIEN_MV'" in sql
 
     def test_schema_qualified(self, dialect):
+        """The owner rides on the view object the procedure's name is read from."""
         expr = OracleRefreshMaterializedViewExpression(
-            dialect, "sales_summary", schema="reporting"
+            dialect,
+            MaterializedView(dialect, "sales_summary", schema_name="reporting"),
         )
         assert expr.to_sql()[0] == "BEGIN DBMS_MVIEW.REFRESH('REPORTING.SALES_SUMMARY'); END;"
 
@@ -284,13 +308,13 @@ class TestOracleRefreshMaterializedViewExpression:
     )
     def test_method_codes(self, dialect, method, code):
         """The procedure codes differ from the REFRESH FAST/COMPLETE DDL keywords."""
-        expr = OracleRefreshMaterializedViewExpression(dialect, "mv", method=method)
+        expr = OracleRefreshMaterializedViewExpression(dialect, MaterializedView(dialect, "mv"), method=method)
         assert f"method => '{code}'" in expr.to_sql()[0]
 
     def test_boolean_options_use_named_notation(self, dialect):
         expr = OracleRefreshMaterializedViewExpression(
             dialect,
-            "mv",
+            MaterializedView(dialect, "mv"),
             atomic_refresh=False,
             out_of_place=True,
             nested=True,
@@ -306,7 +330,7 @@ class TestOracleRefreshMaterializedViewExpression:
 
     def test_numeric_options(self, dialect):
         expr = OracleRefreshMaterializedViewExpression(
-            dialect, "mv", parallelism=4, purge_option=2
+            dialect, MaterializedView(dialect, "mv"), parallelism=4, purge_option=2
         )
         sql, _ = expr.to_sql()
         assert "parallelism => 4" in sql
@@ -314,22 +338,25 @@ class TestOracleRefreshMaterializedViewExpression:
 
     def test_options_default_to_omitted(self, dialect):
         """Server defaults (atomic_refresh TRUE, purge_option 1) stay implicit."""
-        sql, _ = OracleRefreshMaterializedViewExpression(dialect, "mv").to_sql()
+        sql, _ = OracleRefreshMaterializedViewExpression(dialect, MaterializedView(dialect, "mv")).to_sql()
         assert "atomic_refresh" not in sql
         assert "purge_option" not in sql
         assert "parallelism" not in sql
 
     def test_invalid_purge_option(self, dialect):
         with pytest.raises(ValueError, match="purge_option"):
-            OracleRefreshMaterializedViewExpression(dialect, "mv", purge_option=5)
+            OracleRefreshMaterializedViewExpression(dialect, MaterializedView(dialect, "mv"), purge_option=5)
 
     def test_invalid_parallelism(self, dialect):
         with pytest.raises(ValueError, match="parallelism"):
-            OracleRefreshMaterializedViewExpression(dialect, "mv", parallelism=-1)
+            OracleRefreshMaterializedViewExpression(dialect, MaterializedView(dialect, "mv"), parallelism=-1)
 
     def test_empty_name_rejected(self, dialect):
-        with pytest.raises(ValueError, match="view_name"):
-            OracleRefreshMaterializedViewExpression(dialect, "  ")
+        """The name is rejected by the object itself, which owns the slot."""
+        with pytest.raises(ValueError, match="name must be a non-empty string"):
+            OracleRefreshMaterializedViewExpression(
+                dialect, MaterializedView(dialect, "  ")
+            )
 
     def test_capability_probe_is_true_and_version_independent(self):
         """DBMS_MVIEW.REFRESH predates 9i, so no version gate applies."""
@@ -339,12 +366,14 @@ class TestOracleRefreshMaterializedViewExpression:
     def test_renders_without_adapted_dialect(self):
         """Unlike CREATE/DROP, refresh needs no server version."""
         d = OracleDialect(version=(19, 0, 0))
-        sql, _ = OracleRefreshMaterializedViewExpression(d, "mv").to_sql()
+        sql, _ = OracleRefreshMaterializedViewExpression(d, MaterializedView(d, "mv")).to_sql()
         assert sql.startswith("BEGIN DBMS_MVIEW.REFRESH(")
 
     def test_generic_expression_routes_here(self, dialect):
         """The generic RefreshMaterializedViewExpression works on Oracle."""
-        expr = RefreshMaterializedViewExpression(dialect=dialect, view_name="mv")
+        expr = RefreshMaterializedViewExpression(
+            dialect=dialect, view=MaterializedView(dialect, "mv")
+        )
         sql, params = expr.to_sql()
         assert sql == "BEGIN DBMS_MVIEW.REFRESH('MV'); END;"
         assert params == ()
@@ -352,13 +381,13 @@ class TestOracleRefreshMaterializedViewExpression:
     def test_generic_with_data_is_ignored(self, dialect):
         """A refresh always repopulates; WITH [NO] DATA has no counterpart."""
         expr = RefreshMaterializedViewExpression(
-            dialect=dialect, view_name="mv", with_data=False
+            dialect=dialect, view=MaterializedView(dialect, "mv"), with_data=False
         )
         assert "WITH NO DATA" not in expr.to_sql()[0]
 
     def test_generic_concurrent_is_rejected(self, dialect):
         expr = RefreshMaterializedViewExpression(
-            dialect=dialect, view_name="mv", concurrent=True
+            dialect=dialect, view=MaterializedView(dialect, "mv"), concurrent=True
         )
         with pytest.raises(UnsupportedFeatureError) as exc:
             expr.to_sql()

@@ -20,6 +20,7 @@ from enum import Enum
 from typing import Optional, TYPE_CHECKING
 
 from rhosocial.activerecord.backend.expression.bases import BaseExpression, SQLQueryAndParams
+from rhosocial.activerecord.backend.expression.objects import Sequence
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
@@ -82,7 +83,8 @@ class OracleCreateSequenceExpression(BaseExpression):
 
     Args:
         dialect: the Oracle dialect instance.
-        sequence_name: name of the sequence to create.
+        sequence: the sequence to create, carrying its owner when it is not
+            the caller's own.
         if_not_exists: if True, emit ``IF NOT EXISTS`` (Oracle 23ai+).
         start: ``START WITH`` value.
         increment: ``INCREMENT BY`` value.
@@ -94,14 +96,15 @@ class OracleCreateSequenceExpression(BaseExpression):
         order: ``ORDER`` when True, ``NOORDER`` when False, omitted when None.
 
     Raises:
-        ValueError: if ``sequence_name`` is empty, or ``cache`` is negative.
-        TypeError: if ``cache`` is provided but is not an int.
+        ValueError: if ``cache`` is negative.
+        TypeError: if ``sequence`` is not a ``Sequence``, or ``cache`` is
+            provided but is not an int.
     """
 
     def __init__(
         self,
         dialect: "OracleDialect",
-        sequence_name: str,
+        sequence: Sequence,
         if_not_exists: bool = False,
         start: Optional[int] = None,
         increment: Optional[int] = None,
@@ -112,8 +115,10 @@ class OracleCreateSequenceExpression(BaseExpression):
         order: Optional[bool] = None,
     ):
         super().__init__(dialect)
-        if not isinstance(sequence_name, str) or not sequence_name.strip():
-            raise ValueError("sequence_name must be a non-empty string")
+        if not isinstance(sequence, Sequence):
+            raise TypeError(
+                f"sequence must be a Sequence, got {type(sequence).__name__}"
+            )
         if cache is not None:
             if not isinstance(cache, int) or isinstance(cache, bool):
                 raise TypeError(
@@ -122,7 +127,7 @@ class OracleCreateSequenceExpression(BaseExpression):
                 )
             if cache < 0:
                 raise ValueError(f"cache must be non-negative, got {cache}")
-        self.sequence_name = sequence_name
+        self.sequence = sequence
         self.if_not_exists = bool(if_not_exists)
         self.start = start
         self.increment = increment
@@ -143,23 +148,26 @@ class OracleDropSequenceExpression(BaseExpression):
 
     Args:
         dialect: the Oracle dialect instance.
-        sequence_name: name of the sequence to drop.
+        sequence: the sequence to drop, carrying its owner when it is not the
+            caller's own.
         if_exists: if True, emit ``IF EXISTS`` (Oracle 23ai+).
 
     Raises:
-        ValueError: if ``sequence_name`` is empty.
+        TypeError: if ``sequence`` is not a ``Sequence``.
     """
 
     def __init__(
         self,
         dialect: "OracleDialect",
-        sequence_name: str,
+        sequence: Sequence,
         if_exists: bool = False,
     ):
         super().__init__(dialect)
-        if not isinstance(sequence_name, str) or not sequence_name.strip():
-            raise ValueError("sequence_name must be a non-empty string")
-        self.sequence_name = sequence_name
+        if not isinstance(sequence, Sequence):
+            raise TypeError(
+                f"sequence must be a Sequence, got {type(sequence).__name__}"
+            )
+        self.sequence = sequence
         self.if_exists = bool(if_exists)
 
     @property

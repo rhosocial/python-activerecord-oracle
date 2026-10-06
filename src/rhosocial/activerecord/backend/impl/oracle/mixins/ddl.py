@@ -31,8 +31,22 @@ class OracleDDLMixin:
         ``if_not_exists`` is True, the statement is wrapped in an anonymous
         PL/SQL block that checks ``user_tables`` and only executes the DDL
         when the table does not exist, making creation idempotent.
+
+        Raises:
+            TypeError: ``expr.table`` is not a
+                :class:`~rhosocial.activerecord.backend.expression.objects.Table`.
+                Any other catalogue object carries its own ``format_method``, so
+                it would render its own name here and the statement would
+                silently create a table named after, say, an index.
         """
         from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
+        from rhosocial.activerecord.backend.expression.objects import Table
+
+        if not isinstance(expr.table, Table):
+            raise TypeError(
+                f"CreateTableExpression.table must be a Table, "
+                f"got {type(expr.table).__name__}"
+            )
 
         table_options = getattr(expr, "table_options", None)
         if getattr(table_options, "comment", None):
@@ -63,7 +77,10 @@ class OracleDDLMixin:
         if expr.temporary:
             parts.append("GLOBAL TEMPORARY")
         parts.append("TABLE")
-        parts.append(self.format_identifier(expr.table_name))
+        # The table is a catalogue object on the expression, so it is rendered
+        # by its own protocol -- an owner, when the expression carries one, is
+        # quoted by the same rules as everywhere else in the backend.
+        parts.append(expr.table.to_sql()[0])
 
         column_parts: List[str] = []
         for col_def in expr.columns:
@@ -102,7 +119,7 @@ class OracleDDLMixin:
             # is dynamic SQL, so any embedded single quotes must be doubled.
             # Only applied when the statement carries no bind parameters.
             embedded = statement.replace("'", "''")
-            table_upper = expr.table_name.upper()
+            table_upper = expr.table.name.upper()
             statement = (
                 f"DECLARE v_cnt NUMBER; "
                 f"BEGIN SELECT COUNT(*) INTO v_cnt FROM user_tables "
@@ -256,7 +273,10 @@ class OracleDDLMixin:
                 ref_cols_str = ", ".join(
                     self.format_identifier(c) for c in t_const.foreign_key_columns
                 )
-                ref_table = self.format_identifier(t_const.foreign_key_table)
+                # The referenced table is a Table object, so it renders through
+                # the same path as every other named relation -- which is what
+                # lets it carry its own owner.
+                ref_table = t_const.foreign_key_table.to_sql()[0]
                 parts.append(
                     f"FOREIGN KEY ({cols_str}) REFERENCES {ref_table} ({ref_cols_str})"
                 )

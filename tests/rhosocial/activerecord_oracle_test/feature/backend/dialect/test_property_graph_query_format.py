@@ -16,6 +16,16 @@ from rhosocial.activerecord.backend.expression import (
 )
 from rhosocial.activerecord.backend.expression.query_parts import WhereClause
 from rhosocial.activerecord.backend.expression.core import Column, Literal
+from rhosocial.activerecord.backend.expression.objects import (
+    NodeTable,
+    PropertyGraph,
+)
+# The graph *expressions* above name an object; the objects themselves come from
+# the object tree, where EdgeTable is the catalogue entry rather than the
+# CREATE PROPERTY GRAPH clause -- hence the alias.
+from rhosocial.activerecord.backend.expression.objects import (
+    EdgeTable as EdgeTableObject,
+)
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 
 
@@ -57,7 +67,7 @@ class TestPGQGraphVertexFormat:
     """SQL formatting tests for GraphVertex with Oracle 23c dialect."""
 
     def test_basic(self, o23c_dialect: OracleDialect):
-        v = GraphVertex(o23c_dialect, "p", "person")
+        v = GraphVertex(o23c_dialect, "p", NodeTable(o23c_dialect, "person"))
         sql, params = v.to_sql()
         assert "(p IS" in sql
         assert params == ()
@@ -65,7 +75,7 @@ class TestPGQGraphVertexFormat:
     def test_with_where(self, o23c_dialect: OracleDialect):
         where = WhereClause(o23c_dialect,
                             condition=Column(o23c_dialect, "age") > Literal(o23c_dialect, 18))
-        v = GraphVertex(o23c_dialect, "p", "person", where=where)
+        v = GraphVertex(o23c_dialect, "p", NodeTable(o23c_dialect, "person"), where=where)
         sql, params = v.to_sql()
         assert "WHERE" in sql
         assert params == (18,)
@@ -75,7 +85,7 @@ class TestPGQGraphEdgeFormat:
     """SQL formatting tests for GraphEdge with Oracle 23c dialect."""
 
     def test_right(self, o23c_dialect: OracleDialect):
-        e = GraphEdge(o23c_dialect, "e", "knows", GraphEdgeDirection.RIGHT)
+        e = GraphEdge(o23c_dialect, "e", EdgeTableObject(o23c_dialect, "knows"), GraphEdgeDirection.RIGHT)
         assert e.to_sql()[0] == '-[e IS "KNOWS"]->'
 
     def test_anonymous(self, o23c_dialect: OracleDialect):
@@ -87,10 +97,10 @@ class TestPGQGraphTableFormat:
     """SQL formatting tests for GraphTableExpression with Oracle 23c dialect."""
 
     def test_basic(self, o23c_dialect: OracleDialect):
-        v = GraphVertex(o23c_dialect, "p", "person")
+        v = GraphVertex(o23c_dialect, "p", NodeTable(o23c_dialect, "person"))
         cols = ColumnsClause(o23c_dialect, GraphColumn("p", "name"))
         m = MatchClause(o23c_dialect, v)
-        gt = GraphTableExpression(o23c_dialect, "g", m, cols)
+        gt = GraphTableExpression(o23c_dialect, PropertyGraph(o23c_dialect, "g"), m, cols)
         sql, params = gt.to_sql()
         assert "GRAPH_TABLE" in sql.upper()
         assert "COLUMNS" in sql.upper()
@@ -98,10 +108,10 @@ class TestPGQGraphTableFormat:
     def test_with_where(self, o23c_dialect: OracleDialect):
         where = WhereClause(o23c_dialect,
                             condition=Column(o23c_dialect, "age") > Literal(o23c_dialect, 18))
-        v = GraphVertex(o23c_dialect, "p", "person", where=where)
+        v = GraphVertex(o23c_dialect, "p", NodeTable(o23c_dialect, "person"), where=where)
         cols = ColumnsClause(o23c_dialect, GraphColumn("p", "name"))
         m = MatchClause(o23c_dialect, v)
-        gt = GraphTableExpression(o23c_dialect, "g", m, cols)
+        gt = GraphTableExpression(o23c_dialect, PropertyGraph(o23c_dialect, "g"), m, cols)
         sql, params = gt.to_sql()
         assert "WHERE" in sql
         assert params == (18,)
@@ -111,27 +121,27 @@ class TestPGQDDLFormat:
     """SQL formatting tests for PGQ DDL with Oracle 23c dialect."""
 
     def test_create_property_graph(self, o23c_dialect: OracleDialect):
-        vt = VertexTable(o23c_dialect, "people",
+        vt = VertexTable(o23c_dialect, NodeTable(o23c_dialect, "people"),
                          labels=["person"],
                          key_columns=["id"],
                          properties=TablePropertiesClause(o23c_dialect, columns=["id", "name"]))
-        et = EdgeTable(o23c_dialect, "knows", ["person_a"], ["person_b"],
+        et = EdgeTable(o23c_dialect, EdgeTableObject(o23c_dialect, "knows"), ["person_a"], ["person_b"],
                        labels=["knows"],
                        properties=TablePropertiesClause(o23c_dialect, columns=["since"]))
-        expr = CreatePropertyGraphExpression(o23c_dialect, "test_graph", [vt], [et])
+        expr = CreatePropertyGraphExpression(o23c_dialect, PropertyGraph(o23c_dialect, "test_graph"), [vt], [et])
         sql, params = expr.to_sql()
         assert "CREATE PROPERTY GRAPH" in sql.upper()
         assert "SOURCE KEY" in sql.upper()
         assert "DESTINATION KEY" in sql.upper()
 
     def test_drop_property_graph(self, o23c_dialect: OracleDialect):
-        expr = DropPropertyGraphExpression(o23c_dialect, "test_graph", if_exists=True)
+        expr = DropPropertyGraphExpression(o23c_dialect, PropertyGraph(o23c_dialect, "test_graph"), if_exists=True)
         sql, params = expr.to_sql()
         assert "IF EXISTS" in sql.upper()
 
     def test_alter_add_vertex(self, o23c_dialect: OracleDialect):
-        vt = VertexTable(o23c_dialect, "new_table", labels=["NewLabel"])
-        expr = AlterPropertyGraphExpression(o23c_dialect, "g", "ADD", "VERTEX TABLES",
+        vt = VertexTable(o23c_dialect, NodeTable(o23c_dialect, "new_table"), labels=["NewLabel"])
+        expr = AlterPropertyGraphExpression(o23c_dialect, PropertyGraph(o23c_dialect, "g"), "ADD", "VERTEX TABLES",
                                             vertex_tables=[vt])
         sql, params = expr.to_sql()
         assert "ALTER PROPERTY GRAPH" in sql.upper()
@@ -161,19 +171,19 @@ class TestPGQUnsupportedFormat:
         return OracleDialect((19, 0, 0))
 
     def test_graph_vertex_unsupported(self, oracle_11g_dialect: OracleDialect):
-        v = GraphVertex(oracle_11g_dialect, "p", "person")
+        v = GraphVertex(oracle_11g_dialect, "p", NodeTable(oracle_11g_dialect, "person"))
         with pytest.raises(UnsupportedFeatureError):
             v.to_sql()
 
     def test_graph_edge_unsupported(self, oracle_11g_dialect: OracleDialect):
-        e = GraphEdge(oracle_11g_dialect, "e", "knows", GraphEdgeDirection.RIGHT)
+        e = GraphEdge(oracle_11g_dialect, "e", EdgeTableObject(oracle_11g_dialect, "knows"), GraphEdgeDirection.RIGHT)
         with pytest.raises(UnsupportedFeatureError):
             e.to_sql()
 
     def test_graph_table_unsupported(self, oracle_19c_dialect: OracleDialect):
-        v = GraphVertex(oracle_19c_dialect, "p", "person")
+        v = GraphVertex(oracle_19c_dialect, "p", NodeTable(oracle_19c_dialect, "person"))
         cols = ColumnsClause(oracle_19c_dialect, GraphColumn("p", "name"))
         m = MatchClause(oracle_19c_dialect, v)
-        gt = GraphTableExpression(oracle_19c_dialect, "g", m, cols)
+        gt = GraphTableExpression(oracle_19c_dialect, PropertyGraph(oracle_19c_dialect, "g"), m, cols)
         with pytest.raises(UnsupportedFeatureError):
             gt.to_sql()

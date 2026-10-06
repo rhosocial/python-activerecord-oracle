@@ -12,6 +12,15 @@ class OracleDateTimeMixin:
     Provides Oracle-flavoured implementations of date_trunc, interval
     expressions, and datetime arithmetic that differ from the generic
     ``DateTimeMixin`` defaults.
+
+    Each ends with ``self.apply_alias(...)``, the core's post-render hook. It was
+    once ``self._apply_value_expression_modifiers(...)``, a method the core
+    expression mixin defined; core replaced it when it split cast application
+    from aliasing, and this file kept calling the old name. Nothing in the
+    backend's own tests rendered a date/time expression, so the five formatters
+    here raised ``AttributeError`` on first use rather than failing a build --
+    the shape of defect the expression matrix exists to catch, found the first
+    time the matrix classified a render failure instead of swallowing it.
     """
 
     def format_date_trunc_expression(self, expr: "Any") -> Tuple[str, Tuple]:
@@ -31,7 +40,7 @@ class OracleDateTimeMixin:
             raise UnsupportedFeatureError(
                 self.name, f"date_trunc({expr.field.value})"
             )
-        return self._apply_value_expression_modifiers(sql, source_params, expr)
+        return self.apply_alias(sql, source_params, expr)
 
     def format_interval_expression(self, expr: "Any") -> Tuple[str, Tuple]:
         unit = expr.unit.value.upper()
@@ -41,13 +50,13 @@ class OracleDateTimeMixin:
             sql = f"NUMTODSINTERVAL({self.p()} * 7, 'DAY')"
         else:
             sql = f"NUMTODSINTERVAL({self.p()}, '{unit}')"
-        return self._apply_value_expression_modifiers(sql, (expr.value,), expr)
+        return self.apply_alias(sql, (expr.value,), expr)
 
     def format_datetime_add_expression(self, expr: "Any") -> Tuple[str, Tuple]:
         source_sql, source_params = expr.source.to_sql()
         interval_sql, interval_params = expr.interval.to_sql()
         sql = f"{source_sql} + {interval_sql}"
-        return self._apply_value_expression_modifiers(
+        return self.apply_alias(
             sql, source_params + interval_params, expr
         )
 
@@ -55,7 +64,7 @@ class OracleDateTimeMixin:
         source_sql, source_params = expr.source.to_sql()
         interval_sql, interval_params = expr.interval.to_sql()
         sql = f"{source_sql} - {interval_sql}"
-        return self._apply_value_expression_modifiers(
+        return self.apply_alias(
             sql, source_params + interval_params, expr
         )
 
@@ -76,4 +85,4 @@ class OracleDateTimeMixin:
             sql = f"MONTHS_BETWEEN({end_sql}, {start_sql})"
         else:
             sql = f"(MONTHS_BETWEEN({end_sql}, {start_sql}) / 12)"
-        return self._apply_value_expression_modifiers(sql, end_params + start_params, expr)
+        return self.apply_alias(sql, end_params + start_params, expr)

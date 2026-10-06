@@ -7,6 +7,7 @@ import pytest
 from xml.etree.ElementTree import Element
 
 from rhosocial.activerecord.backend.expression import core
+from rhosocial.activerecord.backend.expression.objects import Function, Table, Trigger
 from rhosocial.activerecord.backend.expression.statements.ddl_trigger import (
     CreateTriggerExpression, DropTriggerExpression, TriggerEvent, TriggerLevel,
     TriggerTiming,
@@ -24,10 +25,11 @@ def dialect() -> OracleDialect:
 
 
 def _trigger(dialect: OracleDialect, **kwargs) -> CreateTriggerExpression:
+    """Build a trigger; the three objects it names are built from the dialect."""
     defaults = dict(
-        trigger_name="trg", table_name="t",
+        trigger=Trigger(dialect, "trg"), table=Table(dialect, "t"),
         timing=TriggerTiming.BEFORE, events=[TriggerEvent.INSERT],
-        function_name="proc", level=TriggerLevel.ROW,
+        function=Function(dialect, "proc"), level=TriggerLevel.ROW,
     )
     defaults.update(kwargs)
     return CreateTriggerExpression(dialect=dialect, **defaults)
@@ -49,25 +51,28 @@ class TestTriggerCapabilities:
 
 class TestCreateTriggerFormatting:
     def test_row_trigger_with_call(self, dialect):
-        expr = _trigger(dialect, trigger_name="trg_audit",
-                        table_name="customers",
+        expr = _trigger(dialect, trigger=Trigger(dialect, "trg_audit"),
+                        table=Table(dialect, "customers"),
                         events=[TriggerEvent.INSERT, TriggerEvent.UPDATE],
-                        function_name="audit_proc")
+                        function=Function(dialect, "audit_proc"))
         sql, params = expr.to_sql()
         assert sql == ('CREATE OR REPLACE TRIGGER "TRG_AUDIT" BEFORE INSERT OR UPDATE ON "CUSTOMERS" FOR EACH ROW CALL "AUDIT_PROC"')
         assert params == ()
 
     def test_update_of_columns(self, dialect):
-        expr = _trigger(dialect, table_name="orders",
-                        events=[TriggerEvent.UPDATE], function_name="do_it",
+        expr = _trigger(dialect, table=Table(dialect, "orders"),
+                        events=[TriggerEvent.UPDATE],
+                        function=Function(dialect, "do_it"),
                         update_columns=["status", "note"])
         sql, _ = expr.to_sql()
         assert sql == ('CREATE OR REPLACE TRIGGER "TRG" BEFORE UPDATE OF "STATUS", "NOTE" ON "ORDERS" FOR EACH ROW CALL "DO_IT"')
 
     def test_instead_of_trigger_on_view(self, dialect):
-        expr = _trigger(dialect, trigger_name="TRG", table_name="v",
+        expr = _trigger(dialect, trigger=Trigger(dialect, "TRG"),
+                        table=Table(dialect, "v"),
                         timing=TriggerTiming.INSTEAD_OF,
-                        events=[TriggerEvent.INSERT], function_name="p",
+                        events=[TriggerEvent.INSERT],
+                        function=Function(dialect, "p"),
                         level=TriggerLevel.STATEMENT)
         sql, _ = expr.to_sql()
         assert sql == 'CREATE OR REPLACE TRIGGER "TRG" INSTEAD OF INSERT ON "V" CALL "P"'
@@ -79,7 +84,8 @@ class TestCreateTriggerFormatting:
 
     def test_statement_level_before_11g_not_implemented(self):
         old = OracleDialect(version=(10, 2, 0))
-        expr = _trigger(old, function_name="proc", level=TriggerLevel.STATEMENT)
+        expr = _trigger(old, function=Function(old, "proc"),
+                        level=TriggerLevel.STATEMENT)
         with pytest.raises(NotImplementedError):
             expr.to_sql()
 
@@ -96,12 +102,12 @@ class TestCreateTriggerFormatting:
 
 class TestDropAndToggleTriggers:
     def test_drop_trigger(self, dialect):
-        sql, params = DropTriggerExpression(dialect, "trg_x").to_sql()
+        sql, params = DropTriggerExpression(dialect, Trigger(dialect, "trg_x")).to_sql()
         assert sql == 'DROP TRIGGER "TRG_X"'
         assert params == ()
 
     def test_drop_if_exists_rejected(self, dialect):
-        expr = DropTriggerExpression(dialect, "trg_x", if_exists=True)
+        expr = DropTriggerExpression(dialect, Trigger(dialect, "trg_x"), if_exists=True)
         with pytest.raises(NotImplementedError):
             expr.to_sql()
 
@@ -110,9 +116,9 @@ class TestDropAndToggleTriggers:
             DisableTriggerExpression,
             EnableTriggerExpression,
         )
-        assert DisableTriggerExpression(dialect, "trg_a").to_sql() == \
+        assert DisableTriggerExpression(dialect, Trigger(dialect, "trg_a")).to_sql() == \
             ('ALTER TRIGGER "TRG_A" DISABLE', ())
-        assert EnableTriggerExpression(dialect, "trg_a").to_sql() == \
+        assert EnableTriggerExpression(dialect, Trigger(dialect, "trg_a")).to_sql() == \
             ('ALTER TRIGGER "TRG_A" ENABLE', ())
 
 

@@ -12,6 +12,7 @@ Pure-construction tests: no database connection is required.
 
 import pytest
 
+from rhosocial.activerecord.backend.expression.objects import Table, Trigger
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.expression.vector import (
     VectorLiteralExpression,
@@ -100,13 +101,13 @@ class TestTablespaceClauseExpression:
 
 class TestDisableTriggerExpression:
     def test_basic(self, dialect):
-        expr = DisableTriggerExpression(dialect, 'trg_audit')
+        expr = DisableTriggerExpression(dialect, Trigger(dialect, 'trg_audit'))
         sql, params = expr.to_sql()
         assert sql == 'ALTER TRIGGER "TRG_AUDIT" DISABLE'
         assert params == ()
 
     def test_with_table_name(self, dialect):
-        expr = DisableTriggerExpression(dialect, 'trg_audit', table_name='employees')
+        expr = DisableTriggerExpression(dialect, Trigger(dialect, 'trg_audit'), table=Table(dialect, 'employees'))
         sql, params = expr.to_sql()
         assert sql == 'ALTER TRIGGER "TRG_AUDIT" DISABLE'
         assert params == ()
@@ -116,13 +117,13 @@ class TestDisableTriggerExpression:
 
 class TestEnableTriggerExpression:
     def test_basic(self, dialect):
-        expr = EnableTriggerExpression(dialect, 'trg_audit')
+        expr = EnableTriggerExpression(dialect, Trigger(dialect, 'trg_audit'))
         sql, params = expr.to_sql()
         assert sql == 'ALTER TRIGGER "TRG_AUDIT" ENABLE'
         assert params == ()
 
     def test_with_table_name(self, dialect):
-        expr = EnableTriggerExpression(dialect, 'trg_audit', table_name='employees')
+        expr = EnableTriggerExpression(dialect, Trigger(dialect, 'trg_audit'), table=Table(dialect, 'employees'))
         sql, params = expr.to_sql()
         assert sql == 'ALTER TRIGGER "TRG_AUDIT" ENABLE'
         assert params == ()

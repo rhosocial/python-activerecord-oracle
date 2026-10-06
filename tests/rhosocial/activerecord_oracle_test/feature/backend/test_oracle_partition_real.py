@@ -21,9 +21,9 @@ from rhosocial.activerecord.backend.expression import (
     DropTableExpression,
     Literal,
     QueryExpression,
-    TableExpression,
 )
 from rhosocial.activerecord.backend.errors import DatabaseError
+from rhosocial.activerecord.backend.expression.objects import Table
 from rhosocial.activerecord.backend.impl.oracle.expression.partition import (
     OraclePartitionByHash,
     OraclePartitionByList,
@@ -51,7 +51,7 @@ def _drop(backend, name: str):
     """Drop ``name`` if it exists. Oracle has no DROP TABLE IF EXISTS, so
     we attempt the drop and ignore the ORA-00942 'table or view does not
     exist' error."""
-    expr = DropTableExpression(backend.dialect, name)
+    expr = DropTableExpression(backend.dialect, Table(backend.dialect, name))
     sql, params = expr.to_sql()
     try:
         backend.execute(sql, params)
@@ -73,7 +73,7 @@ def _count_partitions(backend, table_name: str) -> int:
     query = QueryExpression(
         d,
         select=[Column(d, "PARTITION_NAME")],
-        from_=TableExpression(d, "ALL_TAB_PARTITIONS"),
+        from_=Table(d, "ALL_TAB_PARTITIONS"),
         where=Column(d, "TABLE_NAME") == Literal(d, table_name.upper()),
     )
     sql, params = query.to_sql()
@@ -85,7 +85,7 @@ def _partition_names(backend, table_name: str):
     query = QueryExpression(
         d,
         select=[Column(d, "PARTITION_NAME")],
-        from_=TableExpression(d, "ALL_TAB_PARTITIONS"),
+        from_=Table(d, "ALL_TAB_PARTITIONS"),
         where=Column(d, "TABLE_NAME") == Literal(d, table_name.upper()),
     )
     sql, params = query.to_sql()
@@ -119,7 +119,7 @@ def test_create_range_partitioned_table_real(oracle_backend_single):
         )
         expr = CreateTableExpression(
             dialect=d,
-            table=table_name,
+            table=Table(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
                     ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
@@ -162,7 +162,7 @@ def test_create_list_partitioned_table_real(oracle_backend_single):
         )
         expr = CreateTableExpression(
             dialect=d,
-            table=table_name,
+            table=Table(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
                     ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
@@ -198,7 +198,7 @@ def test_create_hash_partitioned_table_real(oracle_backend_single):
         partition = OraclePartitionByHash(d, [Column(d, "ID")], partitions_count=4)
         expr = CreateTableExpression(
             dialect=d,
-            table=table_name,
+            table=Table(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
                     ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
@@ -240,7 +240,7 @@ def test_explain_range_partitioned_table_real(oracle_backend_single):
         )
         expr = CreateTableExpression(
             dialect=d,
-            table=table_name,
+            table=Table(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
                     ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
@@ -257,7 +257,7 @@ def test_explain_range_partitioned_table_real(oracle_backend_single):
         from rhosocial.activerecord.backend.expression.statements import ValuesSource
         insert = InsertExpression(
             d,
-            into=table_name,
+            into=Table(d, table_name),
             source=ValuesSource(d, [[Literal(d, 1), Literal(d, 25)]]),
             columns=["ID", "AGE"],
         )
@@ -273,7 +273,7 @@ def test_explain_range_partitioned_table_real(oracle_backend_single):
         verify = QueryExpression(
             d2,
             select=[Column(d2, "OPERATION")],
-            from_=TableExpression(d2, "PLAN_TABLE"),
+            from_=Table(d2, "PLAN_TABLE"),
             where=Column(d2, "OBJECT_NAME") == Literal(d2, table_name.upper()),
         )
         vsql, vparams = verify.to_sql()

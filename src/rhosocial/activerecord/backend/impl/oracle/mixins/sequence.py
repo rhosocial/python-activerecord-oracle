@@ -54,6 +54,25 @@ class OracleSequenceMixin:
     def format_create_sequence_statement(
         self, expr: "CreateSequenceExpression"
     ) -> Tuple[str, tuple]:
+        """Format ``CREATE SEQUENCE`` for Oracle.
+
+        Raises:
+            TypeError: ``expr.sequence`` is not a
+                :class:`~rhosocial.activerecord.backend.expression.objects.Sequence`.
+                A table would render its own name, producing a well-formed
+                CREATE SEQUENCE over that table's name.
+            UnsupportedFeatureError: The Oracle version is below 9i, IF NOT
+                EXISTS was asked for below 23ai, or OWNED BY was requested --
+                which Oracle has no form of.
+        """
+        from rhosocial.activerecord.backend.expression.objects import Sequence
+
+        if not isinstance(expr.sequence, Sequence):
+            raise TypeError(
+                f"{type(expr).__name__}.sequence must be a Sequence, "
+                f"got {type(expr.sequence).__name__}"
+            )
+
         if self.version < (9, 0, 0):
             raise UnsupportedFeatureError(
                 self.name,
@@ -75,7 +94,7 @@ class OracleSequenceMixin:
                     ),
                 )
             parts.append("IF NOT EXISTS")
-        parts.append(self.format_identifier(expr.sequence_name))
+        parts.append(expr.sequence.to_sql()[0])
         if expr.start is not None:
             parts.append(f"START WITH {expr.start}")
         if expr.increment is not None:
@@ -104,6 +123,24 @@ class OracleSequenceMixin:
     def format_drop_sequence_statement(
         self, expr: "DropSequenceExpression"
     ) -> Tuple[str, tuple]:
+        """Format ``DROP SEQUENCE`` for Oracle.
+
+        Raises:
+            TypeError: ``expr.sequence`` is not a
+                :class:`~rhosocial.activerecord.backend.expression.objects.Sequence`.
+                A table would render its own name, so the statement would drop a
+                table and name a sequence.
+            UnsupportedFeatureError: The Oracle version is below 9i, or IF
+                EXISTS was asked for below 23ai.
+        """
+        from rhosocial.activerecord.backend.expression.objects import Sequence
+
+        if not isinstance(expr.sequence, Sequence):
+            raise TypeError(
+                f"{type(expr).__name__}.sequence must be a Sequence, "
+                f"got {type(expr.sequence).__name__}"
+            )
+
         if self.version < (9, 0, 0):
             raise UnsupportedFeatureError(
                 self.name,
@@ -125,5 +162,5 @@ class OracleSequenceMixin:
                     ),
                 )
             parts.append("IF EXISTS")
-        parts.append(self.format_identifier(expr.sequence_name))
+        parts.append(expr.sequence.to_sql()[0])
         return " ".join(parts), ()

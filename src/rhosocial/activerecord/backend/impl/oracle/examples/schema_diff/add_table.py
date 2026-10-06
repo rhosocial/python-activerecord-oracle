@@ -31,10 +31,11 @@ backend.introspect_and_adapt()
 dialect = backend.dialect
 
 # Clean up any leftover tables
+from rhosocial.activerecord.backend.expression.objects import Table  # noqa: E402
 from rhosocial.activerecord.backend.expression import (  # noqa: E402
     DropTableExpression,
 )
-expr = DropTableExpression(dialect, "USERS", if_exists=True)
+expr = DropTableExpression(dialect, Table(dialect, "USERS"), if_exists=True)
 sql, params = expr.to_sql()
 backend.execute(sql, params)
 
@@ -47,6 +48,7 @@ from rhosocial.activerecord.backend.schema import (  # noqa: E402
 from rhosocial.activerecord.backend.impl.oracle.schema.differ import (  # noqa: E402
     OracleSchemaDiffer,
 )
+from rhosocial.activerecord.backend.expression.objects import Table  # noqa: E402
 from rhosocial.activerecord.backend.expression import (  # noqa: E402
     CreateTableExpression, ColumnDefinition,
     ColumnConstraint, ColumnConstraintType,
@@ -61,7 +63,7 @@ snapshot_before = builder.build()
 # Create a new table. Oracle 12c+ supports GENERATED AS IDENTITY for the
 # primary key column.
 expr = CreateTableExpression(
-    dialect=dialect, table="USERS", columns=[
+    dialect=dialect, table=Table(dialect, "USERS"), columns=[
         ColumnDefinition(dialect, "ID", IntegerType(dialect),
             constraints=[
                 ColumnConstraint(dialect, constraint_type=ColumnConstraintType.PRIMARY_KEY, is_auto_increment=True),
@@ -88,7 +90,7 @@ print(f"Diff is empty:   {diff.is_empty}")
 # ============================================================
 # SECTION: Teardown (necessary for execution, reference only)
 # ============================================================
-expr = DropTableExpression(dialect, "USERS", if_exists=True)
+expr = DropTableExpression(dialect, Table(dialect, "USERS"), if_exists=True)
 sql, params = expr.to_sql()
 backend.execute(sql, params)
 backend.disconnect()

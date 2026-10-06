@@ -3,7 +3,8 @@
 
 Covers ``CREATE [PUBLIC] SYNONYM`` / ``DROP [PUBLIC] SYNONYM``,
 ``CREATE [SHARED] [PUBLIC] DATABASE LINK`` / ``DROP DATABASE LINK``, the
-``@dblink`` table-reference suffix, and the ``(9, 0, 0)`` version boundary.
+``@dblink`` name suffix carried on an ``OracleTable``, and the ``(9, 0, 0)``
+version boundary.
 
 Pure-construction tests: no database connection is required.
 """
@@ -11,13 +12,15 @@ Pure-construction tests: no database connection is required.
 import pytest
 
 from rhosocial.activerecord.backend.dialect import UnsupportedFeatureError
-from rhosocial.activerecord.backend.expression.core import TableExpression
+from rhosocial.activerecord.backend.expression.objects import Synonym, Table
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.expression import (
     OracleCreateDatabaseLinkExpression,
     OracleCreateSynonymExpression,
     OracleDropDatabaseLinkExpression,
     OracleDropSynonymExpression,
+    OracleNamedRelationRef,
+    OracleTable,
 )
 
 
@@ -38,22 +41,41 @@ class TestOracleSynonymCapabilities:
 
 class TestOracleCreateSynonymExpression:
     def test_private_synonym(self, dialect):
-        expr = OracleCreateSynonymExpression(dialect, synonym_name="s", table_name="t")
+        expr = OracleCreateSynonymExpression(
+            dialect, synonym=Synonym(dialect, "s"), table=Table(dialect, "t")
+        )
         sql, params = expr.to_sql()
         assert sql == 'CREATE SYNONYM "S" FOR "T"'
         assert params == ()
 
     def test_schema_qualified_target(self, dialect):
+        """The owner rides on the target table; the synonym keeps its own."""
         expr = OracleCreateSynonymExpression(
-            dialect, synonym_name="s", table_name="t", schema_name="scott"
+            dialect,
+            synonym=Synonym(dialect, "s"),
+            table=Table(dialect, "t", schema_name="scott"),
         )
         sql, params = expr.to_sql()
         assert sql == 'CREATE SYNONYM "S" FOR "SCOTT"."T"'
         assert params == ()
 
+    def test_the_two_owners_are_independent(self, dialect):
+        """A synonym and its target may live in different owners.
+
+        One ``schema_name`` beside both names could not say so: it had to be the
+        same string for the two halves of one statement.
+        """
+        expr = OracleCreateSynonymExpression(
+            dialect,
+            synonym=Synonym(dialect, "s", schema_name="app"),
+            table=Table(dialect, "t", schema_name="hr"),
+        )
+        assert expr.to_sql()[0] == 'CREATE SYNONYM "APP"."S" FOR "HR"."T"'
+
     def test_public_synonym(self, dialect):
         expr = OracleCreateSynonymExpression(
-            dialect, synonym_name="s", table_name="t", public=True
+            dialect, synonym=Synonym(dialect, "s"), table=Table(dialect, "t"),
+            public=True,
         )
         sql, params = expr.to_sql()
         assert sql == 'CREATE PUBLIC SYNONYM "S" FOR "T"'
@@ -61,49 +83,66 @@ class TestOracleCreateSynonymExpression:
 
     def test_public_synonym_with_schema(self, dialect):
         expr = OracleCreateSynonymExpression(
-            dialect, synonym_name="s", table_name="emp", schema_name="hr", public=True
+            dialect,
+            synonym=Synonym(dialect, "s"),
+            table=Table(dialect, "emp", schema_name="hr"),
+            public=True,
         )
         sql, params = expr.to_sql()
         assert sql == 'CREATE PUBLIC SYNONYM "S" FOR "HR"."EMP"'
         assert params == ()
 
     def test_identifier_upper_cased(self, dialect):
-        expr = OracleCreateSynonymExpression(dialect, synonym_name="My_Syn", table_name="t")
+        expr = OracleCreateSynonymExpression(
+            dialect, synonym=Synonym(dialect, "My_Syn"), table=Table(dialect, "t")
+        )
         sql, params = expr.to_sql()
         assert sql == 'CREATE SYNONYM "MY_SYN" FOR "T"'
         assert params == ()
 
     def test_empty_synonym_name_rejected(self, dialect):
-        with pytest.raises(ValueError, match="synonym_name must be a non-empty string"):
-            OracleCreateSynonymExpression(dialect, synonym_name="  ", table_name="t")
+        """The name is rejected by the object itself, which owns the slot."""
+        with pytest.raises(ValueError, match="name must be a non-empty string"):
+            OracleCreateSynonymExpression(
+                dialect, synonym=Synonym(dialect, "  "), table=Table(dialect, "t")
+            )
 
-    def test_empty_table_name_rejected(self, dialect):
-        with pytest.raises(ValueError, match="table_name must be a non-empty string"):
-            OracleCreateSynonymExpression(dialect, synonym_name="s", table_name="")
+    def test_synonym_object_required(self, dialect):
+        with pytest.raises(TypeError, match="synonym must be a Synonym"):
+            OracleCreateSynonymExpression(
+                dialect, synonym="s", table=Table(dialect, "t")
+            )
+
+    def test_table_object_required(self, dialect):
+        with pytest.raises(TypeError, match="table must be a Table"):
+            OracleCreateSynonymExpression(
+                dialect, synonym=Synonym(dialect, "s"), table="t"
+            )
 
 
 class TestOracleDropSynonymExpression:
     def test_private_drop(self, dialect):
-        expr = OracleDropSynonymExpression(dialect, synonym_name="s")
+        expr = OracleDropSynonymExpression(dialect, synonym=Synonym(dialect, "s"))
         sql, params = expr.to_sql()
         assert sql == 'DROP SYNONYM "S"'
         assert params == ()
 
     def test_public_drop(self, dialect):
-        expr = OracleDropSynonymExpression(dialect, synonym_name="s", public=True)
+        expr = OracleDropSynonymExpression(dialect, synonym=Synonym(dialect, "s"), public=True)
         sql, params = expr.to_sql()
         assert sql == 'DROP PUBLIC SYNONYM "S"'
         assert params == ()
 
     def test_drop_force(self, dialect):
-        expr = OracleDropSynonymExpression(dialect, synonym_name="s", force=True)
+        expr = OracleDropSynonymExpression(dialect, synonym=Synonym(dialect, "s"), force=True)
         sql, params = expr.to_sql()
         assert sql == 'DROP SYNONYM "S" FORCE'
         assert params == ()
 
     def test_empty_synonym_name_rejected(self, dialect):
-        with pytest.raises(ValueError, match="synonym_name must be a non-empty string"):
-            OracleDropSynonymExpression(dialect, synonym_name="  ")
+        """The name is rejected by the object itself, which owns the slot."""
+        with pytest.raises(ValueError, match="name must be a non-empty string"):
+            OracleDropSynonymExpression(dialect, synonym=Synonym(dialect, "  "))
 
 
 class TestOracleCreateDatabaseLinkExpression:
@@ -181,43 +220,77 @@ class TestOracleDropDatabaseLinkExpression:
 
 
 class TestOracleDblinkTableReference:
+    """The ``@"DBLINK"`` suffix is part of the name, so it lives on the object.
+
+    A remote reference is an :class:`OracleTable` carrying ``dblink`, read
+    through an :class:`OracleNamedRelationRef`. The suffix is rendered by the
+    table's own formatter, which is why every case below goes through an object
+    rather than a bare identifier.
+    """
+
     def test_dblink_suffix(self, dialect):
-        table = TableExpression(dialect, "remote_table")
-        table.dblink = "dl"
-        sql, params = table.to_sql()
+        ref = OracleNamedRelationRef(
+            dialect, OracleTable(dialect, "remote_table", dblink="dl")
+        )
+        sql, params = ref.to_sql()
         assert sql == '"REMOTE_TABLE"@"DL"'
         assert params == ()
 
     def test_dblink_uppercased(self, dialect):
-        table = TableExpression(dialect, "remote_table")
-        table.dblink = "my_dl"
-        sql, params = table.to_sql()
+        ref = OracleNamedRelationRef(
+            dialect, OracleTable(dialect, "remote_table", dblink="my_dl")
+        )
+        sql, params = ref.to_sql()
         assert sql == '"REMOTE_TABLE"@"MY_DL"'
         assert params == ()
 
     def test_dblink_with_schema(self, dialect):
-        table = TableExpression(dialect, "remote_table", schema_name="scott")
-        table.dblink = "dl"
-        sql, params = table.to_sql()
+        ref = OracleNamedRelationRef(
+            dialect,
+            OracleTable(dialect, "remote_table", schema_name="scott", dblink="dl"),
+        )
+        sql, params = ref.to_sql()
         assert sql == '"SCOTT"."REMOTE_TABLE"@"DL"'
         assert params == ()
 
     def test_dblink_with_alias(self, dialect):
-        table = TableExpression(dialect, "remote_table", alias="r")
-        table.dblink = "dl"
-        sql, params = table.to_sql()
-        assert sql == '"REMOTE_TABLE"@"DL" "R"'
+        ref = OracleNamedRelationRef(
+            dialect, OracleTable(dialect, "remote_table", dblink="dl"), alias="r"
+        )
+        sql, params = ref.to_sql()
+        # The alias keeps the core's ``AS`` separator, as it does for every
+        # other backend: Oracle accepts ``FROM t AS r``.
+        assert sql == '"REMOTE_TABLE"@"DL" AS "R"'
         assert params == ()
 
-    def test_dblink_through_table_expression_to_sql(self, dialect):
-        table = TableExpression(dialect, "remote_table")
-        table.dblink = "dl"
-        sql, params = table.to_sql()
-        assert sql == '"REMOTE_TABLE"@"DL"'
-        assert params == ()
+    def test_dblink_rendered_by_the_table_object(self, dialect):
+        """The suffix belongs to the name, not to the reference.
 
-    def test_table_expression_without_dblink_unchanged(self, dialect):
-        sql, params = TableExpression(dialect, "t").to_sql()
+        Rendering the table on its own produces the same text, which is the point:
+        any statement that names a remote table picks the suffix up without
+        knowing anything about database links.
+        """
+        assert OracleTable(dialect, "remote_table", dblink="dl").to_sql() == (
+            '"REMOTE_TABLE"@"DL"', (),
+        )
+
+    def test_dblink_part_of_identity(self, dialect):
+        """Two references differing only by link must not compare equal."""
+        a = OracleTable(dialect, "t", dblink="dl")
+        b = OracleTable(dialect, "t", dblink="dl2")
+        c = OracleTable(dialect, "t", dblink="dl")
+        assert a != b
+        assert a == c
+        assert hash(a) != hash(b)
+
+    def test_empty_dblink_rejected(self, dialect):
+        with pytest.raises(ValueError, match="dblink must be a non-empty string"):
+            OracleTable(dialect, "t", dblink="  ")
+
+    def test_table_without_dblink_unchanged(self, dialect):
+        sql, params = OracleNamedRelationRef(
+            dialect, OracleTable(dialect, "t")
+        ).to_sql()
         assert sql == '"T"'
         assert params == ()
 
@@ -225,13 +298,13 @@ class TestOracleDblinkTableReference:
 class TestOracleSynonymDatabaseLinkVersionBoundary:
     def test_create_synonym_below_9i_raises(self):
         d8 = OracleDialect(version=(8, 1, 0))
-        expr = OracleCreateSynonymExpression(d8, synonym_name="s", table_name="t")
+        expr = OracleCreateSynonymExpression(d8, synonym=Synonym(d8, "s"), table=Table(d8, "t"))
         with pytest.raises(UnsupportedFeatureError, match="CREATE SYNONYM"):
             expr.to_sql()
 
     def test_drop_synonym_below_9i_raises(self):
         d8 = OracleDialect(version=(8, 1, 0))
-        expr = OracleDropSynonymExpression(d8, synonym_name="s")
+        expr = OracleDropSynonymExpression(d8, synonym=Synonym(d8, "s"))
         with pytest.raises(UnsupportedFeatureError, match="DROP SYNONYM"):
             expr.to_sql()
 
@@ -250,7 +323,7 @@ class TestOracleSynonymDatabaseLinkVersionBoundary:
     def test_at_9i_works(self):
         d9 = OracleDialect(version=(9, 0, 0))
         assert OracleCreateSynonymExpression(
-            d9, synonym_name="s", table_name="t"
+            d9, synonym=Synonym(d9, "s"), table=Table(d9, "t")
         ).to_sql()[0] == 'CREATE SYNONYM "S" FOR "T"'
         assert OracleCreateDatabaseLinkExpression(
             d9, link_name="dl"

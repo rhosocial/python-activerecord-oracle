@@ -9,6 +9,7 @@ from typing import Any, Iterable, List, Optional, Tuple, Type, cast
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 from rhosocial.activerecord.backend.dialect.mixins.user_defined_type import UserDefinedTypeMixin
 from rhosocial.activerecord.backend.expression.bases import BaseExpression
+from rhosocial.activerecord.backend.expression.objects import Type
 from rhosocial.activerecord.backend.expression.statements.ddl_type import (
     AlterTypeExpression,
     CreateTypeExpression,
@@ -190,11 +191,16 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
     def supports_sqlj_type(self) -> bool:
         return self._has_type_support()
 
-    def _format_type_name(self, type_name: str, schema_name: Optional[str]) -> str:
-        name_sql = cast(str, self.format_identifier(type_name))
-        if schema_name is not None:
-            name_sql = f"{cast(str, self.format_identifier(schema_name))}.{name_sql}"
-        return name_sql
+    def _format_type_name(self, type: Type) -> str:
+        """Render a user-defined type name through its own object protocol.
+
+        A ``CREATE``/``ALTER``/``DROP TYPE`` statement names the same object
+        every time, so the expression holds a
+        :class:`~rhosocial.activerecord.backend.expression.objects.Type` and
+        the dialect renders it rather than this formatter concatenating a name
+        and an owner.
+        """
+        return type.to_sql()[0]
 
     def _format_type_value(self, value: Any) -> str:
         if isinstance(value, BaseExpression):
@@ -481,7 +487,7 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
         parts.append("TYPE")
         if expr.if_not_exists:
             parts.append("IF NOT EXISTS")
-        parts.append(self._format_type_name(expr.type_name, expr.schema_name))
+        parts.append(self._format_type_name(expr.type))
         if definition_sql:
             parts.append(definition_sql)
         return " ".join(parts), tuple(definition_params)
@@ -670,7 +676,7 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
         parts = ["ALTER TYPE"]
         if expr.if_exists:
             parts.append("IF EXISTS")
-        parts.append(self._format_type_name(expr.type_name, expr.schema_name))
+        parts.append(self._format_type_name(expr.type))
         parts.append(action_sql)
         return " ".join(parts), tuple(action_params)
 
@@ -690,7 +696,7 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
         parts = ["DROP TYPE"]
         if expr.if_exists:
             parts.append("IF EXISTS")
-        parts.append(self._format_type_name(expr.type_name, expr.schema_name))
+        parts.append(self._format_type_name(expr.type))
         if force:
             parts.append("FORCE")
         elif validate:
@@ -717,7 +723,7 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
         parts.append("TYPE BODY")
         if expr.if_not_exists:
             parts.append("IF NOT EXISTS")
-        parts.append(self._format_type_name(expr.type_name, expr.schema_name))
+        parts.append(self._format_type_name(expr.type))
         parts.append(f"{expr.keyword} {expr.body}")
         return " ".join(parts), ()
 
@@ -732,7 +738,7 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
         parts = ["DROP TYPE BODY"]
         if expr.if_exists:
             parts.append("IF EXISTS")
-        parts.append(self._format_type_name(expr.type_name, expr.schema_name))
+        parts.append(self._format_type_name(expr.type))
         return " ".join(parts), ()
 
     def _format_attribute_names(self, attributes: Iterable[OracleTypeAttribute]) -> str:

@@ -20,6 +20,7 @@ from enum import Enum
 from typing import Optional, TYPE_CHECKING
 
 from rhosocial.activerecord.backend.expression.bases import BaseExpression
+from rhosocial.activerecord.backend.expression.objects import Table
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
@@ -40,7 +41,9 @@ class OracleAnalyzeExpression(BaseExpression):
 
     Args:
         dialect: the Oracle dialect instance.
-        table: name of the table (or table-partition) to analyze.
+        table: the table (or table-partition) to analyze. The object carries
+            its owner, so the name is rendered by the dialect rather than
+            concatenated here.
         mode: the operation mode; one of the :class:`OracleAnalyzeMode`
             values.
         sample_percent: with ``ESTIMATE STATISTICS``, the sampling ratio
@@ -51,26 +54,28 @@ class OracleAnalyzeExpression(BaseExpression):
             row list (``INTO ...``).
 
     Raises:
-        ValueError: if ``table`` is empty, ``sample_percent`` is used
+        ValueError: if ``sample_percent`` is used
             outside ``ESTIMATE STATISTICS``, ``cascade`` is used outside
             ``VALIDATE STRUCTURE``, or ``into`` is used outside
             ``LIST CHAINED ROWS``.
-        TypeError: if ``mode`` is not an :class:`OracleAnalyzeMode`, or
-            ``sample_percent`` is not an int.
+        TypeError: if ``table`` is not a :class:`Table`, ``mode`` is not an
+            :class:`OracleAnalyzeMode`, or ``sample_percent`` is not an int.
     """
 
     def __init__(
         self,
         dialect: "OracleDialect",
-        table: str,
+        table: Table,
         mode: OracleAnalyzeMode,
         sample_percent: Optional[int] = None,
         cascade: bool = False,
         into: Optional[str] = None,
     ):
         super().__init__(dialect)
-        if not isinstance(table, str) or not table.strip():
-            raise ValueError("table must be a non-empty string")
+        if not isinstance(table, Table):
+            raise TypeError(
+                f"table must be a Table, got {type(table).__name__}"
+            )
         if not isinstance(mode, OracleAnalyzeMode):
             raise TypeError(
                 "mode must be an OracleAnalyzeMode value, "
