@@ -40,6 +40,47 @@ class TestOracleSequenceCapabilities:
         assert dialect.supports_create_sequence() is True
         assert dialect.supports_drop_sequence() is True
 
+    def test_master_switch_is_version_gated(self):
+        """8i has no sequence object; 9i is where sequences begin."""
+        assert OracleDialect(version=(8, 1, 0)).supports_sequence() is False
+        assert OracleDialect(version=(9, 0, 0)).supports_sequence() is True
+
+    def test_statement_probes_follow_the_master_switch(self):
+        """CREATE / DROP / ALTER inherit the master answer, not a flat True."""
+        old = OracleDialect(version=(8, 1, 0))
+        new = OracleDialect(version=(9, 0, 0))
+        for probe in (
+            "supports_create_sequence",
+            "supports_drop_sequence",
+            "supports_alter_sequence",
+        ):
+            assert getattr(old, probe)() is False
+            assert getattr(new, probe)() is True
+
+    def test_option_probes(self):
+        """Every option Oracle accepts since 9i answers True; OWNED BY does not."""
+        d = OracleDialect(version=(19, 0, 0))
+        for probe in (
+            "supports_sequence_start",
+            "supports_sequence_increment",
+            "supports_sequence_minvalue",
+            "supports_sequence_maxvalue",
+            "supports_sequence_cycle",
+            "supports_sequence_cache",
+            "supports_sequence_order",
+        ):
+            assert getattr(d, probe)() is True
+        assert d.supports_sequence_owned_by() is False
+
+    def test_graceful_ddl_is_23ai_gated(self):
+        """IF [NOT] EXISTS is 23ai; 18c/21c answer False."""
+        old = OracleDialect(version=(21, 0, 0))
+        new = OracleDialect(version=(23, 0, 0))
+        assert old.supports_sequence_if_not_exists() is False
+        assert new.supports_sequence_if_not_exists() is True
+        assert old.supports_sequence_if_exists() is False
+        assert new.supports_sequence_if_exists() is True
+
 
 class TestOracleSequenceValueExpression:
     def test_nextval(self, dialect):
@@ -144,7 +185,12 @@ class TestOracleCreateSequenceExpression:
 
     def test_if_not_exists_pre_23ai_raises(self, dialect):
         expr = OracleCreateSequenceExpression(dialect, sequence=Sequence(dialect, "seq"), if_not_exists=True)
-        with pytest.raises(UnsupportedFeatureError, match="IF NOT EXISTS"):
+        # The refusal is now the capability gate's, not the formatter's own
+        # version-interpolated one, so the pin names the gate's feature.
+        with pytest.raises(
+            UnsupportedFeatureError,
+            match="does not support CREATE SEQUENCE IF NOT EXISTS",
+        ):
             expr.to_sql()
 
     def test_if_not_exists_23ai(self):
@@ -174,7 +220,11 @@ class TestOracleDropSequenceExpression:
 
     def test_if_exists_pre_23ai_raises(self, dialect):
         expr = OracleDropSequenceExpression(dialect, sequence=Sequence(dialect, "seq"), if_exists=True)
-        with pytest.raises(UnsupportedFeatureError, match="IF EXISTS"):
+        # As with IF NOT EXISTS above: the gate's message, not the formatter's.
+        with pytest.raises(
+            UnsupportedFeatureError,
+            match="does not support DROP SEQUENCE IF EXISTS",
+        ):
             expr.to_sql()
 
     def test_if_exists_23ai(self):
