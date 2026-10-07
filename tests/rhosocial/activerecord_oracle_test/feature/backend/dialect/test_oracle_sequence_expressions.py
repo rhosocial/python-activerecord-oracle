@@ -210,62 +210,113 @@ class TestOracleSequenceOptionProbesAreLoadBearing:
 
     A probe the formatter never consults is decorative: flipping its answer
     leaves the rendered SQL untouched, so a wrong declaration is invisible.
-    Each case below renders an option with the probe's declared answer
-    (``True``), then flips that one probe in a subclass and re-renders. A
-    load-bearing probe makes the second render refuse; a decorative probe
-    renders both times and is reported by name.
+    Each case below renders an option with the probe's declared answer, then
+    flips that one probe in a subclass and re-renders. A load-bearing probe
+    changes the outcome -- a render becomes a refusal or vice versa; a
+    decorative probe behaves identically both times and is reported by name.
+    Seven probes answer ``True`` on Oracle, so their flip must refuse the
+    option; ``supports_sequence_owned_by`` answers ``False``, so its flip must
+    turn the refusal into a render.
     """
 
     def test_every_sequence_option_probe_is_load_bearing(self):
         cases = [
             (
+                "supports_sequence_start",
+                OracleCreateSequenceExpression,
+                {"start": 1},
+                True,
+                'CREATE SEQUENCE "SEQ" START WITH 1',
+            ),
+            (
+                "supports_sequence_increment",
+                OracleCreateSequenceExpression,
+                {"increment": 10},
+                True,
+                'CREATE SEQUENCE "SEQ" INCREMENT BY 10',
+            ),
+            (
                 "supports_sequence_minvalue",
+                OracleCreateSequenceExpression,
                 {"minvalue": 1},
+                True,
                 'CREATE SEQUENCE "SEQ" MINVALUE 1',
             ),
             (
                 "supports_sequence_maxvalue",
+                OracleCreateSequenceExpression,
                 {"maxvalue": 999999},
+                True,
                 'CREATE SEQUENCE "SEQ" MAXVALUE 999999',
             ),
             (
                 "supports_sequence_cycle",
+                OracleCreateSequenceExpression,
                 {"cycle": True},
+                True,
                 'CREATE SEQUENCE "SEQ" CYCLE',
             ),
             (
                 "supports_sequence_cache",
+                OracleCreateSequenceExpression,
                 {"cache": 20},
+                True,
                 'CREATE SEQUENCE "SEQ" CACHE 20',
             ),
             (
                 "supports_sequence_order",
+                OracleCreateSequenceExpression,
                 {"order": True},
+                True,
                 'CREATE SEQUENCE "SEQ" ORDER',
             ),
+            (
+                "supports_sequence_owned_by",
+                # OracleCreateSequenceExpression has no owned_by field; the
+                # core expression is what the formatter's getattr path serves.
+                CreateSequenceExpression,
+                {"owned_by": "t.id"},
+                False,
+                None,  # the declared answer refuses; flipping it must render
+            ),
         ]
-        decorative = []
-        for probe, options, expected in cases:
-            declared = OracleDialect(version=(19, 0, 0))
-            expr = OracleCreateSequenceExpression(
-                declared, sequence=Sequence(declared, "seq"), **options
-            )
-            assert expr.to_sql()[0] == expected
 
-            flipped_cls = type(
-                f"OracleDialectWithout{probe}",
-                (OracleDialect,),
-                {probe: lambda self: False},
-            )
-            flipped = flipped_cls(version=(19, 0, 0))
-            expr = OracleCreateSequenceExpression(
-                flipped, sequence=Sequence(flipped, "seq"), **options
+        def render_outcome(expression_cls, dialect, options):
+            expr = expression_cls(
+                dialect, sequence=Sequence(dialect, "seq"), **options
             )
             try:
-                expr.to_sql()
+                return "rendered", expr.to_sql()[0]
             except UnsupportedFeatureError:
-                continue
-            decorative.append(probe)
+                return "refused", None
+
+        decorative = []
+        for probe, expression_cls, options, declared_answer, expected in cases:
+            declared = OracleDialect(version=(19, 0, 0))
+            assert getattr(declared, probe)() is declared_answer, (
+                f"{probe} is declared {declared_answer} on Oracle"
+            )
+            declared_outcome = render_outcome(expression_cls, declared, options)
+            if expected is None:
+                assert declared_outcome == ("refused", None), (
+                    f"{probe}: declared answer {declared_answer} rendered "
+                    f"{declared_outcome}"
+                )
+            else:
+                assert declared_outcome == ("rendered", expected), (
+                    f"{probe}: declared answer {declared_answer} rendered "
+                    f"{declared_outcome}"
+                )
+
+            flipped_answer = not declared_answer
+            flipped_cls = type(
+                f"OracleDialectWith{probe}",
+                (OracleDialect,),
+                {probe: lambda self, _answer=flipped_answer: _answer},
+            )
+            flipped = flipped_cls(version=(19, 0, 0))
+            if render_outcome(expression_cls, flipped, options) == declared_outcome:
+                decorative.append(probe)
 
         assert not decorative, (
             "decorative sequence option probes: flipping these changes nothing, "

@@ -143,12 +143,15 @@ class OracleSequenceMixin:
     ) -> Tuple[str, tuple]:
         """Format ``CREATE SEQUENCE`` for Oracle.
 
-        The option clauses -- ``MINVALUE``, ``MAXVALUE``, ``CYCLE`` /
-        ``NOCYCLE``, ``CACHE`` / ``NOCACHE``, ``ORDER`` / ``NOORDER`` -- are
-        each gated on the probe for that option before the clause is emitted,
-        exactly as :meth:`format_alter_sequence_statement` gates them. A probe
-        answering ``False`` refuses the option rather than dropping it, so the
-        declaration governs the rendering instead of decorating it.
+        The option clauses -- ``START WITH``, ``INCREMENT BY``, ``MINVALUE``,
+        ``MAXVALUE``, ``CYCLE`` / ``NOCYCLE``, ``CACHE`` / ``NOCACHE``,
+        ``ORDER`` / ``NOORDER`` -- are each gated on the probe for that option
+        before the clause is emitted, exactly as
+        :meth:`format_alter_sequence_statement` gates them. A probe answering
+        ``False`` refuses the option rather than dropping it, so the
+        declaration governs the rendering instead of decorating it. ``START
+        WITH`` is gated on :meth:`supports_sequence_start`, the CREATE-side
+        probe, not the ALTER-side :meth:`supports_alter_sequence_start`.
 
         Raises:
             TypeError: ``expr.sequence`` is not a
@@ -191,8 +194,26 @@ class OracleSequenceMixin:
             parts.append("IF NOT EXISTS")
         parts.append(expr.sequence.to_sql()[0])
         if expr.start is not None:
+            if not self.supports_sequence_start():
+                raise UnsupportedFeatureError(
+                    self.name,
+                    "CREATE SEQUENCE START",
+                    suggestion=(
+                        f"{self.name} does not support the START WITH "
+                        "sequence option."
+                    ),
+                )
             parts.append(f"START WITH {expr.start}")
         if expr.increment is not None:
+            if not self.supports_sequence_increment():
+                raise UnsupportedFeatureError(
+                    self.name,
+                    "CREATE SEQUENCE INCREMENT",
+                    suggestion=(
+                        f"{self.name} does not support the INCREMENT BY "
+                        "sequence option."
+                    ),
+                )
             parts.append(f"INCREMENT BY {expr.increment}")
         if expr.minvalue is not None:
             if not self.supports_sequence_minvalue():
