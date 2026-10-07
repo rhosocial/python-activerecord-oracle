@@ -237,21 +237,17 @@ class OracleSequenceMixin:
                     ),
                 )
             parts.append(f"MAXVALUE {expr.maxvalue}")
-        if expr.cycle is not None:
-            if expr.cycle:
-                if not self.supports_sequence_cycle():
-                    raise UnsupportedFeatureError(
-                        self.name,
-                        "CREATE SEQUENCE CYCLE",
-                        suggestion=(
-                            f"{self.name} does not support the CYCLE sequence "
-                            "option."
-                        ),
-                    )
-                parts.append("CYCLE")
-            elif self.supports_sequence_cycle():
-                # NOCYCLE is Oracle's spelling of the default.
-                parts.append("NOCYCLE")
+        if expr.cycle or expr.no_cycle:
+            if not self.supports_sequence_cycle():
+                raise UnsupportedFeatureError(
+                    self.name,
+                    "CREATE SEQUENCE CYCLE",
+                    suggestion=(
+                        f"{self.name} does not support the CYCLE sequence "
+                        "option."
+                    ),
+                )
+            parts.append("CYCLE" if expr.cycle else "NOCYCLE")
         if expr.cache is not None:
             if not self.supports_sequence_cache():
                 raise UnsupportedFeatureError(
@@ -262,8 +258,19 @@ class OracleSequenceMixin:
                         "option."
                     ),
                 )
-            parts.append(f"CACHE {expr.cache}" if expr.cache else "NOCACHE")
-        if expr.order is not None:
+            parts.append(f"CACHE {expr.cache}")
+        if expr.no_cache:
+            if not self.supports_sequence_cache():
+                raise UnsupportedFeatureError(
+                    self.name,
+                    "CREATE SEQUENCE CACHE",
+                    suggestion=(
+                        f"{self.name} does not support the CACHE sequence "
+                        "option."
+                    ),
+                )
+            parts.append("NOCACHE")
+        if expr.order or expr.no_order:
             if not self.supports_sequence_order():
                 raise UnsupportedFeatureError(
                     self.name,
@@ -433,21 +440,17 @@ class OracleSequenceMixin:
                     ),
                 )
             parts.append(f"MAXVALUE {expr.maxvalue}")
-        if expr.cycle is not None:
-            if expr.cycle:
-                if not self.supports_sequence_cycle():
-                    raise UnsupportedFeatureError(
-                        self.name,
-                        "ALTER SEQUENCE CYCLE",
-                        suggestion=(
-                            f"{self.name} does not support the CYCLE sequence "
-                            "option."
-                        ),
-                    )
-                parts.append("CYCLE")
-            elif self.supports_sequence_cycle():
-                # NOCYCLE is Oracle's spelling of the default.
-                parts.append("NOCYCLE")
+        if expr.cycle or expr.no_cycle:
+            if not self.supports_sequence_cycle():
+                raise UnsupportedFeatureError(
+                    self.name,
+                    "ALTER SEQUENCE CYCLE",
+                    suggestion=(
+                        f"{self.name} does not support the CYCLE sequence "
+                        "option."
+                    ),
+                )
+            parts.append("CYCLE" if expr.cycle else "NOCYCLE")
         if expr.cache is not None:
             if not self.supports_sequence_cache():
                 raise UnsupportedFeatureError(
@@ -458,8 +461,19 @@ class OracleSequenceMixin:
                         "option."
                     ),
                 )
-            parts.append(f"CACHE {expr.cache}" if expr.cache else "NOCACHE")
-        if expr.order is not None:
+            parts.append(f"CACHE {expr.cache}")
+        if expr.no_cache:
+            if not self.supports_sequence_cache():
+                raise UnsupportedFeatureError(
+                    self.name,
+                    "ALTER SEQUENCE CACHE",
+                    suggestion=(
+                        f"{self.name} does not support the CACHE sequence "
+                        "option."
+                    ),
+                )
+            parts.append("NOCACHE")
+        if expr.order or expr.no_order:
             if not self.supports_sequence_order():
                 raise UnsupportedFeatureError(
                     self.name,

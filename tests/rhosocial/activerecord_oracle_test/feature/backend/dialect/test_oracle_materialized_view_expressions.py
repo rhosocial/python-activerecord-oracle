@@ -76,7 +76,7 @@ class TestOracleCreateMaterializedViewExpression:
             build_mode=MaterializedViewBuildMode.IMMEDIATE,
             refresh_method=MaterializedViewRefreshMethod.FAST,
             refresh_trigger=MaterializedViewRefreshTrigger.ON_COMMIT,
-            query_rewrite=True,
+            enable_query_rewrite=True,
         )
         sql, params = expr.to_sql()
         assert sql == (
@@ -93,7 +93,7 @@ class TestOracleCreateMaterializedViewExpression:
             query=build_query(dialect),
             refresh_method=MaterializedViewRefreshMethod.COMPLETE,
             refresh_trigger=MaterializedViewRefreshTrigger.ON_DEMAND,
-            query_rewrite=False,
+            disable_query_rewrite=True,
         )
         sql, params = expr.to_sql()
         assert sql == (
@@ -119,7 +119,7 @@ class TestOracleCreateMaterializedViewExpression:
 
     def test_core_create_materialized_view_expression(self, dialect):
         expr = CreateMaterializedViewExpression(
-            dialect, view=MaterializedView(dialect, "mv"), query=build_query(dialect), with_data=False
+            dialect, view=MaterializedView(dialect, "mv"), query=build_query(dialect), no_data=True
         )
         sql, params = expr.to_sql()
         assert sql.startswith('CREATE MATERIALIZED VIEW "MV"')
@@ -378,10 +378,17 @@ class TestOracleRefreshMaterializedViewExpression:
         assert sql == "BEGIN DBMS_MVIEW.REFRESH('MV'); END;"
         assert params == ()
 
-    def test_generic_with_data_is_ignored(self, dialect):
-        """A refresh always repopulates; WITH [NO] DATA has no counterpart."""
+    def test_generic_with_data_options_are_refused(self, dialect):
+        """Oracle's DBMS_MVIEW.REFRESH always repopulates; neither spelling exists."""
+        for kwargs in ({"with_data": True}, {"no_data": True}):
+            expr = RefreshMaterializedViewExpression(
+                dialect=dialect, view=MaterializedView(dialect, "mv"), **kwargs
+            )
+            with pytest.raises(UnsupportedFeatureError):
+                expr.to_sql()
+        # Neither parameter set is the only state that renders.
         expr = RefreshMaterializedViewExpression(
-            dialect=dialect, view=MaterializedView(dialect, "mv"), with_data=False
+            dialect=dialect, view=MaterializedView(dialect, "mv")
         )
         assert "WITH NO DATA" not in expr.to_sql()[0]
 

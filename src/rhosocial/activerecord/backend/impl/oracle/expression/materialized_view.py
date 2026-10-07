@@ -77,12 +77,13 @@ class OracleCreateMaterializedViewExpression(BaseExpression):
         refresh_method: ``REFRESH FAST | COMPLETE | FORCE`` clause.
         refresh_trigger: ``ON COMMIT`` / ``ON DEMAND`` clause (requires the
             ``REFRESH`` clause).
-        query_rewrite: ``ENABLE QUERY REWRITE`` when True, ``DISABLE QUERY
-            REWRITE`` when False, omitted when None.
+        enable_query_rewrite: when True emit ``ENABLE QUERY REWRITE``.
+        disable_query_rewrite: when True emit ``DISABLE QUERY REWRITE``.
 
     Raises:
         TypeError: if ``view`` is not a ``MaterializedView``, or ``query`` is
             not a ``BaseExpression``.
+        ValueError: if both query-rewrite parameters are set.
     """
 
     def __init__(
@@ -96,7 +97,8 @@ class OracleCreateMaterializedViewExpression(BaseExpression):
         build_mode: Optional[MaterializedViewBuildMode] = None,
         refresh_method: Optional[MaterializedViewRefreshMethod] = None,
         refresh_trigger: Optional[MaterializedViewRefreshTrigger] = None,
-        query_rewrite: Optional[bool] = None,
+        enable_query_rewrite: bool = False,
+        disable_query_rewrite: bool = False,
     ):
         super().__init__(dialect)
         if not isinstance(view, MaterializedView):
@@ -109,6 +111,11 @@ class OracleCreateMaterializedViewExpression(BaseExpression):
                 "query must be a BaseExpression, "
                 f"got {type(query).__name__}"
             )
+        if enable_query_rewrite and disable_query_rewrite:
+            raise ValueError(
+                "enable_query_rewrite and disable_query_rewrite are mutually "
+                "exclusive options"
+            )
         self.view = view
         self.query = query
         self.if_not_exists = bool(if_not_exists)
@@ -117,7 +124,8 @@ class OracleCreateMaterializedViewExpression(BaseExpression):
         self.build_mode = build_mode
         self.refresh_method = refresh_method
         self.refresh_trigger = refresh_trigger
-        self.query_rewrite = query_rewrite
+        self.enable_query_rewrite = bool(enable_query_rewrite)
+        self.disable_query_rewrite = bool(disable_query_rewrite)
 
     @property
     def format_method(self) -> str:

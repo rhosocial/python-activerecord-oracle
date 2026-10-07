@@ -211,9 +211,9 @@ class OracleFeaturesMixin:
 
         Measured on 18c / 21c / 23c: ``CACHE 10`` and ``NOCACHE`` are both
         accepted inside an identity clause. ``CACHE 0`` is refused
-        (ORA-04010), which is why :meth:`identity_cache_keyword` spells a
-        falsy count as ``NOCACHE`` -- the count that cannot be expressed is
-        not the option that cannot be expressed.
+        (ORA-04010); core refuses a non-positive ``cache`` at construction
+        and spells NO CACHE through :meth:`identity_no_cache_keyword`, so a
+        count that cannot be expressed never reaches this hook.
         """
         return True
 
@@ -235,14 +235,22 @@ class OracleFeaturesMixin:
         return "ORDER" if order else "NOORDER"
 
     def identity_cache_keyword(self, cache: int) -> str:
+        """Oracle spells the positive cache form ``CACHE n``.
+
+        Called only for a positive count: core refuses ``cache=0`` at
+        construction and routes the explicit NO CACHE spelling through
+        :meth:`identity_no_cache_keyword`.
+        """
+        return f"CACHE {cache}"
+
+    def identity_no_cache_keyword(self) -> str:
         """Oracle spells the negative cache form ``NOCACHE``.
 
-        Core's SQL-standard ``NO CACHE`` is refused (ORA-02000);
-        ``NOCACHE`` is accepted. A falsy count means the negative form:
-        Oracle refuses ``CACHE 0`` (ORA-04010), so ``NOCACHE`` is the only
-        expressible spelling of "no cache".
+        Core's SQL-standard ``NO CACHE`` is refused (ORA-02000); ``NOCACHE``
+        is accepted on every measured server. This is the hook for the
+        negative spelling -- the positive count hook no longer carries it.
         """
-        return f"CACHE {cache}" if cache else "NOCACHE"
+        return "NOCACHE"
 
     def supports_auto_increment_column(self) -> bool:
         """Oracle has no ``AUTO_INCREMENT`` marker; identity is its mechanism.
@@ -340,7 +348,17 @@ class OracleFeaturesMixin:
         return False
 
     def supports_constraint_enforced(self) -> bool:
-        return self.version >= (12, 0, 0)
+        """Oracle has no ``ENFORCED`` / ``NOT ENFORCED`` constraint spelling.
+
+        Measured on 18c / 21c / 23c: ``CHECK (...) ENFORCED`` is refused
+        (18c/21c ORA-00907, 23c ORA-03076) and ``NOT ENFORCED`` is refused
+        (18c/21c ORA-00905, 23c ORA-02000); an out-of-line ``ENFORCED`` is
+        refused with ORA-03075. Oracle's constraint-state vocabulary is
+        ``ENABLE`` / ``DISABLE`` plus ``VALIDATE`` / ``NOVALIDATE``, which is a
+        different clause; the SQL:2016 spelling does not exist here, so a
+        request for it is refused by name rather than rendered.
+        """
+        return False
 
     def supports_deferrable_constraint(self) -> bool:
         return True

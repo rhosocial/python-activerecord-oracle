@@ -78,7 +78,11 @@ class OracleViewMixin:
                 :class:`~rhosocial.activerecord.backend.expression.objects.View`.
                 Another catalogue object would render its own name, so the
                 statement would drop something else and name a view.
+            UnsupportedFeatureError: CASCADE or RESTRICT was requested; Oracle
+                declares neither probe, so the modifier is refused by name
+                rather than dropped.
         """
+        from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
         from rhosocial.activerecord.backend.expression.objects import View
 
         if not isinstance(expr.view, View):
@@ -87,6 +91,23 @@ class OracleViewMixin:
                 f"got {type(expr.view).__name__}"
             )
 
+        if expr.cascade and not self.supports_cascade_view():
+            raise UnsupportedFeatureError(
+                self.name,
+                "DROP VIEW CASCADE",
+                f"{self.name} does not support DROP VIEW CASCADE.",
+            )
+        if expr.restrict and not self.supports_restrict_view():
+            raise UnsupportedFeatureError(
+                self.name,
+                "DROP VIEW RESTRICT",
+                f"{self.name} does not support DROP VIEW RESTRICT.",
+            )
+
         parts = ["DROP VIEW"]
         parts.append(expr.view.to_sql()[0])
+        if expr.cascade:
+            parts.append("CASCADE")
+        elif expr.restrict:
+            parts.append("RESTRICT")
         return " ".join(parts), ()

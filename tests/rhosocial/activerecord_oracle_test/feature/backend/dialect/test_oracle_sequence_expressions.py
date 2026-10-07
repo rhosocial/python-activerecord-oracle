@@ -156,9 +156,9 @@ class TestOracleCreateSequenceExpression:
         expr = OracleCreateSequenceExpression(
             dialect,
             sequence=Sequence(dialect, "seq"),
-            cycle=False,
-            cache=0,
-            order=False,
+            no_cycle=True,
+            no_cache=True,
+            no_order=True,
         )
         sql, params = expr.to_sql()
         assert sql == 'CREATE SEQUENCE "SEQ" NOCYCLE NOCACHE NOORDER'
@@ -175,7 +175,7 @@ class TestOracleCreateSequenceExpression:
     def test_core_create_sequence_expression(self, dialect):
         expr = CreateSequenceExpression(dialect, sequence=Sequence(dialect, "seq"))
         sql, params = expr.to_sql()
-        assert sql == 'CREATE SEQUENCE "SEQ" NOCYCLE NOORDER'
+        assert sql == 'CREATE SEQUENCE "SEQ"'
         assert params == ()
 
     def test_owned_by_unsupported(self, dialect):
@@ -201,8 +201,21 @@ class TestOracleCreateSequenceExpression:
         assert params == ()
 
     def test_negative_cache_rejected(self, dialect):
-        with pytest.raises(ValueError, match="cache must be non-negative"):
+        with pytest.raises(ValueError, match="cache must be a positive integer"):
             OracleCreateSequenceExpression(dialect, sequence=Sequence(dialect, "seq"), cache=-1)
+        with pytest.raises(ValueError, match="cache must be a positive integer"):
+            OracleCreateSequenceExpression(dialect, sequence=Sequence(dialect, "seq"), cache=0)
+
+    def test_pair_options_are_mutually_exclusive(self, dialect):
+        for kwargs in (
+            {"cycle": True, "no_cycle": True},
+            {"order": True, "no_order": True},
+            {"cache": 10, "no_cache": True},
+        ):
+            with pytest.raises(ValueError, match="mutually exclusive"):
+                OracleCreateSequenceExpression(
+                    dialect, sequence=Sequence(dialect, "seq"), **kwargs
+                )
 
 
 class TestOracleSequenceOptionProbesAreLoadBearing:
@@ -257,6 +270,13 @@ class TestOracleSequenceOptionProbesAreLoadBearing:
                 'CREATE SEQUENCE "SEQ" CYCLE',
             ),
             (
+                "supports_sequence_cycle",
+                OracleCreateSequenceExpression,
+                {"no_cycle": True},
+                True,
+                'CREATE SEQUENCE "SEQ" NOCYCLE',
+            ),
+            (
                 "supports_sequence_cache",
                 OracleCreateSequenceExpression,
                 {"cache": 20},
@@ -264,11 +284,25 @@ class TestOracleSequenceOptionProbesAreLoadBearing:
                 'CREATE SEQUENCE "SEQ" CACHE 20',
             ),
             (
+                "supports_sequence_cache",
+                OracleCreateSequenceExpression,
+                {"no_cache": True},
+                True,
+                'CREATE SEQUENCE "SEQ" NOCACHE',
+            ),
+            (
                 "supports_sequence_order",
                 OracleCreateSequenceExpression,
                 {"order": True},
                 True,
                 'CREATE SEQUENCE "SEQ" ORDER',
+            ),
+            (
+                "supports_sequence_order",
+                OracleCreateSequenceExpression,
+                {"no_order": True},
+                True,
+                'CREATE SEQUENCE "SEQ" NOORDER',
             ),
             (
                 "supports_sequence_owned_by",

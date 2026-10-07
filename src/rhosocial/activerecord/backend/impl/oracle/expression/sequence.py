@@ -77,9 +77,11 @@ class OracleCreateSequenceExpression(BaseExpression):
     """Oracle ``CREATE SEQUENCE ...`` DDL expression.
 
     Oracle renders sequences with the ``START WITH``/``INCREMENT BY`` option
-    set. ``cycle``/``order`` default to ``None`` so the corresponding
-    ``NOCYCLE``/``NOORDER`` clauses are omitted unless explicitly requested;
-    ``cache=0`` renders the explicit ``NOCACHE`` clause.
+    set.  Each spellable alternative has its own parameter, matching core's
+    ``CreateSequenceExpression``: ``cycle`` / ``no_cycle``, ``cache`` /
+    ``no_cache``, ``order`` / ``no_order``.  Setting both of a pair raises
+    ``ValueError``; ``cache`` is a positive count and ``no_cache=True`` spells
+    ``NOCACHE`` (``cache=0`` is refused, not a spelling).
 
     Args:
         dialect: the Oracle dialect instance.
@@ -90,13 +92,16 @@ class OracleCreateSequenceExpression(BaseExpression):
         increment: ``INCREMENT BY`` value.
         minvalue: ``MINVALUE`` value.
         maxvalue: ``MAXVALUE`` value.
-        cycle: ``CYCLE`` when True, ``NOCYCLE`` when False, omitted when None.
-        cache: ``CACHE n`` for a positive int, ``NOCACHE`` for ``0``,
-            omitted when None.
-        order: ``ORDER`` when True, ``NOORDER`` when False, omitted when None.
+        cycle: ``CYCLE`` when True.
+        no_cycle: ``NOCYCLE`` when True.
+        cache: ``CACHE n`` for a positive int.
+        no_cache: ``NOCACHE`` when True.
+        order: ``ORDER`` when True.
+        no_order: ``NOORDER`` when True.
 
     Raises:
-        ValueError: if ``cache`` is negative.
+        ValueError: if both parameters of a pair are set, or ``cache`` is not
+            a positive count.
         TypeError: if ``sequence`` is not a ``Sequence``, or ``cache`` is
             provided but is not an int.
     """
@@ -110,32 +115,47 @@ class OracleCreateSequenceExpression(BaseExpression):
         increment: Optional[int] = None,
         minvalue: Optional[int] = None,
         maxvalue: Optional[int] = None,
-        cycle: Optional[bool] = None,
+        cycle: bool = False,
+        no_cycle: bool = False,
         cache: Optional[int] = None,
-        order: Optional[bool] = None,
+        no_cache: bool = False,
+        order: bool = False,
+        no_order: bool = False,
     ):
         super().__init__(dialect)
         if not isinstance(sequence, Sequence):
             raise TypeError(
                 f"sequence must be a Sequence, got {type(sequence).__name__}"
             )
+        if cycle and no_cycle:
+            raise ValueError("cycle and no_cycle are mutually exclusive options")
+        if cache is not None and no_cache:
+            raise ValueError("cache and no_cache are mutually exclusive options")
+        if order and no_order:
+            raise ValueError("order and no_order are mutually exclusive options")
         if cache is not None:
             if not isinstance(cache, int) or isinstance(cache, bool):
                 raise TypeError(
                     "cache must be an int, "
                     f"got {type(cache).__name__}"
                 )
-            if cache < 0:
-                raise ValueError(f"cache must be non-negative, got {cache}")
+            if cache <= 0:
+                raise ValueError(
+                    "cache must be a positive integer; use no_cache=True to "
+                    "spell NO CACHE"
+                )
         self.sequence = sequence
         self.if_not_exists = bool(if_not_exists)
         self.start = start
         self.increment = increment
         self.minvalue = minvalue
         self.maxvalue = maxvalue
-        self.cycle = cycle
+        self.cycle = bool(cycle)
+        self.no_cycle = bool(no_cycle)
         self.cache = cache
-        self.order = order
+        self.no_cache = bool(no_cache)
+        self.order = bool(order)
+        self.no_order = bool(no_order)
 
     @property
     def format_method(self) -> str:

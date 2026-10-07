@@ -3,6 +3,7 @@
 
 from typing import Dict, Tuple
 
+from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 from rhosocial.activerecord.backend.transaction import IsolationLevel
 
 
@@ -37,6 +38,31 @@ class OracleTransactionMixin:
         return True
 
     def format_begin_transaction(self, expr) -> Tuple[str, tuple]:
+        """Format BEGIN for Oracle, which begins transactions implicitly.
+
+        The statement itself renders as the empty string; a requested
+        ``deferrable`` / ``not_deferrable`` mode has no Oracle spelling and is
+        refused by name instead of being dropped.
+
+        Raises:
+            UnsupportedFeatureError: if a deferrable transaction mode was
+                requested.
+        """
+        params = expr.get_params()
+        if params.get("deferrable"):
+            raise UnsupportedFeatureError(
+                self.name,
+                "BEGIN DEFERRABLE",
+                "Oracle begins transactions implicitly; there is no DEFERRABLE "
+                "BEGIN spelling.",
+            )
+        if params.get("not_deferrable"):
+            raise UnsupportedFeatureError(
+                self.name,
+                "BEGIN NOT DEFERRABLE",
+                "Oracle begins transactions implicitly; there is no NOT "
+                "DEFERRABLE BEGIN spelling.",
+            )
         return ("", ())
 
     def format_commit_transaction(self, expr) -> Tuple[str, tuple]:
@@ -56,6 +82,15 @@ class OracleTransactionMixin:
         return ("", ())
 
     def format_set_transaction(self, expr) -> Tuple[str, tuple]:
+        """Format SET TRANSACTION for Oracle.
+
+        ``deferrable`` renders the declared ``DEFERRABLE`` spelling; the
+        explicit negative has no Oracle form and is refused by name rather
+        than dropped.
+
+        Raises:
+            UnsupportedFeatureError: if ``not_deferrable`` was requested.
+        """
         params = expr.get_params()
         parts = ["SET TRANSACTION"]
         isolation = params.get("isolation_level")
@@ -66,4 +101,10 @@ class OracleTransactionMixin:
             parts.append(str(mode))
         if params.get("deferrable"):
             parts.append("DEFERRABLE")
+        if params.get("not_deferrable"):
+            raise UnsupportedFeatureError(
+                self.name,
+                "SET TRANSACTION NOT DEFERRABLE",
+                "Oracle's SET TRANSACTION has no NOT DEFERRABLE spelling.",
+            )
         return (" ".join(parts), ())

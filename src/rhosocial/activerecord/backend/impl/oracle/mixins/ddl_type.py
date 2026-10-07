@@ -481,9 +481,12 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
         parts = ["CREATE"]
         if expr.or_replace:
             parts.append("OR REPLACE")
-        editionable = getattr(expr.definition, "editionable", None)
-        if editionable is not None:
-            parts.append("EDITIONABLE" if editionable else "NONEDITIONABLE")
+        editionable = getattr(expr.definition, "editionable", False)
+        noneditionable = getattr(expr.definition, "noneditionable", False)
+        if editionable:
+            parts.append("EDITIONABLE")
+        elif noneditionable:
+            parts.append("NONEDITIONABLE")
         parts.append("TYPE")
         if expr.if_not_exists:
             parts.append("IF NOT EXISTS")
@@ -718,8 +721,10 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
         parts = ["CREATE"]
         if expr.or_replace:
             parts.append("OR REPLACE")
-        if expr.editionable is not None:
-            parts.append("EDITIONABLE" if expr.editionable else "NONEDITIONABLE")
+        if expr.editionable:
+            parts.append("EDITIONABLE")
+        elif expr.noneditionable:
+            parts.append("NONEDITIONABLE")
         parts.append("TYPE BODY")
         if expr.if_not_exists:
             parts.append("IF NOT EXISTS")

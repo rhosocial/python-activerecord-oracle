@@ -321,16 +321,46 @@ class OracleDDLMixin:
                             )
                         parts.append(f"ON UPDATE {t_const.on_update.value}")
 
-        deferrable = getattr(t_const, "deferrable", None)
-        if deferrable is not None:
-            if deferrable:
-                parts.append("DEFERRABLE")
-                initially = getattr(t_const, "initially_deferred", None)
-                if initially is True:
-                    parts.append("INITIALLY DEFERRED")
-                elif initially is False:
-                    parts.append("INITIALLY IMMEDIATE")
-            else:
-                parts.append("NOT DEFERRABLE")
+        deferrable = getattr(t_const, "deferrable", False)
+        not_deferrable = getattr(t_const, "not_deferrable", False)
+        initially_deferred = getattr(t_const, "initially_deferred", False)
+        initially_immediate = getattr(t_const, "initially_immediate", False)
+        enforced = getattr(t_const, "enforced", False)
+        not_enforced = getattr(t_const, "not_enforced", False)
+
+        if deferrable or not_deferrable or initially_deferred or initially_immediate:
+            if not self.supports_deferrable_constraint():
+                from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
+                raise UnsupportedFeatureError(
+                    self.name,
+                    "constraint deferrability",
+                    f"{self.name} does not support DEFERRABLE / INITIALLY "
+                    "constraint state.",
+                )
+        if deferrable or not_deferrable:
+            parts.append("DEFERRABLE" if deferrable else "NOT DEFERRABLE")
+        # INITIALLY ... is an independent constraint attribute in the grammar;
+        # it is rendered whenever requested, not only alongside DEFERRABLE.
+        if initially_deferred or initially_immediate:
+            parts.append(
+                "INITIALLY DEFERRED"
+                if initially_deferred
+                else "INITIALLY IMMEDIATE"
+            )
+        if enforced or not_enforced:
+            if not self.supports_constraint_enforced():
+                from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
+                feature = (
+                    "constraint ENFORCED"
+                    if enforced
+                    else "constraint NOT ENFORCED"
+                )
+                raise UnsupportedFeatureError(
+                    self.name,
+                    feature,
+                    f"{self.name} has no ENFORCED / NOT ENFORCED constraint "
+                    "spelling; measured on 18c/21c/23c.",
+                )
+            parts.append("ENFORCED" if enforced else "NOT ENFORCED")
 
         return " ".join(parts), tuple(params)

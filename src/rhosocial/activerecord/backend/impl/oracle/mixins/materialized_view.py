@@ -94,8 +94,12 @@ class OracleMaterializedViewMixin:
         build_mode = getattr(expr, "build_mode", None)
         if build_mode is not None:
             parts.append(f"BUILD {build_mode.value}")
-        elif hasattr(expr, "with_data"):
-            parts.append("BUILD IMMEDIATE" if expr.with_data else "BUILD DEFERRED")
+        elif getattr(expr, "with_data", False):
+            # Oracle spells the SQL-standard WITH DATA as BUILD IMMEDIATE.
+            parts.append("BUILD IMMEDIATE")
+        elif getattr(expr, "no_data", False):
+            # Oracle spells WITH NO DATA as BUILD DEFERRED.
+            parts.append("BUILD DEFERRED")
         refresh_method = getattr(expr, "refresh_method", None)
         refresh_trigger = getattr(expr, "refresh_trigger", None)
         if refresh_method is not None or refresh_trigger is not None:
@@ -105,9 +109,10 @@ class OracleMaterializedViewMixin:
             if refresh_trigger is not None:
                 refresh_parts.append(refresh_trigger.value)
             parts.append(" ".join(refresh_parts))
-        query_rewrite = getattr(expr, "query_rewrite", None)
-        if query_rewrite is not None:
-            parts.append("ENABLE QUERY REWRITE" if query_rewrite else "DISABLE QUERY REWRITE")
+        if getattr(expr, "enable_query_rewrite", False):
+            parts.append("ENABLE QUERY REWRITE")
+        elif getattr(expr, "disable_query_rewrite", False):
+            parts.append("DISABLE QUERY REWRITE")
         query_sql, query_params = expr.query.to_sql()
         parts.append(f"AS {query_sql}")
         return " ".join(parts), query_params
@@ -194,6 +199,24 @@ class OracleMaterializedViewMixin:
         parts.append(expr.view.to_sql()[0])
         if getattr(expr, "preserve_table", False):
             parts.append("PRESERVE TABLE")
+        # Oracle's DROP MATERIALIZED VIEW grammar has no CASCADE; there is no
+        # probe that declares one, so a requested CASCADE is refused by name.
+        # ``getattr`` serves both this backend's expression and the core one.
+        if getattr(expr, "cascade", False):
+            raise UnsupportedFeatureError(
+                self.name,
+                "DROP MATERIALIZED VIEW CASCADE",
+                f"{self.name} does not support DROP MATERIALIZED VIEW CASCADE.",
+            )
+        if getattr(expr, "restrict", False):
+            if not self.supports_materialized_view_restrict():
+                raise UnsupportedFeatureError(
+                    self.name,
+                    "DROP MATERIALIZED VIEW RESTRICT",
+                    f"{self.name} does not support DROP MATERIALIZED VIEW "
+                    "RESTRICT.",
+                )
+            parts.append("RESTRICT")
         return " ".join(parts), ()
 
     def format_refresh_materialized_view_statement(
@@ -208,8 +231,9 @@ class OracleMaterializedViewMixin:
         Also serves the generic ``RefreshMaterializedViewExpression``; its
         SQL-standard options have no Oracle counterpart and are handled as:
         ``concurrent`` is rejected (Oracle refreshes hold the appropriate locks
-        and offer no concurrent mode), ``with_data`` is ignored (a refresh
-        always repopulates).
+        and offer no concurrent mode), and the ``with_data`` / ``no_data``
+        pair is refused by name (``DBMS_MVIEW.REFRESH`` always repopulates, so
+        Oracle can spell neither WITH DATA nor WITH NO DATA).
 
         Args:
             expr: Oracle or generic refresh expression.
@@ -221,7 +245,8 @@ class OracleMaterializedViewMixin:
             TypeError: ``expr.view`` is not a ``MaterializedView``. The name
                 passed to the procedure is read from that object, so any other
                 catalogue object would refresh something else while naming it.
-            UnsupportedFeatureError: if ``concurrent`` was requested.
+            UnsupportedFeatureError: if ``concurrent``, ``with_data`` or
+                ``no_data`` was requested.
         """
         from rhosocial.activerecord.backend.expression.objects import MaterializedView
 
@@ -239,6 +264,20 @@ class OracleMaterializedViewMixin:
                     "Oracle has no concurrent refresh mode; use "
                     "DBMS_MVIEW.REFRESH with atomic_refresh or out_of_place."
                 ),
+            )
+        if getattr(expr, "with_data", False):
+            raise UnsupportedFeatureError(
+                self.name,
+                "REFRESH MATERIALIZED VIEW WITH DATA",
+                "Oracle's DBMS_MVIEW.REFRESH always repopulates the view; "
+                "there is no WITH DATA clause to emit.",
+            )
+        if getattr(expr, "no_data", False):
+            raise UnsupportedFeatureError(
+                self.name,
+                "REFRESH MATERIALIZED VIEW WITH NO DATA",
+                "Oracle's DBMS_MVIEW.REFRESH always repopulates the view; "
+                "it cannot refresh without data.",
             )
 
         name = self._materialized_view_refresh_target(expr)

@@ -100,18 +100,25 @@ class TestOracleShrinkSpaceAction:
 
 class TestOracleReadOnlyAction:
     def test_read_only(self, dialect):
-        alter = AlterTableExpression(dialect, Table(dialect, "t"), actions=[OracleReadOnlyAction(dialect)])
+        alter = AlterTableExpression(
+            dialect, Table(dialect, "t"), actions=[OracleReadOnlyAction(dialect, read_only=True)]
+        )
         sql, params = alter.to_sql()
         assert sql == 'ALTER TABLE "T" READ ONLY'
         assert params == ()
 
     def test_read_write(self, dialect):
         alter = AlterTableExpression(
-            dialect, Table(dialect, "t"), actions=[OracleReadOnlyAction(dialect, read_only=False)]
+            dialect, Table(dialect, "t"), actions=[OracleReadOnlyAction(dialect, read_write=True)]
         )
         sql, params = alter.to_sql()
         assert sql == 'ALTER TABLE "T" READ WRITE'
         assert params == ()
+
+    def test_neither_spelling_is_rejected(self, dialect):
+        """READ ONLY / READ WRITE is mandatory in the action's grammar."""
+        with pytest.raises(ValueError, match="exactly one"):
+            OracleReadOnlyAction(dialect)
 
 
 class TestOracleRowMovementAction:
@@ -125,11 +132,16 @@ class TestOracleRowMovementAction:
 
     def test_disable_row_movement(self, dialect):
         alter = AlterTableExpression(
-            dialect, Table(dialect, "t"), actions=[OracleRowMovementAction(dialect, enable=False)]
+            dialect, Table(dialect, "t"), actions=[OracleRowMovementAction(dialect, disable=True)]
         )
         sql, params = alter.to_sql()
         assert sql == 'ALTER TABLE "T" DISABLE ROW MOVEMENT'
         assert params == ()
+
+    def test_neither_spelling_is_rejected(self, dialect):
+        """ENABLE / DISABLE ROW MOVEMENT is mandatory in the action's grammar."""
+        with pytest.raises(ValueError, match="exactly one"):
+            OracleRowMovementAction(dialect)
 
 
 class TestOracleAlterTableVersionBoundary:
@@ -163,13 +175,17 @@ class TestOracleAlterTableVersionBoundary:
 
     def test_read_only_below_11g_raises(self):
         d10 = OracleDialect(version=(10, 0, 0))
-        alter = AlterTableExpression(d10, Table(d10, "t"), actions=[OracleReadOnlyAction(d10)])
+        alter = AlterTableExpression(
+            d10, Table(d10, "t"), actions=[OracleReadOnlyAction(d10, read_only=True)]
+        )
         with pytest.raises(UnsupportedFeatureError, match="READ ONLY"):
             alter.to_sql()
 
     def test_read_only_at_11g_works(self):
         d11 = OracleDialect(version=(11, 0, 0))
-        alter = AlterTableExpression(d11, Table(d11, "t"), actions=[OracleReadOnlyAction(d11)])
+        alter = AlterTableExpression(
+            d11, Table(d11, "t"), actions=[OracleReadOnlyAction(d11, read_only=True)]
+        )
         sql, params = alter.to_sql()
         assert sql == 'ALTER TABLE "T" READ ONLY'
         assert params == ()
@@ -189,7 +205,7 @@ class TestOracleAlterTableVersionBoundary:
             ([OracleDropUnusedColumnsAction(d10)], 'ALTER TABLE "T" DROP UNUSED COLUMNS'),
             ([OracleMoveTableAction(d10)], 'ALTER TABLE "T" MOVE'),
             ([OracleShrinkSpaceAction(d10, cascade=True)], 'ALTER TABLE "T" SHRINK SPACE CASCADE'),
-            ([OracleRowMovementAction(d10, enable=False)], 'ALTER TABLE "T" DISABLE ROW MOVEMENT'),
+            ([OracleRowMovementAction(d10, disable=True)], 'ALTER TABLE "T" DISABLE ROW MOVEMENT'),
         ]
         for actions, expected in cases:
             alter = AlterTableExpression(d10, Table(d10, "t"), actions=actions)

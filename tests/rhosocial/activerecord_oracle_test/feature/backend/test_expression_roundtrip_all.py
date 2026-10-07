@@ -301,10 +301,14 @@ def _register_core_specials():
 
     # ALTER CONSTRAINT. `constraint_type` is keyword-only behind defaulted
     # positionals, so the introspective constructor skips it and the class
-    # refuses an incomplete action.
+    # refuses an incomplete action; the enforcement keyword is mandatory, so
+    # the factory picks a spelling.
     def alter_constraint(dialect):
         return ddl_alter.AlterConstraint(
-            dialect, "c1", constraint_type=TableConstraintType.FOREIGN_KEY
+            dialect,
+            "c1",
+            constraint_type=TableConstraintType.FOREIGN_KEY,
+            enforced=True,
         )
 
     register_special_constructor(
@@ -918,6 +922,10 @@ def _register_oracle_specials():
         partition as part_mod,
         partition_lifecycle as pl_mod,
     )
+    from rhosocial.activerecord.backend.impl.oracle.expression.alter_table import (
+        OracleReadOnlyAction,
+        OracleRowMovementAction,
+    )
     from rhosocial.activerecord.backend.impl.oracle.expression.analyze import (
         OracleAnalyzeExpression,
         OracleAnalyzeMode,
@@ -947,6 +955,8 @@ def _register_oracle_specials():
         OracleAlterTypeDropAttributeAction,
         OracleAlterTypeDropMethodAction,
         OracleAlterTypeElementTypeAction,
+        OracleAlterTypeFinalAction,
+        OracleAlterTypeInstantiableAction,
         OracleAlterTypeLimitAction,
         OracleCreateTypeBodyExpression,
         OracleDropTypeBodyExpression,
@@ -990,6 +1000,16 @@ def _register_oracle_specials():
         return OracleAnalyzeExpression(
             d, table=_table_obj(d), mode=OracleAnalyzeMode.COMPUTE_STATISTICS
         )
+
+    def read_only_action(d):
+        # READ ONLY / READ WRITE is mandatory in the action's grammar, so the
+        # introspective no-argument guess is refused; this factory picks a
+        # spelling.
+        return OracleReadOnlyAction(d, read_only=True)
+
+    def row_movement_action(d):
+        # ENABLE / DISABLE ROW MOVEMENT is mandatory in the action's grammar.
+        return OracleRowMovementAction(d, enable=True)
 
     def comment_expression(d):
         return OracleCommentExpression(
@@ -1224,6 +1244,15 @@ def _register_oracle_specials():
     def drop_method(d):
         return OracleAlterTypeDropMethodAction(d, method=_method(d))
 
+    def final_action(d):
+        # FINAL/NOT FINAL is mandatory in the action's grammar, so the
+        # introspective no-argument guess is refused; this factory picks a
+        # spelling.
+        return OracleAlterTypeFinalAction(d, final=True)
+
+    def instantiable_action(d):
+        return OracleAlterTypeInstantiableAction(d, instantiable=True)
+
     def element_type(d):
         return OracleAlterTypeElementTypeAction(d, element_type="NUMBER")
 
@@ -1254,6 +1283,8 @@ def _register_oracle_specials():
         return OracleNestedTableTypeDefinition(d, element_type="NUMBER")
 
     registrations = (
+        ("alter_table.OracleReadOnlyAction", read_only_action),
+        ("alter_table.OracleRowMovementAction", row_movement_action),
         ("analyze.OracleAnalyzeExpression", analyze_expression),
         ("column.OracleColumnDefinition", oracle_column_definition),
         ("comment.OracleCommentExpression", comment_expression),
@@ -1310,6 +1341,12 @@ def _register_oracle_specials():
         ("type.OracleAlterTypeDropMethodAction", drop_method),
         ("type.OracleTypeDropMethodAction", drop_method),
         ("type.OracleDropTypeMethodAction", drop_method),
+        ("type.OracleAlterTypeFinalAction", final_action),
+        ("type.OracleTypeFinalAction", final_action),
+        ("type.OracleSetTypeFinalAction", final_action),
+        ("type.OracleAlterTypeInstantiableAction", instantiable_action),
+        ("type.OracleTypeInstantiableAction", instantiable_action),
+        ("type.OracleSetTypeInstantiableAction", instantiable_action),
         ("type.OracleAlterTypeElementTypeAction", element_type),
         ("type.OracleTypeElementTypeAction", element_type),
         ("type.OracleAlterTypeLimitAction", limit_action),

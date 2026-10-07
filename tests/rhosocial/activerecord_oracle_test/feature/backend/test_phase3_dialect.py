@@ -366,14 +366,18 @@ class TestConstraintCapabilities:
         dialect = OracleDialect(version=(19, 0, 0))
         assert dialect.supports_fk_match() is False
 
-    def test_constraint_enforced_version_dependent(self):
-        """Test ENFORCED/NOT ENFORCED support requires 12c+."""
-        from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
-        old_dialect = OracleDialect(version=(11, 0, 0))
-        assert old_dialect.supports_constraint_enforced() is False
+    def test_constraint_enforced_is_never_supported(self):
+        """Measured: Oracle has no ENFORCED / NOT ENFORCED spelling.
 
-        new_dialect = OracleDialect(version=(12, 0, 0))
-        assert new_dialect.supports_constraint_enforced() is True
+        18c/21c refuse ``CHECK (...) ENFORCED`` with ORA-00907 and
+        ``NOT ENFORCED`` with ORA-00905; 23c refuses them with ORA-03076 and
+        ORA-02000, and an out-of-line ``ENFORCED`` with ORA-03075. The answer
+        is False on every version, so a request is refused by name rather
+        than rendered.
+        """
+        from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
+        for version in ((11, 0, 0), (12, 0, 0), (19, 0, 0), (23, 0, 0)):
+            assert OracleDialect(version=version).supports_constraint_enforced() is False
 
 
 class TestTransactionControl:
