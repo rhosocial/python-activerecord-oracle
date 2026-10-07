@@ -69,7 +69,14 @@ class OracleFeaturesMixin:
         return self.version >= (11, 2, 0)
 
     def supports_materialized_cte(self) -> bool:
-        return True
+        """Oracle spells CTE materialization as the ``/*+ MATERIALIZE */`` hint.
+
+        The SQL-standard ``AS MATERIALIZED`` / ``AS NOT MATERIALIZED`` spelling
+        this parameter pair names is rejected by the server (ORA-00906 on
+        18c/21c/23c), and the hint has no expression-level parameter, so the
+        request is refused by name instead of being rendered.
+        """
+        return False
 
     # --- RETURNING ----------------------------------------------------
     def supports_returning_insert(self) -> bool:

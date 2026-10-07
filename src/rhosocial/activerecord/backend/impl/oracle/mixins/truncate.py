@@ -17,6 +17,10 @@ class OracleTruncateMixin:
     being dropped.
     """
 
+    def supports_truncate(self) -> bool:
+        """Oracle supports ``TRUNCATE TABLE`` (measured on 18c/21c/23c)."""
+        return True
+
     def format_truncate_statement(self, expr) -> Tuple[str, tuple]:
         """Format ``TRUNCATE TABLE`` for Oracle.
 
@@ -25,8 +29,8 @@ class OracleTruncateMixin:
                 :class:`~rhosocial.activerecord.backend.expression.objects.Table`.
                 Another catalogue object renders its own name, so the statement
                 would empty an index and name a table.
-            UnsupportedFeatureError: A modifier was requested whose probe is
-                ``False`` on this dialect.
+            UnsupportedFeatureError: ``supports_truncate`` is ``False``, or a
+                modifier was requested whose probe is ``False`` on this dialect.
         """
         from rhosocial.activerecord.backend.expression.objects import Table
 
@@ -34,6 +38,13 @@ class OracleTruncateMixin:
             raise TypeError(
                 f"TruncateExpression.table must be a Table, "
                 f"got {type(expr.table).__name__}"
+            )
+
+        if not self.supports_truncate():
+            raise UnsupportedFeatureError(
+                self.name,
+                "TRUNCATE",
+                f"{self.name} does not support TRUNCATE.",
             )
 
         if expr.restart_identity or expr.continue_identity:

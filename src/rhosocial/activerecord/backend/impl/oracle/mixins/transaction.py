@@ -34,6 +34,17 @@ class OracleTransactionMixin:
     def supports_deferrable_transaction(self) -> bool:
         return True
 
+    def supports_transaction_wait(self) -> bool:
+        """Oracle's ``SET TRANSACTION`` has no WAIT / NO WAIT / NOWAIT clause.
+
+        Measured on 18c/21c/23c: ``SET TRANSACTION READ WRITE`` is accepted,
+        but appending ``WAIT`` / ``NOWAIT`` / ``NO WAIT`` is rejected
+        (ORA-00933 on 18c/21c, ORA-03049/ORA-03048 on 23c).  Oracle spells lock
+        waiting on ``SELECT ... FOR UPDATE`` / ``LOCK TABLE``, not on the
+        transaction statements, so both sides of the pair are refused by name.
+        """
+        return False
+
     def supports_savepoint(self) -> bool:
         return True
 
@@ -41,12 +52,12 @@ class OracleTransactionMixin:
         """Format BEGIN for Oracle, which begins transactions implicitly.
 
         The statement itself renders as the empty string; a requested
-        ``deferrable`` / ``not_deferrable`` mode has no Oracle spelling and is
-        refused by name instead of being dropped.
+        ``deferrable`` / ``not_deferrable`` mode or ``wait`` / ``no_wait`` pair
+        has no Oracle spelling and is refused by name instead of being dropped.
 
         Raises:
-            UnsupportedFeatureError: if a deferrable transaction mode was
-                requested.
+            UnsupportedFeatureError: if a deferrable transaction mode or a
+                lock-wait clause was requested.
         """
         params = expr.get_params()
         if params.get("deferrable"):
@@ -62,6 +73,20 @@ class OracleTransactionMixin:
                 "BEGIN NOT DEFERRABLE",
                 "Oracle begins transactions implicitly; there is no NOT "
                 "DEFERRABLE BEGIN spelling.",
+            )
+        if params.get("wait"):
+            raise UnsupportedFeatureError(
+                self.name,
+                "BEGIN WAIT",
+                "Oracle begins transactions implicitly; there is no BEGIN WAIT "
+                "spelling.",
+            )
+        if params.get("no_wait"):
+            raise UnsupportedFeatureError(
+                self.name,
+                "BEGIN NO WAIT",
+                "Oracle begins transactions implicitly; there is no BEGIN NO "
+                "WAIT spelling.",
             )
         return ("", ())
 
@@ -85,11 +110,12 @@ class OracleTransactionMixin:
         """Format SET TRANSACTION for Oracle.
 
         ``deferrable`` renders the declared ``DEFERRABLE`` spelling; the
-        explicit negative has no Oracle form and is refused by name rather
-        than dropped.
+        explicit negative and the ``wait`` / ``no_wait`` pair have no Oracle
+        form and are refused by name rather than dropped.
 
         Raises:
-            UnsupportedFeatureError: if ``not_deferrable`` was requested.
+            UnsupportedFeatureError: if ``not_deferrable``, ``wait`` or
+                ``no_wait`` was requested.
         """
         params = expr.get_params()
         parts = ["SET TRANSACTION"]
@@ -106,5 +132,17 @@ class OracleTransactionMixin:
                 self.name,
                 "SET TRANSACTION NOT DEFERRABLE",
                 "Oracle's SET TRANSACTION has no NOT DEFERRABLE spelling.",
+            )
+        if params.get("wait"):
+            raise UnsupportedFeatureError(
+                self.name,
+                "SET TRANSACTION WAIT",
+                "Oracle's SET TRANSACTION has no WAIT clause.",
+            )
+        if params.get("no_wait"):
+            raise UnsupportedFeatureError(
+                self.name,
+                "SET TRANSACTION NO WAIT",
+                "Oracle's SET TRANSACTION has no NO WAIT / NOWAIT clause.",
             )
         return (" ".join(parts), ())

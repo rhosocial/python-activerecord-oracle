@@ -30,6 +30,20 @@ class OracleMaterializedViewMixin:
     def supports_materialized_view(self) -> bool:
         return True
 
+    def supports_with_data_clause(self) -> bool:
+        """Oracle has no ``WITH [NO] DATA`` clause.
+
+        Measured on 18c/21c/23c: the SQL-standard clause is rejected both on
+        ``CREATE TABLE ... AS`` and on ``CREATE MATERIALIZED VIEW`` (ORA-00933
+        on 18c/21c, ORA-03048 on 23c, in either clause position).  The only
+        population spellings Oracle accepts are ``BUILD IMMEDIATE`` / ``BUILD
+        DEFERRED``, which this mixin's formatter emits for ``with_data`` /
+        ``no_data``; the ``CREATE TABLE ... AS`` and ``REFRESH MATERIALIZED
+        VIEW`` paths have no such hook and therefore refuse the request by
+        name.
+        """
+        return False
+
     def supports_refresh_materialized_view(self) -> bool:
         """Oracle refreshes through ``DBMS_MVIEW.REFRESH`` (no SQL statement).
 
