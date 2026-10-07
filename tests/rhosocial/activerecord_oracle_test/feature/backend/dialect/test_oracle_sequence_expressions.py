@@ -205,6 +205,74 @@ class TestOracleCreateSequenceExpression:
             OracleCreateSequenceExpression(dialect, sequence=Sequence(dialect, "seq"), cache=-1)
 
 
+class TestOracleSequenceOptionProbesAreLoadBearing:
+    """Every sequence option probe must change behaviour when it is flipped.
+
+    A probe the formatter never consults is decorative: flipping its answer
+    leaves the rendered SQL untouched, so a wrong declaration is invisible.
+    Each case below renders an option with the probe's declared answer
+    (``True``), then flips that one probe in a subclass and re-renders. A
+    load-bearing probe makes the second render refuse; a decorative probe
+    renders both times and is reported by name.
+    """
+
+    def test_every_sequence_option_probe_is_load_bearing(self):
+        cases = [
+            (
+                "supports_sequence_minvalue",
+                {"minvalue": 1},
+                'CREATE SEQUENCE "SEQ" MINVALUE 1',
+            ),
+            (
+                "supports_sequence_maxvalue",
+                {"maxvalue": 999999},
+                'CREATE SEQUENCE "SEQ" MAXVALUE 999999',
+            ),
+            (
+                "supports_sequence_cycle",
+                {"cycle": True},
+                'CREATE SEQUENCE "SEQ" CYCLE',
+            ),
+            (
+                "supports_sequence_cache",
+                {"cache": 20},
+                'CREATE SEQUENCE "SEQ" CACHE 20',
+            ),
+            (
+                "supports_sequence_order",
+                {"order": True},
+                'CREATE SEQUENCE "SEQ" ORDER',
+            ),
+        ]
+        decorative = []
+        for probe, options, expected in cases:
+            declared = OracleDialect(version=(19, 0, 0))
+            expr = OracleCreateSequenceExpression(
+                declared, sequence=Sequence(declared, "seq"), **options
+            )
+            assert expr.to_sql()[0] == expected
+
+            flipped_cls = type(
+                f"OracleDialectWithout{probe}",
+                (OracleDialect,),
+                {probe: lambda self: False},
+            )
+            flipped = flipped_cls(version=(19, 0, 0))
+            expr = OracleCreateSequenceExpression(
+                flipped, sequence=Sequence(flipped, "seq"), **options
+            )
+            try:
+                expr.to_sql()
+            except UnsupportedFeatureError:
+                continue
+            decorative.append(probe)
+
+        assert not decorative, (
+            "decorative sequence option probes: flipping these changes nothing, "
+            f"so the CREATE formatter never consults them: {decorative}"
+        )
+
+
 class TestOracleDropSequenceExpression:
     def test_basic_drop(self, dialect):
         expr = OracleDropSequenceExpression(dialect, sequence=Sequence(dialect, "seq"))

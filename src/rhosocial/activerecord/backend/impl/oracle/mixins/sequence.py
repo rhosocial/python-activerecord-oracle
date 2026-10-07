@@ -143,14 +143,22 @@ class OracleSequenceMixin:
     ) -> Tuple[str, tuple]:
         """Format ``CREATE SEQUENCE`` for Oracle.
 
+        The option clauses -- ``MINVALUE``, ``MAXVALUE``, ``CYCLE`` /
+        ``NOCYCLE``, ``CACHE`` / ``NOCACHE``, ``ORDER`` / ``NOORDER`` -- are
+        each gated on the probe for that option before the clause is emitted,
+        exactly as :meth:`format_alter_sequence_statement` gates them. A probe
+        answering ``False`` refuses the option rather than dropping it, so the
+        declaration governs the rendering instead of decorating it.
+
         Raises:
             TypeError: ``expr.sequence`` is not a
                 :class:`~rhosocial.activerecord.backend.expression.objects.Sequence`.
                 A table would render its own name, producing a well-formed
                 CREATE SEQUENCE over that table's name.
             UnsupportedFeatureError: The Oracle version is below 9i, IF NOT
-                EXISTS was asked for below 23ai, or OWNED BY was requested --
-                which Oracle has no form of.
+                EXISTS was asked for below 23ai, OWNED BY was requested --
+                which Oracle has no form of -- or an option Oracle does not
+                model was requested.
         """
         from rhosocial.activerecord.backend.expression.objects import Sequence
 
@@ -187,14 +195,63 @@ class OracleSequenceMixin:
         if expr.increment is not None:
             parts.append(f"INCREMENT BY {expr.increment}")
         if expr.minvalue is not None:
+            if not self.supports_sequence_minvalue():
+                raise UnsupportedFeatureError(
+                    self.name,
+                    "CREATE SEQUENCE MINVALUE",
+                    suggestion=(
+                        f"{self.name} does not support the MINVALUE sequence "
+                        "option."
+                    ),
+                )
             parts.append(f"MINVALUE {expr.minvalue}")
         if expr.maxvalue is not None:
+            if not self.supports_sequence_maxvalue():
+                raise UnsupportedFeatureError(
+                    self.name,
+                    "CREATE SEQUENCE MAXVALUE",
+                    suggestion=(
+                        f"{self.name} does not support the MAXVALUE sequence "
+                        "option."
+                    ),
+                )
             parts.append(f"MAXVALUE {expr.maxvalue}")
         if expr.cycle is not None:
-            parts.append("CYCLE" if expr.cycle else "NOCYCLE")
+            if expr.cycle:
+                if not self.supports_sequence_cycle():
+                    raise UnsupportedFeatureError(
+                        self.name,
+                        "CREATE SEQUENCE CYCLE",
+                        suggestion=(
+                            f"{self.name} does not support the CYCLE sequence "
+                            "option."
+                        ),
+                    )
+                parts.append("CYCLE")
+            elif self.supports_sequence_cycle():
+                # NOCYCLE is Oracle's spelling of the default.
+                parts.append("NOCYCLE")
         if expr.cache is not None:
+            if not self.supports_sequence_cache():
+                raise UnsupportedFeatureError(
+                    self.name,
+                    "CREATE SEQUENCE CACHE",
+                    suggestion=(
+                        f"{self.name} does not support the CACHE sequence "
+                        "option."
+                    ),
+                )
             parts.append(f"CACHE {expr.cache}" if expr.cache else "NOCACHE")
         if expr.order is not None:
+            if not self.supports_sequence_order():
+                raise UnsupportedFeatureError(
+                    self.name,
+                    "CREATE SEQUENCE ORDER",
+                    suggestion=(
+                        f"{self.name} does not support the ORDER sequence "
+                        "option."
+                    ),
+                )
             parts.append("ORDER" if expr.order else "NOORDER")
         if getattr(expr, "owned_by", None) is not None:
             if not self.supports_sequence_owned_by():
