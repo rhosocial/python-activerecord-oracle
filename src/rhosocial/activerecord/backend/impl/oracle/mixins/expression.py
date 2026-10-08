@@ -5,9 +5,17 @@ Routes Oracle-specific expression formatters (connect_by, pivot,
 unpivot, hint, for_update) back through the expression's own
 ``to_sql(self)`` dispatch, which is the standard pattern used by
 the core ``ExpressionMixin``.
+
+``format_named_relation`` is the one override here that is not a pure
+delegation. The core implementation renders the relation through the
+relation's own ``format_<kind>_object``, appends the engine-specific
+time-travel clause and then the alias; Oracle adds one thing between the
+name and the alias -- the flashback clause.
 """
 
-from typing import Any, List, Tuple, TYPE_CHECKING
+from typing import Tuple, TYPE_CHECKING
+
+from ..expression.sources import OracleNamedRelationRef
 
 if TYPE_CHECKING:
     from rhosocial.activerecord.backend.expression.bases import BaseExpression
@@ -16,38 +24,43 @@ if TYPE_CHECKING:
 class OracleExpressionMixin:
     """Oracle-specific expression formatting that delegates to ``to_sql``."""
 
-    def format_table(self, expr: "BaseExpression") -> Tuple[str, tuple]:
-        """Format a :class:`TableExpression` for Oracle.
+    def format_named_relation(self, ref: "BaseExpression") -> Tuple[str, tuple]:
+        """Format a ``FROM`` reference to a named relation for Oracle.
 
-        Oracle-specific ``@dblink`` suffixes and flashback clauses carried on
-        the expression are rendered after the name, then the optional alias.
+        The relation's name, the ``@"DBLINK"`` suffix and the alias all come
+        from the shared object-naming path; Oracle adds exactly one thing the
+        core has no slot for: the flashback clause ``AS OF SCN 1234567`` /
+        ``VERSIONS BETWEEN ...``, which reads the relation as it existed at a
+        past moment. That clause belongs to the *statement*, so it travels on
+        the reference and is inserted between the name and the alias.
+
+        Alias rendering keeps the core's ``AS`` separator. Oracle accepts
+        ``FROM t AS x``, so there is no reason for this backend to be the one
+        engine whose ``FROM`` clauses read differently from every other
+        backend's for the same input.
+
+        Args:
+            ref: The row source to render. An
+                :class:`~...impl.oracle.expression.sources.OracleNamedRelationRef`
+                may carry a flashback clause; any other named-relation source is
+                rendered entirely by the core implementation.
+
+        Returns:
+            Tuple of (SQL string, parameters tuple).
         """
-        schema_name = getattr(expr, "schema_name", None)
-        alias = getattr(expr, "alias", None)
-        dblink = getattr(expr, "dblink", None)
-        flashback = getattr(expr, "flashback", None)
-        name_need_quote = getattr(expr, "name_need_quote", True)
-        schema_need_quote = getattr(expr, "schema_need_quote", True)
-        alias_need_quote = getattr(expr, "alias_need_quote", True)
+        if not isinstance(ref, OracleNamedRelationRef) or ref.flashback is None:
+            return super().format_named_relation(ref)
 
-        if schema_name:
-            table_sql = (
-                f"{self.format_identifier(schema_name, schema_need_quote)}."
-                f"{self.format_identifier(expr.name, name_need_quote)}"
+        name_sql, params = ref.relation.to_sql()
+        flashback_sql, flashback_params = ref.flashback.to_sql()
+        if ref.alias:
+            name_sql = (
+                f"{name_sql} {flashback_sql}{self.source_alias_separator()}"
+                f"{self.format_identifier(ref.alias, ref.alias_need_quote)}"
             )
         else:
-            table_sql = self.format_identifier(expr.name, name_need_quote)
-
-        table_params: Tuple[Any, ...] = ()
-        if dblink:
-            table_sql = f"{table_sql}@{self.format_identifier(dblink)}"
-        if flashback is not None:
-            flash_sql, flash_params = flashback.to_sql()
-            table_sql = f"{table_sql} {flash_sql}"
-            table_params = tuple(flash_params)
-        if alias:
-            table_sql = f"{table_sql} {self.format_identifier(alias, alias_need_quote)}"
-        return table_sql, table_params
+            name_sql = f"{name_sql} {flashback_sql}"
+        return name_sql, tuple(params) + tuple(flashback_params)
 
     def format_connect_by(self, expr: "BaseExpression") -> Tuple[str, tuple]:
         return expr.to_sql()

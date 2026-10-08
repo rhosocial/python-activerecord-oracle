@@ -4,7 +4,7 @@
 import logging
 from datetime import date, datetime, time
 from decimal import Decimal
-from typing import Dict, Tuple, Type
+from typing import Dict, Optional, Tuple, Type
 from uuid import UUID
 
 from rhosocial.activerecord.backend.type_adapter import SQLTypeAdapter
@@ -19,9 +19,14 @@ class OracleBackendMixin:
     def _quote_identifier(identifier: str) -> str:
         """Double-quote an Oracle identifier (uppercased) for safe embedding.
 
-        Used on externally-sourced identifiers (bulk DML columns/tables, LOB
-        write targets) where defense-in-depth quoting is warranted. Dot-
-        separated qualified paths are quoted segment-by-segment.
+        Used on externally-sourced identifiers (LOB write targets) where
+        defense-in-depth quoting is warranted. Dot-separated qualified paths are
+        quoted segment-by-segment.
+
+        This is deliberately *not* how a qualified name is built for a
+        statement -- that goes through the object's own rendering protocol (see
+        :meth:`_qualified_name`), so a name has one rendering path and
+        namespace slots cannot be lost.
         """
         if "." in identifier:
             return ".".join(
@@ -29,6 +34,47 @@ class OracleBackendMixin:
                 for part in identifier.split(".")
             )
         return f'"{identifier.replace(chr(34), chr(34) * 2).upper()}"'
+
+    def _qualified_name(self, name: str, schema_name: Optional[str] = None) -> str:
+        """Render a qualified relation name for a hand-built DML statement.
+
+        Some DML statements are assembled directly rather than through an
+        expression tree (``bulk_insert`` builds one statement per row so that
+        Oracle can bind each row separately). Those paths must still emit the
+        *same* text the expression path emits, so both build the same
+        :class:`~rhosocial.activerecord.backend.expression.objects.Table` and
+        render it through the same protocol instead of formatting the name here.
+        Anything else is how the synchronous and asynchronous backends came to
+        disagree: one produced ``"SCOTT"."ORDERS"`` and the other
+        ``SCOTT.ORDERS`` for the same options object.
+
+        Args:
+            name: The relation's own name.
+            schema_name: The owner (Oracle's schema), or ``None`` to leave the
+                name unqualified.
+
+        Returns:
+            The qualified name as SQL text.
+
+        Raises:
+            ValueError: ``name`` is empty, or ``schema_name`` was given as an
+                empty string.
+        """
+        from rhosocial.activerecord.backend.expression.objects import Table
+
+        return Table(
+            self.dialect, name, schema_name=schema_name
+        ).to_sql()[0]
+
+    def _identifier_list(self, identifiers) -> str:
+        """Render a comma-separated list of plain identifiers (columns).
+
+        Same rationale as :meth:`_qualified_name`: the column list of a
+        hand-built statement is part of that statement's text, so the
+        synchronous and asynchronous backends must build it the same way, and
+        through the dialect rather than by hand.
+        """
+        return ", ".join(self.dialect.format_identifier(name) for name in identifiers)
 
     def _register_oracle_adapters(self) -> None:
         from ..adapters import (

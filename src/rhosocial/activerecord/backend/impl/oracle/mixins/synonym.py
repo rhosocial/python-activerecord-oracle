@@ -17,6 +17,12 @@ class OracleSynonymMixin:
 
     Synonyms have existed since early Oracle releases; the formatters gate
     on ``(9, 0, 0)`` per the backend implementation contract.
+
+    Both sides of the statement are catalogue objects, so each is rendered by
+    its own protocol: the synonym as a :class:`Synonym`, its target as a
+    :class:`Table`. Rendering one through an object and the other through a bare
+    identifier would make the two halves of one statement follow different
+    quoting rules.
     """
 
     def supports_create_synonym(self) -> bool:
@@ -28,6 +34,31 @@ class OracleSynonymMixin:
     def format_create_synonym_statement(
         self, expr: "OracleCreateSynonymExpression"
     ) -> Tuple[str, tuple]:
+        """Format ``CREATE [PUBLIC] SYNONYM`` for Oracle.
+
+        Raises:
+            TypeError: ``expr.synonym`` is not a ``Synonym``, or ``expr.table``
+                is not a ``Table``. Each side renders through its own object
+                protocol, so a wrong kind on either side would produce a
+                well-formed synonym naming the wrong thing.
+            UnsupportedFeatureError: The Oracle version is below 9i.
+        """
+        from rhosocial.activerecord.backend.expression.objects import (
+            Synonym,
+            Table,
+        )
+
+        if not isinstance(expr.synonym, Synonym):
+            raise TypeError(
+                f"OracleCreateSynonymExpression.synonym must be a Synonym, "
+                f"got {type(expr.synonym).__name__}"
+            )
+        if not isinstance(expr.table, Table):
+            raise TypeError(
+                f"OracleCreateSynonymExpression.table must be a Table, "
+                f"got {type(expr.table).__name__}"
+            )
+
         if self.version < (9, 0, 0):
             raise UnsupportedFeatureError(
                 self.name,
@@ -41,21 +72,30 @@ class OracleSynonymMixin:
         if expr.public:
             parts.append("PUBLIC")
         parts.append("SYNONYM")
-        parts.append(self.format_identifier(expr.synonym_name))
+        parts.append(expr.synonym.to_sql()[0])
         parts.append("FOR")
-        if expr.schema_name:
-            target = (
-                f"{self.format_identifier(expr.schema_name)}."
-                f"{self.format_identifier(expr.table_name)}"
-            )
-        else:
-            target = self.format_identifier(expr.table_name)
-        parts.append(target)
+        parts.append(expr.table.to_sql()[0])
         return " ".join(parts), ()
 
     def format_drop_synonym_statement(
         self, expr: "OracleDropSynonymExpression"
     ) -> Tuple[str, tuple]:
+        """Format ``DROP [PUBLIC] SYNONYM`` for Oracle.
+
+        Raises:
+            TypeError: ``expr.synonym`` is not a ``Synonym``. Any other object
+                renders its own name, so the statement would drop something else
+                and name a synonym.
+            UnsupportedFeatureError: The Oracle version is below 9i.
+        """
+        from rhosocial.activerecord.backend.expression.objects import Synonym
+
+        if not isinstance(expr.synonym, Synonym):
+            raise TypeError(
+                f"OracleDropSynonymExpression.synonym must be a Synonym, "
+                f"got {type(expr.synonym).__name__}"
+            )
+
         if self.version < (9, 0, 0):
             raise UnsupportedFeatureError(
                 self.name,
@@ -69,7 +109,7 @@ class OracleSynonymMixin:
         if expr.public:
             parts.append("PUBLIC")
         parts.append("SYNONYM")
-        parts.append(self.format_identifier(expr.synonym_name))
+        parts.append(expr.synonym.to_sql()[0])
         if expr.force:
             parts.append("FORCE")
         return " ".join(parts), ()

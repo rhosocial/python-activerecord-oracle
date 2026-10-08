@@ -131,20 +131,35 @@ class OracleReadOnlyAction(AlterTableAction):
     """Oracle ``ALTER TABLE ... READ ONLY | READ WRITE`` action.
 
     Toggles a table between read-only (no DML allowed on the table or its
-    dependents) and read-write state.
+    dependents) and read-write state.  Each spelling has its own parameter and
+    the clause is mandatory in the action's grammar: exactly one of
+    ``read_only=True`` / ``read_write=True`` must be set.
 
     Args:
         dialect: the Oracle dialect instance.
-        read_only: when True emit ``READ ONLY``, otherwise ``READ WRITE``.
+        read_only: when True emit ``READ ONLY``.
+        read_write: when True emit ``READ WRITE``.
+
+    Raises:
+        ValueError: if both parameters are set, or neither is.
     """
 
     def __init__(
         self,
         dialect: "OracleDialect",
-        read_only: bool = True,
+        read_only: bool = False,
+        read_write: bool = False,
     ):
         super().__init__(dialect)
+        if read_only and read_write:
+            raise ValueError("read_only and read_write are mutually exclusive options")
+        if not read_only and not read_write:
+            raise ValueError(
+                "READ ONLY/READ WRITE requires exactly one of read_only=True "
+                "or read_write=True"
+            )
         self.read_only = bool(read_only)
+        self.read_write = bool(read_write)
 
     @property
     def format_method(self) -> str:
@@ -157,21 +172,35 @@ class OracleRowMovementAction(AlterTableAction):
 
     Enables or disables row movement, which allows Oracle to move a row to a
     different partition/segment during an update (required for partition
-    updates and segment shrink).
+    updates and segment shrink).  Each spelling has its own parameter and the
+    clause is mandatory in the action's grammar: exactly one of
+    ``enable=True`` / ``disable=True`` must be set.
 
     Args:
         dialect: the Oracle dialect instance.
-        enable: when True emit ``ENABLE ROW MOVEMENT``, otherwise ``DISABLE
-            ROW MOVEMENT``.
+        enable: when True emit ``ENABLE ROW MOVEMENT``.
+        disable: when True emit ``DISABLE ROW MOVEMENT``.
+
+    Raises:
+        ValueError: if both parameters are set, or neither is.
     """
 
     def __init__(
         self,
         dialect: "OracleDialect",
-        enable: bool = True,
+        enable: bool = False,
+        disable: bool = False,
     ):
         super().__init__(dialect)
+        if enable and disable:
+            raise ValueError("enable and disable are mutually exclusive options")
+        if not enable and not disable:
+            raise ValueError(
+                "ENABLE/DISABLE ROW MOVEMENT requires exactly one of "
+                "enable=True or disable=True"
+            )
         self.enable = bool(enable)
+        self.disable = bool(disable)
 
     @property
     def format_method(self) -> str:

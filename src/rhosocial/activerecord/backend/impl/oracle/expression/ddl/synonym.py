@@ -9,14 +9,21 @@ which provide a transparent alias for another schema object:
 * ``OracleDropSynonymExpression`` — ``DROP [PUBLIC] SYNONYM s`` (optionally
   ``FORCE``).
 
+Each takes the objects it names rather than a name and an owner. A synonym and
+its target are two different catalogue entries that may well live in different
+owners, and carrying each as its own object is the only way the two owners can
+be told apart; passing a single ``schema_name`` beside both names made the
+synonym's owner and its target's owner the same string by construction.
+
 All expressions delegate SQL generation to the dialect through the public
 ``format_*`` formatters implemented by ``OracleSynonymMixin``.
 """
 from __future__ import annotations
 
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from rhosocial.activerecord.backend.expression.bases import BaseExpression
+from rhosocial.activerecord.backend.expression.objects import Synonym, Table
 
 if TYPE_CHECKING:  # pragma: no cover
     from ...dialect import OracleDialect
@@ -27,32 +34,35 @@ class OracleCreateSynonymExpression(BaseExpression):
 
     Args:
         dialect: the Oracle dialect instance.
-        synonym_name: name of the synonym to create.
-        table_name: name of the object the synonym points to.
-        schema_name: optional schema qualifier of the target object.
+        synonym: the synonym to create, carrying its owner if it is not the
+            caller's own.
+        table: the object the synonym points to, carrying its own owner.
         public: create a PUBLIC synonym (shared by all users) instead of a
             private one.
 
     Raises:
-        ValueError: if ``synonym_name`` or ``table_name`` is empty.
+        TypeError: if ``synonym`` is not a ``Synonym`` or ``table`` is not a
+            ``Table``.
     """
 
     def __init__(
         self,
         dialect: "OracleDialect",
-        synonym_name: str,
-        table_name: str,
-        schema_name: Optional[str] = None,
+        synonym: Synonym,
+        table: Table,
         public: bool = False,
     ):
         super().__init__(dialect)
-        if not isinstance(synonym_name, str) or not synonym_name.strip():
-            raise ValueError("synonym_name must be a non-empty string")
-        if not isinstance(table_name, str) or not table_name.strip():
-            raise ValueError("table_name must be a non-empty string")
-        self.synonym_name = synonym_name
-        self.table_name = table_name
-        self.schema_name = schema_name
+        if not isinstance(synonym, Synonym):
+            raise TypeError(
+                f"synonym must be a Synonym, got {type(synonym).__name__}"
+            )
+        if not isinstance(table, Table):
+            raise TypeError(
+                f"table must be a Table, got {type(table).__name__}"
+            )
+        self.synonym = synonym
+        self.table = table
         self.public = bool(public)
 
     @property
@@ -66,26 +76,29 @@ class OracleDropSynonymExpression(BaseExpression):
 
     Args:
         dialect: the Oracle dialect instance.
-        synonym_name: name of the synonym to drop.
+        synonym: the synonym to drop, carrying its owner if it is not the
+            caller's own.
         public: drop the PUBLIC synonym.
         force: append ``FORCE`` to drop the synonym even when it has
             dependents.
 
     Raises:
-        ValueError: if ``synonym_name`` is empty.
+        TypeError: if ``synonym`` is not a ``Synonym``.
     """
 
     def __init__(
         self,
         dialect: "OracleDialect",
-        synonym_name: str,
+        synonym: Synonym,
         public: bool = False,
         force: bool = False,
     ):
         super().__init__(dialect)
-        if not isinstance(synonym_name, str) or not synonym_name.strip():
-            raise ValueError("synonym_name must be a non-empty string")
-        self.synonym_name = synonym_name
+        if not isinstance(synonym, Synonym):
+            raise TypeError(
+                f"synonym must be a Synonym, got {type(synonym).__name__}"
+            )
+        self.synonym = synonym
         self.public = bool(public)
         self.force = bool(force)
 

@@ -27,9 +27,9 @@ from rhosocial.activerecord.backend.expression import (
     InsertExpression,
     Literal,
     QueryExpression,
-    TableExpression,
 )
 from rhosocial.activerecord.backend.errors import DatabaseError
+from rhosocial.activerecord.backend.expression.objects import Table
 from rhosocial.activerecord.backend.expression.operators import RawSQLExpression
 from rhosocial.activerecord.backend.expression.types import (
     DateType,
@@ -71,7 +71,7 @@ from rhosocial.activerecord.testsuite.utils.common import requires_protocol
 
 def _drop(backend, name: str):
     """Drop ``name`` if it exists; ignore ORA-00942."""
-    expr = DropTableExpression(backend.dialect, name)
+    expr = DropTableExpression(backend.dialect, Table(backend.dialect, name))
     sql, params = expr.to_sql()
     try:
         backend.execute(sql, params)
@@ -91,7 +91,7 @@ def _partition_names(backend, table_name: str):
     query = QueryExpression(
         d,
         select=[Column(d, "PARTITION_NAME")],
-        from_=TableExpression(d, "ALL_TAB_PARTITIONS"),
+        from_=Table(d, "ALL_TAB_PARTITIONS"),
         where=Column(d, "TABLE_NAME") == Literal(d, table_name.upper()),
     )
     sql, params = query.to_sql()
@@ -108,7 +108,7 @@ def _count_subpartitions(backend, table_name: str) -> int:
     query = QueryExpression(
         d,
         select=[Column(d, "SUBPARTITION_NAME")],
-        from_=TableExpression(d, "ALL_TAB_SUBPARTITIONS"),
+        from_=Table(d, "ALL_TAB_SUBPARTITIONS"),
         where=Column(d, "TABLE_NAME") == Literal(d, table_name.upper()),
     )
     sql, params = query.to_sql()
@@ -123,7 +123,7 @@ def _insert_row(backend, table_name: str, columns: dict):
     values = [Literal(d, v) for v in columns.values()]
     expr = InsertExpression(
         d,
-        into=table_name,
+        into=Table(d, table_name),
         source=ValuesSource(d, [values]),
         columns=col_names,
     )
@@ -158,7 +158,7 @@ def test_interval_partition_auto_creates_partition_real(oracle_backend_single):
         )
         expr = CreateTableExpression(
             dialect=d,
-            table=table_name,
+            table=Table(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
                     ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
@@ -218,7 +218,7 @@ def test_reference_partitioning_inherits_parent_partitions_real(oracle_backend_s
         )
         parent_expr = CreateTableExpression(
             dialect=d,
-            table=parent_name,
+            table=Table(d, parent_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
                     ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
@@ -242,13 +242,13 @@ def test_reference_partitioning_inherits_parent_partitions_real(oracle_backend_s
             name="fk_child_parent",
             constraint_type=TableConstraintType.FOREIGN_KEY,
             columns=["PARENT_ID"],
-            foreign_key_table=parent_name,
+            foreign_key_table=Table(d, parent_name),
             foreign_key_columns=["ID"],
         )
         child_partition = OracleReferencePartitionClause(d, "fk_child_parent")
         child_expr = CreateTableExpression(
             dialect=d,
-            table=child_name,
+            table=Table(d, child_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
                     ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
@@ -313,7 +313,7 @@ def test_composite_range_hash_partitioning_real(oracle_backend_single):
         )
         expr = CreateTableExpression(
             dialect=d,
-            table=table_name,
+            table=Table(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
                     ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
@@ -359,7 +359,7 @@ def test_add_and_drop_partition_real(oracle_backend_single):
         )
         expr = CreateTableExpression(
             dialect=d,
-            table=table_name,
+            table=Table(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
                     ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
@@ -374,7 +374,7 @@ def test_add_and_drop_partition_real(oracle_backend_single):
 
         # ADD a new partition p2 with boundary 200.
         add_expr = OracleAddPartitionExpression(
-            d, table_name,
+            d, Table(d, table_name),
             OraclePartitionDefinition(name="p2", less_than=[OraclePartitionValue(d, 200)]),
         )
         sql, params = add_expr.to_sql()
@@ -382,7 +382,7 @@ def test_add_and_drop_partition_real(oracle_backend_single):
         assert _partition_names(backend, table_name) == {"P1", "P2"}
 
         # DROP p1.
-        drop_expr = OracleDropPartitionExpression(d, table_name, "p1")
+        drop_expr = OracleDropPartitionExpression(d, Table(d, table_name), "p1")
         sql, params = drop_expr.to_sql()
         backend.execute(sql, params)
         assert _partition_names(backend, table_name) == {"P2"}
@@ -409,7 +409,7 @@ def test_split_partition_real(oracle_backend_single):
         )
         expr = CreateTableExpression(
             dialect=d,
-            table=table_name,
+            table=Table(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
                     ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
@@ -423,7 +423,7 @@ def test_split_partition_real(oracle_backend_single):
 
         # SPLIT p_max at 200 into p2 (<200) and p_max (MAXVALUE).
         split_expr = OracleSplitPartitionExpression(
-            d, table_name, "p_max",
+            d, Table(d, table_name), "p_max",
             at_values=[OraclePartitionValue(d, 200)],
             new_partitions=[
                 OraclePartitionDefinition(name="p2", less_than=[OraclePartitionValue(d, 200)]),
@@ -456,7 +456,7 @@ def test_merge_partitions_real(oracle_backend_single):
         )
         expr = CreateTableExpression(
             dialect=d,
-            table=table_name,
+            table=Table(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
                     ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
@@ -470,7 +470,7 @@ def test_merge_partitions_real(oracle_backend_single):
 
         # MERGE p1 and p2 into p12 (<200).
         merge_expr = OracleMergePartitionsExpression(
-            d, table_name, ["p1", "p2"],
+            d, Table(d, table_name), ["p1", "p2"],
             OraclePartitionDefinition(name="p12", less_than=[OraclePartitionValue(d, 200)]),
         )
         sql, params = merge_expr.to_sql()
@@ -498,7 +498,7 @@ def test_truncate_partition_real(oracle_backend_single):
         )
         expr = CreateTableExpression(
             dialect=d,
-            table=table_name,
+            table=Table(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
                     ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
@@ -515,13 +515,13 @@ def test_truncate_partition_real(oracle_backend_single):
 
         # Count total rows.
         count_query = QueryExpression(
-            d, select=[Column(d, "ID")], from_=TableExpression(d, table_name),
+            d, select=[Column(d, "ID")], from_=Table(d, table_name),
         )
         sql, params = count_query.to_sql()
         assert len(_exec_query(backend, sql, params)) == 2
 
         # TRUNCATE p1 (contains ID=1).
-        trunc_expr = OracleTruncatePartitionExpression(d, table_name, "p1")
+        trunc_expr = OracleTruncatePartitionExpression(d, Table(d, table_name), "p1")
         sql, params = trunc_expr.to_sql()
         backend.execute(sql, params)
 
@@ -552,7 +552,7 @@ def test_move_partition_real(oracle_backend_single):
         )
         expr = CreateTableExpression(
             dialect=d,
-            table=table_name,
+            table=Table(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
                     ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
@@ -564,7 +564,7 @@ def test_move_partition_real(oracle_backend_single):
         backend.execute(sql, params)
 
         # MOVE p1. No assertion on tablespace; we just verify it executes.
-        move_expr = OracleMovePartitionExpression(d, table_name, "p1")
+        move_expr = OracleMovePartitionExpression(d, Table(d, table_name), "p1")
         sql, params = move_expr.to_sql()
         backend.execute(sql, params)
 
@@ -594,7 +594,7 @@ def test_exchange_partition_real(oracle_backend_single):
         )
         expr = CreateTableExpression(
             dialect=d,
-            table=table_name,
+            table=Table(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
                     ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
@@ -608,7 +608,7 @@ def test_exchange_partition_real(oracle_backend_single):
         # Build a non-partitioned staging table with the same shape.
         staging_expr = CreateTableExpression(
             dialect=d,
-            table=staging_name,
+            table=Table(d, staging_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
                     ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
@@ -620,7 +620,7 @@ def test_exchange_partition_real(oracle_backend_single):
 
         # EXCHANGE p1 with the staging table (WITHOUT VALIDATION for speed).
         exch_expr = OracleExchangePartitionExpression(
-            d, table_name, "p1", staging_name, with_validation=False,
+            d, Table(d, table_name), "p1", Table(d, staging_name), with_validation=False,
         )
         sql, params = exch_expr.to_sql()
         backend.execute(sql, params)

@@ -35,18 +35,12 @@ from rhosocial.activerecord.backend.dialect.protocols import (
     LateralJoinSupport,
     WildcardSupport,
     JoinSupport,
-    ViewSupport,
-    SchemaSupport,
-    IndexSupport,
-    SequenceSupport,
-    TableSupport,
     IntrospectionSupport,
     SetOperationSupport,
     TruncateSupport,
     ConstraintSupport,
     TransactionControlSupport,
     SQLFunctionSupport,
-    UserDefinedTypeSupport,
 )
 from rhosocial.activerecord.backend.dialect.mixins import (
     SQLXMLMixin,
@@ -56,6 +50,26 @@ from rhosocial.activerecord.backend.dialect.mixins import (
     WindowFunctionMixin,
     JSONMixin,
 
+    # Named objects: each *NameMixin turns one catalogue object into SQL
+    # through its format_<kind>_object, and each inherits NamespaceMixin, so
+    # each must precede it. RelationSourceMixin renders the FROM side.
+    RelationSourceMixin,
+    TableNameMixin,
+    ViewNameMixin,
+    MaterializedViewNameMixin,
+    ForeignTableNameMixin,
+    IndexNameMixin,
+    SequenceNameMixin,
+    TriggerNameMixin,
+    FunctionNameMixin,
+    ProcedureNameMixin,
+    TypeNameMixin,
+    DomainNameMixin,
+    SynonymNameMixin,
+    SchemaNameMixin,
+    DatabaseNameMixin,
+    PropertyGraphNameMixin,
+    NamespaceMixin,
     ArrayMixin,
     ExplainMixin,
     GraphMixin,
@@ -77,6 +91,11 @@ from rhosocial.activerecord.backend.dialect.mixins import (
     ConstraintMixin,
     IntrospectionMixin,
     DDLColumnMixin,
+    # Column mechanisms: the parameterised identity clause and the bare
+    # AUTO_INCREMENT marker. Oracle declares the probes in
+    # OracleFeaturesMixin, which precedes these generic formatters.
+    IdentityColumnMixin,
+    AutoIncrementMixin,
     PredicateMixin,
     ExpressionMixin,
     DateTimeMixin,
@@ -109,6 +128,7 @@ from .mixins import (
     OraclePaginationMixin,
     OraclePartitionMixin,
     OraclePivotMixin,
+    OracleNamespaceMixin,
     OracleRoutineMixin,
     OracleSchemaMixin,
     OracleSequenceMixin,
@@ -125,7 +145,6 @@ from .mixins import (
     OracleTypeDDLMixin,
     OracleVectorMixin,
     OracleViewMixin,
-    OracleIdentifierMixin,
     OracleExplainMixin,
 )
 from .protocols.partition import OraclePartitionSupport
@@ -167,6 +186,10 @@ class OracleDialect(
     OraclePaginationMixin,
     OraclePartitionMixin,
     OraclePivotMixin,
+    # Qualified-name rendering must resolve before any generic mixin that
+    # might render a name, so Oracle's @dblink suffix and its single-level
+    # (owner-only) shape both outrank core's two-slot default.
+    OracleNamespaceMixin,
     OracleRoutineMixin,
     OracleSchemaMixin,
     OracleSequenceMixin,
@@ -182,7 +205,6 @@ class OracleDialect(
     OracleTypeSuggestionMixin,
     OracleVectorMixin,
     OracleViewMixin,
-    OracleIdentifierMixin,
     OracleExplainMixin,
     # ================================================================
     # Generic fallback mixins – defaults that Oracle-specific mixins
@@ -207,6 +229,29 @@ class OracleDialect(
     JoinMixin,
     SetOperationMixin,
     TruncateMixin,
+    # Named objects. Each *NameMixin turns one catalogue object into SQL
+    # through its format_<kind>_object, and each inherits NamespaceMixin, so
+    # each must precede it. RelationSourceMixin renders the FROM side. These
+    # sit after the Oracle overrides above because OracleNamespaceMixin
+    # subclasses TableNameMixin to add the @dblink suffix and its own
+    # format_qualified_name, and a subclass must precede its base.
+    RelationSourceMixin,
+    TableNameMixin,
+    ViewNameMixin,
+    MaterializedViewNameMixin,
+    ForeignTableNameMixin,
+    IndexNameMixin,
+    SequenceNameMixin,
+    TriggerNameMixin,
+    FunctionNameMixin,
+    ProcedureNameMixin,
+    TypeNameMixin,
+    DomainNameMixin,
+    SynonymNameMixin,
+    SchemaNameMixin,
+    DatabaseNameMixin,
+    PropertyGraphNameMixin,
+    NamespaceMixin,
     ViewMixin,
     SchemaMixin,
     IndexMixin,
@@ -215,6 +260,8 @@ class OracleDialect(
     ConstraintMixin,
     IntrospectionMixin,
     DDLColumnMixin,
+    IdentityColumnMixin,
+    AutoIncrementMixin,
     PredicateMixin,
     ExpressionMixin,
     DateTimeMixin,
@@ -253,24 +300,29 @@ class OracleDialect(
     JoinSupport,
     SetOperationSupport,
     TruncateSupport,
-    ViewSupport,
-    SchemaSupport,
-    IndexSupport,
-    SequenceSupport,
-    TableSupport,
     ConstraintSupport,
     IntrospectionSupport,
     TransactionControlSupport,
     SQLFunctionSupport,
     OraclePartitionSupport,
     OracleTypeDDLSupport,
-    UserDefinedTypeSupport,
 ):
     """Oracle dialect implementation that adapts to the Oracle version.
 
     All SQL generation and capability-check logic lives in dedicated
     mixin classes (see ``.mixins`` package). This class is a thin
     composition skeleton that wires them together.
+
+    The protocol block at the foot of the base list is a type-annotation
+    guarantee only: nothing dispatches through those classes, and a protocol
+    earns its place there only when listing it keeps the MRO consistent. The
+    three user-defined-type protocols are deliberately absent even though
+    :class:`~.protocols.ddl_type.OracleTypeDDLSupport` composes them. A protocol
+    mixed in ahead of the concrete mixins cannot be linearised, and the failure
+    reads as an opaque "cannot create a consistent method resolution order"
+    naming every base rather than as anything to do with protocols. Their
+    contract is asserted by ``isinstance``, which is what a structural protocol
+    is for.
     """
 
     def __init__(
@@ -340,7 +392,19 @@ class OracleDialect(
         self._ru_version = self._normalize_ru_version(value)
 
     def format_identifier(self, identifier: str, need_quote: bool = True) -> str:
-        """Format identifier for Oracle with double-quote quoting and uppercasing."""
+        """Format identifier for Oracle with double-quote quoting and uppercasing.
+
+        The single definition of this primitive in this backend. Identifiers
+        are quoted and folded to upper case because Oracle folds every unquoted
+        identifier to upper case; ``need_quote=False`` returns the identifier
+        untouched (with a warning when it is a reserved word), which is what a
+        caller asking for a literal-ish name means.
+
+        Qualified names are *not* built here -- ``validate_namespace`` refuses a
+        namespace level Oracle cannot express and ``format_qualified_name``
+        spells the ones it can, which on OracleDialect is the owner alone; each
+        object renders itself through its own ``format_<kind>_object``.
+        """
         if not need_quote:
             if self.is_reserved_word(identifier):
                 import warnings

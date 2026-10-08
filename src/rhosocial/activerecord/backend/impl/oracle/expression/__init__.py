@@ -86,6 +86,8 @@ from .ddl import (
 from .analyze import (
     OracleAnalyzeMode, OracleAnalyzeExpression,
 )
+from .objects import OracleRemoteName, OraclePackage, OracleTable
+from .sources import OracleNamedRelationRef
 from .vector import VectorLiteralExpression, VectorOperandExpression
 from .table import TableCompressionClauseExpression, TablespaceClauseExpression
 from .trigger import DisableTriggerExpression, EnableTriggerExpression
@@ -161,6 +163,8 @@ __all__ = [
     'DropTypeBodyExpression', 'OracleDropTypeBodyExpression',
     # ANALYZE TABLE expressions
     'OracleAnalyzeMode', 'OracleAnalyzeExpression',
+    # Schema objects and named-relation references
+    'OracleRemoteName', 'OraclePackage', 'OracleTable', 'OracleNamedRelationRef',
     # Vector expressions
     'VectorLiteralExpression', 'VectorOperandExpression',
     # Table clause expressions

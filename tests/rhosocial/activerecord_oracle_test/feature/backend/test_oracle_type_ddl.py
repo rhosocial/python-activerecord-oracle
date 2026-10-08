@@ -7,7 +7,12 @@ import pytest
 
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 from rhosocial.activerecord.backend.dialect.mixins import UserDefinedTypeMixin
-from rhosocial.activerecord.backend.dialect.protocols import UserDefinedTypeSupport
+from rhosocial.activerecord.backend.dialect.protocols import (
+    AlterTypeSupport,
+    CreateTypeSupport,
+    DropTypeSupport,
+)
+from rhosocial.activerecord.backend.expression.objects import Type
 from rhosocial.activerecord.backend.expression.serialization import deserialize, serialize
 from rhosocial.activerecord.backend.expression.statements import (
     AlterTypeExpression,
@@ -52,12 +57,17 @@ def _dialect(
 
 def test_type_protocol_and_definition_sql() -> None:
     dialect = _dialect(version_full=(19, 28, 0, 0, 0))
-    assert issubclass(OracleTypeDDLSupport, UserDefinedTypeSupport)
-    assert isinstance(dialect, UserDefinedTypeSupport)
+    # One protocol per statement: Oracle declares CREATE, ALTER and DROP TYPE
+    # separately, and the backend's own protocol composes the three.
+    for protocol in (CreateTypeSupport, AlterTypeSupport, DropTypeSupport):
+        assert issubclass(OracleTypeDDLSupport, protocol)
+        assert isinstance(dialect, protocol)
     assert isinstance(dialect, OracleTypeDDLSupport)
     mro = OracleDialect.__mro__
+    # The composite protocol is an Oracle-side declaration, not a base class:
+    # runtime_checkable Protocols cannot sit behind the concrete *NameMixin
+    # bases, so it is asserted by conformance rather than by MRO position.
     assert mro.index(OracleTypeDDLMixin) < mro.index(UserDefinedTypeMixin)
-    assert mro.index(OracleTypeDDLSupport) < mro.index(UserDefinedTypeSupport)
 
     definition = OracleObjectTypeDefinition(
         dialect,
@@ -69,7 +79,7 @@ def test_type_protocol_and_definition_sql() -> None:
         not_final=True,
         instantiable=False,
     )
-    create = CreateTypeExpression(dialect, "person_t", definition, or_replace=True)
+    create = CreateTypeExpression(dialect, Type(dialect, "person_t"), definition, or_replace=True)
     sql, params = create.to_sql()
     assert sql == (
         'CREATE OR REPLACE TYPE "PERSON_T" AS OBJECT ('
@@ -86,7 +96,7 @@ def test_definition_option_validation_and_accessible_by() -> None:
         attributes=[OracleTypeAttribute("id", "NUMBER")],
         accessible_by=["PROCEDURE trusted", "PACKAGE APP.TRUSTED"],
     )
-    assert CreateTypeExpression(dialect, "secured_t", definition).to_sql()[0] == (
+    assert CreateTypeExpression(dialect, Type(dialect, "secured_t"), definition).to_sql()[0] == (
         'CREATE TYPE "SECURED_T" ACCESSIBLE BY (PROCEDURE trusted, '
         'PACKAGE APP.TRUSTED) AS OBJECT ("ID" NUMBER)'
     )
@@ -102,7 +112,7 @@ def test_definition_option_validation_and_accessible_by() -> None:
         attributes=[OracleTypeAttribute("id", "NUMBER")],
         under="base_t",
     )
-    assert "PERSISTABLE" not in CreateTypeExpression(dialect, "sub_t", subtype).to_sql()[0]
+    assert "PERSISTABLE" not in CreateTypeExpression(dialect, Type(dialect, "sub_t"), subtype).to_sql()[0]
     with pytest.raises(ValueError):
         OracleObjectTypeDefinition(
             dialect,
@@ -142,7 +152,7 @@ def test_invoker_rights_is_validated_and_rendered_canonically() -> None:
             attributes=[OracleTypeAttribute("id", "NUMBER")],
             invoker_rights=invoker_rights,
         )
-        sql = CreateTypeExpression(dialect, "secure_t", definition).to_sql()[0]
+        sql = CreateTypeExpression(dialect, Type(dialect, "secure_t"), definition).to_sql()[0]
         assert "AUTHID CURRENT_USER" in sql
         assert "INVOKER RIGHTS" not in sql
     with pytest.raises(ValueError, match="invoker_rights"):
@@ -160,7 +170,7 @@ def test_invoker_rights_is_validated_and_rendered_canonically() -> None:
         )
     definition.invoker_rights = "INVALID"
     with pytest.raises(ValueError, match="invoker_rights"):
-        CreateTypeExpression(dialect, "secure_t", definition).to_sql()
+        CreateTypeExpression(dialect, Type(dialect, "secure_t"), definition).to_sql()
 
 
 def test_structured_method_kind_return_type_and_name_validation() -> None:
@@ -188,13 +198,13 @@ def test_collection_sqlj_and_incomplete_sql() -> None:
     )
     incomplete = OracleIncompleteTypeDefinition(dialect)
 
-    assert CreateTypeExpression(dialect, "numbers_t", varray).to_sql()[0] == (
+    assert CreateTypeExpression(dialect, Type(dialect, "numbers_t"), varray).to_sql()[0] == (
         'CREATE TYPE "NUMBERS_T" AS VARRAY(10) OF NUMBER NOT NULL'
     )
-    assert CreateTypeExpression(dialect, "names_t", nested).to_sql()[0] == (
+    assert CreateTypeExpression(dialect, Type(dialect, "names_t"), nested).to_sql()[0] == (
         'CREATE TYPE "NAMES_T" AS TABLE OF (VARCHAR2(30)) NOT PERSISTABLE'
     )
-    assert CreateTypeExpression(dialect, "person_java", sqlj).to_sql()[0] == (
+    assert CreateTypeExpression(dialect, Type(dialect, "person_java"), sqlj).to_sql()[0] == (
         'CREATE TYPE "PERSON_JAVA" AS OBJECT EXTERNAL NAME \'Person\' LANGUAGE JAVA '
         'USING SQLData ("NAME" VARCHAR2(30) EXTERNAL NAME \'name\', '
         'MEMBER FUNCTION id RETURN NUMBER EXTERNAL NAME \'id() return int\')'
@@ -220,7 +230,7 @@ def test_collection_sqlj_and_incomplete_sql() -> None:
             external_name="Person",
             language="JAVA",
         )
-    assert CreateTypeExpression(dialect, "forward_t", incomplete).to_sql()[0] == (
+    assert CreateTypeExpression(dialect, Type(dialect, "forward_t"), incomplete).to_sql()[0] == (
         'CREATE TYPE "FORWARD_T"'
     )
 
@@ -239,10 +249,10 @@ def test_persistable_clause_requires_oracle_18c() -> None:
     assert legacy.supports_type_persistable() is False
     assert supported.supports_type_persistable() is True
     with pytest.raises(UnsupportedFeatureError, match="PERSISTABLE"):
-        CreateTypeExpression(legacy, "legacy_numbers_t", legacy_definition).to_sql()
+        CreateTypeExpression(legacy, Type(legacy, "legacy_numbers_t"), legacy_definition).to_sql()
     assert "NOT PERSISTABLE" in CreateTypeExpression(
         supported,
-        "numbers_t",
+        Type(supported, "numbers_t"),
         supported_definition,
     ).to_sql()[0]
 
@@ -260,7 +270,7 @@ def test_alter_actions_and_dependent_handling() -> None:
             OracleTypeAttribute("tag", "VARCHAR2(20)"),
         ),
     ]
-    alter = AlterTypeExpression(dialect, "person_t", actions)
+    alter = AlterTypeExpression(dialect, Type(dialect, "person_t"), actions)
     sql, params = alter.to_sql()
     assert sql == (
         'ALTER TYPE "PERSON_T" ADD ATTRIBUTE ("CREATED_AT" TIMESTAMP, '
@@ -278,7 +288,7 @@ def test_alter_actions_and_dependent_handling() -> None:
             dependent_handling=OracleAlterTypeDependentHandling.CASCADE,
         ),
     ]
-    method_sql = AlterTypeExpression(dialect, "person_t", method_actions).to_sql()[0]
+    method_sql = AlterTypeExpression(dialect, Type(dialect, "person_t"), method_actions).to_sql()[0]
     assert method_sql == (
         'ALTER TYPE "PERSON_T" ADD MEMBER FUNCTION label RETURN VARCHAR2, '
         'DROP MEMBER FUNCTION old_label() CASCADE'
@@ -286,13 +296,13 @@ def test_alter_actions_and_dependent_handling() -> None:
     with pytest.raises(UnsupportedFeatureError):
         AlterTypeExpression(
             dialect,
-            "person_t",
+            Type(dialect, "person_t"),
             [actions[0], method_actions[0]],
         ).to_sql()
     with pytest.raises(UnsupportedFeatureError):
         AlterTypeExpression(
             dialect,
-            "person_t",
+            Type(dialect, "person_t"),
             [
                 actions[0],
                 OracleAlterTypeModifyAttributeAction(
@@ -325,20 +335,20 @@ def test_body_and_force_validate_drop_are_separate_expressions() -> None:
     dialect = _dialect(version_full=(19, 28, 0, 0, 0))
     body = OracleCreateTypeBodyExpression(
         dialect,
-        "person_t",
+        Type(dialect, "person_t"),
         "MEMBER FUNCTION display RETURN VARCHAR2 IS BEGIN RETURN name; END;",
         or_replace=True,
     )
-    force_drop = OracleDropTypeExpression(dialect, "person_t", force=True)
-    validate_drop = OracleDropTypeExpression(dialect, "person_t", validate=True)
-    body_drop = DropTypeBodyExpression(dialect, "person_t", if_exists=True)
+    force_drop = OracleDropTypeExpression(dialect, Type(dialect, "person_t"), force=True)
+    validate_drop = OracleDropTypeExpression(dialect, Type(dialect, "person_t"), validate=True)
+    body_drop = DropTypeBodyExpression(dialect, Type(dialect, "person_t"), if_exists=True)
 
     assert body.to_sql()[0].startswith("CREATE OR REPLACE TYPE BODY")
     assert force_drop.to_sql()[0] == 'DROP TYPE "PERSON_T" FORCE'
     assert validate_drop.to_sql()[0] == 'DROP TYPE "PERSON_T" VALIDATE'
     assert body_drop.to_sql()[0] == 'DROP TYPE BODY IF EXISTS "PERSON_T"'
     with pytest.raises(ValueError):
-        OracleDropTypeExpression(dialect, "person_t", force=True, validate=True)
+        OracleDropTypeExpression(dialect, Type(dialect, "person_t"), force=True, validate=True)
 
 
 def test_if_clauses_require_reliable_19_28_ru_source() -> None:
@@ -355,19 +365,19 @@ def test_if_clauses_require_reliable_19_28_ru_source() -> None:
     assert future.supports_create_type_if_not_exists() is False
     assert supported.supports_create_type_if_not_exists() is True
     with pytest.raises(UnsupportedFeatureError):
-        CreateTypeExpression(base, "forward_t", definition, if_not_exists=True).to_sql()
+        CreateTypeExpression(base, Type(base, "forward_t"), definition, if_not_exists=True).to_sql()
     with pytest.raises(UnsupportedFeatureError):
-        DropTypeBodyExpression(base, "forward_t", if_exists=True).to_sql()
+        DropTypeBodyExpression(base, Type(base, "forward_t"), if_exists=True).to_sql()
     assert CreateTypeExpression(
         supported,
-        "forward_t",
+        Type(supported, "forward_t"),
         OracleIncompleteTypeDefinition(supported),
         if_not_exists=True,
     ).to_sql()[0] == 'CREATE TYPE IF NOT EXISTS "FORWARD_T"'
     with pytest.raises(ValueError):
         CreateTypeExpression(
             supported,
-            "forward_t",
+            Type(supported, "forward_t"),
             OracleIncompleteTypeDefinition(supported),
             if_not_exists=True,
             or_replace=True,
@@ -412,11 +422,11 @@ def test_type_ddl_serialization_registration() -> None:
         OracleAlterTypeDropMethodAction(dialect, name="id", kind="MEMBER FUNCTION", parameters=[]),
         OracleAlterTypeLimitAction(dialect, 4),
         OracleAlterTypeCompileAction(dialect),
-        OracleAlterTypeFinalAction(dialect),
-        OracleAlterTypeInstantiableAction(dialect),
-        OracleCreateTypeBodyExpression(dialect, "person_t", "BEGIN NULL; END;"),
-        OracleDropTypeExpression(dialect, "person_t", force=True),
-        DropTypeBodyExpression(dialect, "person_t"),
+        OracleAlterTypeFinalAction(dialect, final=True),
+        OracleAlterTypeInstantiableAction(dialect, instantiable=True),
+        OracleCreateTypeBodyExpression(dialect, Type(dialect, "person_t"), "BEGIN NULL; END;"),
+        OracleDropTypeExpression(dialect, Type(dialect, "person_t"), force=True),
+        DropTypeBodyExpression(dialect, Type(dialect, "person_t")),
     )
     for expression in expressions:
         restored = deserialize(serialize(expression), dialect)
@@ -475,6 +485,6 @@ async def test_async_introspect_refreshes_version_full_cache() -> None:
 
 def test_core_drop_type_expression_is_supported() -> None:
     dialect = _dialect()
-    sql, params = DropTypeExpression(dialect, "person_t").to_sql()
+    sql, params = DropTypeExpression(dialect, Type(dialect, "person_t")).to_sql()
     assert sql == 'DROP TYPE "PERSON_T"'
     assert params == ()

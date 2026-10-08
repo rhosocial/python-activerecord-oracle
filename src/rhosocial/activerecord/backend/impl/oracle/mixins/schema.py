@@ -1,9 +1,23 @@
 # src/rhosocial/activerecord/backend/impl/oracle/mixins/schema.py
-"""Oracle schema DDL support mixin."""
+"""Oracle schema (owner) support: the DDL switches."""
 
 
 class OracleSchemaMixin:
-    """Oracle schema management capability checks."""
+    """Oracle schema (owner) capability checks, DDL side only.
+
+    One question lives here: does the engine have schemas as a thing it can
+    create and drop? Oracle answers it -- schemas exist, but they come from
+    ``CREATE USER``, so there is no ``CREATE SCHEMA`` and no ``DROP SCHEMA``.
+
+    The *other* question -- may a name be qualified with an owner? -- is a
+    naming question with a different owner, and it is answered on
+    :class:`~...mixins.namespace.OracleNamespaceMixin`, which implements the
+    core's :class:`~rhosocial.activerecord.backend.dialect.protocols.NamespaceSupport`.
+    Keeping the two apart is not tidiness. MySQL has a schema it cannot create
+    and a database it cannot qualify names with, so a single switch cannot say
+    both, and Oracle -- which has schemas it cannot create and *can* qualify
+    names with -- is that same disagreement pointed the other way.
+    """
 
     def supports_schema(self) -> bool:
         """Oracle namespaces objects per user schema (schema.table qualification)."""

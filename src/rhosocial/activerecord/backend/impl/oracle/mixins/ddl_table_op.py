@@ -59,22 +59,41 @@ class OracleTableCapabilityMixin:
 
         Oracle has no IF EXISTS clause and no bare CASCADE/RESTRICT keyword;
         instead, the dialect-specific ``CASCADE CONSTRAINTS`` form (optionally
-        followed by ``PURGE``) is emitted when ``expr.cascade is True``. The
-        typed ``expr.purge`` flag appends PURGE.
+        followed by ``PURGE``) is emitted when ``expr.cascade is True``.  The
+        SQL-standard ``expr.restrict`` has no Oracle spelling, so it is
+        refused by name through :meth:`supports_drop_table_restrict` rather
+        than dropped. The typed ``expr.purge`` flag appends PURGE.
+
+        Raises:
+            TypeError: ``expr.table`` is not a
+                :class:`~rhosocial.activerecord.backend.expression.objects.Table`.
+                Another catalogue object renders its own name, so the statement
+                would drop an index and name a table.
+            UnsupportedFeatureError: ``expr.restrict`` was requested and the
+                probe is ``False``, or CASCADE CONSTRAINTS is unavailable.
         """
         from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
+        from rhosocial.activerecord.backend.expression.objects import Table
+
+        if not isinstance(expr.table, Table):
+            raise TypeError(
+                f"DropTableExpression.table must be a Table, "
+                f"got {type(expr.table).__name__}"
+            )
 
         parts = ["DROP TABLE"]
         table_sql, table_params = expr.table.to_sql()
         parts.append(table_sql)
-        if expr.cascade is True:
+        if expr.cascade:
             if not self.supports_cascade_constraints():
                 raise UnsupportedFeatureError(
                     self.name, "DROP TABLE ... CASCADE CONSTRAINTS"
                 )
             parts.append("CASCADE CONSTRAINTS")
-        elif expr.cascade is False:
-            raise UnsupportedFeatureError(self.name, "DROP TABLE ... RESTRICT")
+        if expr.restrict:
+            if not self.supports_drop_table_restrict():
+                raise UnsupportedFeatureError(self.name, "DROP TABLE ... RESTRICT")
+            parts.append("RESTRICT")
         if getattr(expr, "purge", False) and self.supports_purge_on_drop_table():
             parts.append("PURGE")
         return " ".join(parts), table_params

@@ -5,12 +5,24 @@ from __future__ import annotations
 
 from typing import Any, Protocol, Tuple, Type, runtime_checkable
 
-from rhosocial.activerecord.backend.dialect.protocols import UserDefinedTypeSupport
+from rhosocial.activerecord.backend.dialect.protocols import (
+    AlterTypeSupport,
+    CreateTypeSupport,
+    DropTypeSupport,
+)
 
 
 @runtime_checkable
-class OracleTypeDDLSupport(UserDefinedTypeSupport, Protocol):
-    """Protocol for Oracle TYPE DDL support."""
+class OracleTypeDDLSupport(
+    CreateTypeSupport, AlterTypeSupport, DropTypeSupport, Protocol
+):
+    """Protocol for Oracle TYPE DDL support.
+
+    The core declares one protocol per statement -- ``CREATE TYPE``, ``ALTER
+    TYPE``, ``DROP TYPE`` -- so this composes the three it implements and adds
+    only what is Oracle's own: the type-body statements, which no other engine
+    has, and the extended ``DROP TYPE FORCE`` / ``VALIDATE`` options.
+    """
 
     def supports_type_objects(self) -> bool:
         """Whether Oracle user-defined type objects are supported."""

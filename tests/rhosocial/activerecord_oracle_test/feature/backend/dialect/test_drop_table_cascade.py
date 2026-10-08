@@ -8,14 +8,16 @@ SQL-standard CASCADE) and supports ``PURGE``. The dialect never emits an
 - ``supports_drop_table_cascade() / restrict()`` are False (bare tokens illegal).
 - ``supports_cascade_constraints() / supports_purge_on_drop_table()`` are True.
 - ``cascade=True`` renders ``CASCADE CONSTRAINTS`` (with optional ``PURGE``).
-- ``cascade=False`` raises ``UnsupportedFeatureError`` (Oracle has no RESTRICT).
-- ``cascade=None`` omits the clause; ``if_exists=True`` is NOT emitted.
+- ``restrict=True`` raises ``UnsupportedFeatureError`` (Oracle has no RESTRICT).
+- neither ``cascade`` nor ``restrict`` omits the clause; ``if_exists=True`` is
+  NOT emitted.
 """
 
 import pytest
 
 from rhosocial.activerecord.backend.dialect import UnsupportedFeatureError
 from rhosocial.activerecord.backend.expression import DropTableExpression
+from rhosocial.activerecord.backend.expression.objects import Table
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
 
@@ -36,7 +38,7 @@ class TestOracleDropTableCascadeCapabilities:
 
 class TestOracleDropTableRendering:
     def test_cascade_true_renders_cascade_constraints(self, dialect):
-        expr = DropTableExpression(dialect, table="users", cascade=True)
+        expr = DropTableExpression(dialect, table=Table(dialect, "users"), cascade=True)
         sql, params = expr.to_sql()
         assert sql.endswith(" CASCADE CONSTRAINTS")
         assert "PURGE" not in sql
@@ -45,7 +47,7 @@ class TestOracleDropTableRendering:
     def test_cascade_true_with_purge_option(self, dialect):
         expr = DropTableExpression(
             dialect,
-            table="users",
+            table=Table(dialect, "users"),
             cascade=True,
             purge=True,
         )
@@ -54,19 +56,19 @@ class TestOracleDropTableRendering:
         assert params == ()
 
     def test_purge_without_cascade(self, dialect):
-        expr = DropTableExpression(dialect, table="users", purge=True)
+        expr = DropTableExpression(dialect, table=Table(dialect, "users"), purge=True)
         sql, params = expr.to_sql()
         assert sql.endswith(" PURGE")
         assert "CASCADE" not in sql
         assert params == ()
 
-    def test_cascade_false_raises(self, dialect):
-        expr = DropTableExpression(dialect, table="users", cascade=False)
+    def test_restrict_true_raises(self, dialect):
+        expr = DropTableExpression(dialect, table=Table(dialect, "users"), restrict=True)
         with pytest.raises(UnsupportedFeatureError, match="DROP TABLE ... RESTRICT"):
             expr.to_sql()
 
-    def test_cascade_none_omits_clause(self, dialect):
-        expr = DropTableExpression(dialect, table="users", cascade=None)
+    def test_unspecified_omits_clause(self, dialect):
+        expr = DropTableExpression(dialect, table=Table(dialect, "users"))
         sql, params = expr.to_sql()
         assert "CASCADE" not in sql
         assert "RESTRICT" not in sql
@@ -74,7 +76,7 @@ class TestOracleDropTableRendering:
 
     def test_if_exists_not_emitted(self, dialect):
         """Oracle has no IF EXISTS clause; the flag must be dropped silently."""
-        expr = DropTableExpression(dialect, table="users", if_exists=True)
+        expr = DropTableExpression(dialect, table=Table(dialect, "users"), if_exists=True)
         sql, params = expr.to_sql()
         assert "IF EXISTS" not in sql
         assert sql.startswith("DROP TABLE")

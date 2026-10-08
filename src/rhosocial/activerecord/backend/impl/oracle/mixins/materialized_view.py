@@ -6,6 +6,7 @@ from typing import Tuple, TYPE_CHECKING
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 
 if TYPE_CHECKING:  # pragma: no cover
+    from rhosocial.activerecord.backend.expression.objects import MaterializedView
     from rhosocial.activerecord.backend.expression.statements import (
         CreateMaterializedViewExpression,
         DropMaterializedViewExpression,
@@ -29,6 +30,20 @@ class OracleMaterializedViewMixin:
     def supports_materialized_view(self) -> bool:
         return True
 
+    def supports_with_data_clause(self) -> bool:
+        """Oracle has no ``WITH [NO] DATA`` clause.
+
+        Measured on 18c/21c/23c: the SQL-standard clause is rejected both on
+        ``CREATE TABLE ... AS`` and on ``CREATE MATERIALIZED VIEW`` (ORA-00933
+        on 18c/21c, ORA-03048 on 23c, in either clause position).  The only
+        population spellings Oracle accepts are ``BUILD IMMEDIATE`` / ``BUILD
+        DEFERRED``, which this mixin's formatter emits for ``with_data`` /
+        ``no_data``; the ``CREATE TABLE ... AS`` and ``REFRESH MATERIALIZED
+        VIEW`` paths have no such hook and therefore refuse the request by
+        name.
+        """
+        return False
+
     def supports_refresh_materialized_view(self) -> bool:
         """Oracle refreshes through ``DBMS_MVIEW.REFRESH`` (no SQL statement).
 
@@ -45,6 +60,24 @@ class OracleMaterializedViewMixin:
     def format_create_materialized_view_statement(
         self, expr: "CreateMaterializedViewExpression"
     ) -> Tuple[str, tuple]:
+        """Format ``CREATE MATERIALIZED VIEW`` with Oracle's option set.
+
+        Raises:
+            TypeError: ``expr.view`` is not a
+                :class:`~rhosocial.activerecord.backend.expression.objects.MaterializedView`.
+                A plain view would render its own name, producing a well-formed
+                CREATE MATERIALIZED VIEW over that view's name.
+            UnsupportedFeatureError: The Oracle version is below 9i, or a
+                graceful-DDL option was asked for below 23ai.
+        """
+        from rhosocial.activerecord.backend.expression.objects import MaterializedView
+
+        if not isinstance(expr.view, MaterializedView):
+            raise TypeError(
+                f"CreateMaterializedViewExpression.view must be a MaterializedView, "
+                f"got {type(expr.view).__name__}"
+            )
+
         if self.version < (9, 0, 0):
             raise UnsupportedFeatureError(
                 self.name,
@@ -66,7 +99,7 @@ class OracleMaterializedViewMixin:
                     ),
                 )
             parts.append("IF NOT EXISTS")
-        parts.append(self.format_identifier(expr.view_name))
+        parts.append(expr.view.to_sql()[0])
         if expr.column_aliases:
             cols = ", ".join(self.format_identifier(c) for c in expr.column_aliases)
             parts.append(f"({cols})")
@@ -75,8 +108,12 @@ class OracleMaterializedViewMixin:
         build_mode = getattr(expr, "build_mode", None)
         if build_mode is not None:
             parts.append(f"BUILD {build_mode.value}")
-        elif hasattr(expr, "with_data"):
-            parts.append("BUILD IMMEDIATE" if expr.with_data else "BUILD DEFERRED")
+        elif getattr(expr, "with_data", False):
+            # Oracle spells the SQL-standard WITH DATA as BUILD IMMEDIATE.
+            parts.append("BUILD IMMEDIATE")
+        elif getattr(expr, "no_data", False):
+            # Oracle spells WITH NO DATA as BUILD DEFERRED.
+            parts.append("BUILD DEFERRED")
         refresh_method = getattr(expr, "refresh_method", None)
         refresh_trigger = getattr(expr, "refresh_trigger", None)
         if refresh_method is not None or refresh_trigger is not None:
@@ -86,9 +123,10 @@ class OracleMaterializedViewMixin:
             if refresh_trigger is not None:
                 refresh_parts.append(refresh_trigger.value)
             parts.append(" ".join(refresh_parts))
-        query_rewrite = getattr(expr, "query_rewrite", None)
-        if query_rewrite is not None:
-            parts.append("ENABLE QUERY REWRITE" if query_rewrite else "DISABLE QUERY REWRITE")
+        if getattr(expr, "enable_query_rewrite", False):
+            parts.append("ENABLE QUERY REWRITE")
+        elif getattr(expr, "disable_query_rewrite", False):
+            parts.append("DISABLE QUERY REWRITE")
         query_sql, query_params = expr.query.to_sql()
         parts.append(f"AS {query_sql}")
         return " ".join(parts), query_params
@@ -96,6 +134,23 @@ class OracleMaterializedViewMixin:
     def format_create_materialized_view_log_statement(
         self, expr: "OracleCreateMaterializedViewLogExpression"
     ) -> Tuple[str, tuple]:
+        """Format ``CREATE MATERIALIZED VIEW LOG`` for Oracle.
+
+        Raises:
+            TypeError: ``expr.table`` is not a
+                :class:`~rhosocial.activerecord.backend.expression.objects.Table`.
+                Another catalogue object would render its own name, so the log
+                would be taken on it while naming a table.
+            UnsupportedFeatureError: The Oracle version is below 9i.
+        """
+        from rhosocial.activerecord.backend.expression.objects import Table
+
+        if not isinstance(expr.table, Table):
+            raise TypeError(
+                f"OracleCreateMaterializedViewLogExpression.table must be a Table, "
+                f"got {type(expr.table).__name__}"
+            )
+
         if self.version < (9, 0, 0):
             raise UnsupportedFeatureError(
                 self.name,
@@ -110,12 +165,30 @@ class OracleMaterializedViewMixin:
             with_parts.append("ROWID")
         if expr.with_primary_key:
             with_parts.append("PRIMARY KEY")
-        table_sql = self.format_identifier(expr.table)
+        table_sql = expr.table.to_sql()[0]
         return f"CREATE MATERIALIZED VIEW LOG ON {table_sql} WITH {', '.join(with_parts)}", ()
 
     def format_drop_materialized_view_statement(
         self, expr: "DropMaterializedViewExpression"
     ) -> Tuple[str, tuple]:
+        """Format ``DROP MATERIALIZED VIEW`` for Oracle.
+
+        Raises:
+            TypeError: ``expr.view`` is not a
+                :class:`~rhosocial.activerecord.backend.expression.objects.MaterializedView`.
+                A plain view would render its own name, so the statement would
+                drop a view and name a materialized one.
+            UnsupportedFeatureError: The Oracle version is below 9i, or IF
+                EXISTS was asked for below 23ai.
+        """
+        from rhosocial.activerecord.backend.expression.objects import MaterializedView
+
+        if not isinstance(expr.view, MaterializedView):
+            raise TypeError(
+                f"DropMaterializedViewExpression.view must be a MaterializedView, "
+                f"got {type(expr.view).__name__}"
+            )
+
         if self.version < (9, 0, 0):
             raise UnsupportedFeatureError(
                 self.name,
@@ -137,9 +210,27 @@ class OracleMaterializedViewMixin:
                     ),
                 )
             parts.append("IF EXISTS")
-        parts.append(self.format_identifier(expr.view_name))
+        parts.append(expr.view.to_sql()[0])
         if getattr(expr, "preserve_table", False):
             parts.append("PRESERVE TABLE")
+        # Oracle's DROP MATERIALIZED VIEW grammar has no CASCADE; there is no
+        # probe that declares one, so a requested CASCADE is refused by name.
+        # ``getattr`` serves both this backend's expression and the core one.
+        if getattr(expr, "cascade", False):
+            raise UnsupportedFeatureError(
+                self.name,
+                "DROP MATERIALIZED VIEW CASCADE",
+                f"{self.name} does not support DROP MATERIALIZED VIEW CASCADE.",
+            )
+        if getattr(expr, "restrict", False):
+            if not self.supports_materialized_view_restrict():
+                raise UnsupportedFeatureError(
+                    self.name,
+                    "DROP MATERIALIZED VIEW RESTRICT",
+                    f"{self.name} does not support DROP MATERIALIZED VIEW "
+                    "RESTRICT.",
+                )
+            parts.append("RESTRICT")
         return " ".join(parts), ()
 
     def format_refresh_materialized_view_statement(
@@ -154,8 +245,9 @@ class OracleMaterializedViewMixin:
         Also serves the generic ``RefreshMaterializedViewExpression``; its
         SQL-standard options have no Oracle counterpart and are handled as:
         ``concurrent`` is rejected (Oracle refreshes hold the appropriate locks
-        and offer no concurrent mode), ``with_data`` is ignored (a refresh
-        always repopulates).
+        and offer no concurrent mode), and the ``with_data`` / ``no_data``
+        pair is refused by name (``DBMS_MVIEW.REFRESH`` always repopulates, so
+        Oracle can spell neither WITH DATA nor WITH NO DATA).
 
         Args:
             expr: Oracle or generic refresh expression.
@@ -164,8 +256,20 @@ class OracleMaterializedViewMixin:
             Tuple of (SQL string, empty params tuple).
 
         Raises:
-            UnsupportedFeatureError: if ``concurrent`` was requested.
+            TypeError: ``expr.view`` is not a ``MaterializedView``. The name
+                passed to the procedure is read from that object, so any other
+                catalogue object would refresh something else while naming it.
+            UnsupportedFeatureError: if ``concurrent``, ``with_data`` or
+                ``no_data`` was requested.
         """
+        from rhosocial.activerecord.backend.expression.objects import MaterializedView
+
+        if not isinstance(getattr(expr, "view", None), MaterializedView):
+            raise TypeError(
+                f"{type(expr).__name__}.view must be a MaterializedView, "
+                f"got {type(getattr(expr, 'view', None)).__name__}"
+            )
+
         if getattr(expr, "concurrent", False):
             raise UnsupportedFeatureError(
                 self.name,
@@ -174,6 +278,20 @@ class OracleMaterializedViewMixin:
                     "Oracle has no concurrent refresh mode; use "
                     "DBMS_MVIEW.REFRESH with atomic_refresh or out_of_place."
                 ),
+            )
+        if getattr(expr, "with_data", False):
+            raise UnsupportedFeatureError(
+                self.name,
+                "REFRESH MATERIALIZED VIEW WITH DATA",
+                "Oracle's DBMS_MVIEW.REFRESH always repopulates the view; "
+                "there is no WITH DATA clause to emit.",
+            )
+        if getattr(expr, "no_data", False):
+            raise UnsupportedFeatureError(
+                self.name,
+                "REFRESH MATERIALIZED VIEW WITH NO DATA",
+                "Oracle's DBMS_MVIEW.REFRESH always repopulates the view; "
+                "it cannot refresh without data.",
             )
 
         name = self._materialized_view_refresh_target(expr)
@@ -203,14 +321,19 @@ class OracleMaterializedViewMixin:
     def _materialized_view_refresh_target(self, expr) -> str:
         """Build the materialized view name passed to ``DBMS_MVIEW.REFRESH``.
 
-        The procedure takes a *string* name, not an identifier, so the name is
-        upper-cased (unquoted identifiers fold to upper case in Oracle) and any
-        embedded single quote is escaped.
+        The procedure takes a *string* name, not an identifier, so this cannot
+        use the SQL identifier renderer -- that would emit double quotes into a
+        string literal. What it does do is read the name and its owner from the
+        same :class:`MaterializedView` object every other statement in this
+        mixin uses, so the owner cannot be dropped on this one path; the slots
+        are then folded the way Oracle folds an unquoted name (upper case) and
+        the literal's single quotes are escaped.
         """
-        name = str(getattr(expr, "view_name", "") or "").strip()
-        if not name:
+        parts = [
+            part
+            for part in (expr.view.schema_name, expr.view.name)
+            if part
+        ]
+        if not parts:
             raise ValueError("materialized view refresh requires a view name")
-        schema = getattr(expr, "schema", None)
-        if schema:
-            name = f"{schema}.{name}"
-        return name.replace("'", "''").upper()
+        return ".".join(parts).replace("'", "''").upper()

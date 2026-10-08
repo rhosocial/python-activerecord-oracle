@@ -28,6 +28,10 @@ from enum import Enum
 from typing import List, Optional, TYPE_CHECKING
 
 from rhosocial.activerecord.backend.expression.bases import BaseExpression
+from rhosocial.activerecord.backend.expression.objects import (
+    MaterializedView,
+    Table,
+)
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
@@ -60,7 +64,9 @@ class OracleCreateMaterializedViewExpression(BaseExpression):
 
     Args:
         dialect: the Oracle dialect instance.
-        view_name: name of the materialized view to create.
+        view: the materialized view to create. The object carries its owner,
+            so the name is rendered by the dialect rather than concatenated
+            here.
         query: a ``BaseExpression`` (typically a ``QueryExpression``) whose
             SQL becomes the ``AS subquery`` clause.
         if_not_exists: if True, emit ``IF NOT EXISTS`` (Oracle 23ai+).
@@ -71,18 +77,19 @@ class OracleCreateMaterializedViewExpression(BaseExpression):
         refresh_method: ``REFRESH FAST | COMPLETE | FORCE`` clause.
         refresh_trigger: ``ON COMMIT`` / ``ON DEMAND`` clause (requires the
             ``REFRESH`` clause).
-        query_rewrite: ``ENABLE QUERY REWRITE`` when True, ``DISABLE QUERY
-            REWRITE`` when False, omitted when None.
+        enable_query_rewrite: when True emit ``ENABLE QUERY REWRITE``.
+        disable_query_rewrite: when True emit ``DISABLE QUERY REWRITE``.
 
     Raises:
-        ValueError: if ``view_name`` is empty.
-        TypeError: if ``query`` is not a ``BaseExpression``.
+        TypeError: if ``view`` is not a ``MaterializedView``, or ``query`` is
+            not a ``BaseExpression``.
+        ValueError: if both query-rewrite parameters are set.
     """
 
     def __init__(
         self,
         dialect: "OracleDialect",
-        view_name: str,
+        view: MaterializedView,
         query: BaseExpression,
         if_not_exists: bool = False,
         column_aliases: Optional[List[str]] = None,
@@ -90,17 +97,26 @@ class OracleCreateMaterializedViewExpression(BaseExpression):
         build_mode: Optional[MaterializedViewBuildMode] = None,
         refresh_method: Optional[MaterializedViewRefreshMethod] = None,
         refresh_trigger: Optional[MaterializedViewRefreshTrigger] = None,
-        query_rewrite: Optional[bool] = None,
+        enable_query_rewrite: bool = False,
+        disable_query_rewrite: bool = False,
     ):
         super().__init__(dialect)
-        if not isinstance(view_name, str) or not view_name.strip():
-            raise ValueError("view_name must be a non-empty string")
+        if not isinstance(view, MaterializedView):
+            raise TypeError(
+                "view must be a MaterializedView, "
+                f"got {type(view).__name__}"
+            )
         if not isinstance(query, BaseExpression):
             raise TypeError(
                 "query must be a BaseExpression, "
                 f"got {type(query).__name__}"
             )
-        self.view_name = view_name
+        if enable_query_rewrite and disable_query_rewrite:
+            raise ValueError(
+                "enable_query_rewrite and disable_query_rewrite are mutually "
+                "exclusive options"
+            )
+        self.view = view
         self.query = query
         self.if_not_exists = bool(if_not_exists)
         self.column_aliases = list(column_aliases) if column_aliases else []
@@ -108,7 +124,8 @@ class OracleCreateMaterializedViewExpression(BaseExpression):
         self.build_mode = build_mode
         self.refresh_method = refresh_method
         self.refresh_trigger = refresh_trigger
-        self.query_rewrite = query_rewrite
+        self.enable_query_rewrite = bool(enable_query_rewrite)
+        self.disable_query_rewrite = bool(disable_query_rewrite)
 
     @property
     def format_method(self) -> str:
@@ -121,25 +138,30 @@ class OracleCreateMaterializedViewLogExpression(BaseExpression):
 
     Args:
         dialect: the Oracle dialect instance.
-        table: name of the master (base) table to log.
+        table: the master (base) table to log. The object carries its owner,
+            so the name is rendered by the dialect rather than concatenated
+            here.
         with_rowid: emit ``WITH ROWID``.
         with_primary_key: emit ``WITH PRIMARY KEY``.
 
     Raises:
-        ValueError: if ``table`` is empty, or neither ``with_rowid`` nor
-            ``with_primary_key`` is True.
+        ValueError: if neither ``with_rowid`` nor ``with_primary_key`` is True.
+        TypeError: if ``table`` is not a ``Table``.
     """
 
     def __init__(
         self,
         dialect: "OracleDialect",
-        table: str,
+        table: Table,
         with_rowid: bool = False,
         with_primary_key: bool = False,
     ):
         super().__init__(dialect)
-        if not isinstance(table, str) or not table.strip():
-            raise ValueError("table must be a non-empty string")
+        if not isinstance(table, Table):
+            raise TypeError(
+                "table must be a Table, "
+                f"got {type(table).__name__}"
+            )
         if not with_rowid and not with_primary_key:
             raise ValueError(
                 "materialized view log requires WITH ROWID and/or WITH PRIMARY KEY"
@@ -159,26 +181,30 @@ class OracleDropMaterializedViewExpression(BaseExpression):
 
     Args:
         dialect: the Oracle dialect instance.
-        view_name: name of the materialized view to drop.
+        view: the materialized view to drop. The object carries its owner, so
+            the name is rendered by the dialect rather than concatenated here.
         if_exists: if True, emit ``IF EXISTS`` (Oracle 23ai+).
         preserve_table: if True, append ``PRESERVE TABLE`` to keep the
             underlying container table.
 
     Raises:
-        ValueError: if ``view_name`` is empty.
+        TypeError: if ``view`` is not a ``MaterializedView``.
     """
 
     def __init__(
         self,
         dialect: "OracleDialect",
-        view_name: str,
+        view: MaterializedView,
         if_exists: bool = False,
         preserve_table: bool = False,
     ):
         super().__init__(dialect)
-        if not isinstance(view_name, str) or not view_name.strip():
-            raise ValueError("view_name must be a non-empty string")
-        self.view_name = view_name
+        if not isinstance(view, MaterializedView):
+            raise TypeError(
+                "view must be a MaterializedView, "
+                f"got {type(view).__name__}"
+            )
+        self.view = view
         self.if_exists = bool(if_exists)
         self.preserve_table = bool(preserve_table)
 
@@ -212,8 +238,9 @@ class OracleRefreshMaterializedViewExpression(BaseExpression):
 
     Args:
         dialect: the Oracle dialect instance.
-        view_name: name of the materialized view to refresh.
-        schema: optional owner/schema of the materialized view.
+        view: the materialized view to refresh. The object carries its owner,
+            so the name that goes into the procedure's string argument is read
+            from the same object every other statement in this module uses.
         method: refresh method code, e.g. ``OracleRefreshMethod.COMPLETE``.
         atomic_refresh: refresh the list in a single transaction (server default
             is ``TRUE``).
@@ -225,14 +252,15 @@ class OracleRefreshMaterializedViewExpression(BaseExpression):
         push_deferred_rpc: push deferred changes from an updatable MV first.
 
     Raises:
-        ValueError: if ``view_name`` is empty.
+        ValueError: if ``purge_option`` is not 0, 1 or 2, or ``parallelism`` is
+            negative.
+        TypeError: if ``view`` is not a ``MaterializedView``.
     """
 
     def __init__(
         self,
         dialect: "OracleDialect",
-        view_name: str,
-        schema: Optional[str] = None,
+        view: MaterializedView,
         method: Optional[OracleRefreshMethod] = None,
         atomic_refresh: Optional[bool] = None,
         out_of_place: Optional[bool] = None,
@@ -243,16 +271,16 @@ class OracleRefreshMaterializedViewExpression(BaseExpression):
         push_deferred_rpc: Optional[bool] = None,
     ):
         super().__init__(dialect)
-        if not isinstance(view_name, str) or not view_name.strip():
-            raise ValueError("view_name must be a non-empty string")
-        if schema is not None and (not isinstance(schema, str) or not schema.strip()):
-            raise ValueError("schema must be a non-empty string when provided")
+        if not isinstance(view, MaterializedView):
+            raise TypeError(
+                "view must be a MaterializedView, "
+                f"got {type(view).__name__}"
+            )
         if purge_option is not None and purge_option not in (0, 1, 2):
             raise ValueError("purge_option must be 0 (none), 1 (lazy) or 2 (aggressive)")
         if parallelism is not None and (not isinstance(parallelism, int) or parallelism < 0):
             raise ValueError("parallelism must be a non-negative integer")
-        self.view_name = view_name
-        self.schema = schema
+        self.view = view
         self.method = method
         self.atomic_refresh = atomic_refresh
         self.out_of_place = out_of_place

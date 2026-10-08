@@ -8,8 +8,9 @@ links, which enable cross-database/instance queries:
   DATABASE LINK dl CONNECT TO u IDENTIFIED BY pwd USING 'conn_str'``.
 * ``OracleDropDatabaseLinkExpression`` — ``DROP [PUBLIC] DATABASE LINK dl``.
 
-Remote table references are expressed with the ``@dblink`` suffix, supported
-through ``format_table(..., dblink=...)``.
+Remote table references are expressed with the ``@dblink`` suffix, which is part
+of the remote object's name: see
+:class:`~...impl.oracle.expression.objects.OracleTable`.
 
 All expressions delegate SQL generation to the dialect through the public
 ``format_*`` formatters implemented by ``OracleDatabaseLinkMixin``.

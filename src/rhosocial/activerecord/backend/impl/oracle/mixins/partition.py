@@ -89,6 +89,29 @@ class OraclePartitionMixin:
     maintenance statements.
     """
 
+    def _partition_table_sql(self, expr) -> str:
+        """Render the table a partition-maintenance statement acts on.
+
+        Every maintenance statement names a table, so the table -- owner and
+        all -- is held as a
+        :class:`~rhosocial.activerecord.backend.expression.objects.Table` and
+        rendered by its own protocol. Partition *names* stay bare identifiers:
+        a partition lives inside the table and has no namespace of its own.
+
+        Raises:
+            TypeError: ``expr.table`` is not a ``Table``. An index or a view
+                renders its own name, so ``ALTER TABLE`` would act on that name
+                while the statement claims a table.
+        """
+        from rhosocial.activerecord.backend.expression.objects import Table
+
+        if not isinstance(expr.table, Table):
+            raise TypeError(
+                f"{type(expr).__name__}.table must be a Table, "
+                f"got {type(expr.table).__name__}"
+            )
+        return expr.table.to_sql()[0]
+
     # ------------------------------------------------------------------
     # Capability methods (PartitionSupport)
     # ------------------------------------------------------------------
@@ -468,7 +491,7 @@ class OraclePartitionMixin:
         if isinstance(expr, OraclePartitionMaxValue):
             return "MAXVALUE", ()
         if isinstance(expr, OraclePartitionValue):
-            return self.render_partition_literal(expr.value), ()
+            return self.format_partition_literal(expr.value), ()
         raise TypeError(
             "expr must be an OraclePartitionValue or OraclePartitionMaxValue, "
             f"got {type(expr).__name__}"
@@ -517,11 +540,11 @@ class OraclePartitionMixin:
         if isinstance(value, OraclePartitionMaxValue):
             return "MAXVALUE", ()
         if isinstance(value, OraclePartitionValue):
-            return self.render_partition_literal(value.value), ()
+            return self.format_partition_literal(value.value), ()
         if isinstance(value, str) and value.upper() == "MAXVALUE":
             return "MAXVALUE", ()
         if isinstance(value, Literal):
-            return self.render_partition_literal(value.value), ()
+            return self.format_partition_literal(value.value), ()
         raise TypeError(
             "partition boundary value must be an OraclePartitionValue, "
             "OraclePartitionMaxValue, Literal, or the string 'MAXVALUE', "
@@ -538,7 +561,7 @@ class OraclePartitionMixin:
                 "ADD PARTITION",
                 f"Oracle {self.version} does not support ADD PARTITION.",
             )
-        table_sql = self.format_identifier(expr.table)
+        table_sql = self._partition_table_sql(expr)
         part_def = expr.partition
         if part_def.less_than is not None:
             strategy = "RANGE"
@@ -559,7 +582,7 @@ class OraclePartitionMixin:
                 "DROP PARTITION",
                 f"Oracle {self.version} does not support DROP PARTITION.",
             )
-        table_sql = self.format_identifier(expr.table)
+        table_sql = self._partition_table_sql(expr)
         part_sql = self.format_identifier(expr.partition_name)
         sql = f"ALTER TABLE {table_sql} DROP PARTITION {part_sql}"
         if expr.update_indexes:
@@ -576,7 +599,7 @@ class OraclePartitionMixin:
                 "SPLIT PARTITION",
                 f"Oracle {self.version} does not support SPLIT PARTITION.",
             )
-        table_sql = self.format_identifier(expr.table)
+        table_sql = self._partition_table_sql(expr)
         part_sql = self.format_identifier(expr.partition_name)
         at_parts = [self.format_partition_boundary_value(v)[0] for v in expr.at_values]
         at_sql = ", ".join(at_parts)
@@ -601,7 +624,7 @@ class OraclePartitionMixin:
                 "MERGE PARTITIONS",
                 f"Oracle {self.version} does not support MERGE PARTITIONS.",
             )
-        table_sql = self.format_identifier(expr.table)
+        table_sql = self._partition_table_sql(expr)
         names_sql = ", ".join(self.format_identifier(n) for n in expr.partition_names)
         into_name = self.format_identifier(expr.into_partition.name)
         return (
@@ -620,9 +643,16 @@ class OraclePartitionMixin:
                 "EXCHANGE PARTITION",
                 f"Oracle {self.version} does not support EXCHANGE PARTITION.",
             )
-        table_sql = self.format_identifier(expr.table)
+        table_sql = self._partition_table_sql(expr)
         part_sql = self.format_identifier(expr.partition_name)
-        with_sql = self.format_identifier(expr.with_table)
+        from rhosocial.activerecord.backend.expression.objects import Table
+
+        if not isinstance(expr.with_table, Table):
+            raise TypeError(
+                f"{type(expr).__name__}.with_table must be a Table, "
+                f"got {type(expr.with_table).__name__}"
+            )
+        with_sql = expr.with_table.to_sql()[0]
         sql = (
             f"ALTER TABLE {table_sql} EXCHANGE PARTITION {part_sql} "
             f"WITH TABLE {with_sql}"
@@ -645,7 +675,7 @@ class OraclePartitionMixin:
                 "MOVE PARTITION",
                 f"Oracle {self.version} does not support MOVE PARTITION.",
             )
-        table_sql = self.format_identifier(expr.table)
+        table_sql = self._partition_table_sql(expr)
         part_sql = self.format_identifier(expr.partition_name)
         sql = f"ALTER TABLE {table_sql} MOVE PARTITION {part_sql}"
         if expr.tablespace_name is not None:
@@ -663,15 +693,23 @@ class OraclePartitionMixin:
                 "TRUNCATE PARTITION",
                 f"Oracle {self.version} does not support TRUNCATE PARTITION.",
             )
-        table_sql = self.format_identifier(expr.table)
+        table_sql = self._partition_table_sql(expr)
         part_sql = self.format_identifier(expr.partition_name)
         sql = f"ALTER TABLE {table_sql} TRUNCATE PARTITION {part_sql}"
         if expr.update_indexes:
             sql = f"{sql} UPDATE INDEXES"
         return sql, ()
 
-    def render_partition_literal(self, value: Any) -> str:
-        """Render a Python scalar as a safe inline SQL literal.
+    def format_partition_literal(self, value: Any) -> str:
+        """Format a Python scalar as a safe inline SQL literal.
+
+        Named for what it does rather than for how: it builds SQL text, and
+        ``format_*`` is this tree's name for that. It was the one method left
+        called ``render_*`` anywhere in the series, and the reason it survived
+        is that ``render_namespace`` used to sit beside it -- core's namespace
+        method was the ``render_*`` this name was matching. Core renamed that one
+        and the resemblance went with it, leaving a formatter with a name no
+        other formatter in the tree has.
 
         Mirrors MySQL ``format_partition_value`` semantics. Only scalar
         types that are valid Oracle partition boundary values are accepted;

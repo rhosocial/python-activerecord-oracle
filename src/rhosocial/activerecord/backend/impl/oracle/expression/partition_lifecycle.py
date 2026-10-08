@@ -26,6 +26,7 @@ from __future__ import annotations
 from typing import Optional, Sequence, TYPE_CHECKING
 
 from rhosocial.activerecord.backend.expression.bases import BaseExpression, SQLQueryAndParams
+from rhosocial.activerecord.backend.expression.objects import Table
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
@@ -35,15 +36,17 @@ if TYPE_CHECKING:  # pragma: no cover
 class _OraclePartitionMaintenanceExpression(BaseExpression):
     """Common base for Oracle partition maintenance expressions.
 
-    Stores the target table name and provides the shared capability-gating
+    Stores the target table and provides the shared capability-gating
     hook. Subclasses define their own ``to_sql()`` delegating to the
     dialect formatter.
     """
 
-    def __init__(self, dialect: "OracleDialect", table: str):
+    def __init__(self, dialect: "OracleDialect", table: Table):
         super().__init__(dialect)
-        if not isinstance(table, str) or not table.strip():
-            raise ValueError("table must be a non-empty string")
+        if not isinstance(table, Table):
+            raise TypeError(
+                f"table must be a Table, got {type(table).__name__}"
+            )
         self.table = table
 
 
@@ -55,7 +58,7 @@ class OracleAddPartitionExpression(_OraclePartitionMaintenanceExpression):
     so ADD PARTITION is typically used with RANGE/LIST.
 
     Args:
-        table: target table name.
+        table: the target table, carrying its owner.
         partition: an :class:`OraclePartitionDefinition` describing the
             new partition (with ``less_than`` for RANGE or ``in_values``
             for LIST).
@@ -67,7 +70,7 @@ class OracleAddPartitionExpression(_OraclePartitionMaintenanceExpression):
     def __init__(
         self,
         dialect: "OracleDialect",
-        table: str,
+        table: Table,
         partition: "OraclePartitionDefinition",
     ):
         super().__init__(dialect, table)
@@ -90,7 +93,7 @@ class OracleDropPartitionExpression(_OraclePartitionMaintenanceExpression):
     """``ALTER TABLE ... DROP PARTITION`` expression.
 
     Args:
-        table: target table name.
+        table: the target table, carrying its owner.
         partition_name: name of the partition to drop.
         update_indexes: if True, append ``UPDATE INDEXES`` (Oracle 11g+)
             to maintain global indexes. Default False.
@@ -102,7 +105,7 @@ class OracleDropPartitionExpression(_OraclePartitionMaintenanceExpression):
     def __init__(
         self,
         dialect: "OracleDialect",
-        table: str,
+        table: Table,
         partition_name: str,
         *,
         update_indexes: bool = False,
@@ -126,7 +129,7 @@ class OracleSplitPartitionExpression(_OraclePartitionMaintenanceExpression):
     two new partitions. The original partition is removed.
 
     Args:
-        table: target table name.
+        table: the target table, carrying its owner.
         partition_name: name of the partition to split.
         at_values: boundary value(s) at which to split (sequence of
             ``OraclePartitionValue`` / ``Literal`` / ``"MAXVALUE"``).
@@ -142,7 +145,7 @@ class OracleSplitPartitionExpression(_OraclePartitionMaintenanceExpression):
     def __init__(
         self,
         dialect: "OracleDialect",
-        table: str,
+        table: Table,
         partition_name: str,
         at_values: Sequence,
         new_partitions: Sequence["OraclePartitionDefinition"],
@@ -180,7 +183,7 @@ class OracleMergePartitionsExpression(_OraclePartitionMaintenanceExpression):
     Merges two adjacent partitions into a single new partition.
 
     Args:
-        table: target table name.
+        table: the target table, carrying its owner.
         partition_names: exactly two partition names to merge.
         into_partition: the :class:`OraclePartitionDefinition` for the
             resulting merged partition.
@@ -192,7 +195,7 @@ class OracleMergePartitionsExpression(_OraclePartitionMaintenanceExpression):
     def __init__(
         self,
         dialect: "OracleDialect",
-        table: str,
+        table: Table,
         partition_names: Sequence[str],
         into_partition: "OraclePartitionDefinition",
     ):
@@ -227,23 +230,25 @@ class OracleExchangePartitionExpression(_OraclePartitionMaintenanceExpression):
     non-partitioned table.
 
     Args:
-        table: target (partitioned) table name.
+        table: the target (partitioned) table, carrying its owner.
         partition_name: name of the partition to exchange.
-        with_table: the non-partitioned table to exchange with.
+        with_table: the non-partitioned table to exchange with, carrying its
+            own owner -- a segment exchange may cross owners.
         including_indexes: if True, append ``INCLUDING INDEXES``.
         with_validation: if True, append ``WITH VALIDATION`` (default True
             for Oracle; use False for ``WITHOUT VALIDATION``).
 
     Raises:
-        ValueError: if ``partition_name`` or ``with_table`` is empty.
+        ValueError: if ``partition_name`` is empty.
+        TypeError: if ``with_table`` is not a :class:`Table`.
     """
 
     def __init__(
         self,
         dialect: "OracleDialect",
-        table: str,
+        table: Table,
         partition_name: str,
-        with_table: str,
+        with_table: Table,
         *,
         including_indexes: bool = False,
         with_validation: bool = True,
@@ -251,8 +256,10 @@ class OracleExchangePartitionExpression(_OraclePartitionMaintenanceExpression):
         super().__init__(dialect, table)
         if not isinstance(partition_name, str) or not partition_name.strip():
             raise ValueError("partition_name must be a non-empty string")
-        if not isinstance(with_table, str) or not with_table.strip():
-            raise ValueError("with_table must be a non-empty string")
+        if not isinstance(with_table, Table):
+            raise TypeError(
+                f"with_table must be a Table, got {type(with_table).__name__}"
+            )
         self.partition_name = partition_name
         self.with_table = with_table
         self.including_indexes = bool(including_indexes)
@@ -272,7 +279,7 @@ class OracleMovePartitionExpression(_OraclePartitionMaintenanceExpression):
     ``tablespace_name`` to specify the target tablespace.
 
     Args:
-        table: target table name.
+        table: the target table, carrying its owner.
         partition_name: name of the partition to move.
         tablespace_name: optional target tablespace name.
 
@@ -283,7 +290,7 @@ class OracleMovePartitionExpression(_OraclePartitionMaintenanceExpression):
     def __init__(
         self,
         dialect: "OracleDialect",
-        table: str,
+        table: Table,
         partition_name: str,
         *,
         tablespace_name: Optional[str] = None,
@@ -309,7 +316,7 @@ class OracleTruncatePartitionExpression(_OraclePartitionMaintenanceExpression):
     Removes all rows from a partition (and its subpartitions).
 
     Args:
-        table: target table name.
+        table: the target table, carrying its owner.
         partition_name: name of the partition to truncate.
         update_indexes: if True, append ``UPDATE INDEXES`` (Oracle 11g+).
 
@@ -320,7 +327,7 @@ class OracleTruncatePartitionExpression(_OraclePartitionMaintenanceExpression):
     def __init__(
         self,
         dialect: "OracleDialect",
-        table: str,
+        table: Table,
         partition_name: str,
         *,
         update_indexes: bool = False,

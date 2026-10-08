@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import Optional, TYPE_CHECKING
 
 from rhosocial.activerecord.backend.expression.bases import BaseExpression
+from rhosocial.activerecord.backend.expression.objects import Table, Trigger
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
@@ -25,19 +26,28 @@ class DisableTriggerExpression(BaseExpression):
 
     Args:
         dialect: the Oracle dialect instance.
-        trigger_name: the trigger to disable.
-        table_name: optional table name (reserved for future use).
+        trigger: the trigger to disable, carrying its owner when it is not the
+            caller's own.
+        table: optional table the trigger fires on.
     """
 
     def __init__(
         self,
         dialect: "OracleDialect",
-        trigger_name: str,
-        table_name: Optional[str] = None,
+        trigger: Trigger,
+        table: Optional[Table] = None,
     ):
         super().__init__(dialect)
-        self.trigger_name = trigger_name
-        self.table_name = table_name
+        if not isinstance(trigger, Trigger):
+            raise TypeError(
+                f"trigger must be a Trigger, got {type(trigger).__name__}"
+            )
+        if table is not None and not isinstance(table, Table):
+            raise TypeError(
+                f"table must be a Table, got {type(table).__name__}"
+            )
+        self.trigger = trigger
+        self.table = table
 
     @property
     def format_method(self) -> str:
@@ -52,19 +62,28 @@ class EnableTriggerExpression(BaseExpression):
 
     Args:
         dialect: the Oracle dialect instance.
-        trigger_name: the trigger to enable.
-        table_name: optional table name (reserved for future use).
+        trigger: the trigger to enable, carrying its owner when it is not the
+            caller's own.
+        table: optional table the trigger fires on.
     """
 
     def __init__(
         self,
         dialect: "OracleDialect",
-        trigger_name: str,
-        table_name: Optional[str] = None,
+        trigger: Trigger,
+        table: Optional[Table] = None,
     ):
         super().__init__(dialect)
-        self.trigger_name = trigger_name
-        self.table_name = table_name
+        if not isinstance(trigger, Trigger):
+            raise TypeError(
+                f"trigger must be a Trigger, got {type(trigger).__name__}"
+            )
+        if table is not None and not isinstance(table, Table):
+            raise TypeError(
+                f"table must be a Table, got {type(table).__name__}"
+            )
+        self.trigger = trigger
+        self.table = table
 
     @property
     def format_method(self) -> str:

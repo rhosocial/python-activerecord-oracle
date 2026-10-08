@@ -87,19 +87,29 @@ class TestSchemaResolution:
 
 
 class TestSqlBuilders:
-    def test_columns_sql_targets_uppercase_owner_and_table(self):
+    def test_columns_sql_binds_uppercase_owner_and_table(self):
+        """Table and owner are bind values, never interpolated literals."""
         insp, _, _ = make_sync_introspector("ar_crm")
-        sql = insp._build_columns_sql("customers", "ar_crm").upper()
-        assert "ALL_TAB_COLUMNS" in sql
-        assert "'CUSTOMERS'" in sql
-        assert "'AR_CRM'" in sql
+        sql, params = insp._build_columns_sql("customers", "ar_crm")
+        assert "ALL_TAB_COLUMNS" in sql.upper()
+        assert "CUSTOMERS" not in sql.upper()
+        assert "AR_CRM" not in sql.upper()
+        assert params == ("CUSTOMERS", "AR_CRM")
 
-    def test_primary_key_sql_filters_constraint_type(self):
+    def test_primary_key_sql_binds_uppercase_owner_and_table(self):
         insp, _, _ = make_sync_introspector()
-        sql = insp._build_primary_key_sql("orders", "ar_shop").upper()
-        assert "ALL_CONSTRAINTS" in sql
+        sql, params = insp._build_primary_key_sql("orders", "ar_shop")
+        assert "ALL_CONSTRAINTS" in sql.upper()
         assert "'P'" in sql
-        assert "'ORDERS'" in sql
+        assert "ORDERS" not in sql.upper()
+        assert "AR_SHOP" not in sql.upper()
+        assert params == ("ORDERS", "AR_SHOP")
+
+    def test_quoting_attempt_in_table_name_is_not_executed(self):
+        """A name carrying SQL is bound as data and cannot alter the query."""
+        insp, _, _ = make_sync_introspector()
+        _, params = insp._build_columns_sql("t' OR '1'='1", "scott")
+        assert params == ("T' OR '1'='1", "SCOTT")
 
     def test_dialect_table_list_query_scopes_owner(self):
         dialect = OracleDialect(version=(23, 0, 0))

@@ -14,8 +14,9 @@ import os
 
 import re
 
-from rhosocial.activerecord.backend.expression import InsertExpression, ValuesSource, TableExpression
+from rhosocial.activerecord.backend.expression import InsertExpression, ValuesSource
 from rhosocial.activerecord.backend.expression.core import Literal
+from rhosocial.activerecord.backend.expression.objects import Table
 from rhosocial.activerecord.backend.impl.oracle.backend import OracleBackend
 from rhosocial.activerecord.backend.impl.oracle.config import OracleConnectionConfig
 from rhosocial.activerecord.backend.options import ExecutionOptions
@@ -70,7 +71,7 @@ vals = ValuesSource(
     dialect,
     [[Literal(dialect, "Bob"), Literal(dialect, 92), Literal(dialect, "active")]],
 )
-target = TableExpression(dialect, "eg_insert_demo")
+target = Table(dialect, "eg_insert_demo")
 insert_expr = InsertExpression(
     dialect=dialect,
     into=target,

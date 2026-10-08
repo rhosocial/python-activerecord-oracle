@@ -10,6 +10,7 @@ import re
 from typing import Any, Dict, List, Optional, Sequence, Tuple, TYPE_CHECKING, cast
 
 from rhosocial.activerecord.backend.expression.bases import BaseExpression
+from rhosocial.activerecord.backend.expression.objects import Type
 from rhosocial.activerecord.backend.expression.serialization import ExpressionRegistry
 from rhosocial.activerecord.backend.expression.statements.ddl_type import (
     DropTypeExpression,
@@ -423,7 +424,8 @@ class OracleTypeDefinitionBase(TypeDefinition):
         force: bool,
         authid: Optional[str],
         keyword: str,
-        editionable: Optional[bool],
+        editionable: bool,
+        noneditionable: bool,
         sharing: Optional[str],
         oid: Optional[str],
         default_collation: Optional[str],
@@ -454,9 +456,14 @@ class OracleTypeDefinitionBase(TypeDefinition):
         if self.authid is not None and self.authid not in ("CURRENT_USER", "DEFINER"):
             raise ValueError("authid must be CURRENT_USER or DEFINER")
         self.keyword = _normalize_keyword(keyword, "keyword")
-        if editionable is not None and not isinstance(editionable, bool):
-            raise TypeError("editionable must be a bool or None")
+        if editionable and noneditionable:
+            raise ValueError(
+                "editionable and noneditionable are mutually exclusive options"
+            )
+        if not isinstance(editionable, bool) or not isinstance(noneditionable, bool):
+            raise TypeError("editionable and noneditionable must be bools")
         self.editionable = editionable
+        self.noneditionable = noneditionable
         self.sharing = _validate_fragment(sharing, "sharing") if sharing is not None else None
         self.oid = _validate_fragment(oid, "oid") if oid is not None else None
         self.default_collation = (
@@ -501,7 +508,8 @@ class OracleObjectTypeDefinition(OracleTypeDefinitionBase):
         force: bool = False,
         authid: Optional[str] = None,
         keyword: str = "AS",
-        editionable: Optional[bool] = None,
+        editionable: bool = False,
+        noneditionable: bool = False,
         sharing: Optional[str] = None,
         oid: Optional[str] = None,
         default_collation: Optional[str] = None,
@@ -531,6 +539,7 @@ class OracleObjectTypeDefinition(OracleTypeDefinitionBase):
             authid,
             keyword,
             editionable,
+            noneditionable,
             sharing,
             oid,
             default_collation,
@@ -570,7 +579,8 @@ class OracleSqljTypeDefinition(OracleTypeDefinitionBase):
         force: bool = False,
         authid: Optional[str] = None,
         keyword: str = "AS",
-        editionable: Optional[bool] = None,
+        editionable: bool = False,
+        noneditionable: bool = False,
         sharing: Optional[str] = None,
         oid: Optional[str] = None,
         default_collation: Optional[str] = None,
@@ -621,6 +631,7 @@ class OracleSqljTypeDefinition(OracleTypeDefinitionBase):
             authid,
             keyword,
             editionable,
+            noneditionable,
             sharing,
             oid,
             default_collation,
@@ -1086,50 +1097,79 @@ class OracleAlterTypeCompileAction(OracleTypeAlterAction):
 
 
 class OracleAlterTypeFinalAction(OracleTypeAlterAction):
-    """Change the FINAL property of an object type."""
+    """Change the FINAL property of an object type.
+
+    ``FINAL`` and ``NOT FINAL`` are two spellings with one parameter each.
+    The clause is mandatory in the action's grammar, so exactly one of
+    ``final=True`` / ``not_final=True`` must be set; setting both, or
+    neither, raises ``ValueError``.  ``is_final`` is kept as a compatibility
+    alias that accepts either spelling.
+
+    Raises:
+        ValueError: if both parameters are set, or neither is.
+    """
 
     action_kind = "oracle.final"
 
     def __init__(
         self,
         dialect: "OracleDialect",
-        final: Optional[bool] = None,
+        final: bool = False,
         *,
         is_final: Optional[bool] = None,
-        not_final: Optional[bool] = None,
+        not_final: bool = False,
         dependent_handling: Any = None,
         force: bool = False,
     ) -> None:
         super().__init__(dialect, dependent_handling=dependent_handling, force=force)
-        if final is not None and is_final is not None:
-            raise ValueError("final and is_final are mutually exclusive")
-        if final is None:
-            final = is_final
-        self.final = _normalize_flag(final, not_final, "final")
-        if self.final is None:
-            self.final = True
+        if is_final is not None:
+            if final or not_final:
+                raise ValueError(
+                    "is_final and final/not_final are mutually exclusive"
+                )
+            if is_final:
+                final = True
+            else:
+                not_final = True
+        if final and not_final:
+            raise ValueError("final and not_final are mutually exclusive options")
+        if not final and not not_final:
+            raise ValueError(
+                "FINAL/NOT FINAL requires exactly one of final=True or "
+                "not_final=True"
+            )
+        self.final = bool(final)
+        self.not_final = bool(not_final)
         self.is_final = is_final
-        self.not_final = not_final
 
     def get_params(self) -> Dict[str, Any]:
         params = super().get_params()
         params.pop("is_final", None)
-        params.pop("not_final", None)
         return params
 
 
 class OracleAlterTypeInstantiableAction(OracleAlterTypeFinalAction):
-    """Change the INSTANTIABLE property of an object type."""
+    """Change the INSTANTIABLE property of an object type.
+
+    ``INSTANTIABLE`` and ``NOT INSTANTIABLE`` are two spellings with one
+    parameter each.  The clause is mandatory in the action's grammar, so
+    exactly one of ``instantiable=True`` / ``not_instantiable=True`` must be
+    set; setting both, or neither, raises ``ValueError``.  ``is_instantiable``
+    is kept as a compatibility alias that accepts either spelling.
+
+    Raises:
+        ValueError: if both parameters are set, or neither is.
+    """
 
     action_kind = "oracle.instantiable"
 
     def __init__(
         self,
         dialect: "OracleDialect",
-        instantiable: Optional[bool] = None,
+        instantiable: bool = False,
         *,
         is_instantiable: Optional[bool] = None,
-        not_instantiable: Optional[bool] = None,
+        not_instantiable: bool = False,
         dependent_handling: Any = None,
         force: bool = False,
     ) -> None:
@@ -1139,28 +1179,36 @@ class OracleAlterTypeInstantiableAction(OracleAlterTypeFinalAction):
             dependent_handling=dependent_handling,
             force=force,
         )
-        if instantiable is not None and is_instantiable is not None:
-            raise ValueError("instantiable and is_instantiable are mutually exclusive")
-        if instantiable is None:
-            instantiable = is_instantiable
-        self.instantiable = _normalize_flag(
-            instantiable,
-            not_instantiable,
-            "instantiable",
-        )
+        if is_instantiable is not None:
+            if instantiable or not_instantiable:
+                raise ValueError(
+                    "is_instantiable and instantiable/not_instantiable are "
+                    "mutually exclusive"
+                )
+            if is_instantiable:
+                instantiable = True
+            else:
+                not_instantiable = True
+        if instantiable and not_instantiable:
+            raise ValueError(
+                "instantiable and not_instantiable are mutually exclusive options"
+            )
+        if not instantiable and not not_instantiable:
+            raise ValueError(
+                "INSTANTIABLE/NOT INSTANTIABLE requires exactly one of "
+                "instantiable=True or not_instantiable=True"
+            )
+        self.instantiable = bool(instantiable)
+        self.not_instantiable = bool(not_instantiable)
         self.is_instantiable = is_instantiable
-        if self.instantiable is None:
-            self.instantiable = True
-        self.not_instantiable = not_instantiable
-        self.final = None
-        self.not_final = None
+        self.final = False
+        self.not_final = False
 
     def get_params(self) -> Dict[str, Any]:
         params = OracleTypeAlterAction.get_params(self)
         params.pop("final", None)
         params.pop("not_final", None)
         params.pop("is_instantiable", None)
-        params.pop("not_instantiable", None)
         return params
 
 
@@ -1185,41 +1233,37 @@ class OracleCreateTypeBodyExpression(BaseExpression):
     def __init__(
         self,
         dialect: "OracleDialect",
-        type_name: str,
+        type: Type,
         body: str,
         *,
-        schema_name: Optional[str] = None,
-        schema: Optional[str] = None,
         if_not_exists: bool = False,
         or_replace: bool = False,
         keyword: str = "AS",
-        editionable: Optional[bool] = None,
+        editionable: bool = False,
+        noneditionable: bool = False,
     ) -> None:
         super().__init__(dialect)
-        _validate_name(type_name, "type_name")
-        if schema_name is not None and schema is not None and schema_name != schema:
-            raise ValueError("schema_name and schema are mutually exclusive")
-        schema_name = schema_name if schema_name is not None else schema
-        _validate_optional_name(schema_name, "schema_name")
+        if not isinstance(type, Type):
+            raise TypeError(
+                f"type must be a Type, got {type.__name__}"
+            )
         if not isinstance(body, str) or not body.strip():
             raise ValueError("body must be a non-empty string")
         if if_not_exists and or_replace:
             raise ValueError("CREATE TYPE BODY IF NOT EXISTS and OR REPLACE are mutually exclusive")
-        self.type_name = type_name
+        self.type = type
         self.body = body
-        self.schema_name = schema_name
-        self.schema = schema
         self.if_not_exists = bool(if_not_exists)
         self.or_replace = bool(or_replace)
         self.keyword = _normalize_keyword(keyword, "keyword")
-        if editionable is not None and not isinstance(editionable, bool):
-            raise TypeError("editionable must be a bool or None")
+        if editionable and noneditionable:
+            raise ValueError(
+                "editionable and noneditionable are mutually exclusive options"
+            )
+        if not isinstance(editionable, bool) or not isinstance(noneditionable, bool):
+            raise TypeError("editionable and noneditionable must be bools")
         self.editionable = editionable
-
-    def get_params(self) -> Dict[str, Any]:
-        params = cast(Dict[str, Any], super().get_params())
-        params.pop("schema", None)
-        return params
+        self.noneditionable = noneditionable
 
     @property
     def format_method(self) -> str:
@@ -1232,35 +1276,23 @@ class OracleDropTypeExpression(DropTypeExpression):
     def __init__(
         self,
         dialect: "OracleDialect",
-        type_name: str,
+        type: Type,
         *,
-        schema_name: Optional[str] = None,
-        schema: Optional[str] = None,
         if_exists: bool = False,
         force: bool = False,
         validate: bool = False,
     ) -> None:
-        if schema_name is not None and schema is not None and schema_name != schema:
-            raise ValueError("schema_name and schema are mutually exclusive")
-        schema_name = schema_name if schema_name is not None else schema
         super().__init__(
             dialect,
-            type_name,
-            schema_name=schema_name,
+            type,
             if_exists=if_exists,
         )
         if force and validate:
             raise ValueError("DROP TYPE FORCE and VALIDATE are mutually exclusive")
         if not isinstance(force, bool) or not isinstance(validate, bool):
             raise TypeError("force and validate must be bools")
-        self.schema = schema
         self.force = force
         self.validate = validate
-
-    def get_params(self) -> Dict[str, Any]:
-        params = cast(Dict[str, Any], super().get_params())
-        params.pop("schema", None)
-        return params
 
 
 class DropTypeBodyExpression(BaseExpression):
@@ -1269,27 +1301,17 @@ class DropTypeBodyExpression(BaseExpression):
     def __init__(
         self,
         dialect: "OracleDialect",
-        type_name: str,
+        type: Type,
         *,
-        schema_name: Optional[str] = None,
-        schema: Optional[str] = None,
         if_exists: bool = False,
     ) -> None:
         super().__init__(dialect)
-        _validate_name(type_name, "type_name")
-        if schema_name is not None and schema is not None and schema_name != schema:
-            raise ValueError("schema_name and schema are mutually exclusive")
-        schema_name = schema_name if schema_name is not None else schema
-        _validate_optional_name(schema_name, "schema_name")
-        self.type_name = type_name
-        self.schema_name = schema_name
-        self.schema = schema
+        if not isinstance(type, Type):
+            raise TypeError(
+                f"type must be a Type, got {type.__name__}"
+            )
+        self.type = type
         self.if_exists = bool(if_exists)
-
-    def get_params(self) -> Dict[str, Any]:
-        params = cast(Dict[str, Any], super().get_params())
-        params.pop("schema", None)
-        return params
 
     @property
     def format_method(self) -> str:

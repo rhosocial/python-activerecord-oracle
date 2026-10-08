@@ -69,7 +69,14 @@ class OracleFeaturesMixin:
         return self.version >= (11, 2, 0)
 
     def supports_materialized_cte(self) -> bool:
-        return True
+        """Oracle spells CTE materialization as the ``/*+ MATERIALIZE */`` hint.
+
+        The SQL-standard ``AS MATERIALIZED`` / ``AS NOT MATERIALIZED`` spelling
+        this parameter pair names is rejected by the server (ORA-00906 on
+        18c/21c/23c), and the hint has no expression-level parameter, so the
+        request is refused by name instead of being rendered.
+        """
+        return False
 
     # --- RETURNING ----------------------------------------------------
     def supports_returning_insert(self) -> bool:
@@ -160,9 +167,108 @@ class OracleFeaturesMixin:
         """Oracle supports FETCH FIRST ... WITH TIES since 12c."""
         return self.version >= (12, 0, 0)
 
-    # --- Auto-increment / Generated columns ---------------------------
-    def supports_auto_increment(self) -> bool:
+    # --- Identity / Auto-increment columns ----------------------------
+    def supports_identity_column(self) -> bool:
+        """Oracle accepts ``GENERATED ... AS IDENTITY`` from 12c onward."""
         return self.version >= (12, 0, 0)
+
+    def supports_identity_generation_always(self) -> bool:
+        """Oracle can express ``GENERATED ALWAYS AS IDENTITY``."""
+        return True
+
+    def supports_identity_start(self) -> bool:
+        """Oracle accepts the ``START WITH`` identity option."""
+        return True
+
+    def supports_identity_increment(self) -> bool:
+        """Oracle accepts the ``INCREMENT BY`` identity option."""
+        return True
+
+    def supports_identity_minvalue(self) -> bool:
+        """Oracle accepts the ``MINVALUE`` identity option."""
+        return True
+
+    def supports_identity_maxvalue(self) -> bool:
+        """Oracle accepts the ``MAXVALUE`` identity option."""
+        return True
+
+    def supports_identity_cycle(self) -> bool:
+        """Oracle accepts the ``CYCLE`` / ``NOCYCLE`` identity option.
+
+        Measured on 18c / 21c / 23c: both spellings are accepted inside an
+        identity clause. A bare ``CYCLE`` additionally needs a ``MAXVALUE``
+        (ORA-04015), which is a value constraint, not a missing clause. The
+        negative spelling is Oracle's own and comes from
+        :meth:`identity_cycle_keyword`: core's SQL-standard ``NO CYCLE`` is
+        refused (ORA-02000) on every measured server.
+        """
+        return True
+
+    def supports_identity_order(self) -> bool:
+        """Oracle accepts the ``ORDER`` / ``NOORDER`` identity option.
+
+        Measured on 18c / 21c / 23c: both spellings are accepted inside an
+        identity clause, so the option is expressible; the negative form is
+        spelled by :meth:`identity_order_keyword`.
+        """
+        return True
+
+    def supports_identity_cache(self) -> bool:
+        """Oracle accepts the ``CACHE n`` / ``NOCACHE`` identity option.
+
+        Measured on 18c / 21c / 23c: ``CACHE 10`` and ``NOCACHE`` are both
+        accepted inside an identity clause. ``CACHE 0`` is refused
+        (ORA-04010); core refuses a non-positive ``cache`` at construction
+        and spells NO CACHE through :meth:`identity_no_cache_keyword`, so a
+        count that cannot be expressed never reaches this hook.
+        """
+        return True
+
+    def identity_cycle_keyword(self, cycle: bool) -> str:
+        """Oracle spells the negative cycle form ``NOCYCLE``.
+
+        Core's SQL-standard ``NO CYCLE`` is refused (ORA-02000) on every
+        measured server; ``NOCYCLE`` is accepted. This answers spelling only:
+        the gate stays in core's formatter, which is not overridden here.
+        """
+        return "CYCLE" if cycle else "NOCYCLE"
+
+    def identity_order_keyword(self, order: bool) -> str:
+        """Oracle spells the negative order form ``NOORDER``.
+
+        Core's SQL-standard ``NO ORDER`` is refused (ORA-02000);
+        ``NOORDER`` is accepted.
+        """
+        return "ORDER" if order else "NOORDER"
+
+    def identity_cache_keyword(self, cache: int) -> str:
+        """Oracle spells the positive cache form ``CACHE n``.
+
+        Called only for a positive count: core refuses ``cache=0`` at
+        construction and routes the explicit NO CACHE spelling through
+        :meth:`identity_no_cache_keyword`.
+        """
+        return f"CACHE {cache}"
+
+    def identity_no_cache_keyword(self) -> str:
+        """Oracle spells the negative cache form ``NOCACHE``.
+
+        Core's SQL-standard ``NO CACHE`` is refused (ORA-02000); ``NOCACHE``
+        is accepted on every measured server. This is the hook for the
+        negative spelling -- the positive count hook no longer carries it.
+        """
+        return "NOCACHE"
+
+    def supports_auto_increment_column(self) -> bool:
+        """Oracle has no ``AUTO_INCREMENT`` marker; identity is its mechanism.
+
+        ``AUTO_INCREMENT`` is a different mechanism from the parameterised
+        ``GENERATED ... AS IDENTITY`` clause -- it is parameterless, and its
+        seed is a table-level option -- and Oracle spells neither. The answer
+        is ``False``; this replaces the old ``supports_auto_increment``, whose
+        version check answered a question no renderer asked.
+        """
+        return False
 
     def supports_column_collation(self) -> bool:
         """Oracle supports column-level COLLATE since 12.2."""
@@ -249,7 +355,17 @@ class OracleFeaturesMixin:
         return False
 
     def supports_constraint_enforced(self) -> bool:
-        return self.version >= (12, 0, 0)
+        """Oracle has no ``ENFORCED`` / ``NOT ENFORCED`` constraint spelling.
+
+        Measured on 18c / 21c / 23c: ``CHECK (...) ENFORCED`` is refused
+        (18c/21c ORA-00907, 23c ORA-03076) and ``NOT ENFORCED`` is refused
+        (18c/21c ORA-00905, 23c ORA-02000); an out-of-line ``ENFORCED`` is
+        refused with ORA-03075. Oracle's constraint-state vocabulary is
+        ``ENABLE`` / ``DISABLE`` plus ``VALIDATE`` / ``NOVALIDATE``, which is a
+        different clause; the SQL:2016 spelling does not exist here, so a
+        request for it is refused by name rather than rendered.
+        """
+        return False
 
     def supports_deferrable_constraint(self) -> bool:
         return True
