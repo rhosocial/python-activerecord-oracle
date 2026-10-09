@@ -107,7 +107,7 @@ from rhosocial.activerecord.backend.dialect.mixins import (
 from .mixins import (
     OracleAnalyzeMixin,
     OracleCollationMixin,
-    OracleColumnSuggestionMixin,
+    OracleColumnTypeMixin,
     OracleCommentMixin,
     OracleDatabaseLinkMixin,
     OracleDateTimeMixin,
@@ -165,7 +165,7 @@ class OracleDialect(
     # ================================================================
     OracleAnalyzeMixin,
     OracleCollationMixin,
-    OracleColumnSuggestionMixin,
+    OracleColumnTypeMixin,
     OracleDDLMixin,
     OracleTypeDDLMixin,
     UserDefinedTypeMixin,

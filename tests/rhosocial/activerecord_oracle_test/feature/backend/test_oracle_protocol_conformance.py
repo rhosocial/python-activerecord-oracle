@@ -89,6 +89,10 @@ ORACLE_PROTOCOLS = [
     dialect_protocols.UpsertSupport,
     dialect_protocols.WildcardSupport,
     dialect_protocols.WindowFunctionSupport,
+    # The column-class table: which column a common Python type resolves
+    # to. OracleColumnTypeMixin supplies the table; the storage half is
+    # DataTypeSupport, classified with the DDL protocols below.
+    dialect_protocols.ColumnTypeSupport,
     # --- SQL/XML ---
     dialect_protocols.SQLXMLAggregationSupport,
     dialect_protocols.SQLXMLConstructionSupport,

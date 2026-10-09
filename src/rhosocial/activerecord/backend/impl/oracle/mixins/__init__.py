@@ -9,7 +9,7 @@ from .analyze import OracleAnalyzeMixin
 from .backend_mixin import OracleBackendMixin
 from .collation import OracleCollationMixin
 from .column import OracleModifyColumnMixin
-from .column_suggestion import OracleColumnSuggestionMixin
+from .column_type import OracleColumnTypeMixin
 from .comment import OracleCommentMixin
 from .concurrency import OracleConcurrencyMixin
 from .database_link import OracleDatabaseLinkMixin
@@ -53,7 +53,7 @@ __all__ = [
     "OracleAnalyzeMixin",
     "OracleBackendMixin",
     "OracleCollationMixin",
-    "OracleColumnSuggestionMixin",
+    "OracleColumnTypeMixin",
     "OracleDateTimeMixin",
     "OracleDDLMixin",
     "OracleTypeDDLMixin",
