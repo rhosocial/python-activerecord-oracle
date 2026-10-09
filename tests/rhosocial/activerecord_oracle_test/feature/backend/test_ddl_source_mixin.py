@@ -27,9 +27,9 @@ from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.expression.column import (
     OracleColumnOptions,
 )
-from rhosocial.activerecord.backend.impl.oracle.expression.types import (
-    OracleCharType,
-    OracleVarChar2Type,
+from rhosocial.activerecord.backend.expression.types import (
+    CharType,
+    VarCharType,
 )
 from rhosocial.activerecord.base import (
     CharacterSetAttribute,
@@ -71,8 +71,8 @@ def index_condition(dialect):
     return Column(dialect, "value_col") == "active"
 
 
-PRIMARY_TYPE = OracleVarChar2Type(length=64)
-FALLBACK_TYPE = OracleCharType(length=8)
+PRIMARY_TYPE = VarCharType(length=64)
+FALLBACK_TYPE = CharType(length=8)
 TYPE_MARKER = UseSqlType(PRIMARY_TYPE, FALLBACK_TYPE)
 DEFAULT_VALUE = Literal(None, "model-default", inline_literals=True)
 DEFAULT_CONSTRAINT = UseConstraint(
@@ -304,7 +304,7 @@ def test_field_declarations_are_collected_in_declaration_order(model):
     assert model.column_type("value_field").data_types == (PRIMARY_TYPE, FALLBACK_TYPE)
     assert model.column_type("value_field").data_types[0] is PRIMARY_TYPE
     assert model.column_type("value_field").data_types[1] is FALLBACK_TYPE
-    assert isinstance(model.column_type("value_field").data_type, OracleVarChar2Type)
+    assert isinstance(model.column_type("value_field").data_type, VarCharType)
     assert model.column_type("value_field").data_type.length == 64
 
     value_constraints = model.column_constraints("value_field")
@@ -349,7 +349,7 @@ def test_field_declarations_are_collected_in_declaration_order(model):
 def test_collected_backend_data_type_renders_with_dialect():
     dialect = OracleDialect((19, 0, 0))
     data_type = SyncModel.column_type("value_field").data_types[0]
-    assert isinstance(data_type, OracleVarChar2Type)
+    assert isinstance(data_type, VarCharType)
     data_type.dialect = dialect
     try:
         rendered = ColumnDefinition(dialect, "value_col", data_type).to_sql()

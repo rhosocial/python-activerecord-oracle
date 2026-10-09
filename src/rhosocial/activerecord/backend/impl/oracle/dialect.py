@@ -107,6 +107,7 @@ from rhosocial.activerecord.backend.dialect.mixins import (
 from .mixins import (
     OracleAnalyzeMixin,
     OracleCollationMixin,
+    OracleColumnSuggestionMixin,
     OracleCommentMixin,
     OracleDatabaseLinkMixin,
     OracleDateTimeMixin,
@@ -148,6 +149,7 @@ from .mixins import (
     OracleExplainMixin,
 )
 from .protocols.partition import OraclePartitionSupport
+from .protocols.data_type import OracleDataTypeSupport
 from .protocols.ddl_type import OracleTypeDDLSupport
 from .reserved_words import ORACLE_RESERVED_WORDS
 
@@ -163,6 +165,7 @@ class OracleDialect(
     # ================================================================
     OracleAnalyzeMixin,
     OracleCollationMixin,
+    OracleColumnSuggestionMixin,
     OracleDDLMixin,
     OracleTypeDDLMixin,
     UserDefinedTypeMixin,
@@ -305,6 +308,7 @@ class OracleDialect(
     TransactionControlSupport,
     SQLFunctionSupport,
     OraclePartitionSupport,
+    OracleDataTypeSupport,
     OracleTypeDDLSupport,
 ):
     """Oracle dialect implementation that adapts to the Oracle version.

@@ -19,7 +19,24 @@ class OracleFeaturesMixin:
 
     # --- XML ----------------------------------------------------------
     def supports_xmlparse(self) -> bool:
-        return False
+        """Whether SQL/XML XMLPARSE is supported.
+
+        Oracle's SQL Reference first lists ``XMLPARSE`` in 10.2; it is absent
+        from the XML function lists of 9.2 and 10.1, and 10g Release 2 is the
+        release whose SQL/XML coverage expands to the SQL:2005 set
+        (``XMLPARSE``, ``XMLSERIALIZE``, ``XMLQUERY``, ``XMLTABLE``). So the
+        floor is 10.2 rather than the 9.0 the older construction probes use.
+
+        Measured live: the core rendering ``XMLPARSE(DOCUMENT ?)`` and
+        ``XMLPARSE(CONTENT ?)`` executes on 18c, 21c and 23c — an
+        ``XMLSERIALIZE`` around the parse returns the document text. The
+        standard's ``PRESERVE WHITESPACE`` clause is *not* Oracle grammar: it
+        raises ORA-03001 "unimplemented feature" on all three, so a caller
+        asking for ``preserve_whitespace=True`` gets that server error. The
+        function itself, including Oracle's ``WELLFORMED`` extension, is
+        supported.
+        """
+        return self.version >= (10, 2, 0)
 
     def supports_xmlserialize(self) -> bool:
         return self.version >= (9, 0, 0)

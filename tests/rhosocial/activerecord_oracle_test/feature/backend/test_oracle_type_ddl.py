@@ -352,17 +352,24 @@ def test_body_and_force_validate_drop_are_separate_expressions() -> None:
 
 
 def test_if_clauses_require_reliable_19_28_ru_source() -> None:
+    """The 19c half of the threshold is a *release update*, so it needs a real
+    one.
+
+    Oracle's own words on the 19c ``CREATE TYPE`` page: "You can use IF [NOT]
+    EXISTS only from Release 19.28 and up."  ``_version`` reads ``(19, 0, 0)``
+    on every 19c server whatever its release update, so the RU has to come from
+    ``version_full`` - and a base version of ``(19, 28, 0)``, which is a number
+    no server reports, must not be mistaken for one.
+    """
     base = _dialect(version=(19, 0, 0), version_full=(19, 27, 0, 0, 0))
     fake = _dialect(version=(19, 28, 0))
     other_major = _dialect(version=(20, 0, 0), version_full=(20, 28, 0, 0, 0))
-    future = _dialect(version=(23, 0, 0), version_full=(23, 28, 0, 0, 0))
     supported = _dialect(version=(19, 0, 0), version_full=(19, 28, 0, 0, 0))
     definition = OracleIncompleteTypeDefinition(base)
 
     assert base.supports_create_type_if_not_exists() is False
     assert fake.supports_create_type_if_not_exists() is False
     assert other_major.supports_create_type_if_not_exists() is False
-    assert future.supports_create_type_if_not_exists() is False
     assert supported.supports_create_type_if_not_exists() is True
     with pytest.raises(UnsupportedFeatureError):
         CreateTypeExpression(base, Type(base, "forward_t"), definition, if_not_exists=True).to_sql()
@@ -382,6 +389,88 @@ def test_if_clauses_require_reliable_19_28_ru_source() -> None:
             if_not_exists=True,
             or_replace=True,
         )
+
+
+def test_if_clauses_are_a_base_release_fact_from_23ai_on() -> None:
+    """The 23ai half of the threshold is a *base release*, so the RU is not
+    consulted at all.
+
+    ``test_if_clauses_require_reliable_19_28_ru_source`` used to assert ``False``
+    here, on a ``(23, 0, 0)`` dialect: the gate read ``major == 19`` and so
+    refused on the newest line.  Measured on the 26ai server (``23.26.1.0.0``,
+    as ``system``), all five of ``CREATE TYPE IF NOT EXISTS``, ``ALTER TYPE IF
+    EXISTS``, ``DROP TYPE IF EXISTS``, ``CREATE TYPE BODY IF NOT EXISTS`` and
+    ``DROP TYPE BODY IF EXISTS`` run, and the create form is honoured - a new
+    name lands in ``USER_TYPES`` and an existing one is a no-op.  So the 23
+    reference documenting the clause with no release note is a base-release
+    fact, and it is what this threshold now says.
+    """
+    base_release = _dialect(version=(23, 0, 0))
+    with_ru = _dialect(version=(23, 0, 0), version_full=(23, 28, 0, 0, 0))
+
+    for dialect in (base_release, with_ru):
+        assert dialect.supports_create_type_if_not_exists() is True
+        assert dialect.supports_alter_type_if_exists() is True
+        assert dialect.supports_drop_type_if_exists() is True
+        assert dialect.supports_create_type_body_if_not_exists() is True
+        assert dialect.supports_drop_type_body_if_exists() is True
+
+    assert CreateTypeExpression(
+        base_release,
+        Type(base_release, "forward_t"),
+        OracleIncompleteTypeDefinition(base_release),
+        if_not_exists=True,
+    ).to_sql()[0] == 'CREATE TYPE IF NOT EXISTS "FORWARD_T"'
+    assert DropTypeExpression(
+        base_release, Type(base_release, "forward_t"), if_exists=True,
+    ).to_sql()[0] == 'DROP TYPE IF EXISTS "FORWARD_T"'
+
+
+def test_21c_refuses_every_if_clause_and_says_what_to_write_instead() -> None:
+    """Measured on 21.3 (``21.3.0.0.0``): ``ALTER TYPE IF EXISTS`` is
+    ``ORA-00922``, ``DROP TYPE IF EXISTS`` and ``DROP TYPE BODY IF EXISTS`` are
+    ``ORA-00933``, and ``CREATE TYPE BODY IF NOT EXISTS`` over an existing body
+    is ``ORA-00955``.  ``CREATE TYPE IF NOT EXISTS`` is the awkward one: it is
+    **accepted and creates nothing** - the name stays out of ``USER_OBJECTS`` and
+    ``USER_TYPES`` and ``SELECT <name>(1) FROM DUAL`` is ``ORA-00904`` - so
+    reporting support there would be reporting a statement that lies to its
+    caller.  Refusal is the honest answer, and it has to name the alternative,
+    because ``major == 19`` is the only thing that would otherwise make this
+    line look newer than the clause.
+    """
+    dialect = _dialect(version=(21, 0, 0), version_full=(21, 3, 0, 0, 0))
+
+    for name in (
+        "supports_create_type_if_not_exists",
+        "supports_alter_type_if_exists",
+        "supports_drop_type_if_exists",
+        "supports_create_type_body_if_not_exists",
+        "supports_drop_type_body_if_exists",
+    ):
+        assert getattr(dialect, name)() is False, name
+
+    with pytest.raises(UnsupportedFeatureError) as create_exc:
+        CreateTypeExpression(
+            dialect,
+            Type(dialect, "forward_t"),
+            OracleIncompleteTypeDefinition(dialect),
+            if_not_exists=True,
+        ).to_sql()
+    assert "CREATE TYPE IF NOT EXISTS" in str(create_exc.value)
+    assert "CREATE OR REPLACE TYPE" in str(create_exc.value)
+
+    with pytest.raises(UnsupportedFeatureError) as drop_exc:
+        DropTypeExpression(dialect, Type(dialect, "forward_t"), if_exists=True).to_sql()
+    assert "DROP TYPE IF EXISTS" in str(drop_exc.value)
+    assert "USER_OBJECTS" in str(drop_exc.value)
+
+    # ...and the unadorned statements, which run everywhere, are untouched.
+    assert CreateTypeExpression(
+        dialect, Type(dialect, "forward_t"), OracleIncompleteTypeDefinition(dialect),
+    ).to_sql()[0] == 'CREATE TYPE "FORWARD_T"'
+    assert DropTypeExpression(
+        dialect, Type(dialect, "forward_t"), if_exists=False,
+    ).to_sql()[0] == 'DROP TYPE "FORWARD_T"'
 
 
 def test_common_definition_does_not_accept_method_body() -> None:

@@ -42,10 +42,37 @@ from ..expression.ddl.type import (
     OracleVarrayTypeDefinition,
     _normalize_invoker_rights,
     _normalize_method_kind,
-    _normalize_sqlj_using,
     _validate_accessible_by,
     _validate_method_name,
     _validate_method_parameter,
+)
+
+#: What to write instead, for each refused ``IF [NOT] EXISTS`` form.  The clause
+#: is not implemented by every line this backend can reach - see
+#: ``OracleTypeDDLMixin._supports_type_if_exists`` for which are measured and
+#: which are documented - and a refusal that says only "not supported" leaves the
+#: caller with no statement to write instead.  Each alternative below runs on
+#: every release, which is the whole point: they are spelled in plain SQL and a
+#: dictionary lookup, with no version gate at all.
+_TYPE_IF_EXISTS_CREATE_ALTERNATIVE = (
+    "this server predates the clause on TYPE DDL; use CREATE OR REPLACE TYPE, "
+    "or run plain CREATE TYPE guarded on USER_OBJECTS."
+)
+_TYPE_IF_EXISTS_BODY_ALTERNATIVE = (
+    "this server predates the clause on TYPE DDL; use CREATE OR REPLACE TYPE "
+    "BODY, or run plain CREATE TYPE BODY guarded on USER_OBJECTS."
+)
+_TYPE_IF_EXISTS_ALTER_ALTERNATIVE = (
+    "this server predates the clause on TYPE DDL; run plain ALTER TYPE guarded "
+    "on USER_OBJECTS."
+)
+_TYPE_IF_EXISTS_DROP_ALTERNATIVE = (
+    "this server predates the clause on TYPE DDL; run plain DROP TYPE guarded "
+    "on USER_OBJECTS."
+)
+_TYPE_IF_EXISTS_DROP_BODY_ALTERNATIVE = (
+    "this server predates the clause on TYPE DDL; run plain DROP TYPE BODY "
+    "guarded on USER_OBJECTS."
 )
 
 
@@ -74,8 +101,18 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
     )
     _TYPE_MIN_VERSION = (9, 0, 0)
     _TYPE_PERSISTABLE_MIN_VERSION = (18, 0, 0)
-    _TYPE_IF_EXISTS_MAJOR = 19
+
+    #: The line the ``IF [NOT] EXISTS`` clause was *backported* to, and the
+    #: release update on that line that carries it.  Oracle dates this one in
+    #: its own words, so the threshold is a release update and has to be read
+    #: from ``VERSION_FULL`` - see :meth:`_supports_type_if_exists`.
+    _TYPE_IF_EXISTS_LINE = 19
     _TYPE_IF_EXISTS_RU = 28
+
+    #: The line from which the clause is in the **base release**, so on and
+    #: after it the base version alone decides and the release update is not
+    #: consulted.  The reference documents it there with no release note at all.
+    _TYPE_IF_EXISTS_BASE_LINE = 23
 
     def _has_type_support(self) -> bool:
         version = getattr(self, "_version", None)
@@ -86,18 +123,78 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
         return version is not None and tuple(version) >= self._TYPE_PERSISTABLE_MIN_VERSION
 
     def _supports_type_if_exists(self) -> bool:
+        """Whether this server accepts ``IF [NOT] EXISTS`` on TYPE DDL.
+
+        The clause has **two** documented anchors and they are not the same
+        shape, which is why one constant cannot express it:
+
+        * **19c, release update 28** — the 19c SQL Language Reference's
+          ``CREATE TYPE`` page documents ``IF NOT EXISTS`` and dates it in the
+          same paragraph: *"Note: You can use IF [NOT] EXISTS only from Release
+          19.28 and up."*  On this line the threshold is a **release update**,
+          and the only number carrying one is the second component of
+          ``VERSION_FULL``, which this dialect already exposes as
+          ``ru_version``.  ``_version`` reads ``(19, 0, 0)`` on every 19c server
+          whatever its release update, so a base-version comparison cannot say
+          anything here — and a base version of ``(19, 28, 0)`` is a number no
+          server reports, which is why the release update is read from
+          ``version_full`` and cross-checked against ``_ru_version`` instead of
+          one of the two being taken on trust.
+
+        * **23ai, base release** — the 23ai/26ai SQL Language Reference documents
+          ``IF NOT EXISTS`` on ``CREATE TYPE`` with **no release note**, because
+          on that line the clause ships in the base release.  From 23 on the
+          base version decides and the release update has nothing to add.
+
+        So: ``major == 19`` was neither shape.  It made this gate answer *no* on
+        23ai and on 26ai, where the clause works and is honoured — measured on
+        the 26ai server (``23.26.1.0.0``, measured as ``system``):
+        ``CREATE TYPE IF NOT EXISTS`` creates the type and is a no-op over an
+        existing one, and ``ALTER TYPE IF EXISTS``, ``DROP TYPE IF EXISTS``,
+        ``CREATE TYPE BODY IF NOT EXISTS`` and ``DROP TYPE BODY IF EXISTS`` all
+        run.  That is a false refusal of the same kind as the one this replaced,
+        pointed the other way: the backend refused DDL the server accepts, on the
+        newest release, and refused it hardest on the one where the caller is
+        most likely to need it.
+
+        The 21c line is deliberately **not** answered by the 19.28 anchor, even
+        though "19.28 and up" reads as though it should be.  That reading is not
+        what the servers do, and a measurement beats a reading.  On 21.3
+        (``21.3.0.0.0``, measured): ``ALTER TYPE IF EXISTS`` is ``ORA-00922``,
+        ``DROP TYPE IF EXISTS`` and ``DROP TYPE BODY IF EXISTS`` are
+        ``ORA-00933``, ``CREATE TYPE BODY IF NOT EXISTS`` over an existing body
+        is ``ORA-00955``, and ``CREATE TABLE IF NOT EXISTS`` — the same clause
+        family, same server — is ``ORA-00922``.  The one form 21c *accepts*,
+        ``CREATE TYPE IF NOT EXISTS``, is worse than a refusal: it accepts and
+        creates nothing — ``user_objects`` and ``user_types`` stay empty and
+        ``SELECT <name>(1) FROM DUAL`` is ``ORA-00904`` — so the caller is told
+        the type exists and then fails on first use.  Refusing is the honest
+        answer there, and Oracle's 21c reference agrees with the measurement:
+        its ``CREATE TYPE`` page documents no ``IF NOT EXISTS`` clause at all.
+
+        A later 21c release update may carry the same backport 19.28 did.
+        Nothing reachable from here measures one, so nothing here claims one,
+        and the direction of the error is the safe one: refusing a statement a
+        server would have honoured is recoverable, silently dropping a type is
+        not.
+        """
         version = getattr(self, "_version", None)
         if version is None:
             return False
-        version = tuple(version)
-        if not version or version[0] != self._TYPE_IF_EXISTS_MAJOR:
+        version = cast(Tuple[int, ...], tuple(version))
+        if not version:
+            return False
+        if version[0] >= self._TYPE_IF_EXISTS_BASE_LINE:
+            # Base release: the clause is in it, with no release-update note.
+            return True
+        if version[0] != self._TYPE_IF_EXISTS_LINE:
             return False
         full_version = getattr(self, "version_full", None)
         configured_ru = cast(Optional[int], getattr(self, "_ru_version", None))
         ru_version = configured_ru
         if full_version and len(full_version) >= 2:
             full_version = cast(Tuple[int, ...], tuple(full_version))
-            if full_version[0] != self._TYPE_IF_EXISTS_MAJOR:
+            if full_version[0] != self._TYPE_IF_EXISTS_LINE:
                 return False
             if configured_ru is not None and configured_ru != full_version[1]:
                 return False
@@ -326,11 +423,15 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
 
     def _format_flags(self, expr: Any) -> List[str]:
         flags: List[str] = []
-        for name in ("final", "instantiable", "persistable"):
-            value = getattr(expr, name, None)
+        for attribute, keyword in (
+            ("resolved_final", "FINAL"),
+            ("resolved_instantiable", "INSTANTIABLE"),
+            ("resolved_persistable", "PERSISTABLE"),
+        ):
+            value = getattr(expr, attribute, None)
             if value is None:
                 continue
-            flags.append(name.upper() if value else f"NOT {name.upper()}")
+            flags.append(keyword if value else f"NOT {keyword}")
         return flags
 
     def _format_common_prefix(self, expr: Any) -> List[str]:
@@ -396,7 +497,7 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
             members.append(self._format_attributes(expr.attributes))
         if expr.methods:
             members.append(self._format_methods(expr.methods))
-        using_clause = _normalize_sqlj_using(getattr(expr, "using_clause", None))
+        using_clause = expr.normalized_using_clause
         parts.append(f"USING {using_clause} ({', '.join(members)})")
         parts.extend(self._format_flags(expr))
         return " ".join(parts)
@@ -406,19 +507,21 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
         element_sql = self._format_type_value(expr.element_type)
         if expr.not_null:
             element_sql = f"{element_sql} NOT NULL"
-        if expr.persistable is None:
-            return f"{prefix}AS VARRAY({expr.size_limit}) OF {element_sql}"
-        persistable = "PERSISTABLE" if expr.persistable else "NOT PERSISTABLE"
-        return f"{prefix}AS VARRAY({expr.size_limit}) OF ({element_sql}) {persistable}"
+        if expr.resolved_persistable is None:
+            return f"{prefix}AS VARRAY({expr.resolved_size_limit}) OF {element_sql}"
+        persistable = "PERSISTABLE" if expr.resolved_persistable else "NOT PERSISTABLE"
+        return (
+            f"{prefix}AS VARRAY({expr.resolved_size_limit}) OF ({element_sql}) {persistable}"
+        )
 
     def _format_nested_table_definition(self, expr: OracleNestedTableTypeDefinition) -> str:
         prefix = "FORCE " if expr.force else ""
         element_sql = self._format_type_value(expr.element_type)
         if expr.not_null:
             element_sql = f"{element_sql} NOT NULL"
-        if expr.persistable is None:
+        if expr.resolved_persistable is None:
             return f"{prefix}AS TABLE OF {element_sql}"
-        persistable = "PERSISTABLE" if expr.persistable else "NOT PERSISTABLE"
+        persistable = "PERSISTABLE" if expr.resolved_persistable else "NOT PERSISTABLE"
         return f"{prefix}AS TABLE OF ({element_sql}) {persistable}"
 
     def _format_dependent_clause(self, expr: OracleTypeAlterAction) -> str:
@@ -437,7 +540,7 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
     def format_type_definition(self, expr: TypeDefinition) -> Tuple[str, tuple]:
         if not self.supports_type_objects():
             raise UnsupportedFeatureError(self.name, "TYPE definition")
-        if getattr(expr, "persistable", None) is not None and not self.supports_type_persistable():
+        if getattr(expr, "resolved_persistable", None) is not None and not self.supports_type_persistable():
             raise UnsupportedFeatureError(self.name, "TYPE PERSISTABLE clause")
         if not self.supports_type_definition(type(expr)):
             raise UnsupportedFeatureError(
@@ -463,7 +566,11 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
         if not self.supports_type_objects() or not self.supports_create_type():
             raise UnsupportedFeatureError(self.name, "CREATE TYPE")
         if expr.if_not_exists and not self.supports_create_type_if_not_exists():
-            raise UnsupportedFeatureError(self.name, "CREATE TYPE IF NOT EXISTS")
+            raise UnsupportedFeatureError(
+                self.name,
+                "CREATE TYPE IF NOT EXISTS",
+                _TYPE_IF_EXISTS_CREATE_ALTERNATIVE,
+            )
         if expr.or_replace and not self.supports_create_type_or_replace():
             raise UnsupportedFeatureError(self.name, "CREATE OR REPLACE TYPE")
         if expr.if_not_exists and expr.or_replace:
@@ -547,7 +654,7 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
     ) -> Tuple[str, tuple]:
         attributes: List[OracleTypeAttribute] = []
         for action in actions:
-            attributes.extend(cast(OracleAlterTypeAddAttributeAction, action).attributes)
+            attributes.extend(cast(OracleAlterTypeAddAttributeAction, action).resolved_attributes)
         suffix = self._format_alter_dependent_group(actions)
         if keyword == "DROP":
             clause = self._format_attribute_names(attributes)
@@ -590,11 +697,11 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
                 f"ALTER TYPE action {getattr(expr, 'action_kind', type(expr).__name__)}",
             )
         if isinstance(expr, OracleAlterTypeInstantiableAction):
-            value = "INSTANTIABLE" if expr.instantiable else "NOT INSTANTIABLE"
+            value = "INSTANTIABLE" if expr.resolved_instantiable else "NOT INSTANTIABLE"
             suffix = self._format_dependent_clause(expr)
             return f"{value} {suffix}".rstrip(), ()
         if isinstance(expr, OracleAlterTypeFinalAction):
-            value = "FINAL" if expr.final else "NOT FINAL"
+            value = "FINAL" if expr.resolved_final else "NOT FINAL"
             suffix = self._format_dependent_clause(expr)
             return f"{value} {suffix}".rstrip(), ()
         if isinstance(expr, OracleAlterTypeCompileAction):
@@ -603,8 +710,8 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
             parts = ["COMPILE"]
             if expr.debug:
                 parts.append("DEBUG")
-            if expr.target:
-                parts.append(expr.target)
+            if expr.resolved_target:
+                parts.append(expr.resolved_target)
             parts.extend(str(parameter) for parameter in expr.compiler_parameters)
             if expr.reuse_settings:
                 parts.append("REUSE SETTINGS")
@@ -619,36 +726,36 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
             else:
                 keyword = "ADD"
             return (
-                f"{keyword} ATTRIBUTE ({self._format_attributes(expr.attributes)}) "
+                f"{keyword} ATTRIBUTE ({self._format_attributes(expr.resolved_attributes)}) "
                 f"{self._format_dependent_clause(expr)}".rstrip(),
                 (),
             )
         if isinstance(expr, OracleAlterTypeDropAttributeAction):
             return (
-                f"DROP ATTRIBUTE ({self._format_attribute_names(expr.attributes)}) "
+                f"DROP ATTRIBUTE ({self._format_attribute_names(expr.resolved_attributes)}) "
                 f"{self._format_dependent_clause(expr)}".rstrip(),
                 (),
             )
         if isinstance(expr, OracleAlterTypeDropMethodAction):
             return (
-                f"DROP {self._format_drop_method(expr.method)} "
+                f"DROP {self._format_drop_method(expr.resolved_method)} "
                 f"{self._format_dependent_clause(expr)}".rstrip(),
                 (),
             )
         if isinstance(expr, OracleAlterTypeAddMethodAction):
             return (
-                f"ADD {self._format_method(expr.method)} "
+                f"ADD {self._format_method(expr.resolved_method)} "
                 f"{self._format_dependent_clause(expr)}".rstrip(),
                 (),
             )
         if isinstance(expr, OracleAlterTypeLimitAction):
             return (
-                f"MODIFY LIMIT {expr.limit} {self._format_dependent_clause(expr)}".rstrip(),
+                f"MODIFY LIMIT {expr.resolved_limit} {self._format_dependent_clause(expr)}".rstrip(),
                 (),
             )
         if isinstance(expr, OracleAlterTypeElementTypeAction):
             return (
-                f"MODIFY ELEMENT TYPE {self._format_type_value(expr.element_type)} "
+                f"MODIFY ELEMENT TYPE {self._format_type_value(expr.resolved_element_type)} "
                 f"{self._format_dependent_clause(expr)}".rstrip(),
                 (),
             )
@@ -661,7 +768,11 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
         if not self.supports_type_objects() or not self.supports_alter_type():
             raise UnsupportedFeatureError(self.name, "ALTER TYPE")
         if expr.if_exists and not self.supports_alter_type_if_exists():
-            raise UnsupportedFeatureError(self.name, "ALTER TYPE IF EXISTS")
+            raise UnsupportedFeatureError(
+                self.name,
+                "ALTER TYPE IF EXISTS",
+                _TYPE_IF_EXISTS_ALTER_ALTERNATIVE,
+            )
         actions = list(expr.actions)
         if len(actions) > 1 and not self.supports_multiple_type_alter_actions():
             raise UnsupportedFeatureError(self.name, "multiple ALTER TYPE actions")
@@ -687,7 +798,11 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
         if not self.supports_type_objects() or not self.supports_drop_type():
             raise UnsupportedFeatureError(self.name, "DROP TYPE")
         if expr.if_exists and not self.supports_drop_type_if_exists():
-            raise UnsupportedFeatureError(self.name, "DROP TYPE IF EXISTS")
+            raise UnsupportedFeatureError(
+                self.name,
+                "DROP TYPE IF EXISTS",
+                _TYPE_IF_EXISTS_DROP_ALTERNATIVE,
+            )
         force = bool(getattr(expr, "force", False))
         validate = bool(vars(expr).get("validate", False))
         if force and validate:
@@ -713,7 +828,11 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
         if not self.supports_type_objects() or not self.supports_create_type_body():
             raise UnsupportedFeatureError(self.name, "CREATE TYPE BODY")
         if expr.if_not_exists and not self.supports_create_type_body_if_not_exists():
-            raise UnsupportedFeatureError(self.name, "CREATE TYPE BODY IF NOT EXISTS")
+            raise UnsupportedFeatureError(
+                self.name,
+                "CREATE TYPE BODY IF NOT EXISTS",
+                _TYPE_IF_EXISTS_BODY_ALTERNATIVE,
+            )
         if expr.or_replace and not self.supports_create_type_or_replace():
             raise UnsupportedFeatureError(self.name, "CREATE OR REPLACE TYPE BODY")
         if expr.if_not_exists and expr.or_replace:
@@ -739,7 +858,11 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
         if not self.supports_type_objects() or not self.supports_drop_type_body():
             raise UnsupportedFeatureError(self.name, "DROP TYPE BODY")
         if expr.if_exists and not self.supports_drop_type_body_if_exists():
-            raise UnsupportedFeatureError(self.name, "DROP TYPE BODY IF EXISTS")
+            raise UnsupportedFeatureError(
+                self.name,
+                "DROP TYPE BODY IF EXISTS",
+                _TYPE_IF_EXISTS_DROP_BODY_ALTERNATIVE,
+            )
         parts = ["DROP TYPE BODY"]
         if expr.if_exists:
             parts.append("IF EXISTS")

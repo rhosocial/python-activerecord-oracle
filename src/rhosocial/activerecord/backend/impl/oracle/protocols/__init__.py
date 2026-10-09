@@ -12,6 +12,7 @@ from .json import (
     OracleJSONDualitySupport,
 )
 from .partition import OraclePartitionSupport
+from .data_type import OracleDataTypeSupport
 from .ddl_type import (
     OracleTypeDDLSupport,
     OracleTypeSupport,
@@ -28,6 +29,7 @@ __all__ = [
     "OracleVectorTypeSupport",
     "OracleJSONDualitySupport",
     "OraclePartitionSupport",
+    "OracleDataTypeSupport",
     "OracleTypeDDLSupport",
     "OracleTypeSupport",
     "OracleUserDefinedTypeSupport",

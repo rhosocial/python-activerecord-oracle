@@ -40,7 +40,9 @@ from ..version import (
     VERSION_QUERY,
     normalize_version,
     parse_version_row,
+    product_name_from_row,
     ru_from_version_full,
+    select_version_row,
 )
 
 
@@ -74,10 +76,11 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         Args:
             version: Expected Oracle server version tuple (major, minor, patch).
                     Used for dialect and type adapter initialization.
-                    Defaults to (19, 0, 0). Can be passed as 'version' in kwargs.
+                    Defaults to **None**, meaning "not stated and not yet
+                    measured". Can be passed as 'version' in kwargs.
         """
         # Extract version from kwargs if provided
-        version = kwargs.pop('version', None) or (19, 0, 0)
+        version = kwargs.pop('version', None)
         version_full = kwargs.pop('version_full', None)
         ru_version = kwargs.pop('ru_version', None)
 
@@ -115,8 +118,16 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
 
         super().__init__(**kwargs)
 
-        # Store the expected Oracle server version
-        self._version = version or (19, 0, 0)
+        # Store the expected Oracle server version. ``None`` when the caller did
+        # not state one, which is the only honest value for a version that has
+        # not been measured: the previous ``or (19, 0, 0)`` answered "19c" for
+        # every backend that had not yet talked to its server, and a version gate
+        # reading that answered "too old" for a server nobody had asked. ``None``
+        # leaves the dialect unadapted instead, and an unadapted dialect's
+        # ``.version`` raises ``DialectNotAdaptedException`` - so the gates
+        # refuse rather than guess, until :meth:`get_server_version` has a real
+        # number. See ``version.py`` for the measurements behind that.
+        self._version = version
         self._version_full = normalize_version(version_full, minimum_length=2) or None
         self._ru_version = (
             ru_version if ru_version is not None else ru_from_version_full(self._version_full)
@@ -175,7 +186,16 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
                 ru_version=actual_ru_version,
             )
             self._register_oracle_adapters()
-            self.log(logging.INFO, f"Adapted to Oracle server version {actual_version}")
+            self.log(
+                logging.INFO if actual_version is not None else logging.ERROR,
+                f"Adapted to Oracle server version {actual_version}"
+                if actual_version is not None
+                else (
+                    "Adapted to an Oracle server whose version could not be "
+                    "read; the dialect is unadapted and every version-gated "
+                    "feature will refuse rather than assume one"
+                ),
+            )
 
     @property
     def dialect(self) -> OracleDialect:
@@ -678,42 +698,92 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
             if cursor:
                 cursor.close()
 
-    def get_server_version(self) -> tuple:
-        """Get the Oracle base and full release versions."""
+    def get_server_version(self) -> Optional[Tuple[int, int, int]]:
+        """Read the server's own release version.
+
+        Which row this takes is decided by
+        :func:`~..version.select_version_row` and nothing else — **no product
+        name is matched**. ``PRODUCT`` was ``'Oracle Database 21c Express
+        Edition '`` on the 21c server and ``'Oracle AI Database 26ai Free'`` on
+        the 23.0 line (both measured), so a ``PRODUCT LIKE 'Oracle Database%'``
+        filter stopped finding the database the moment Oracle rebranded it and
+        every version gate in the backend fell through to its fallback. The
+        product string is still selected, and still logged, so a future rename is
+        visible in the log rather than silent — it is simply never a condition.
+
+        Returns ``None`` when the version genuinely cannot be read. There is
+        deliberately no numeric default: the previous ``(19, 0, 0)`` was a claim
+        that the server was 19c, it made every gate above 19 answer "too old",
+        and it was indistinguishable from a version that had actually been
+        measured. ``None`` clears ``self._version``, which leaves the dialect
+        unadapted, and an unadapted dialect's ``.version`` raises
+        ``DialectNotAdaptedException`` — so no gate can act on a version nobody
+        measured.
+        """
         if not self._connection:
             self.connect()
 
         cursor = None
         try:
             cursor = self._get_cursor()
+            product: Optional[str] = None
             try:
                 cursor.execute(VERSION_FULL_QUERY)
-                row = cursor.fetchone()
+                rows = cursor.fetchall()
+                row = select_version_row(rows)
                 base, version_full = parse_version_row(row)
+                product = product_name_from_row(row)
             except Exception:
                 cursor.close()
                 cursor = self._get_cursor()
                 cursor.execute(VERSION_QUERY)
-                row = cursor.fetchone()
+                rows = cursor.fetchall()
+                row = select_version_row(rows)
                 base, version_full = parse_version_row(row)
             base = normalize_version(base)[:3]
             if not base:
-                raise ValueError("Oracle PRODUCT_COMPONENT_VERSION returned no version")
+                raise ValueError(
+                    "Oracle PRODUCT_COMPONENT_VERSION returned no row whose "
+                    "VERSION is a dotted number"
+                )
             self._version_full = version_full
             self._ru_version = ru_from_version_full(version_full)
-            self.log(logging.INFO, f"Oracle server version: {base}")
+            self._version = base
+            self.log(
+                logging.INFO,
+                f"Oracle server version: {base} (product "
+                f"{product if product else 'not reported by this query'}"
+                f", full {version_full if version_full else 'not reported'})",
+            )
             return base
         except Exception as e:
-            self.log(logging.WARNING, f"Could not determine Oracle version: {str(e)}, defaulting to 19.0.0")
+            self.log(
+                logging.ERROR,
+                f"Could not determine the Oracle server version: {e}. The "
+                f"version is left UNKNOWN rather than assumed: every "
+                f"version-gated feature in this backend will now refuse "
+                f"(DialectNotAdaptedException) instead of answering on a "
+                f"number that was never measured. Previously this path "
+                f"reported (19, 0, 0), which answered \"too old\" for every "
+                f"21c+ feature on a server of any version.",
+            )
+            self._version = None
             self._version_full = None
             self._ru_version = None
-            return (19, 0, 0)
+            return None
         finally:
             if cursor:
                 cursor.close()
 
     def get_server_version_full(self) -> Optional[Tuple[int, ...]]:
-        """Return the full Oracle version, including the RU when available."""
+        """Return the full Oracle version, including the RU when available.
+
+        ``None`` here means "not known", which is a different answer from a
+        three-component base version: the full string carries the release update,
+        and on the 23.0 line its second component is the number that separates a
+        23ai server from a 26ai one (see
+        :func:`~..version.ru_from_version_full`).
+        """
         if self._version_full is not None:
             return self._version_full
         self.get_server_version()

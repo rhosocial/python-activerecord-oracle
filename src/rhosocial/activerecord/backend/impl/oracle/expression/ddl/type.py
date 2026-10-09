@@ -7,7 +7,7 @@ from collections.abc import Sequence as ABCSequence
 from dataclasses import dataclass
 from enum import Enum
 import re
-from typing import Any, Dict, List, Optional, Sequence, Tuple, TYPE_CHECKING, cast
+from typing import Any, List, Optional, Sequence, Tuple, TYPE_CHECKING, cast
 
 from rhosocial.activerecord.backend.expression.bases import BaseExpression
 from rhosocial.activerecord.backend.expression.objects import Type
@@ -409,8 +409,82 @@ class OracleTypeMethod:
             _validate_fragment(self.return_type, "return_type")
 
 
-class OracleTypeDefinitionBase(TypeDefinition):
-    """Shared state for Oracle type definitions."""
+class _ResolvedFlagView:
+    """Read-only merged view over Oracle's alias spellings of one tri-state flag.
+
+    Oracle spells a single tri-state flag several ways: the positive parameter
+    (``final=True``), an ``is_``-prefixed duplicate (``is_final=True``) and a
+    negating parameter (``not_final=True``). They are mutually exclusive, so
+    ``__init__`` stores each one *verbatim* under the name the caller actually
+    used and leaves the others at ``None`` ("not supplied"). The merged value is
+    computed here, once, and every reader uses it, so the generic
+    introspection-based ``get_params()`` needs no override: it emits the
+    spellings verbatim and the reconstruction takes the same branch as the
+    original construction.
+    """
+
+    def _aliased_flag(self, *names: str) -> Optional[bool]:
+        for name in names:
+            value = getattr(self, name, None)
+            if value is not None:
+                return value
+        return None
+
+    def _merged_flag(
+        self,
+        field_name: str,
+        positive: Sequence[str],
+        negative: str,
+    ) -> Optional[bool]:
+        """Merge one flag's spellings, rejecting two at once.
+
+        Deliberately reads the stored attributes directly rather than going
+        through the ``resolved_*`` properties, so a subclass that overrides one
+        of those to apply a default cannot recurse back into it.
+        """
+        return _normalize_flag(
+            self._aliased_flag(*positive),
+            self._aliased_flag(negative),
+            field_name,
+        )
+
+    def _validate_resolved_flags(self) -> None:
+        """Reject mutually exclusive flag spellings at construction time.
+
+        The merged values are computed on demand by the properties below, so
+        validation happens here instead of being deferred to render time.
+        """
+        self._merged_flag("final", ("final", "is_final"), "not_final")
+        self._merged_flag("instantiable", ("instantiable", "is_instantiable"), "not_instantiable")
+        self._merged_flag("persistable", ("persistable",), "not_persistable")
+
+    @property
+    def resolved_final(self) -> Optional[bool]:
+        """``FINAL`` / ``NOT FINAL`` / unspecified, whichever spelling was used."""
+        return self._merged_flag("final", ("final", "is_final"), "not_final")
+
+    @property
+    def resolved_instantiable(self) -> Optional[bool]:
+        """``INSTANTIABLE`` / ``NOT INSTANTIABLE`` / unspecified."""
+        return self._merged_flag(
+            "instantiable",
+            ("instantiable", "is_instantiable"),
+            "not_instantiable",
+        )
+
+    @property
+    def resolved_persistable(self) -> Optional[bool]:
+        """``PERSISTABLE`` / ``NOT PERSISTABLE`` / unspecified."""
+        return self._merged_flag("persistable", ("persistable",), "not_persistable")
+
+
+class OracleTypeDefinitionBase(_ResolvedFlagView, TypeDefinition):
+    """Shared state for Oracle type definitions.
+
+    Every option is stored verbatim under the parameter name the caller used, so
+    the merged value of the aliased flags is reached through
+    :class:`_ResolvedFlagView` rather than by rewriting the serialized form.
+    """
 
     def _initialize_options(
         self,
@@ -433,21 +507,14 @@ class OracleTypeDefinitionBase(TypeDefinition):
         invoker_rights: Any,
     ) -> None:
         self.under = _validate_optional_name(under, "under")
-        self.final = _normalize_flag(final, not_final, "final")
+        self.final = final
         self.not_final = not_final
-        self.instantiable = _normalize_flag(
-            instantiable,
-            not_instantiable,
-            "instantiable",
-        )
+        self.instantiable = instantiable
         self.not_instantiable = not_instantiable
-        self.persistable = _normalize_flag(
-            persistable,
-            not_persistable,
-            "persistable",
-        )
+        self.persistable = persistable
         self.not_persistable = not_persistable
-        if self.under is not None and self.persistable is not None:
+        self._validate_resolved_flags()
+        if self.under is not None and self.resolved_persistable is not None:
             raise ValueError("subtypes inherit PERSISTABLE and cannot specify it")
         if not isinstance(force, bool):
             raise TypeError("force must be a bool")
@@ -476,18 +543,14 @@ class OracleTypeDefinitionBase(TypeDefinition):
         if self.authid is not None and self.invoker_rights:
             raise ValueError("authid and invoker_rights are mutually exclusive")
 
-    def get_params(self) -> Dict[str, Any]:
-        params = cast(Dict[str, Any], super().get_params())
-        for alias in ("not_final", "not_instantiable", "not_persistable"):
-            params.pop(alias, None)
-        params["final"] = self.final
-        params["instantiable"] = self.instantiable
-        params["persistable"] = self.persistable
-        return params
-
 
 class OracleObjectTypeDefinition(OracleTypeDefinitionBase):
-    """Oracle object type definition."""
+    """Oracle object type definition.
+
+    ``external_name`` exists only so that the SQLJ subclass's signature is a
+    superset of this one; it is rejected above, so it always round-trips as
+    ``None`` and the generic ``get_params()`` carries it unchanged.
+    """
 
     definition_kind = "oracle.object"
 
@@ -546,11 +609,6 @@ class OracleObjectTypeDefinition(OracleTypeDefinitionBase):
             accessible_by,
             invoker_rights,
         )
-
-    def get_params(self) -> Dict[str, Any]:
-        params = cast(Dict[str, Any], super().get_params())
-        params.pop("external_name", None)
-        return params
 
 
 class OracleSqljTypeDefinition(OracleTypeDefinitionBase):
@@ -617,8 +675,13 @@ class OracleSqljTypeDefinition(OracleTypeDefinitionBase):
         if not isinstance(language, str) or language.strip().upper() != "JAVA":
             raise ValueError("SQLJ object types only support LANGUAGE JAVA")
         self.language = "JAVA"
-        self.using_clause = _normalize_sqlj_using(using_clause)
+        # `java_class` and `using_type` are aliases of `external_name` and
+        # `using_clause`. They are stored verbatim so the generic get_params()
+        # round trip reproduces the same branch; the renderer reads the merged
+        # values below.
+        self.using_clause = using_clause
         self.using_type = using_type
+        self._normalized_using_clause = _normalize_sqlj_using(using_clause)
         self._initialize_options(
             under,
             final,
@@ -639,17 +702,24 @@ class OracleSqljTypeDefinition(OracleTypeDefinitionBase):
             invoker_rights,
         )
 
-    def get_params(self) -> Dict[str, Any]:
-        params = cast(Dict[str, Any], super().get_params())
-        params.pop("java_class", None)
-        params.pop("using_type", None)
-        params["external_name"] = self.external_name
-        params["using_clause"] = self.using_clause
-        return params
+    @property
+    def normalized_using_clause(self) -> str:
+        """The USING clause, whichever spelling supplied it.
+
+        ``using_clause`` and ``using_type`` are two names for one clause; only
+        the spelling that was passed owns the corresponding attribute.
+        """
+        return self._normalized_using_clause
 
 
-class OracleVarrayTypeDefinition(TypeDefinition):
-    """Oracle named VARRAY type definition."""
+class OracleVarrayTypeDefinition(_ResolvedFlagView, TypeDefinition):
+    """Oracle named VARRAY type definition.
+
+    ``size_limit`` has three aliases (``max_size``, ``max_length``, ``size``)
+    which are mutually exclusive with it. The one the caller used owns the
+    corresponding attribute; the merged limit is read through
+    :attr:`resolved_size_limit`.
+    """
 
     definition_kind = "oracle.varray"
 
@@ -675,48 +745,54 @@ class OracleVarrayTypeDefinition(TypeDefinition):
         if isinstance(element_type, int) and not isinstance(element_type, bool):
             if size_limit is not None and not isinstance(size_limit, int):
                 element_type, size_limit = size_limit, element_type
+        # Resolve the limit, then record which spelling actually supplied it: the
+        # four names are mutually exclusive aliases of one value, and only the
+        # one the caller used owns the corresponding attribute (the others stay
+        # None, "not supplied"). Storing the resolved value under every name
+        # would make the reconstruction see two spellings at once.
+        limit_alias = "size_limit"
         if size_limit is None:
-            size_limit = (
-                max_size
-                if max_size is not None
-                else max_length
-                if max_length is not None
-                else size
-            )
+            if max_size is not None:
+                limit_alias, limit_value = "max_size", max_size
+            elif max_length is not None:
+                limit_alias, limit_value = "max_length", max_length
+            elif size is not None:
+                limit_alias, limit_value = "size", size
+            else:
+                limit_value = None
         elif max_size is not None or max_length is not None or size is not None:
             raise ValueError(
                 "size_limit, max_size, max_length and size are mutually exclusive aliases"
             )
-        if not isinstance(size_limit, int) or isinstance(size_limit, bool):
+        else:
+            limit_value = size_limit
+        if not isinstance(limit_value, int) or isinstance(limit_value, bool):
             raise TypeError("size_limit must be an int")
-        if size_limit <= 0:
+        if limit_value <= 0:
             raise ValueError("size_limit must be positive")
         if not isinstance(not_null, bool):
             raise TypeError("not_null must be a bool")
         self.element_type = element_type
         self.force = force
-        self.size_limit = size_limit
-        self.max_size = max_size
-        self.max_length = max_length
-        self.size = size
+        self.size_limit = limit_value if limit_alias == "size_limit" else None
+        self.max_size = limit_value if limit_alias == "max_size" else None
+        self.max_length = limit_value if limit_alias == "max_length" else None
+        self.size = limit_value if limit_alias == "size" else None
         self.not_null = not_null
-        self.persistable = _normalize_flag(
-            persistable,
-            not_persistable,
-            "persistable",
-        )
+        self.persistable = persistable
         self.not_persistable = not_persistable
+        self._validate_resolved_flags()
 
-    def get_params(self) -> Dict[str, Any]:
-        params = cast(Dict[str, Any], super().get_params())
-        for key in ("max_size", "max_length", "size", "not_persistable"):
-            params.pop(key, None)
-        params["size_limit"] = self.size_limit
-        params["persistable"] = self.persistable
-        return params
+    @property
+    def resolved_size_limit(self) -> int:
+        """The VARRAY element limit, whichever of the four spellings supplied it."""
+        for value in (self.size_limit, self.max_size, self.max_length, self.size):
+            if value is not None:
+                return cast(int, value)
+        raise ValueError("VARRAY requires a size limit")
 
 
-class OracleNestedTableTypeDefinition(TypeDefinition):
+class OracleNestedTableTypeDefinition(_ResolvedFlagView, TypeDefinition):
     """Oracle named nested table type definition."""
 
     definition_kind = "oracle.nested_table"
@@ -741,18 +817,9 @@ class OracleNestedTableTypeDefinition(TypeDefinition):
         self.element_type = element_type
         self.force = force
         self.not_null = not_null
-        self.persistable = _normalize_flag(
-            persistable,
-            not_persistable,
-            "persistable",
-        )
+        self.persistable = persistable
         self.not_persistable = not_persistable
-
-    def get_params(self) -> Dict[str, Any]:
-        params = cast(Dict[str, Any], super().get_params())
-        params.pop("not_persistable", None)
-        params["persistable"] = self.persistable
-        return params
+        self._validate_resolved_flags()
 
 
 class OracleIncompleteTypeDefinition(TypeDefinition):
@@ -790,15 +857,15 @@ class OracleTypeAlterAction(TypeAlterAction):
             raise TypeError("force must be a bool")
         self.force = force
 
-    def get_params(self) -> Dict[str, Any]:
-        params = super().get_params()
-        params["dependent_handling"] = self.dependent_handling
-        params["force"] = self.force
-        return cast(Dict[str, Any], params)
-
 
 class OracleAlterTypeAddAttributeAction(OracleTypeAlterAction):
-    """Add one or more object attributes."""
+    """Add one or more object attributes.
+
+    ``attribute``, ``attribute_name`` and ``attributes`` are mutually exclusive
+    spellings of the same list, optionally combined with ``data_type`` to build a
+    single ``OracleTypeAttribute``. Each is stored verbatim under the name the
+    caller used; the coerced list is read through :attr:`resolved_attributes`.
+    """
 
     action_kind = "oracle.attribute.add"
 
@@ -828,22 +895,23 @@ class OracleAlterTypeAddAttributeAction(OracleTypeAlterAction):
             if isinstance(value, OracleTypeAttribute):
                 raise ValueError("data_type cannot be combined with OracleTypeAttribute")
             value = OracleTypeAttribute(str(value), data_type)
-        self.attributes = _coerce_attributes(value)
-        if not self.attributes:
+        self._resolved_attributes = _coerce_attributes(value)
+        if not self._resolved_attributes:
             raise ValueError("ADD ATTRIBUTE requires at least one attribute")
-        self.attribute = self.attributes[0] if len(self.attributes) == 1 else self.attributes
+        self.attribute = attribute
         self.attribute_name = attribute_name
+        self.attributes = attributes
         self.data_type = data_type
-        self.attributes_argument = attributes
 
-    def get_params(self) -> Dict[str, Any]:
-        params = super().get_params()
-        params.pop("attribute_name", None)
-        params.pop("attributes", None)
-        params.pop("data_type", None)
-        params.pop("attributes_argument", None)
-        params["attribute"] = self.attribute
-        return params
+    @property
+    def resolved_attributes(self) -> List["OracleTypeAttribute"]:
+        """The declared attributes, whichever spelling the caller used.
+
+        ``attribute``, ``attribute_name`` and ``attributes`` are three names for
+        one list; only the spelling that was passed owns the corresponding
+        attribute, so read them back through this instead.
+        """
+        return self._resolved_attributes
 
 
 class OracleAlterTypeModifyAttributeAction(OracleAlterTypeAddAttributeAction):
@@ -853,7 +921,12 @@ class OracleAlterTypeModifyAttributeAction(OracleAlterTypeAddAttributeAction):
 
 
 class OracleAlterTypeDropAttributeAction(OracleTypeAlterAction):
-    """Drop one or more object attributes."""
+    """Drop one or more object attributes.
+
+    ``attribute``, ``attribute_name``, ``attributes`` and ``names`` are mutually
+    exclusive spellings of the same list. Each is stored verbatim under the name
+    the caller used; the coerced list is read through :attr:`resolved_attributes`.
+    """
 
     action_kind = "oracle.attribute.drop"
 
@@ -889,22 +962,33 @@ class OracleAlterTypeDropAttributeAction(OracleTypeAlterAction):
             values = list(value)
         else:
             values = [value]
-        self.attributes = [_coerce_attribute(item, require_type=False) for item in values]
-        self.attribute = self.attributes[0] if len(self.attributes) == 1 else self.attributes
+        self._resolved_attributes = [
+            _coerce_attribute(item, require_type=False) for item in values
+        ]
+        self.attribute = attribute
         self.attribute_name = attribute_name
+        self.attributes = attributes
         self.names = names
 
-    def get_params(self) -> Dict[str, Any]:
-        params = super().get_params()
-        params.pop("attribute_name", None)
-        params.pop("attributes", None)
-        params.pop("names", None)
-        params["attribute"] = self.attribute
-        return params
+    @property
+    def resolved_attributes(self) -> List["OracleTypeAttribute"]:
+        """The dropped attributes, whichever spelling the caller used.
+
+        ``attribute``, ``attribute_name``, ``attributes`` and ``names`` are four
+        names for one list; only the spelling that was passed owns the
+        corresponding attribute, so read them back through this instead.
+        """
+        return self._resolved_attributes
 
 
 class OracleAlterTypeAddMethodAction(OracleTypeAlterAction):
-    """Add one or more method declarations."""
+    """Add one or more method declarations.
+
+    ``method`` and ``declaration`` are mutually exclusive spellings of the same
+    value, and ``external_name`` is folded into the resulting
+    ``OracleTypeMethod``. Each is stored verbatim under the name the caller used;
+    the coerced method is read through :attr:`resolved_method`.
+    """
 
     action_kind = "oracle.method.add"
 
@@ -933,20 +1017,31 @@ class OracleAlterTypeAddMethodAction(OracleTypeAlterAction):
             )
         elif external_name is not None:
             value = OracleTypeMethod(declaration=str(value), external_name=external_name)
-        self.method = _coerce_method(value)
+        self._resolved_method = _coerce_method(value)
+        self.method = method
         self.declaration = declaration
         self.external_name = external_name
 
-    def get_params(self) -> Dict[str, Any]:
-        params = super().get_params()
-        params.pop("declaration", None)
-        params.pop("external_name", None)
-        params["method"] = self.method
-        return params
+    @property
+    def resolved_method(self) -> "OracleTypeMethod":
+        """The declared method, whichever spelling the caller used.
+
+        ``method`` and ``declaration`` are two names for one value; only the
+        spelling that was passed owns the corresponding attribute.
+        """
+        return self._resolved_method
 
 
 class OracleAlterTypeDropMethodAction(OracleTypeAlterAction):
-    """Drop one or more method specifications."""
+    """Drop one or more method specifications.
+
+    ``method`` is one spelling of the value; ``name`` / ``method_name`` /
+    ``kind`` / ``parameters`` are a second, decomposed one that ``__init__``
+    assembles into an ``OracleTypeMethod``. Each parameter is stored verbatim
+    under its own name, so the generic ``get_params()`` reproduces the same
+    branch on reconstruction; the assembled method is read through
+    :attr:`resolved_method`.
+    """
 
     action_kind = "oracle.method.drop"
 
@@ -966,29 +1061,35 @@ class OracleAlterTypeDropMethodAction(OracleTypeAlterAction):
         supplied = [item for item in (method, name, method_name) if item is not None]
         if len(supplied) > 1:
             raise ValueError("method, name and method_name are mutually exclusive")
-        if method is None and (name is not None or method_name is not None):
-            method = OracleTypeMethod(
+        assembled = method
+        if assembled is None and (name is not None or method_name is not None):
+            assembled = OracleTypeMethod(
                 kind=kind or "MEMBER FUNCTION",
                 name=name or method_name,
                 parameters=parameters,
                 require_return_type=False,
             )
-        self.method = _coerce_method(method)
+        self._resolved_method = _coerce_method(assembled)
+        self.method = method
         self.name = name
-        self.method_name = method_name or name
+        self.method_name = method_name
         self.kind = kind
         self.parameters = parameters
 
-    def get_params(self) -> Dict[str, Any]:
-        params = super().get_params()
-        for alias in ("name", "method_name", "kind", "parameters"):
-            params.pop(alias, None)
-        params["method"] = self.method
-        return cast(Dict[str, Any], params)
+    @property
+    def resolved_method(self) -> "OracleTypeMethod":
+        """The method being dropped, whichever spelling supplied it."""
+        return self._resolved_method
 
 
 class OracleAlterTypeLimitAction(OracleTypeAlterAction):
-    """Increase a VARRAY type's element limit."""
+    """Increase a VARRAY type's element limit.
+
+    ``limit``, ``size_limit`` and ``new_limit`` are mutually exclusive
+    spellings of one positive integer; the one the caller used owns the
+    corresponding attribute and the merged value is read through
+    :attr:`resolved_limit`.
+    """
 
     action_kind = "oracle.limit"
 
@@ -1011,19 +1112,24 @@ class OracleAlterTypeLimitAction(OracleTypeAlterAction):
             value = new_limit
         if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
             raise ValueError("limit must be a positive integer")
-        self.limit = value
+        self.limit = limit
         self.size_limit = size_limit
         self.new_limit = new_limit
+        self._resolved_limit = value
 
-    def get_params(self) -> Dict[str, Any]:
-        params = super().get_params()
-        params.pop("size_limit", None)
-        params.pop("new_limit", None)
-        return params
+    @property
+    def resolved_limit(self) -> int:
+        """The new element limit, whichever spelling the caller used."""
+        return self._resolved_limit
 
 
 class OracleAlterTypeElementTypeAction(OracleTypeAlterAction):
-    """Modify a collection element data type."""
+    """Modify a collection element data type.
+
+    ``element_type`` and ``new_element_type`` are mutually exclusive spellings
+    of the same value; only the spelling that was passed owns the corresponding
+    attribute.
+    """
 
     action_kind = "oracle.element_type"
 
@@ -1039,19 +1145,26 @@ class OracleAlterTypeElementTypeAction(OracleTypeAlterAction):
         super().__init__(dialect, dependent_handling=dependent_handling, force=force)
         if element_type is not None and new_element_type is not None:
             raise ValueError("element_type and new_element_type are mutually exclusive")
-        self.element_type = element_type if element_type is not None else new_element_type
+        self.element_type = element_type
         self.new_element_type = new_element_type
-        if self.element_type is None:
+        self._resolved_element_type = (
+            element_type if element_type is not None else new_element_type
+        )
+        if self._resolved_element_type is None:
             raise ValueError("MODIFY ELEMENT TYPE requires a data type")
 
-    def get_params(self) -> Dict[str, Any]:
-        params = super().get_params()
-        params.pop("new_element_type", None)
-        return params
+    @property
+    def resolved_element_type(self) -> Any:
+        """The new element type, whichever spelling the caller used."""
+        return self._resolved_element_type
 
 
 class OracleAlterTypeCompileAction(OracleTypeAlterAction):
-    """Compile an Oracle type specification or body."""
+    """Compile an Oracle type specification or body.
+
+    ``target`` and ``compile_target`` are two spellings of the same compile
+    target; the one the caller used owns the corresponding attribute.
+    """
 
     action_kind = "oracle.compile"
 
@@ -1070,11 +1183,10 @@ class OracleAlterTypeCompileAction(OracleTypeAlterAction):
         super().__init__(dialect, dependent_handling=dependent_handling, force=force)
         if target is not None and compile_target is not None and target != compile_target:
             raise ValueError("target and compile_target are mutually exclusive")
-        if target is None:
-            target = compile_target
-        if target is not None:
-            target = str(target).upper()
-            if target not in ("SPECIFICATION", "BODY"):
+        resolved_target = target if target is not None else compile_target
+        if resolved_target is not None:
+            resolved_target = str(resolved_target).upper()
+            if resolved_target not in ("SPECIFICATION", "BODY"):
                 raise ValueError("target must be SPECIFICATION or BODY")
         if not isinstance(debug, bool) or not isinstance(reuse_settings, bool):
             raise TypeError("debug and reuse_settings must be bools")
@@ -1087,26 +1199,24 @@ class OracleAlterTypeCompileAction(OracleTypeAlterAction):
         self.debug = debug
         self.target = target
         self.compile_target = compile_target
+        self._resolved_target = resolved_target
         self.reuse_settings = reuse_settings
         self.compiler_parameters = compiler_parameters
 
-    def get_params(self) -> Dict[str, Any]:
-        params = super().get_params()
-        params.pop("compile_target", None)
-        return params
+    @property
+    def resolved_target(self) -> Optional[str]:
+        """The compile target, whichever spelling the caller used."""
+        return self._resolved_target
 
 
-class OracleAlterTypeFinalAction(OracleTypeAlterAction):
+class OracleAlterTypeFinalAction(_ResolvedFlagView, OracleTypeAlterAction):
     """Change the FINAL property of an object type.
 
-    ``FINAL`` and ``NOT FINAL`` are two spellings with one parameter each.
-    The clause is mandatory in the action's grammar, so exactly one of
-    ``final=True`` / ``not_final=True`` must be set; setting both, or
-    neither, raises ``ValueError``.  ``is_final`` is kept as a compatibility
-    alias that accepts either spelling.
-
-    Raises:
-        ValueError: if both parameters are set, or neither is.
+    ``final``, ``is_final`` and ``not_final`` are mutually exclusive spellings of
+    one flag; only the spelling that was passed owns the corresponding attribute,
+    and the clause is mandatory: exactly one spelling must be set, or the
+    construction is refused. The merged value is what the formatter reads, so
+    it is never ``None`` by the time anything renders it.
     """
 
     action_kind = "oracle.final"
@@ -1114,51 +1224,40 @@ class OracleAlterTypeFinalAction(OracleTypeAlterAction):
     def __init__(
         self,
         dialect: "OracleDialect",
-        final: bool = False,
+        final: Optional[bool] = None,
         *,
         is_final: Optional[bool] = None,
-        not_final: bool = False,
+        not_final: Optional[bool] = None,
         dependent_handling: Any = None,
         force: bool = False,
     ) -> None:
         super().__init__(dialect, dependent_handling=dependent_handling, force=force)
-        if is_final is not None:
-            if final or not_final:
-                raise ValueError(
-                    "is_final and final/not_final are mutually exclusive"
-                )
-            if is_final:
-                final = True
-            else:
-                not_final = True
-        if final and not_final:
-            raise ValueError("final and not_final are mutually exclusive options")
-        if not final and not not_final:
+        if final is not None and is_final is not None:
+            raise ValueError("final and is_final are mutually exclusive")
+        self.final = final
+        self.is_final = is_final
+        self.not_final = not_final
+        merged = self._merged_flag("final", ("final", "is_final"), "not_final")
+        if merged is None:
             raise ValueError(
-                "FINAL/NOT FINAL requires exactly one of final=True or "
+                "ALTER TYPE ... FINAL requires exactly one of final=True or "
                 "not_final=True"
             )
-        self.final = bool(final)
-        self.not_final = bool(not_final)
-        self.is_final = is_final
+        self._resolved_final = merged
 
-    def get_params(self) -> Dict[str, Any]:
-        params = super().get_params()
-        params.pop("is_final", None)
-        return params
+    @property
+    def resolved_final(self) -> bool:
+        """The new FINAL setting; exactly one spelling is mandatory."""
+        return self._resolved_final
 
 
 class OracleAlterTypeInstantiableAction(OracleAlterTypeFinalAction):
     """Change the INSTANTIABLE property of an object type.
 
-    ``INSTANTIABLE`` and ``NOT INSTANTIABLE`` are two spellings with one
-    parameter each.  The clause is mandatory in the action's grammar, so
-    exactly one of ``instantiable=True`` / ``not_instantiable=True`` must be
-    set; setting both, or neither, raises ``ValueError``.  ``is_instantiable``
-    is kept as a compatibility alias that accepts either spelling.
-
-    Raises:
-        ValueError: if both parameters are set, or neither is.
+    ``instantiable``, ``is_instantiable`` and ``not_instantiable`` are mutually
+    exclusive spellings of one flag; only the spelling that was passed owns the
+    corresponding attribute, and the clause is mandatory: exactly one spelling
+    must be set, or the construction is refused.
     """
 
     action_kind = "oracle.instantiable"
@@ -1166,10 +1265,10 @@ class OracleAlterTypeInstantiableAction(OracleAlterTypeFinalAction):
     def __init__(
         self,
         dialect: "OracleDialect",
-        instantiable: bool = False,
+        instantiable: Optional[bool] = None,
         *,
         is_instantiable: Optional[bool] = None,
-        not_instantiable: bool = False,
+        not_instantiable: Optional[bool] = None,
         dependent_handling: Any = None,
         force: bool = False,
     ) -> None:
@@ -1179,37 +1278,31 @@ class OracleAlterTypeInstantiableAction(OracleAlterTypeFinalAction):
             dependent_handling=dependent_handling,
             force=force,
         )
-        if is_instantiable is not None:
-            if instantiable or not_instantiable:
-                raise ValueError(
-                    "is_instantiable and instantiable/not_instantiable are "
-                    "mutually exclusive"
-                )
-            if is_instantiable:
-                instantiable = True
-            else:
-                not_instantiable = True
-        if instantiable and not_instantiable:
+        if instantiable is not None and is_instantiable is not None:
+            raise ValueError("instantiable and is_instantiable are mutually exclusive")
+        self.instantiable = instantiable
+        self.is_instantiable = is_instantiable
+        self.not_instantiable = not_instantiable
+        merged = self._merged_flag(
+            "instantiable",
+            ("instantiable", "is_instantiable"),
+            "not_instantiable",
+        )
+        if merged is None:
             raise ValueError(
-                "instantiable and not_instantiable are mutually exclusive options"
-            )
-        if not instantiable and not not_instantiable:
-            raise ValueError(
-                "INSTANTIABLE/NOT INSTANTIABLE requires exactly one of "
+                "ALTER TYPE ... INSTANTIABLE requires exactly one of "
                 "instantiable=True or not_instantiable=True"
             )
-        self.instantiable = bool(instantiable)
-        self.not_instantiable = bool(not_instantiable)
-        self.is_instantiable = is_instantiable
-        self.final = False
-        self.not_final = False
+        self._resolved_instantiable = merged
+        self.final = None
+        self.not_final = None
+        self.is_final = None
+        self._resolved_final = None
 
-    def get_params(self) -> Dict[str, Any]:
-        params = OracleTypeAlterAction.get_params(self)
-        params.pop("final", None)
-        params.pop("not_final", None)
-        params.pop("is_instantiable", None)
-        return params
+    @property
+    def resolved_instantiable(self) -> bool:
+        """The new INSTANTIABLE setting; exactly one spelling is mandatory."""
+        return self._resolved_instantiable
 
 
 class OracleAlterTypeResetAction(OracleTypeAlterAction):
@@ -1228,7 +1321,12 @@ class OracleAlterTypeResetAction(OracleTypeAlterAction):
 
 
 class OracleCreateTypeBodyExpression(BaseExpression):
-    """Oracle CREATE TYPE BODY expression."""
+    """Oracle CREATE TYPE BODY expression.
+
+    ``schema`` is a deprecated alias of ``schema_name``; both are stored
+    verbatim and ``__init__`` resolves them, so the generic ``get_params()``
+    round trip carries the same pair back.
+    """
 
     def __init__(
         self,
@@ -1271,7 +1369,11 @@ class OracleCreateTypeBodyExpression(BaseExpression):
 
 
 class OracleDropTypeExpression(DropTypeExpression):
-    """Oracle DROP TYPE expression with FORCE or VALIDATE."""
+    """Oracle DROP TYPE expression with FORCE or VALIDATE.
+
+    ``schema`` is a deprecated alias of ``schema_name``; both are stored
+    verbatim and ``__init__`` resolves them.
+    """
 
     def __init__(
         self,
@@ -1296,7 +1398,11 @@ class OracleDropTypeExpression(DropTypeExpression):
 
 
 class DropTypeBodyExpression(BaseExpression):
-    """Oracle DROP TYPE BODY expression."""
+    """Oracle DROP TYPE BODY expression.
+
+    ``schema`` is a deprecated alias of ``schema_name``; both are stored
+    verbatim and ``__init__`` resolves them.
+    """
 
     def __init__(
         self,

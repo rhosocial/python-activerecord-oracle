@@ -38,7 +38,9 @@ from ..version import (
     VERSION_QUERY,
     normalize_version,
     parse_version_row,
+    product_name_from_row,
     ru_from_version_full,
+    select_version_row,
 )
 from .backend import OracleBackend, _is_numeric_python_type
 
@@ -47,8 +49,14 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
     """Oracle asynchronous backend implementation using oracledb thin mode."""
 
     def __init__(self, **kwargs):
-        """Initialize async Oracle backend."""
-        version = kwargs.pop('version', None) or (19, 0, 0)
+        """Initialize async Oracle backend.
+
+        ``version`` defaults to ``None`` — "not stated and not yet measured" —
+        for the same reason as on the sync backend: a silent ``(19, 0, 0)`` is a
+        claim no measurement supports, and it is indistinguishable from one that
+        is. See ``version.py`` and :meth:`get_server_version`.
+        """
+        version = kwargs.pop('version', None)
         version_full = kwargs.pop('version_full', None)
         ru_version = kwargs.pop('ru_version', None)
 
@@ -83,7 +91,7 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
 
         super().__init__(**kwargs)
 
-        self._version = version or (19, 0, 0)
+        self._version = version
         self._version_full = normalize_version(version_full, minimum_length=2) or None
         self._ru_version = (
             ru_version if ru_version is not None else ru_from_version_full(self._version_full)
@@ -164,7 +172,16 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
                 ru_version=actual_ru_version,
             )
             self._register_oracle_adapters()
-            self.log(logging.INFO, f"Adapted to Oracle server version {actual_version}")
+            self.log(
+                logging.INFO if actual_version is not None else logging.ERROR,
+                f"Adapted to Oracle server version {actual_version}"
+                if actual_version is not None
+                else (
+                    "Adapted to an Oracle server whose version could not be "
+                    "read; the dialect is unadapted and every version-gated "
+                    "feature will refuse rather than assume one"
+                ),
+            )
 
     def _handle_error(self, error: Exception) -> None:
         """Handle Oracle-specific errors."""
@@ -611,40 +628,82 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             if cursor:
                 cursor.close()
 
-    async def get_server_version(self) -> tuple:
-        """Get the Oracle base and full release versions asynchronously."""
+    async def get_server_version(self) -> Optional[Tuple[int, int, int]]:
+        """Read the server's own release version, asynchronously.
+
+        The row is chosen by :func:`~..version.select_version_row` and **no
+        product name is matched** — see the sync
+        :meth:`~.backend.OracleBackend.get_server_version` and ``version.py`` for
+        the measurements: ``PRODUCT`` is ``'Oracle AI Database 26ai Free'`` on the
+        current 23.0 line, and matching it is what made every version gate in
+        this backend fall through to its fallback.
+
+        Returns ``None`` when the version cannot be read. The previous ``(19, 0,
+        0)`` was an unmeasured claim that made every gate above 19 answer "too
+        old"; ``None`` clears ``self._version``, leaving the dialect unadapted so
+        the gates refuse rather than guess.
+        """
         if not self._connection:
             await self.connect()
 
         cursor = None
         try:
             cursor = await self._get_cursor()
+            product: Optional[str] = None
             try:
                 await cursor.execute(VERSION_FULL_QUERY)
-                row = await cursor.fetchone()
+                rows = await cursor.fetchall()
+                row = select_version_row(rows)
                 base, version_full = parse_version_row(row)
+                product = product_name_from_row(row)
             except Exception:
                 cursor.close()
                 cursor = await self._get_cursor()
                 await cursor.execute(VERSION_QUERY)
-                row = await cursor.fetchone()
+                rows = await cursor.fetchall()
+                row = select_version_row(rows)
                 base, version_full = parse_version_row(row)
             base = normalize_version(base)[:3]
             if not base:
-                raise ValueError("Oracle PRODUCT_COMPONENT_VERSION returned no version")
+                raise ValueError(
+                    "Oracle PRODUCT_COMPONENT_VERSION returned no row whose "
+                    "VERSION is a dotted number"
+                )
             self._version_full = version_full
             self._ru_version = ru_from_version_full(version_full)
+            self._version = base
+            self.log(
+                logging.INFO,
+                f"Oracle server version: {base} (product "
+                f"{product if product else 'not reported by this query'}"
+                f", full {version_full if version_full else 'not reported'})",
+            )
             return base
-        except Exception:
+        except Exception as e:
+            self.log(
+                logging.ERROR,
+                f"Could not determine the Oracle server version: {e}. The "
+                f"version is left UNKNOWN rather than assumed: every "
+                f"version-gated feature in this backend will now refuse "
+                f"(DialectNotAdaptedException) instead of answering on a "
+                f"number that was never measured. Previously this path "
+                f"reported (19, 0, 0), which answered \"too old\" for every "
+                f"21c+ feature on a server of any version.",
+            )
+            self._version = None
             self._version_full = None
             self._ru_version = None
-            return (19, 0, 0)
+            return None
         finally:
             if cursor:
                 cursor.close()
 
     async def get_server_version_full(self) -> Optional[Tuple[int, ...]]:
-        """Return the full Oracle version, including the RU when available."""
+        """Return the full Oracle version, including the RU when available.
+
+        ``None`` means "not known"; see the sync backend's method of the same
+        name for why the full string matters to the 23.0 line.
+        """
         if self._version_full is not None:
             return self._version_full
         await self.get_server_version()

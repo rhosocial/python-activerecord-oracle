@@ -909,6 +909,20 @@ def _register_core_specials():
 
     register_special_constructor("xml.XMLTableExpression", xml_table)
 
+    # CUSTOM. Its ``raw`` slot exists to carry the SQL type name and defaults to the
+    # empty string, which the filler skips and the class refuses while constructing.
+    # Handed a real name it builds and renders, so it is a constructor rather than a
+    # skip -- and for that same reason it is absent from LEGITIMATE_NON_RENDERS below,
+    # which would otherwise pin a rendering nothing could ask for.
+    def custom_type(dialect):
+        from rhosocial.activerecord.backend.expression.types.custom import (
+            CustomType,
+        )
+
+        return CustomType(dialect, "VARCHAR2(10)")
+
+    register_special_constructor("types.custom.CustomType", custom_type)
+
     # The column must survive all three encodings, not just dict. XMLTableColumn was
     # a plain class, so core's JSON and XML encoders dropped the whole COLUMNS list
     # and every round-trip lost it; core fixed that in ae5b7f9 and the round-trip
@@ -1383,15 +1397,24 @@ _register_oracle_specials()
 
 #: Classes the generic introspective constructor cannot build.
 #:
-#: Empty, and that is the finding rather than an omission. Every expression class
-#: in either package builds: where the introspective guess was a lie -- a bare
-#: ``"x"`` where a catalogue object belongs, an empty container where one member is
-#: mandatory -- there is a ``register_special_constructor`` call above saying which
-#: object was substituted and why. The tuple stays because a class that starts
-#: failing to build must be pinned here with the fault located, not left to become
-#: a silent skip; :func:`TestMatrixIntegrity.test_unconstructible_list_is_exact`
-#: fails in both directions when the sets disagree.
-UNCONSTRUCTIBLE: tuple = ()
+#: Measured, not assumed: each entry below was built by hand first, with arguments
+#: the class actually accepts, and refused while constructing.
+#:
+#: The three UUID nodes all refuse in ``__init__`` rather than in ``to_sql()`` --
+#: Oracle spells no UUID SQL, so the answer is the same for every argument and no
+#: registered constructor can change it. The nil/max constant only shows that once
+#: it is given a *valid* ``which``: an invalid one raises ValueError first, which is
+#: a different answer entirely and hides the dialect's.
+#:
+#: The tuple stays because a class that starts failing to build must be pinned here
+#: with the fault located, not left to become a silent skip;
+#: :func:`TestMatrixIntegrity.test_unconstructible_list_is_exact` fails in both
+#: directions when the sets disagree.
+UNCONSTRUCTIBLE: tuple = (
+    "rhosocial.activerecord.backend.expression.uuid.UUIDCastExpression",
+    "rhosocial.activerecord.backend.expression.uuid.UUIDConstantExpression",
+    "rhosocial.activerecord.backend.expression.uuid.UUIDGenerationExpression",
+)
 
 #: Classes that construct but cannot render.
 #:
@@ -1579,17 +1602,8 @@ LEGITIMATE_NON_RENDERS: Dict[str, tuple] = {
     "rhosocial.activerecord.backend.expression.types.binary.VarBinaryType": (
         TypeError, "does not support the generic type 'varbinary'"
     ),
-    "rhosocial.activerecord.backend.expression.types.custom.CustomType": (
-        TypeError, "does not support the generic type 'custom'"
-    ),
-    "rhosocial.activerecord.backend.expression.types.datetime_.IntervalType": (
-        TypeError, "does not support the generic type 'interval'"
-    ),
     "rhosocial.activerecord.backend.expression.types.enum_.EnumType": (
         TypeError, "does not support the generic type 'enum'"
-    ),
-    "rhosocial.activerecord.backend.expression.types.integer.IntType": (
-        TypeError, "does not support the generic type 'int'"
     ),
     "rhosocial.activerecord.backend.expression.types.uuid_.UUIDType": (
         TypeError, "does not support the generic type 'uuid'"

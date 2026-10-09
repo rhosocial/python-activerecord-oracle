@@ -24,9 +24,9 @@ from rhosocial.activerecord.backend.expression.statements.ddl_table import (
     ColumnConstraintType,
     DropTableExpression,
 )
-from rhosocial.activerecord.backend.impl.oracle.expression.types import (
-    OracleIntegerType,
-    OracleVarChar2Type,
+from rhosocial.activerecord.backend.expression.types import (
+    IntegerType,
+    VarCharType,
 )
 
 
@@ -39,7 +39,7 @@ def create_users_table(dialect):
             ColumnDefinition(
                 dialect,
                 "id",
-                OracleIntegerType(dialect),
+                IntegerType(dialect),
                 constraints=[
                     ColumnConstraint(
                         dialect,
@@ -48,8 +48,8 @@ def create_users_table(dialect):
                     ),
                 ],
             ),
-            ColumnDefinition(dialect, "name", OracleVarChar2Type(length=255, dialect=dialect)),
-            ColumnDefinition(dialect, "email", OracleVarChar2Type(length=255, dialect=dialect)),
+            ColumnDefinition(dialect, "name", VarCharType(length=255, dialect=dialect)),
+            ColumnDefinition(dialect, "email", VarCharType(length=255, dialect=dialect)),
         ],
     )
 
@@ -68,7 +68,7 @@ def create_posts_table(dialect):
             ColumnDefinition(
                 dialect,
                 "id",
-                OracleIntegerType(dialect),
+                IntegerType(dialect),
                 constraints=[
                     ColumnConstraint(
                         dialect,
@@ -77,8 +77,8 @@ def create_posts_table(dialect):
                     ),
                 ],
             ),
-            ColumnDefinition(dialect, "title", OracleVarChar2Type(length=255, dialect=dialect)),
-            ColumnDefinition(dialect, "user_id", OracleIntegerType(dialect)),
+            ColumnDefinition(dialect, "title", VarCharType(length=255, dialect=dialect)),
+            ColumnDefinition(dialect, "user_id", IntegerType(dialect)),
         ],
     )
 
@@ -101,7 +101,7 @@ def create_custom_table(dialect, table_name: str = "custom_table"):
             ColumnDefinition(
                 dialect,
                 "id",
-                OracleIntegerType(dialect),
+                IntegerType(dialect),
                 constraints=[
                     ColumnConstraint(
                         dialect,
@@ -110,7 +110,7 @@ def create_custom_table(dialect, table_name: str = "custom_table"):
                     ),
                 ],
             ),
-            ColumnDefinition(dialect, "value", OracleVarChar2Type(length=255, dialect=dialect)),
+            ColumnDefinition(dialect, "value", VarCharType(length=255, dialect=dialect)),
         ],
     )
 

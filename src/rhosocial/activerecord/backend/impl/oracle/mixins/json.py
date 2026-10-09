@@ -29,6 +29,43 @@ class OracleJSONFunctionMixin(object):
         """Format JSON_QUERY function for object/array extraction."""
         return f"JSON_QUERY({col_expr}, '$.{path}')", ()
 
+    def supports_json_path(self) -> bool:
+        """Whether a JSON path can be read on this server.
+
+        Same gate as the formatter below, which uses JSON_QUERY for a document
+        and JSON_VALUE for a scalar. Both exist in the versions this claims and
+        not in the ones it does not.
+        """
+        return self.supports_json_type()
+
+    def format_json_function_expression(self, expr) -> Tuple[str, tuple]:
+        """Render a JSON path with JSON_QUERY / JSON_VALUE.
+
+        The core default emits JSON_EXTRACT wrapped in JSON_UNQUOTE, and Oracle
+        has no JSON_UNQUOTE — so `->>` produced SQL the server rejects. Oracle's
+        pair is JSON_QUERY for a document and JSON_VALUE for a scalar, which is
+        what the two operators mean.
+
+        Declared here because this mixin sits earlier in the MRO than the core
+        JSONMixin; a formatter anywhere later would be dead code.
+        """
+        from ....expression import bases
+
+        if isinstance(expr.column, bases.BaseExpression):
+            col_sql, col_params = expr.column.to_sql()
+        else:
+            col_sql, col_params = self.format_identifier(str(expr.column)), ()
+
+        path = _jsonpath_body(expr.path)
+        if expr.operation == "->>":
+            sql = f"JSON_VALUE({col_sql}, '$.{path}')"
+        else:
+            sql = f"JSON_QUERY({col_sql}, '$.{path}')"
+
+        if expr.alias:
+            sql = f"{sql} AS {self.format_identifier(expr.alias)}"
+        return sql, col_params
+
     def format_json_exists(self, col_expr: str, path: str) -> Tuple[str, tuple]:
         """Format JSON_EXISTS function for existence check."""
         return f"JSON_EXISTS({col_expr}, '$.{path}')", ()
@@ -78,3 +115,18 @@ class OracleJSONFunctionMixin(object):
         """Format JSON_OBJECT function using Oracle KEY/VALUE syntax."""
         parts = [f"KEY {k} VALUE {v}" for k, v in pairs]
         return f"JSON_OBJECT({', '.join(parts)})", ()
+
+
+def _jsonpath_body(path: str) -> str:
+    """Strip the leading ``$.`` from a jsonpath.
+
+    Oracle's JSON_QUERY and JSON_VALUE take the path as a literal, so the
+    shared ``$.a.b`` is assembled as ``'$.'`` plus the remainder — which is how
+    the format_json_* helpers above are already written.
+    """
+    text = str(path or "").strip()
+    if text.startswith("$."):
+        return text[2:]
+    if text == "$":
+        return ""
+    return text

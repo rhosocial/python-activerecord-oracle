@@ -54,6 +54,14 @@ def provisioned():
     backend_class, config = get_scenario_raw("oracle_23c")
     backend = OracleBackend(connection_config=config)
     backend.connect()
+    # The version has to be measured before the dialect answers anything: the
+    # backend no longer invents one, so an unadapted dialect refuses
+    # (``DialectNotAdaptedException``) instead of answering every version gate
+    # against a fabricated ``(19, 0, 0)``.  Adapting is what the framework asks
+    # for here - "Call backend.introspect_and_adapt() or use backend.context()
+    # for automatic adaptation" - and this fixture was relying on the fabricated
+    # default instead of doing it.
+    backend.introspect_and_adapt()
     try:
         for user in SCHEMA_USERS:
             backend.execute(_drop_user_block(user), options=_ddl_options())
@@ -96,6 +104,9 @@ async def async_backend(provisioned):
 
     backend = AsyncOracleBackend(connection_config=provisioned)
     await backend.connect()
+    # see the sync fixture above: no fabricated version means no unadapted
+    # dialect, so the version has to be measured before the dialect is used.
+    await backend.introspect_and_adapt()
     yield backend
     try:
         await backend.disconnect()
