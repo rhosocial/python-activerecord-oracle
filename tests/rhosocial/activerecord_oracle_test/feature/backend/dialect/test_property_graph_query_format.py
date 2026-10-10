@@ -16,6 +16,7 @@ from rhosocial.activerecord.backend.expression import (
 )
 from rhosocial.activerecord.backend.expression.query_parts import WhereClause
 from rhosocial.activerecord.backend.expression.core import Column, Literal
+from rhosocial.activerecord.backend.expression.predicates import ComparisonPredicate
 from rhosocial.activerecord.backend.expression.objects import (
     NodeTable,
     PropertyGraph,
@@ -73,8 +74,12 @@ class TestPGQGraphVertexFormat:
         assert params == ()
 
     def test_with_where(self, o23c_dialect: OracleDialect):
-        where = WhereClause(o23c_dialect,
-                            condition=Column(o23c_dialect, "age") > Literal(o23c_dialect, 18))
+        where = WhereClause(
+            o23c_dialect,
+            condition=ComparisonPredicate(
+                o23c_dialect, ">", Column(o23c_dialect, "age"), Literal(o23c_dialect, 18)
+            ),
+        )
         v = GraphVertex(o23c_dialect, "p", NodeTable(o23c_dialect, "person"), where=where)
         sql, params = v.to_sql()
         assert "WHERE" in sql
@@ -106,8 +111,12 @@ class TestPGQGraphTableFormat:
         assert "COLUMNS" in sql.upper()
 
     def test_with_where(self, o23c_dialect: OracleDialect):
-        where = WhereClause(o23c_dialect,
-                            condition=Column(o23c_dialect, "age") > Literal(o23c_dialect, 18))
+        where = WhereClause(
+            o23c_dialect,
+            condition=ComparisonPredicate(
+                o23c_dialect, ">", Column(o23c_dialect, "age"), Literal(o23c_dialect, 18)
+            ),
+        )
         v = GraphVertex(o23c_dialect, "p", NodeTable(o23c_dialect, "person"), where=where)
         cols = ColumnsClause(o23c_dialect, GraphColumn("p", "name"))
         m = MatchClause(o23c_dialect, v)

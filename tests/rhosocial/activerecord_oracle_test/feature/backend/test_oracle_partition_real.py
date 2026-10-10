@@ -17,6 +17,7 @@ from rhosocial.activerecord.backend.expression import (
     ColumnDefinition,
     ColumnConstraint,
     ColumnConstraintType,
+    ComparisonPredicate,
     CreateTableExpression,
     DropTableExpression,
     Literal,
@@ -74,7 +75,9 @@ def _count_partitions(backend, table_name: str) -> int:
         d,
         select=[Column(d, "PARTITION_NAME")],
         from_=Table(d, "ALL_TAB_PARTITIONS"),
-        where=Column(d, "TABLE_NAME") == Literal(d, table_name.upper()),
+        where=ComparisonPredicate(
+            d, "=", Column(d, "TABLE_NAME"), Literal(d, table_name.upper())
+        ),
     )
     sql, params = query.to_sql()
     return len(_exec_query(backend, sql, params))
@@ -86,7 +89,9 @@ def _partition_names(backend, table_name: str):
         d,
         select=[Column(d, "PARTITION_NAME")],
         from_=Table(d, "ALL_TAB_PARTITIONS"),
-        where=Column(d, "TABLE_NAME") == Literal(d, table_name.upper()),
+        where=ComparisonPredicate(
+            d, "=", Column(d, "TABLE_NAME"), Literal(d, table_name.upper())
+        ),
     )
     sql, params = query.to_sql()
     return {row["partition_name"] for row in _exec_query(backend, sql, params)}
@@ -274,7 +279,9 @@ def test_explain_range_partitioned_table_real(oracle_backend_single):
             d2,
             select=[Column(d2, "OPERATION")],
             from_=Table(d2, "PLAN_TABLE"),
-            where=Column(d2, "OBJECT_NAME") == Literal(d2, table_name.upper()),
+            where=ComparisonPredicate(
+                d2, "=", Column(d2, "OBJECT_NAME"), Literal(d2, table_name.upper())
+            ),
         )
         vsql, vparams = verify.to_sql()
         rows = _exec_query(backend, vsql, vparams)
