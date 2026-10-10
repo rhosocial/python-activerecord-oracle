@@ -47,11 +47,11 @@ from rhosocial.activerecord.backend.expression.column_types import (
     BinaryColumn,
     BooleanColumn,
     ColumnBase,
-    DateTimeColumn,
     IntegerColumn,
     JSONColumn,
     NumericColumn,
     StringColumn,
+    TimestampColumn,
     UUIDColumn,
 )
 
@@ -105,7 +105,7 @@ from rhosocial.activerecord.backend.expression.column_types import (
 #:     field on Oracle rather than describe the gap.
 #:
 #: ``datetime.date`` / ``datetime.time``
-#:     :class:`~...expression.column_types.DateTimeColumn`, and this one is
+#:     :class:`~...expression.column_types.TimestampColumn`, and this one is
 #:     Oracle-specific rather than a deviation from the baseline: **Oracle's
 #:     ``DATE`` carries a time component.** A ``date`` mapped here is stored
 #:     as ``DATE`` or ``TIMESTAMP`` and reads back as a ``datetime``, so the
@@ -137,9 +137,9 @@ ORACLE_COLUMN_TYPES: Dict[Any, Type[ColumnBase]] = {
     str: StringColumn,
     bytes: BinaryColumn,
     bytearray: BinaryColumn,
-    datetime.date: DateTimeColumn,
-    datetime.time: DateTimeColumn,
-    datetime.datetime: DateTimeColumn,
+    datetime.date: TimestampColumn,
+    datetime.time: TimestampColumn,
+    datetime.datetime: TimestampColumn,
     datetime.timedelta: NumericColumn,
     uuid.UUID: UUIDColumn,
     dict: JSONColumn,
