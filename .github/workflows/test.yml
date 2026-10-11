@@ -400,3 +400,139 @@ jobs:
           flags: unittests,python-3.14,oracle-23c
           name: codecov-oracle-3.14-23c
           fail_ci_if_error: true
+
+  # Python 3.15 leg, pinned to the newest supported server (23c) and mirroring
+  # the 3.14 / Oracle 23c block above step for step. It is a required leg: no
+  # continue-on-error, no `if:` gate, no "(experimental)" in the name.
+  #
+  # GIL only, by necessity: `oracledb` 26.0.1 publishes a cp315 wheel and a
+  # Python :: 3.15 classifier, so the GIL build is fully supported, but it
+  # publishes no cp315t wheel -- there is no free-threaded 3.15 interpreter
+  # that can import the driver. A 3.15t leg therefore has nothing to run
+  # against and is deliberately not declared here.
+  test-python-315:
+    name: Python 3.15 / Oracle 23c
+    runs-on: ubuntu-latest
+
+    services:
+      oracle:
+        image: gvenzl/oracle-free:23-slim
+        env:
+          ORACLE_PASSWORD: password
+          ORACLE_CHARACTERSET: AL32UTF8
+        ports:
+          - 1521:1521
+        options: >-
+          --health-cmd "healthcheck.sh"
+          --health-interval 30s
+          --health-timeout 60s
+          --health-retries 15
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python 3.15
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.15"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Install activerecord and testsuite from git
+        run: |
+          pip install "rhosocial-activerecord @ git+https://github.com/rhosocial/python-activerecord.git@feature/typed-columns"
+          pip install "rhosocial-activerecord-testsuite @ git+https://github.com/rhosocial/python-activerecord-testsuite.git@test/typed-column-contracts"
+
+      - name: Wait for Oracle and test connectivity
+        run: |
+          python -c "
+          import sys, time, oracledb
+          max_retries = 30
+          for attempt in range(max_retries):
+              try:
+                  conn = oracledb.connect(
+                      user='system', password='password',
+                      dsn='localhost:1521/FREEPDB1')
+                  conn.close()
+                  print('Oracle 23c connectivity OK')
+                  break
+              except Exception as e:
+                  if attempt < max_retries - 1:
+                      print(f'Retry {attempt+1}/{max_retries}: {e}')
+                      time.sleep(10)
+                  else:
+                      print(f'Failed: {e}')
+                      sys.exit(1)
+          "
+
+      - name: Ensure PDB service registered with listener
+        run: |
+          docker exec ${{ job.services.oracle.id }} sqlplus -L / as sysdba <<EOF
+          -- Boost connection capacity so long-running pytest runs do not
+          -- exhaust the dispatcher / session pool (ORA-12516 / DPY-6005).
+          -- The default gvenzl/oracle-free:23-slim image ships with a
+          -- single dispatcher and 200 processes, which is too tight for the
+          -- python-activerecord-oracle worker tests that fan out several
+          -- concurrent backend pools per scenario.
+          alter system set processes=600 scope=spfile;
+          alter system set sessions=900 scope=spfile;
+          alter system set dispatchers='(PROTOCOL=TCP)(DISPATCHERS=4)' scope=both;
+          alter system register;
+          exit;
+          EOF
+          # Spfile-only changes (processes/sessions) require an instance
+          # restart for ``gvenzl/oracle-free:23-slim``. Bounce the container
+          # so the boosted limits apply before the test run starts.
+          docker restart ${{ job.services.oracle.id }}
+          sleep 30
+          docker exec ${{ job.services.oracle.id }} sqlplus -L / as sysdba <<EOF
+          alter system set dispatchers='(PROTOCOL=TCP)(DISPATCHERS=4)' scope=both;
+          alter system register;
+          exit;
+          EOF
+          sleep 5
+          python -c "
+          import oracledb
+          conn = oracledb.connect(
+              user='system', password='password',
+              dsn='localhost:1521/FREEPDB1')
+          conn.close()
+          print('PDB service FREEPDB1 registered OK')
+          "
+
+      - name: Create Oracle scenario config
+        run: |
+          cat > oracle_scenarios.yaml << EOF
+          scenarios:
+            oracle_23c:
+              host: localhost
+              port: 1521
+              username: system
+              password: password
+              service_name: FREEPDB1
+              encoding: AL32UTF8
+          EOF
+          echo "ORACLE_SCENARIOS_CONFIG_PATH=$(pwd)/oracle_scenarios.yaml" >> $GITHUB_ENV
+
+      - name: Run tests
+        run: |
+          export PYTHONPATH=src:tests
+          python -m pytest tests/ --tb=short -n 2 --dist=loadgroup -x
+
+      - name: Run tests with coverage
+        run: |
+          export PYTHONPATH=src:tests
+          python -m pytest tests/ --tb=short -n 2 --dist=loadgroup --cov=src/rhosocial --cov-branch --cov-report=xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          flags: unittests,python-3.15,oracle-23c
+          name: codecov-oracle-3.15-23c
+          fail_ci_if_error: true
