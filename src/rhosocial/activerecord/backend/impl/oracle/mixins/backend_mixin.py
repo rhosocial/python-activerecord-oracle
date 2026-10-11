@@ -110,12 +110,23 @@ class OracleBackendMixin:
             OracleUUIDAdapter(),
         ]
 
-        version = self._version if hasattr(self, '_version') and self._version else (23, 0, 0)
+        version = getattr(self, '_version', None)
 
         oracle_adapters.append(OracleXMLAdapter())
         oracle_adapters.append(OracleSDOGeometryAdapter())
 
-        if version[0] >= 23:
+        # Measured on both wired servers: ``VECTOR`` is an unresolvable
+        # identifier on 21c (``ORA-00904``) and a real column type on 23ai/26ai
+        # (``CREATE TABLE t (a VECTOR(3))`` succeeds in an ASSM tablespace and
+        # the catalog reports ``DATA_TYPE = 'VECTOR'``), so 23 is the boundary.
+        #
+        # An unmeasured version registers nothing rather than assuming the newer
+        # release: this line used to substitute ``(23, 0, 0)`` for a falsy
+        # version, which claimed "new enough for a vector adapter" about a server
+        # nobody had asked. It happened to be unreachable before, because
+        # ``_version`` was always at least the fabricated ``(19, 0, 0)`` — which
+        # is exactly why it must not be reached by making ``_version`` honest.
+        if version is not None and version[0] >= 23:
             oracle_adapters.append(OracleVectorAdapter())
 
         for adapter in oracle_adapters:
@@ -159,7 +170,19 @@ class OracleBackendMixin:
         return suggestions
 
     def _get_oracle_version_string(self) -> str:
+        """A human label for the configured version, or an honest "unknown".
+
+        The brand in each label is a **naming convenience**, not a threshold: the
+        gates compare the number in ``_version``, and ``23`` covers both the 23ai
+        branding and the 26ai one because they are the same line (measured: the
+        26ai server reports ``VERSION = '23.0.0.0.0'`` under the product name
+        ``'Oracle AI Database 26ai Free'``). An unmeasured version says so rather
+        than picking a brand, because a brand implies a release that was never
+        confirmed.
+        """
         version = self._version
+        if not version:
+            return "Oracle (version not measured)"
         if version >= (23, 0, 0):
             return f"Oracle 23ai ({version[0]}.{version[1]}.{version[2]})"
         elif version >= (21, 0, 0):

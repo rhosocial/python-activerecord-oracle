@@ -69,7 +69,7 @@ ORACLE_PROTOCOLS = [
     dialect_protocols.AdvancedGroupingSupport,
     dialect_protocols.ArraySupport,
     dialect_protocols.CTESupport,
-    dialect_protocols.DateTimeSupport,
+    dialect_protocols.TimestampSupport,
     dialect_protocols.DqlOrderSupport,
     dialect_protocols.ExplainSupport,
     dialect_protocols.FilterClauseSupport,
@@ -89,6 +89,10 @@ ORACLE_PROTOCOLS = [
     dialect_protocols.UpsertSupport,
     dialect_protocols.WildcardSupport,
     dialect_protocols.WindowFunctionSupport,
+    # The column-class table: which column a common Python type resolves
+    # to. OracleColumnTypeMixin supplies the table; the storage half is
+    # DataTypeSupport, classified with the DDL protocols below.
+    dialect_protocols.ColumnTypeSupport,
     # --- SQL/XML ---
     dialect_protocols.SQLXMLAggregationSupport,
     dialect_protocols.SQLXMLConstructionSupport,
@@ -170,6 +174,11 @@ class TestOracleDialectProtocolConformance:
 # satisfies one by accident, the negative test fails and forces a conscious
 # decision (move to ORACLE_PROTOCOLS or revert).
 ORACLE_NOT_IMPLEMENTED = [
+    # UUID value expressions (generation / nil-max constants / cast) are not
+    # implemented yet on this dialect. Listed here so the omission is a
+    # recorded decision rather than a gap; move it to the implemented list
+    # when the mixin lands.
+    dialect_protocols.UUIDSupport,
     # --- Intentional non-support ---
     # Oracle has no DATABASE, DOMAIN or schema-namespace DDL: schemas come from
     # CREATE USER. See OracleSchemaMixin, which answers the DDL side False and

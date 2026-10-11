@@ -8,8 +8,11 @@ and Oracle-specific utility functions.
 
 Usage Rules:
 - All functions accept a dialect instance as the first argument
-- For column references, pass Column objects or column name strings
-- For literal values, pass the value directly (will be converted to Literal)
+- Every other argument is an expression: pass a ``Column`` to read a column
+  and a ``Literal`` to write a value
+- Data that is not yet an expression -- a geometry given as WKT, for
+  instance -- is turned into one by a named constructor here
+  (``sdo_geom_from_wkt``), not by the function that consumes it
 - Functions return appropriate expression objects (FunctionCall, RawSQLExpression, etc.)
 
 Version Requirements:
@@ -18,8 +21,6 @@ Version Requirements:
 - Analytic functions: Oracle 8i+ (enhanced in 9i, 10g, 11g)
 - LISTAGG: Oracle 11g R2+
 """
-
-from ._convert import _convert_to_expression
 
 # Import all function modules
 from .json import (

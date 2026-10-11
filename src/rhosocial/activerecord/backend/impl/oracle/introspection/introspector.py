@@ -72,9 +72,16 @@ class OracleIntrospectorMixin(IntrospectorMixin):
             return self._backend.config.username.upper() if self._backend.config.username else ""
         return ""
 
-    def _get_version(self) -> tuple:
-        """Return the Oracle server version tuple from the backend."""
-        return getattr(self._backend, '_version', (19, 0, 0))
+    def _get_version(self) -> Optional[Tuple[int, ...]]:
+        """Return the Oracle server version tuple from the backend, or ``None``.
+
+        ``None`` is a real answer here, not a gap: the backend leaves its
+        version unset when the caller stated none and
+        :meth:`~..backend.OracleBackend.get_server_version` could not measure
+        one, and it used to report ``(19, 0, 0)`` in both cases — a version
+        nobody measured, which every version gate then compared against.
+        """
+        return getattr(self._backend, '_version', None)
 
     # ------------------------------------------------------------------ #
     # SQL builders — Oracle data dictionary queries
@@ -181,7 +188,12 @@ class OracleIntrospectorMixin(IntrospectorMixin):
 
     def _parse_database_info(self, rows: List[Dict[str, Any]]) -> DatabaseInfo:
         version = self._get_version()
-        version_str = ".".join(str(v) for v in version)
+        # Reported as the string "unknown" rather than a fabricated number: this
+        # is a status surface, and a status surface that invents a version is the
+        # same defect as a dialect that invents one.
+        version_str = (
+            ".".join(str(v) for v in version) if version else "unknown"
+        )
         schema = self._get_default_schema()
 
         db_row = rows[0] if rows else {}
@@ -245,13 +257,23 @@ class OracleIntrospectorMixin(IntrospectorMixin):
             elif data_type in ("VARCHAR2", "CHAR", "NVARCHAR2", "NCHAR"):
                 char_length = row.get("CHAR_LENGTH") or row.get("DATA_LENGTH")
                 data_type_full = f"{data_type}({char_length})"
+            elif data_type == "RAW":
+                # RAW's declared width is its whole identity — two RAW columns
+                # of different widths are different columns — and DATA_LENGTH
+                # holds it exactly: 16 for a RAW(16), 64 for a RAW(64), with
+                # DATA_PRECISION and DATA_SCALE both NULL. Leaving it out sent
+                # every RAW column through the parser as a bare "RAW", which
+                # could only come back with an invented width.
+                # https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/Data-Types.html
+                data_type_full = f"RAW({row.get('DATA_LENGTH')})"
             else:
                 data_type_full = data_type
 
             col_name = row["COLUMN_NAME"]
             # Parse the full type string into a structured DataType so that
-            # SchemaDiffer._columns_equivalent can use is_equivalent() instead
-            # of raw string comparison (core #108).
+            # SchemaDiffer._columns_equivalent can compare two DataType
+            # instances with `!=` — class plus the fields named by PARAMETERS —
+            # instead of raw string comparison (core #108).
             parsed_data_type: Optional[DataType] = None
             try:
                 parsed_data_type = DataType.parse_data_type_str(

@@ -1,78 +1,33 @@
 # src/rhosocial/activerecord/backend/impl/oracle/cli/info.py
 """info subcommand - Display Oracle environment information.
 
-info can optionally connect to a database for version introspection,
-falling back to --version flag when no connection is available.
+info connects to a database only when one was named — ``--named-connection``,
+explicit connection flags, or an ``ORACLE_*`` environment variable — and reads
+the server version from it. Given nothing to connect to it reports what it can
+be told and marks the rest "not known": the panel is a report, not a probe, and
+it must not open a session against a placeholder service, nor die asking a
+release it never learned which features exist.
 """
 
 import argparse
 import inspect
 import json
 import logging
-from typing import Dict, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
-from .connection import add_connection_args, add_version_arg, resolve_connection_config_from_args
+from rhosocial.activerecord.backend.dialect.exceptions import DialectNotAdaptedException
+
+from .connection import (
+    add_connection_args,
+    add_version_arg,
+    connection_named,
+    resolve_connection_config_from_args,
+)
 from .output import create_provider, RICH_AVAILABLE
 
 logger = logging.getLogger(__name__)
 
 OUTPUT_CHOICES = ['table', 'json']
-
-
-def create_parser(subparsers):
-    """Create the info subcommand parser."""
-    parser = subparsers.add_parser(
-        'info',
-        help='Display Oracle environment information',
-        epilog="""Examples:
-  # Show info using default version (19.0.0)
-  %(prog)s
-
-  # Show info for a specific version
-  %(prog)s --version 21.0.0
-
-  # Show info from actual database connection
-  %(prog)s --host localhost --service XEPDB1 --user system --password secret
-
-  # Output as JSON
-  %(prog)s -o json
-""",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-
-    parser.add_argument(
-        '-o', '--output',
-        choices=OUTPUT_CHOICES,
-        default='table',
-        help='Output format (default: table)',
-    )
-
-    add_connection_args(parser)
-    add_version_arg(parser)
-
-    parser.add_argument(
-        '-v', '--verbose',
-        action='count',
-        default=0,
-        help='Increase verbosity. -v for families, -vv for details.',
-    )
-
-    parser.add_argument(
-        '--rich-ascii',
-        action='store_true',
-        help='Use ASCII characters for rich table borders.',
-    )
-
-    return parser
-
-
-def parse_version(version_str: str) -> Tuple[int, int, int]:
-    """Parse version string like '19.0.0' to tuple."""
-    parts = version_str.split('.')
-    major = int(parts[0]) if len(parts) > 0 else 19
-    minor = int(parts[1]) if len(parts) > 1 else 0
-    patch = int(parts[2]) if len(parts) > 2 else 0
-    return (major, minor, patch)
 
 
 def handle(args):
@@ -83,8 +38,7 @@ def handle(args):
     dialect = None
     version_display = None
 
-    named_conn = getattr(args, "named_connection", None)
-    if named_conn or (args.host and args.service):
+    if connection_named(args):
         try:
             from rhosocial.activerecord.backend.impl.oracle.backend import OracleBackend
             config = resolve_connection_config_from_args(args)
@@ -103,40 +57,77 @@ def handle(args):
             logger.warning("Using default values for dialect information.")
 
     if dialect is None:
+        # Offline mode. The version is whatever the caller stated and nothing
+        # else: the previous ``(19, 0, 0)`` here reported 19c for a server this
+        # process never spoke to, and every ``supports_*`` below it answered on
+        # that invented number. ``None`` leaves the dialect unadapted, so the
+        # gates that need a release answer "not known" below rather than
+        # claiming one nobody named.
         actual_version = args.version
-        if actual_version:
-            version = parse_version(actual_version)
-        else:
-            version = (19, 0, 0)
+        version = parse_version(actual_version) if actual_version else None
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
         dialect = OracleDialect(version=version)
-        version_display = f"{version[0]}.{version[1]}.{version[2]}"
+        version_display = (
+            f"{version[0]}.{version[1]}.{version[2]}" if version else "unknown"
+        )
+
+    # ``dialect.version`` raises ``DialectNotAdaptedException`` when no version
+    # was stated and none could be read, and an info panel is not the place to
+    # die on that. Resolve it once: the panel then reports the version as
+    # ``None`` and every version-derived flag as ``None`` too, which reads as
+    # "not known" rather than as "no" — the same distinction the gates make.
+    try:
+        effective_version: Optional[Tuple[int, ...]] = tuple(dialect.version)
+    except Exception:
+        effective_version = None
+
+    def _since(threshold: Tuple[int, int, int]) -> Optional[bool]:
+        if effective_version is None:
+            return None
+        return effective_version >= threshold
+
+    def _gate(method) -> Optional[bool]:
+        """Ask one capability gate, reporting "not known" when it cannot answer.
+
+        Oracle's release-derived gates answer by reading ``dialect.version``,
+        which refuses on a dialect that was never adapted, and an offline panel
+        is exactly that state: there is no server to read a release from and the
+        caller named none. Calling such a gate directly turned the refusal into a
+        ``DialectNotAdaptedException`` out of ``info``, which is why this helper
+        exists. Only the gates that genuinely need a release are affected — the
+        rest answer as they always did, so the panel still says ``True`` for a
+        capability Oracle has had since 11g.
+        """
+        try:
+            return method()
+        except DialectNotAdaptedException:
+            return None
 
     info = {
         "database": {
             "type": "oracle",
             "version": version_display,
-            "version_tuple": list(dialect.version),
+            "version_tuple": list(effective_version) if effective_version else None,
             "connected": is_connected,
         },
         "features": {
-            "hierarchical_queries": dialect.supports_hierarchical_queries(),
-            "pivot": dialect.supports_pivot(),
-            "unpivot": dialect.supports_unpivot(),
-            "query_hints": dialect.supports_query_hints(),
-            "native_json": dialect.supports_native_json(),
-            "boolean_type": dialect.supports_boolean_type(),
-            "vector_type": dialect.supports_vector_type(),
-            "json_duality": dialect.supports_json_duality(),
+            "hierarchical_queries": _gate(dialect.supports_hierarchical_queries),
+            "pivot": _gate(dialect.supports_pivot),
+            "unpivot": _gate(dialect.supports_unpivot),
+            "query_hints": _gate(dialect.supports_query_hints),
+            "native_json": _gate(dialect.supports_native_json),
+            "boolean_type": _gate(dialect.supports_boolean_type),
+            "vector_type": _gate(dialect.supports_vector_type),
+            "json_duality": _gate(dialect.supports_json_duality),
         },
         "locking": {
-            "for_update": dialect.supports_for_update(),
-            "for_update_nowait": dialect.supports_for_update_nowait(),
-            "for_update_wait": dialect.supports_for_update_wait(),
-            "for_update_skip_locked": dialect.supports_for_update_skip_locked(),
+            "for_update": _gate(dialect.supports_for_update),
+            "for_update_nowait": _gate(dialect.supports_for_update_nowait),
+            "for_update_wait": _gate(dialect.supports_for_update_wait),
+            "for_update_skip_locked": _gate(dialect.supports_for_update_skip_locked),
         },
         "pagination": {
-            "fetch_first": dialect.version >= (12, 0, 0),
+            "fetch_first": _since((12, 0, 0)),
             "rownum": True,
         },
         "protocols": {},
@@ -151,46 +142,17 @@ def handle(args):
     if args.output == "json" or not RICH_AVAILABLE:
         print(json.dumps(info, indent=2))
     else:
-        _display_info_rich(info, version_display, is_connected)
+        # The renderer's second parameter is the verbosity, so the count
+        # collected above is what belongs there. An earlier version of this call
+        # passed ``version_display`` in that position instead, which bound a
+        # string to ``verbose`` and raised
+        # ``TypeError: '>=' not supported between instances of 'str' and 'int'``
+        # on the panel's own first comparison — so the default table output
+        # could never render at all, while ``-o json`` was unaffected because
+        # it takes the branch above and never reaches the renderer.
+        _display_info_rich(info, args.verbose, version_display, is_connected)
 
     return info
-
-
-def _display_info_rich(info: Dict, version_display: str, is_connected: bool):
-    """Display info using rich console."""
-    from rich.console import Console
-
-    console = Console(force_terminal=True)
-
-    console.print("\n[bold cyan]Oracle Environment Information[/bold cyan]\n")
-
-    if is_connected:
-        console.print(f"[bold]Oracle Version:[/bold] {version_display} [dim](from actual connection)[/dim]\n")
-    else:
-        console.print(f"[bold]Oracle Version:[/bold] {version_display} [yellow](default value - no database connection)[/yellow]\n")
-
-    console.print("[bold green]Features:[/bold green]")
-    features = info.get("features", {})
-    for name, supported in features.items():
-        status = "[green][OK][/green]" if supported else "[red][X][/red]"
-        name_display = name.replace("_", " ").title()
-        console.print(f" {status} {name_display}")
-
-    console.print("\n[bold green]Locking:[/bold green]")
-    locking = info.get("locking", {})
-    for name, supported in locking.items():
-        status = "[green][OK][/green]" if supported else "[red][X][/red]"
-        name_display = name.replace("_", " ").title()
-        console.print(f" {status} {name_display}")
-
-    console.print("\n[bold green]Pagination:[/bold green]")
-    pagination = info.get("pagination", {})
-    for name, supported in pagination.items():
-        status = "[green][OK][/green]" if supported else "[red][X][/red]"
-        name_display = name.replace("_", " ").title()
-        console.print(f" {status} {name_display}")
-
-    console.print()
 
 
 from rhosocial.activerecord.backend.dialect.protocols import (
@@ -270,32 +232,33 @@ PROTOCOL_FAMILY_GROUPS: Dict[str, list] = {
     ],
 }
 
-# All possible test arguments for methods that require parameters
+# Group names whose protocols this dialect implements itself rather than
+# inheriting from core. The renderer tags these so a reader can tell an
+# Oracle-native capability from a core protocol every backend answers. Derived
+# from the groups above rather than restated, so adding a dialect-native
+# protocol cannot leave the label behind.
+DIALECT_SPECIFIC_GROUPS = {
+    name
+    for name, protocols in PROTOCOL_FAMILY_GROUPS.items()
+    if all(
+        getattr(protocol, "__module__", "").startswith(
+            "rhosocial.activerecord.backend.impl.oracle."
+        )
+        for protocol in protocols
+    )
+}
+
+# Candidate arguments probed for the ``supports_*`` methods that require one.
+# ``check_protocol_support`` reports a method not listed here as unsupported
+# without calling it, so an entry has to name a method this dialect actually
+# takes an argument for. ``supports_explain_format`` is currently the only one
+# that does; the JSON-function and spatial probes that used to sit here named
+# MySQL protocols, and neither could ever be reached: Oracle declares no
+# ``supports_json_function`` at all, and its ``supports_spatial_type`` takes no
+# argument, so the ``elif method_name in SUPPORT_METHOD_ALL_ARGS`` branch was
+# never entered for either key.
 SUPPORT_METHOD_ALL_ARGS: Dict[str, List[str]] = {
-    # ExplainSupport: all possible format types
     "supports_explain_format": ["TEXT", "JSON", "TREE", "XML", "YAML", "DOT"],
-    # MySQLJSONFunctionSupport: JSON functions with version-specific support
-    "supports_json_function": [
-        "JSON_EXTRACT",
-        "JSON_ARRAY",
-        "JSON_OBJECT",
-        "JSON_MERGE",
-        "JSON_TABLE",
-        "JSON_VALUE",
-        "JSON_SCHEMA_VALID",
-        "JSON_MERGE_PATCH",
-    ],
-    # MySQLSpatialSupport: spatial types
-    "supports_spatial_type": [
-        "GEOMETRY",
-        "POINT",
-        "LINESTRING",
-        "POLYGON",
-        "MULTIPOINT",
-        "MULTILINESTRING",
-        "MULTIPOLYGON",
-        "GEOMETRYCOLLECTION",
-    ],
 }
 
 
@@ -303,16 +266,16 @@ def create_parser(subparsers):
     """Create the info subcommand parser."""
     parser = subparsers.add_parser(
         "info",
-        help="Display MySQL environment information",
+        help="Display Oracle environment information",
         epilog="""Examples:
-  # Show info using default version (8.0.0)
+  # Show info without connecting (no version is assumed)
   %(prog)s
 
   # Show info for a specific version
-  %(prog)s --version 5.7.0
+  %(prog)s --version 19.0.0
 
   # Show info from actual database connection
-  %(prog)s --host localhost --database mydb --user root --password secret
+  %(prog)s --host localhost --service XEPDB1 --user system --password secret
 
   # Output as JSON
   %(prog)s -o json
@@ -425,7 +388,7 @@ def check_protocol_support(dialect, protocol_class: type) -> Dict[str, Any]:
 
 
 def parse_version(version_str: str) -> Tuple[int, int, int]:
-    """Parse version string like '8.0.0' to tuple."""
+    """Parse version string like '19.0.0' to tuple."""
     parts = version_str.split(".")
     major = int(parts[0]) if len(parts) > 0 else 0
     minor = int(parts[1]) if len(parts) > 1 else 0
@@ -461,7 +424,7 @@ def _build_protocol_info(dialect, group_name: str, protocols: List[type], verbos
     """Build protocol support information for a single group.
 
     Args:
-        dialect: MySQLDialect instance to check against
+        dialect: OracleDialect instance to check against
         group_name: Name of the protocol group
         protocols: List of protocol classes in this group
         verbose: Verbosity level for output detail
@@ -561,13 +524,16 @@ def _display_info_rich(info: Dict, verbose: int, version_display: str, is_connec
 
     console = Console(force_terminal=True)
 
-    console.print("\n[bold cyan]MySQL Environment Information[/bold cyan]\n")
+    # This renderer is the Oracle CLI's own output; it was pasted in from MySQL
+    # with the brand strings still in it, so the Oracle panel used to title
+    # itself "MySQL Environment Information" and report a "MySQL Version".
+    console.print("\n[bold cyan]Oracle Environment Information[/bold cyan]\n")
 
     if is_connected:
-        console.print(f"[bold]MySQL Version:[/bold] {version_display} [dim](from actual connection)[/dim]\n")
+        console.print(f"[bold]Oracle Version:[/bold] {version_display} [dim](from actual connection)[/dim]\n")
     else:
         console.print(
-            f"[bold]MySQL Version:[/bold] {version_display} [yellow](default value - no database connection)[/yellow]\n"
+            f"[bold]Oracle Version:[/bold] {version_display} [yellow](no database connection)[/yellow]\n"
         )
 
     label = "Detailed" if verbose >= 2 else "Family Overview"

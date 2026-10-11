@@ -27,6 +27,11 @@ _2d9062a_
 - **CI-tested server versions**: 18 (XE), 21 (XE), 23 (Free)
 - **Published**: PyPI `1.0.0.dev2`
 
+Supported Python versions run from 3.8 through 3.15 inclusive; the
+`requires-python = ">=3.8"` pin is a floor, not a cap. The dynamic `Python`
+badge is rendered from the PyPI classifiers, so it shows 3.15 only after the
+next publish.
+
 ## Installation
 
 ```bash

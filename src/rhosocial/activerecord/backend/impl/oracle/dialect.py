@@ -103,10 +103,21 @@ from rhosocial.activerecord.backend.dialect.mixins import (
     DMLMixin,
     PartitionMixin,
     UserDefinedTypeMixin,
+    # TRIM/LPAD/RPAD are nodes with default formatters, and Oracle spells all
+    # three natively -- ``TRIM([LEADING|TRAILING|BOTH] [chars] FROM s)``
+    # (sqlrf/TRIM.html) and ``LPAD``/``RPAD(s, n, padstr)`` (sqlrf/LPAD.html,
+    # sqlrf/RPAD.html) -- so the shared defaults are the answer and no override
+    # is needed. REPEAT is deliberately absent: Oracle has no such function
+    # (ORA-00904, live-verified 2026-10-09), so ``format_repeat_expression``
+    # stays refused here rather than emitting SQL the server rejects.
+    LpadMixin,
+    RpadMixin,
+    TrimMixin,
 )
 from .mixins import (
     OracleAnalyzeMixin,
     OracleCollationMixin,
+    OracleColumnTypeMixin,
     OracleCommentMixin,
     OracleDatabaseLinkMixin,
     OracleDateTimeMixin,
@@ -148,6 +159,7 @@ from .mixins import (
     OracleExplainMixin,
 )
 from .protocols.partition import OraclePartitionSupport
+from .protocols.data_type import OracleDataTypeSupport
 from .protocols.ddl_type import OracleTypeDDLSupport
 from .reserved_words import ORACLE_RESERVED_WORDS
 
@@ -163,6 +175,7 @@ class OracleDialect(
     # ================================================================
     OracleAnalyzeMixin,
     OracleCollationMixin,
+    OracleColumnTypeMixin,
     OracleDDLMixin,
     OracleTypeDDLMixin,
     UserDefinedTypeMixin,
@@ -269,6 +282,17 @@ class OracleDialect(
     DMLMixin,
     PartitionMixin,
     GraphTableMixin,
+    # TRIM/LPAD/RPAD are nodes with default formatters, and Oracle spells all
+    # three natively -- ``TRIM([LEADING|TRAILING|BOTH] [chars] FROM s)``
+    # (sqlrf/TRIM.html) and ``LPAD``/``RPAD(s, n, padstr)`` (sqlrf/LPAD.html and
+    # sqlrf/RPAD.html) -- so the shared defaults are the answer here and no
+    # override is needed. REPEAT is deliberately absent: Oracle has no such
+    # function (ORA-00904, live-verified 2026-10-09), so
+    # ``format_repeat_expression`` stays refused on this backend rather than
+    # emitting SQL the server rejects.
+    LpadMixin,
+    RpadMixin,
+    TrimMixin,
     # ================================================================
     # Protocols (type-annotation guarantee only)
     # ================================================================
@@ -305,6 +329,7 @@ class OracleDialect(
     TransactionControlSupport,
     SQLFunctionSupport,
     OraclePartitionSupport,
+    OracleDataTypeSupport,
     OracleTypeDDLSupport,
 ):
     """Oracle dialect implementation that adapts to the Oracle version.

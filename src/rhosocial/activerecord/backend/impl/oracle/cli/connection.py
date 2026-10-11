@@ -5,38 +5,57 @@ import os
 
 
 
+# The placeholder a connection argument carries when neither the command line
+# nor an ORACLE_* variable named one. Kept here, next to the defaults that
+# produce it, so `connection_named` below and `add_connection_args` cannot drift
+# apart. A command that can report without a database needs to tell "nobody named
+# a connection" from "named localhost:1521/ORCL", and these values are the only
+# thing that distinguishes them.
+_CONNECTION_PLACEHOLDERS = {
+    "host": "localhost",
+    "port": 1521,
+    "service": "ORCL",
+    "user": "system",
+    "password": "",
+}
+
+
 def add_connection_args(parser):
     """Add Oracle connection arguments to a subcommand parser.
 
     Each subcommand that needs a database connection calls this.
+
+    Every field carries a placeholder when nothing named one, which is why
+    ``connection_named`` exists: a subcommand that can also run without a
+    database has no other way to tell an omitted connection from a real one.
     """
     parser.add_argument(
         "--host",
-        default=os.getenv("ORACLE_HOST", "localhost"),
+        default=os.getenv("ORACLE_HOST", _CONNECTION_PLACEHOLDERS["host"]),
         help="Database host (env: ORACLE_HOST, default: localhost)",
     )
     parser.add_argument(
         "--port",
         type=int,
-        default=int(os.getenv("ORACLE_PORT", "1521")),
+        default=int(os.getenv("ORACLE_PORT", _CONNECTION_PLACEHOLDERS["port"])),
         help="Database port (env: ORACLE_PORT, default: 1521)",
     )
     parser.add_argument(
         "--service",
         "--database",
         dest="service",
-        default=os.getenv("ORACLE_SERVICE", "ORCL"),
+        default=os.getenv("ORACLE_SERVICE", _CONNECTION_PLACEHOLDERS["service"]),
         help="Oracle service name (env: ORACLE_SERVICE, default: ORCL). "
         "--database is an alias for --service.",
     )
     parser.add_argument(
         "--user",
-        default=os.getenv("ORACLE_USER", "system"),
+        default=os.getenv("ORACLE_USER", _CONNECTION_PLACEHOLDERS["user"]),
         help="Database user (env: ORACLE_USER, default: system)",
     )
     parser.add_argument(
         "--password",
-        default=os.getenv("ORACLE_PASSWORD", ""),
+        default=os.getenv("ORACLE_PASSWORD", _CONNECTION_PLACEHOLDERS["password"]),
         help="Database password (env: ORACLE_PASSWORD)",
     )
     parser.add_argument(
@@ -105,6 +124,32 @@ def create_connection_parent_parser():
         help="Use ASCII characters for rich table borders.",
     )
     return parent
+
+
+def connection_named(args) -> bool:
+    """Whether the caller named a connection, by flag or by environment.
+
+    True when ``--named-connection`` was given, or when any connection field
+    holds something other than the placeholder it defaults to. False for a bare
+    invocation, which left every field on its placeholder.
+
+    The placeholders are why this exists. ``add_connection_args`` must give
+    every field a default — ``query`` and ``status`` need a usable target when
+    nothing is passed — so the parsed values alone cannot distinguish
+    ``--host localhost`` from no flag at all. A subcommand that can also report
+    without a database has to make that call, and it used to make it by opening
+    a session: bare ``info`` connected to localhost's ORCL on every run, against
+    a service that exists only where someone installed one, and reported the
+    failure instead of the panel it was asked for. The one thing this cannot see
+    is a connection named *exactly* the placeholder values, which is declined
+    here; pass a real service, or set ``ORACLE_SERVICE``, to ask for one.
+    """
+    if getattr(args, "named_connection", None):
+        return True
+    return any(
+        getattr(args, field, placeholder) != placeholder
+        for field, placeholder in _CONNECTION_PLACEHOLDERS.items()
+    )
 
 
 def resolve_connection_config_from_args(args):

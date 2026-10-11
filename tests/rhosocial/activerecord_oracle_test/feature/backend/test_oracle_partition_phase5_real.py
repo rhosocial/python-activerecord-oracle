@@ -22,6 +22,7 @@ from rhosocial.activerecord.backend.expression import (
     ColumnDefinition,
     ColumnConstraint,
     ColumnConstraintType,
+    ComparisonPredicate,
     CreateTableExpression,
     DropTableExpression,
     InsertExpression,
@@ -92,7 +93,9 @@ def _partition_names(backend, table_name: str):
         d,
         select=[Column(d, "PARTITION_NAME")],
         from_=Table(d, "ALL_TAB_PARTITIONS"),
-        where=Column(d, "TABLE_NAME") == Literal(d, table_name.upper()),
+        where=ComparisonPredicate(
+            d, "=", Column(d, "TABLE_NAME"), Literal(d, table_name.upper())
+        ),
     )
     sql, params = query.to_sql()
     return {row["partition_name"] for row in _exec_query(backend, sql, params)}
@@ -109,7 +112,9 @@ def _count_subpartitions(backend, table_name: str) -> int:
         d,
         select=[Column(d, "SUBPARTITION_NAME")],
         from_=Table(d, "ALL_TAB_SUBPARTITIONS"),
-        where=Column(d, "TABLE_NAME") == Literal(d, table_name.upper()),
+        where=ComparisonPredicate(
+            d, "=", Column(d, "TABLE_NAME"), Literal(d, table_name.upper())
+        ),
     )
     sql, params = query.to_sql()
     return len(_exec_query(backend, sql, params))

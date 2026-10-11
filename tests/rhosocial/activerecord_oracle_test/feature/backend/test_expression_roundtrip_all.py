@@ -47,8 +47,14 @@ Each outcome is now named and asserted:
 
 * **renders** -- all three encodings must restore byte-identical SQL *and*
   byte-identical bind parameters.
-* ``UnsupportedFeatureError`` -- Oracle does not model the feature. Asserted as
-  exactly that type, so a different error cannot hide behind it.
+* ``UnsupportedFeatureError`` from a probe inside a formatter -- Oracle does
+  not model the feature. Asserted as exactly that type, so a different error
+  cannot hide behind it.
+* ``UnsupportedFeatureError`` from the dispatch -- the dialect declares no
+  ``format_*`` method for the class at all, which is a wiring fact about this
+  backend rather than a capability answer. The method the dispatch names must
+  be a row in :data:`UNMODELLED_FORMATTERS`, so the gap is a decision with a
+  reason rather than an omission; see :func:`_dispatched_formatter`.
 * ``NotImplementedError`` -- an expression-category base that deliberately names
   no formatter. Asserted as exactly that type, for the same reason.
 * a member of :data:`LEGITIMATE_NON_RENDERS` -- a class that constructs but
@@ -57,6 +63,24 @@ Each outcome is now named and asserted:
   pins the exception type *and* a message fragment, so a class that starts
   failing for a different reason fails here instead of staying quietly green.
 * **anything else** -- a failure naming the class and the exception.
+
+Why the dispatch's refusal is no longer allowed on its type alone
+=================================================================
+
+The two ``UnsupportedFeatureError`` outcomes above were one branch until core
+turned ``trim``/``lpad``/``rpad``/``repeat`` into dedicated nodes. Oracle
+spells ``lpad``/``rpad``/``trim`` natively and has no ``REPEAT`` function, so
+``RepeatExpression`` reaches a dispatch that finds no
+``format_repeat_expression`` -- and before this split, that refusal read as
+"Oracle lacks the feature" and passed, indistinguishable from a probe declining
+something Oracle genuinely does not have. The exception itself records who is
+refusing: a probe names the feature, while the dispatch frames the formatting
+method it could not find as ``the '<method>' statement`` -- see
+:func:`_dispatched_formatter`. Only the dispatch's refusal is a wiring fact
+about this backend, so only it must be accounted for:
+:meth:`TestMatrixIntegrity.test_unmodelled_formatter_list_is_exact` pins
+:data:`UNMODELLED_FORMATTERS` in both directions, and a method nobody listed
+fails the run.
 
 And what happens when a class cannot be constructed
 ===================================================
@@ -909,6 +933,20 @@ def _register_core_specials():
 
     register_special_constructor("xml.XMLTableExpression", xml_table)
 
+    # CUSTOM. Its ``raw`` slot exists to carry the SQL type name and defaults to the
+    # empty string, which the filler skips and the class refuses while constructing.
+    # Handed a real name it builds and renders, so it is a constructor rather than a
+    # skip -- and for that same reason it is absent from LEGITIMATE_NON_RENDERS below,
+    # which would otherwise pin a rendering nothing could ask for.
+    def custom_type(dialect):
+        from rhosocial.activerecord.backend.expression.types.custom import (
+            CustomType,
+        )
+
+        return CustomType(dialect, "VARCHAR2(10)")
+
+    register_special_constructor("types.custom.CustomType", custom_type)
+
     # The column must survive all three encodings, not just dict. XMLTableColumn was
     # a plain class, so core's JSON and XML encoders dropped the whole COLUMNS list
     # and every round-trip lost it; core fixed that in ae5b7f9 and the round-trip
@@ -1383,15 +1421,24 @@ _register_oracle_specials()
 
 #: Classes the generic introspective constructor cannot build.
 #:
-#: Empty, and that is the finding rather than an omission. Every expression class
-#: in either package builds: where the introspective guess was a lie -- a bare
-#: ``"x"`` where a catalogue object belongs, an empty container where one member is
-#: mandatory -- there is a ``register_special_constructor`` call above saying which
-#: object was substituted and why. The tuple stays because a class that starts
-#: failing to build must be pinned here with the fault located, not left to become
-#: a silent skip; :func:`TestMatrixIntegrity.test_unconstructible_list_is_exact`
-#: fails in both directions when the sets disagree.
-UNCONSTRUCTIBLE: tuple = ()
+#: Measured, not assumed: each entry below was built by hand first, with arguments
+#: the class actually accepts, and refused while constructing.
+#:
+#: The three UUID nodes all refuse in ``__init__`` rather than in ``to_sql()`` --
+#: Oracle spells no UUID SQL, so the answer is the same for every argument and no
+#: registered constructor can change it. The nil/max constant only shows that once
+#: it is given a *valid* ``which``: an invalid one raises ValueError first, which is
+#: a different answer entirely and hides the dialect's.
+#:
+#: The tuple stays because a class that starts failing to build must be pinned here
+#: with the fault located, not left to become a silent skip;
+#: :func:`TestMatrixIntegrity.test_unconstructible_list_is_exact` fails in both
+#: directions when the sets disagree.
+UNCONSTRUCTIBLE: tuple = (
+    "rhosocial.activerecord.backend.expression.uuid.UUIDCastExpression",
+    "rhosocial.activerecord.backend.expression.uuid.UUIDConstantExpression",
+    "rhosocial.activerecord.backend.expression.uuid.UUIDGenerationExpression",
+)
 
 #: Classes that construct but cannot render.
 #:
@@ -1579,17 +1626,8 @@ LEGITIMATE_NON_RENDERS: Dict[str, tuple] = {
     "rhosocial.activerecord.backend.expression.types.binary.VarBinaryType": (
         TypeError, "does not support the generic type 'varbinary'"
     ),
-    "rhosocial.activerecord.backend.expression.types.custom.CustomType": (
-        TypeError, "does not support the generic type 'custom'"
-    ),
-    "rhosocial.activerecord.backend.expression.types.datetime_.IntervalType": (
-        TypeError, "does not support the generic type 'interval'"
-    ),
     "rhosocial.activerecord.backend.expression.types.enum_.EnumType": (
         TypeError, "does not support the generic type 'enum'"
-    ),
-    "rhosocial.activerecord.backend.expression.types.integer.IntType": (
-        TypeError, "does not support the generic type 'int'"
     ),
     "rhosocial.activerecord.backend.expression.types.uuid_.UUIDType": (
         TypeError, "does not support the generic type 'uuid'"
@@ -1651,6 +1689,103 @@ CORE_SERIALISATION_DEFECTS: Dict[str, tuple] = {}
 
 
 # ---------------------------------------------------------------------------
+# The dispatch gap: a missing formatter is a decision, not an omission
+# ---------------------------------------------------------------------------
+#
+# ``to_sql()`` reports a dialect that names no formatter for a class through
+# the same ``UnsupportedFeatureError`` a capability probe uses, so the type
+# alone cannot say "this backend never wired the feature in". The frame the
+# dispatch puts around the method name can, and it is the only place in the
+# tree that opens it -- see :func:`_dispatched_formatter`.
+
+#: The two ends of the frame ``to_sql()`` puts around a formatting method name
+#: in the ``feature_name`` of the ``UnsupportedFeatureError`` it raises for a
+#: dialect that has no such formatter.
+_DISPATCH_FEATURE_PREFIX = "the '"
+_DISPATCH_FEATURE_SUFFIX = "' statement"
+
+
+def _dispatched_formatter(exc):
+    """The formatting method *exc* says the dialect does not have, or ``None``.
+
+    ``None`` means *exc* is not the dispatch reporting a missing formatter --
+    it is a probe inside a formatter that refused a feature, which is the
+    ``"unsupported"`` branch and needs no row anywhere.
+
+    Args:
+        exc: An :class:`UnsupportedFeatureError` raised out of ``to_sql()``.
+
+    Returns:
+        The method name out of the ``feature_name`` frame, or ``None`` when
+        *exc* came from a probe rather than from the dispatch.
+    """
+    feature = exc.feature_name
+    if not feature.startswith(_DISPATCH_FEATURE_PREFIX):
+        return None
+    if not feature.endswith(_DISPATCH_FEATURE_SUFFIX):
+        return None
+    method = feature[len(_DISPATCH_FEATURE_PREFIX) : len(feature) - len(_DISPATCH_FEATURE_SUFFIX)]
+    return method if method else None
+
+
+#: Formatters Oracle declares no implementation of, grouped by the feature that
+#: is absent, each group naming every method the matrix's classes need.
+#:
+#: A class needing one of these fails with ``UnsupportedFeatureError`` naming
+#: the method it wanted, and :func:`assert_sql_roundtrip_classified` asserts
+#: that method is a row here. :meth:`TestMatrixIntegrity.\
+#: test_unmodelled_formatter_list_is_exact` pins the table in both directions:
+#: a formatter that starts existing moves its classes out of the table and the
+#: pin fails until the entry goes, and a class that starts needing a method
+#: outside the table fails outright instead of passing as "unsupported".
+#:
+#: These are not defects: they are features Oracle does not have -- or spells
+#: through this backend's own expressions -- which the shared renderer reports
+#: by naming the method it could not find. ``RepeatExpression`` is the one
+#: that made the accounting necessary: Oracle has no ``REPEAT`` function, the
+#: node dispatches to a formatter no base in this dialect provides, and before
+#: the table existed that refusal was allowed on its type alone.
+UNMODELLED_FORMATTERS = {
+    "the core DATABASE statements (an Oracle database is an instance, so this "
+    "dialect composes no CREATE/DROP/ALTER DATABASE formatter)": (
+        "format_alter_database_statement",
+        "format_create_database_statement",
+        "format_drop_database_statement",
+    ),
+    "DOMAIN (Oracle's dialect models no DOMAIN object, so no domain statement "
+    "or action renders)": (
+        "format_alter_domain_statement",
+        "format_create_domain_statement",
+        "format_drop_domain_statement",
+        "format_domain_alter_action",
+        "format_domain_check_constraint",
+        "format_domain_value_expression",
+    ),
+    "the core SQL/PSM DROP FUNCTION statement (this backend renders routine "
+    "DDL through its own OracleCreateFunctionExpression family, and composes "
+    "no formatter for the core statement)": ("format_drop_function_statement",),
+    "ILIKE (Oracle has no ILIKE operator; case-insensitive matching goes "
+    "through UPPER() + LIKE)": ("format_ilike_expression",),
+    "the core PIVOT / UNPIVOT expressions (PIVOT goes through this backend's "
+    "own PivotExpression and its format_pivot, so the core mixin is not "
+    "composed)": (
+        "format_pivot_expression",
+        "format_unpivot_expression",
+    ),
+    "REPEAT (Oracle has no REPEAT function; the node exists for the backends "
+    "that spell it natively, and this dialect declares no formatter to "
+    "emulate it)": ("format_repeat_expression",),
+    "the TableSource root (every concrete row source overrides its formatter; "
+    "the root carries nothing but an alias and is never rendered)": ("format_table_source",),
+}
+
+
+def _unmodelled_methods():
+    """The flat set of formatter names in :data:`UNMODELLED_FORMATTERS`."""
+    return {method for methods in UNMODELLED_FORMATTERS.values() for method in methods}
+
+
+# ---------------------------------------------------------------------------
 # The local SQL assertion: classify the outcome instead of swallowing it
 # ---------------------------------------------------------------------------
 
@@ -1663,9 +1798,14 @@ def assert_sql_roundtrip_classified(fqn, instance, dialect):
       byte-identical bind parameters. An encoding listed in
       :data:`CORE_SERIALISATION_DEFECTS` is skipped, because core's serialiser is
       known to drop the class on that channel.
-    * ``UnsupportedFeatureError`` -- Oracle does not model the feature. Asserted
-      as exactly that type, so a formatter raising it for an unrelated reason is
-      still visible as that type rather than as a pass.
+    * ``UnsupportedFeatureError`` from a probe inside a formatter -- Oracle does
+      not model the feature. Asserted as exactly that type, so a formatter
+      raising it for an unrelated reason is still visible as that type rather
+      than as a pass.
+    * ``UnsupportedFeatureError`` from the dispatch -- the dialect declares no
+      ``format_*`` method for the class at all, which is a wiring fact about
+      this backend rather than a capability answer. The method must be in
+      :data:`UNMODELLED_FORMATTERS`; the table entry is the reason.
     * ``NotImplementedError`` -- an expression-category base that names no
       formatter. Asserted as exactly that type, for the same reason.
     * a member of :data:`LEGITIMATE_NON_RENDERS` -- unrenderable by design,
@@ -1691,6 +1831,17 @@ def assert_sql_roundtrip_classified(fqn, instance, dialect):
         expected_sql, expected_params = instance.to_sql()
     except UnsupportedFeatureError as exc:
         assert type(exc) is UnsupportedFeatureError, fqn
+        method = _dispatched_formatter(exc)
+        if method is not None:
+            assert method in _unmodelled_methods(), (
+                f"{fqn}: to_sql() reported that {exc.dialect_name} declares no "
+                f"{method!r}, which is not in UNMODELLED_FORMATTERS.\n"
+                f"  Either Oracle now needs that formatter -- in which case the "
+                f"class should render and this entry should go -- or the "
+                f"feature is absent and the method belongs in that table with "
+                f"its reason."
+            )
+            return "unmodelled"
         return "unsupported"
     except NotImplementedError as exc:
         # An expression-category base that deliberately declares no
@@ -1920,6 +2071,60 @@ class TestMatrixIntegrity:
                 f"{exc_info.value}"
             )
 
+    def test_unmodelled_formatter_list_is_exact(self, oracle_dialect):
+        """Pin the unmodelled-formatter table against what the dialect lacks.
+
+        Observed rather than assumed: for each class the matrix covers, either
+        it renders or it fails, and every dispatch refusal is attributed to the
+        method it named -- including the classes pinned in
+        :data:`LEGITIMATE_NON_RENDERS`, whose dispatch failures those pins
+        record class by class. Then the table is compared with the set
+        observed, in both directions, so:
+
+        * a method in the table that Oracle now implements fails here, because
+          its classes render and are no longer attributed to it -- which is the
+          moment to delete the entry rather than leave a lie in the table;
+        * a class that starts needing a method outside the table fails the
+          per-class assertion in :func:`assert_sql_roundtrip_classified`
+          instead of being absorbed into "unsupported".
+
+        This is the regression test for the pad/trim incident. Core turned
+        ``trim``/``lpad``/``rpad``/``repeat`` into dedicated nodes; Oracle
+        spells three of them natively and has no ``REPEAT`` function, so
+        ``RepeatExpression`` is exactly the shape this test exists for: a
+        class whose formatter no base in this dialect provides, which before
+        the split was allowed through as "Oracle lacks the feature" without
+        anything asking whether the feature was even claimed.
+        """
+        observed = set()
+        for fqn in sorted(REGISTERED):
+            instance, source = make_instance(REGISTERED[fqn], oracle_dialect)
+            if instance is None:
+                continue
+            try:
+                instance.to_sql()
+            except UnsupportedFeatureError as exc:
+                method = _dispatched_formatter(exc)
+                if method is not None:
+                    observed.add(method)
+                continue
+            except Exception:
+                continue
+
+        declared = _unmodelled_methods()
+        assert not (observed - declared), (
+            "classes need formatters that are not in UNMODELLED_FORMATTERS: "
+            f"{sorted(observed - declared)}. Add each with the feature that is "
+            f"absent and why -- or mix the formatter in, in which case the "
+            f"classes render and the entry is not needed."
+        )
+        assert not (declared - observed), (
+            "UNMODELLED_FORMATTERS names formatters no class actually needs: "
+            f"{sorted(declared - observed)}. Oracle may have gained one of "
+            f"these, in which case the classes needing it now render and the "
+            f"entry should go."
+        )
+
     def test_matrix_covers_both_packages(self):
         """The matrix covers every concrete class either package defines.
 
@@ -1991,12 +2196,15 @@ class TestMatrixIntegrity:
         three encodings, 15 are expression-category bases raising
         ``NotImplementedError``, 53 raise ``UnsupportedFeatureError``, 23 are
         non-renders pinned in :data:`LEGITIMATE_NON_RENDERS`, none unbuildable.
-        The 20 group-one entries that used to be counted as non-renders now fall
-        into ``unsupported``, because ``to_sql()`` reports a missing formatter as
-        ``UnsupportedFeatureError``; they are still pinned there, and
-        :func:`test_pinned_non_render_really_does_not_render` is what keeps their
-        message fragments honest, since the ``unsupported`` branch is taken before
-        the dict is consulted.
+        The 20 group-one entries that used to be counted as non-renders now
+        fall into the ``UnsupportedFeatureError`` branches, because
+        ``to_sql()`` reports a missing formatter as that type; they are still
+        pinned there, and :func:`test_pinned_non_render_really_does_not_render`
+        is what keeps their message fragments honest. The split inside those
+        branches is the load-bearing half: the ones the *dispatch* refused are
+        counted as ``unmodelled`` and each method they named is a row in
+        :data:`UNMODELLED_FORMATTERS`, while a probe's refusal stays
+        ``unsupported`` and needs no row.
         """
         ExpressionRegistry._auto_register_builtins()
         counts: Dict[str, int] = {}
@@ -2010,6 +2218,8 @@ class TestMatrixIntegrity:
         print(f"\nexpression matrix: {len(REGISTERED)} classes  {counts}")
         for fqn in UNCONSTRUCTIBLE:
             print(f"  not constructible: {fqn}")
+        for feature, methods in sorted(UNMODELLED_FORMATTERS.items()):
+            print(f"  not modelled: {feature} ({len(methods)} formatters)")
 
 
 # ---------------------------------------------------------------------------

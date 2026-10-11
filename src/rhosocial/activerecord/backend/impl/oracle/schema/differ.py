@@ -3,9 +3,10 @@
 
 Oracle column equivalence relies on the core ``SchemaDiffer._columns_equivalent``
 implementation, which compares the structured ``parsed_data_type`` field
-(populated by ``OracleIntrospector``) via ``DataType.is_equivalent()`` and
-falls back to ``data_type`` string comparison when the parsed type is
-unavailable.
+(populated by ``OracleIntrospector``) with ``!=`` — ``==`` on a ``DataType``
+is the whole comparison, over the class plus every field named by its
+``PARAMETERS`` — and falls back to ``data_type`` string comparison when the
+parsed type is unavailable.
 
 This aligns with core #108: column definitions carry ``DataType`` instances,
 and the differ no longer overrides ``_columns_equivalent`` with a raw
