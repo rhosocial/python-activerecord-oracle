@@ -69,7 +69,7 @@ ORACLE_PROTOCOLS = [
     dialect_protocols.AdvancedGroupingSupport,
     dialect_protocols.ArraySupport,
     dialect_protocols.CTESupport,
-    dialect_protocols.DateTimeSupport,
+    dialect_protocols.TimestampSupport,
     dialect_protocols.DqlOrderSupport,
     dialect_protocols.ExplainSupport,
     dialect_protocols.FilterClauseSupport,
