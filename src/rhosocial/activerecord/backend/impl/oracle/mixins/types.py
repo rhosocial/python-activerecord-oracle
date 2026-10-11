@@ -480,8 +480,22 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
         ``NUMERIC``/``DECIMAL`` to ``NUMBER(p,s)`` and gives no unsigned row
         either, which is the same conclusion this class's docstring reaches
         about widths for the other half of the same table.
+
+        The shape guard comes first, and it lives here at the rendering end
+        rather than in the expression's constructor: an expression collects
+        ``unsigned`` without judging it, because only the formatter knows which
+        backend will have to honour it.  A non-boolean therefore reaches this
+        point instead of being rejected at construction, and is named here --
+        reading ``1`` or ``"yes"`` as a truthy ``True`` would refuse a signed
+        column over a flag that was never a boolean.
         """
-        if not data_type.unsigned:
+        unsigned = data_type.unsigned
+        if not isinstance(unsigned, bool):
+            raise TypeError(
+                f"unsigned must be a bool, got {type(unsigned).__name__}; it "
+                f"becomes a type modifier in the rendered DDL."
+            )
+        if not unsigned:
             return
         raise UnsupportedFeatureError(
             self.name,
@@ -566,8 +580,19 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
         out-of-range number.  Every one of those existing checks still fires
         unchanged for a signed declaration, which is what
         ``test_oracle_type_protocol.py`` pins.
+
+        The shape guard runs before even that, for the reason written down on
+        :meth:`_refuse_unsigned_integer`: the expression collects ``unsigned``
+        without judging it, so a non-boolean arrives here and is named rather
+        than read as a truthy ``True``.
         """
-        if not data_type.unsigned:
+        unsigned = data_type.unsigned
+        if not isinstance(unsigned, bool):
+            raise TypeError(
+                f"unsigned must be a bool, got {type(unsigned).__name__}; it "
+                f"becomes a type modifier in the rendered DDL."
+            )
+        if not unsigned:
             return
         raise UnsupportedFeatureError(
             self.name,
