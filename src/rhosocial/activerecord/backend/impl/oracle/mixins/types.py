@@ -1248,7 +1248,7 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
     def format_data_type_timetz(self, data_type: TimeTzType) -> Tuple[str, tuple]:
         # Oracle supports TIMESTAMP WITH TIME ZONE; precision optional.
         return (f"TIMESTAMP({data_type.precision}) WITH TIME ZONE"
-                if getattr(data_type, 'precision', None) is not None
+                if data_type.precision is not None
                 else "TIMESTAMP WITH TIME ZONE"), ()
 
     def supports_data_type_timetz(self) -> bool:
@@ -1256,7 +1256,7 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
 
     def format_data_type_timestamptz(self, data_type: TimestampTzType) -> Tuple[str, tuple]:
         return (f"TIMESTAMP({data_type.precision}) WITH TIME ZONE"
-                if getattr(data_type, 'precision', None) is not None
+                if data_type.precision is not None
                 else "TIMESTAMP WITH TIME ZONE"), ()
 
     def supports_data_type_timestamptz(self) -> bool:
@@ -1279,7 +1279,7 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
         https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/Data-Types.html
         """
         return (f"TIMESTAMP({data_type.precision}) WITH LOCAL TIME ZONE"
-                if getattr(data_type, 'precision', None) is not None
+                if data_type.precision is not None
                 else "TIMESTAMP WITH LOCAL TIME ZONE"), ()
 
     def supports_data_type_oracle_timestamp_ltz(self) -> bool:

@@ -199,7 +199,7 @@ class OracleMaterializedViewMixin:
                 ),
             )
         parts = ["DROP MATERIALIZED VIEW"]
-        if getattr(expr, "if_exists", False):
+        if expr.if_exists:
             if self.version < (23, 0, 0):
                 raise UnsupportedFeatureError(
                     self.name,
@@ -264,10 +264,10 @@ class OracleMaterializedViewMixin:
         """
         from rhosocial.activerecord.backend.expression.objects import MaterializedView
 
-        if not isinstance(getattr(expr, "view", None), MaterializedView):
+        if not isinstance(expr.view, MaterializedView):
             raise TypeError(
                 f"{type(expr).__name__}.view must be a MaterializedView, "
-                f"got {type(getattr(expr, 'view', None)).__name__}"
+                f"got {type(expr.view).__name__}"
             )
 
         if getattr(expr, "concurrent", False):

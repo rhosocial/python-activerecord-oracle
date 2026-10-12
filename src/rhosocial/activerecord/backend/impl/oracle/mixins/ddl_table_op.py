@@ -94,7 +94,7 @@ class OracleTableCapabilityMixin:
             if not self.supports_drop_table_restrict():
                 raise UnsupportedFeatureError(self.name, "DROP TABLE ... RESTRICT")
             parts.append("RESTRICT")
-        if getattr(expr, "purge", False) and self.supports_purge_on_drop_table():
+        if expr.purge and self.supports_purge_on_drop_table():
             parts.append("PURGE")
         return " ".join(parts), table_params
 

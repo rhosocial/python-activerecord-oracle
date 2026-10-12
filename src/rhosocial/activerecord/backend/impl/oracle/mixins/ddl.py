@@ -48,7 +48,7 @@ class OracleDDLMixin:
                 f"got {type(expr.table).__name__}"
             )
 
-        table_options = getattr(expr, "table_options", None)
+        table_options = expr.table_options
         if getattr(table_options, "comment", None):
             # Oracle annotates comments through the standalone COMMENT ON
             # statement (no inline table option); a comment on the table
@@ -99,7 +99,7 @@ class OracleDDLMixin:
         # TableOptions serves as the fallback (Oracle has no ENGINE/CHARSET).
         tablespace = expr.tablespace
         if not tablespace:
-            to = getattr(expr, "table_options", None)
+            to = expr.table_options
             if to is not None:
                 tablespace = getattr(to, "tablespace", None)
         if tablespace:
@@ -148,7 +148,7 @@ class OracleDDLMixin:
         from rhosocial.activerecord.backend.impl.oracle.expression.column import (
             OracleColumnDefinition,
         )
-        if getattr(col_def, "comment", None):
+        if col_def.comment:
             # Oracle annotates column comments through the standalone
             # COMMENT ON COLUMN statement (no inline column clause); a
             # comment on a column definition is never silently dropped.
@@ -321,12 +321,12 @@ class OracleDDLMixin:
                             )
                         parts.append(f"ON UPDATE {t_const.on_update.value}")
 
-        deferrable = getattr(t_const, "deferrable", False)
-        not_deferrable = getattr(t_const, "not_deferrable", False)
-        initially_deferred = getattr(t_const, "initially_deferred", False)
-        initially_immediate = getattr(t_const, "initially_immediate", False)
-        enforced = getattr(t_const, "enforced", False)
-        not_enforced = getattr(t_const, "not_enforced", False)
+        deferrable = t_const.deferrable
+        not_deferrable = t_const.not_deferrable
+        initially_deferred = t_const.initially_deferred
+        initially_immediate = t_const.initially_immediate
+        enforced = t_const.enforced
+        not_enforced = t_const.not_enforced
 
         if deferrable or not_deferrable or initially_deferred or initially_immediate:
             if not self.supports_deferrable_constraint():

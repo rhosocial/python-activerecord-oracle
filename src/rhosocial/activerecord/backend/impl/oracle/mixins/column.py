@@ -110,7 +110,7 @@ class OracleModifyColumnMixin:
         modifier and delegate the plain form to the base implementation
         (``ADD COLUMN <col>``, which Oracle accepts).
         """
-        if getattr(action, "if_not_exists", None):
+        if action.if_not_exists:
             raise UnsupportedFeatureError(
                 self.name,
                 "ALTER TABLE ADD COLUMN IF NOT EXISTS",

@@ -181,7 +181,7 @@ class OracleSequenceMixin:
                 ),
             )
         parts = ["CREATE SEQUENCE"]
-        if getattr(expr, "if_not_exists", False):
+        if expr.if_not_exists:
             if not self.supports_sequence_if_not_exists():
                 raise UnsupportedFeatureError(
                     self.name,
@@ -324,7 +324,7 @@ class OracleSequenceMixin:
                 ),
             )
         parts = ["DROP SEQUENCE"]
-        if getattr(expr, "if_exists", False):
+        if expr.if_exists:
             if not self.supports_sequence_if_exists():
                 raise UnsupportedFeatureError(
                     self.name,
@@ -484,7 +484,7 @@ class OracleSequenceMixin:
                     ),
                 )
             parts.append("ORDER" if expr.order else "NOORDER")
-        if expr.owned_by is not None:
+        if getattr(expr, "owned_by", None) is not None:
             if not self.supports_sequence_owned_by():
                 raise UnsupportedFeatureError(
                     self.name,

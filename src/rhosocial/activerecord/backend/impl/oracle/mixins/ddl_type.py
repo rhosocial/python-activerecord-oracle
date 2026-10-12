@@ -460,7 +460,7 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
 
     def _format_object_definition(self, expr: OracleObjectTypeDefinition) -> str:
         parts = self._format_common_prefix(expr)
-        oid = getattr(expr, "oid", None)
+        oid = expr.oid
         if oid:
             escaped = oid.replace("'", "''")
             oid_sql = f"OID '{escaped}'"
@@ -484,11 +484,11 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
             parts.append(f"UNDER {self._format_type_reference(expr.under)}")
         else:
             parts.append(f"{expr.keyword} OBJECT")
-        external_name = getattr(expr, "external_name", None)
+        external_name = expr.external_name
         if not isinstance(external_name, str):
             raise ValueError("SQLJ object types require EXTERNAL NAME")
         parts.append(self._format_external_name(external_name))
-        language = getattr(expr, "language", None)
+        language = expr.language
         if not isinstance(language, str) or re.sub(r"\s+", " ", language.strip().upper()) != "JAVA":
             raise ValueError("SQLJ object types only support LANGUAGE JAVA")
         parts.append("LANGUAGE JAVA")
