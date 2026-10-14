@@ -11,8 +11,8 @@ from rhosocial.activerecord.backend.expression import (
     GraphVertex, GraphEdge, GraphEdgeDirection, MatchClause,
     GraphColumn, ColumnsClause, GraphTableExpression,
     TablePropertiesClause, VertexTable, EdgeTable,
-    CreatePropertyGraphExpression, DropPropertyGraphExpression,
-    AlterPropertyGraphExpression,
+    CreatePropertyGraphStatement, DropPropertyGraphStatement,
+    AlterPropertyGraphStatement,
 )
 from rhosocial.activerecord.backend.expression.query_parts import WhereClause
 from rhosocial.activerecord.backend.expression.core import Column, Literal
@@ -137,20 +137,20 @@ class TestPGQDDLFormat:
         et = EdgeTable(o23c_dialect, EdgeTableObject(o23c_dialect, "knows"), ["person_a"], ["person_b"],
                        labels=["knows"],
                        properties=TablePropertiesClause(o23c_dialect, columns=["since"]))
-        expr = CreatePropertyGraphExpression(o23c_dialect, PropertyGraph(o23c_dialect, "test_graph"), [vt], [et])
+        expr = CreatePropertyGraphStatement(o23c_dialect, PropertyGraph(o23c_dialect, "test_graph"), [vt], [et])
         sql, params = expr.to_sql()
         assert "CREATE PROPERTY GRAPH" in sql.upper()
         assert "SOURCE KEY" in sql.upper()
         assert "DESTINATION KEY" in sql.upper()
 
     def test_drop_property_graph(self, o23c_dialect: OracleDialect):
-        expr = DropPropertyGraphExpression(o23c_dialect, PropertyGraph(o23c_dialect, "test_graph"), if_exists=True)
+        expr = DropPropertyGraphStatement(o23c_dialect, PropertyGraph(o23c_dialect, "test_graph"), if_exists=True)
         sql, params = expr.to_sql()
         assert "IF EXISTS" in sql.upper()
 
     def test_alter_add_vertex(self, o23c_dialect: OracleDialect):
         vt = VertexTable(o23c_dialect, NodeTable(o23c_dialect, "new_table"), labels=["NewLabel"])
-        expr = AlterPropertyGraphExpression(o23c_dialect, PropertyGraph(o23c_dialect, "g"), "ADD", "VERTEX TABLES",
+        expr = AlterPropertyGraphStatement(o23c_dialect, PropertyGraph(o23c_dialect, "g"), "ADD", "VERTEX TABLES",
                                             vertex_tables=[vt])
         sql, params = expr.to_sql()
         assert "ALTER PROPERTY GRAPH" in sql.upper()

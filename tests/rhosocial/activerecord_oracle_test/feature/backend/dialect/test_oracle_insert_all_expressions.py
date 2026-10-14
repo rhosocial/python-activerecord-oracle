@@ -15,7 +15,7 @@ import pytest
 from rhosocial.activerecord.backend.dialect import UnsupportedFeatureError
 from rhosocial.activerecord.backend.expression.core import Column, Literal
 from rhosocial.activerecord.backend.expression.objects import Table
-from rhosocial.activerecord.backend.expression.statements import QueryExpression
+from rhosocial.activerecord.backend.expression.statements import QueryStatement
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
 
@@ -25,7 +25,7 @@ def dialect():
 
 
 def build_query(dialect):
-    query = QueryExpression(
+    query = QueryStatement(
         dialect,
         select=[Column(dialect, "a"), Column(dialect, "b")],
         from_=Table(dialect, "src"),

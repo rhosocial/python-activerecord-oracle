@@ -23,11 +23,11 @@ from rhosocial.activerecord.backend.expression import (
     ColumnConstraint,
     ColumnConstraintType,
     ComparisonPredicate,
-    CreateTableExpression,
-    DropTableExpression,
-    InsertExpression,
+    CreateTableStatement,
+    DropTableStatement,
+    InsertStatement,
     Literal,
-    QueryExpression,
+    QueryStatement,
 )
 from rhosocial.activerecord.backend.errors import DatabaseError
 from rhosocial.activerecord.backend.expression.objects import Table
@@ -72,7 +72,7 @@ from rhosocial.activerecord.testsuite.utils.common import requires_protocol
 
 def _drop(backend, name: str):
     """Drop ``name`` if it exists; ignore ORA-00942."""
-    expr = DropTableExpression(backend.dialect, Table(backend.dialect, name))
+    expr = DropTableStatement(backend.dialect, Table(backend.dialect, name))
     sql, params = expr.to_sql()
     try:
         backend.execute(sql, params)
@@ -89,7 +89,7 @@ def _exec_query(backend, sql, params=()):
 
 def _partition_names(backend, table_name: str):
     d = backend.dialect
-    query = QueryExpression(
+    query = QueryStatement(
         d,
         select=[Column(d, "PARTITION_NAME")],
         from_=Table(d, "ALL_TAB_PARTITIONS"),
@@ -108,7 +108,7 @@ def _count_partitions(backend, table_name: str) -> int:
 def _count_subpartitions(backend, table_name: str) -> int:
     """Count subpartitions of ``table_name`` via ALL_TAB_SUBPARTITIONS."""
     d = backend.dialect
-    query = QueryExpression(
+    query = QueryStatement(
         d,
         select=[Column(d, "SUBPARTITION_NAME")],
         from_=Table(d, "ALL_TAB_SUBPARTITIONS"),
@@ -126,7 +126,7 @@ def _insert_row(backend, table_name: str, columns: dict):
 
     col_names = list(columns.keys())
     values = [Literal(d, v) for v in columns.values()]
-    expr = InsertExpression(
+    expr = InsertStatement(
         d,
         into=Table(d, table_name),
         source=ValuesSource(d, [values]),
@@ -161,7 +161,7 @@ def test_interval_partition_auto_creates_partition_real(oracle_backend_single):
                 ),
             ],
         )
-        expr = CreateTableExpression(
+        expr = CreateTableStatement(
             dialect=d,
             table=Table(d, table_name),
             columns=[
@@ -221,7 +221,7 @@ def test_reference_partitioning_inherits_parent_partitions_real(oracle_backend_s
                 OraclePartitionDefinition(name="p2", less_than=[OraclePartitionMaxValue(d)]),
             ],
         )
-        parent_expr = CreateTableExpression(
+        parent_expr = CreateTableStatement(
             dialect=d,
             table=Table(d, parent_name),
             columns=[
@@ -251,7 +251,7 @@ def test_reference_partitioning_inherits_parent_partitions_real(oracle_backend_s
             foreign_key_columns=["ID"],
         )
         child_partition = OracleReferencePartitionClause(d, "fk_child_parent")
-        child_expr = CreateTableExpression(
+        child_expr = CreateTableStatement(
             dialect=d,
             table=Table(d, child_name),
             columns=[
@@ -316,7 +316,7 @@ def test_composite_range_hash_partitioning_real(oracle_backend_single):
                 ),
             ],
         )
-        expr = CreateTableExpression(
+        expr = CreateTableStatement(
             dialect=d,
             table=Table(d, table_name),
             columns=[
@@ -362,7 +362,7 @@ def test_add_and_drop_partition_real(oracle_backend_single):
                 OraclePartitionDefinition(name="p1", less_than=[OraclePartitionValue(d, 100)]),
             ],
         )
-        expr = CreateTableExpression(
+        expr = CreateTableStatement(
             dialect=d,
             table=Table(d, table_name),
             columns=[
@@ -412,7 +412,7 @@ def test_split_partition_real(oracle_backend_single):
                 OraclePartitionDefinition(name="p_max", less_than=[OraclePartitionMaxValue(d)]),
             ],
         )
-        expr = CreateTableExpression(
+        expr = CreateTableStatement(
             dialect=d,
             table=Table(d, table_name),
             columns=[
@@ -459,7 +459,7 @@ def test_merge_partitions_real(oracle_backend_single):
                 OraclePartitionDefinition(name="p3", less_than=[OraclePartitionMaxValue(d)]),
             ],
         )
-        expr = CreateTableExpression(
+        expr = CreateTableStatement(
             dialect=d,
             table=Table(d, table_name),
             columns=[
@@ -501,7 +501,7 @@ def test_truncate_partition_real(oracle_backend_single):
                 OraclePartitionDefinition(name="p2", less_than=[OraclePartitionMaxValue(d)]),
             ],
         )
-        expr = CreateTableExpression(
+        expr = CreateTableStatement(
             dialect=d,
             table=Table(d, table_name),
             columns=[
@@ -519,7 +519,7 @@ def test_truncate_partition_real(oracle_backend_single):
         _insert_row(backend, table_name, {"ID": 150})
 
         # Count total rows.
-        count_query = QueryExpression(
+        count_query = QueryStatement(
             d, select=[Column(d, "ID")], from_=Table(d, table_name),
         )
         sql, params = count_query.to_sql()
@@ -555,7 +555,7 @@ def test_move_partition_real(oracle_backend_single):
                 OraclePartitionDefinition(name="p2", less_than=[OraclePartitionMaxValue(d)]),
             ],
         )
-        expr = CreateTableExpression(
+        expr = CreateTableStatement(
             dialect=d,
             table=Table(d, table_name),
             columns=[
@@ -597,7 +597,7 @@ def test_exchange_partition_real(oracle_backend_single):
                 OraclePartitionDefinition(name="p2", less_than=[OraclePartitionMaxValue(d)]),
             ],
         )
-        expr = CreateTableExpression(
+        expr = CreateTableStatement(
             dialect=d,
             table=Table(d, table_name),
             columns=[
@@ -611,7 +611,7 @@ def test_exchange_partition_real(oracle_backend_single):
         backend.execute(sql, params)
 
         # Build a non-partitioned staging table with the same shape.
-        staging_expr = CreateTableExpression(
+        staging_expr = CreateTableStatement(
             dialect=d,
             table=Table(d, staging_name),
             columns=[

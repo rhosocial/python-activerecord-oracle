@@ -11,9 +11,9 @@ from rhosocial.activerecord.backend.dialect.mixins.user_defined_type import User
 from rhosocial.activerecord.backend.expression.bases import BaseExpression
 from rhosocial.activerecord.backend.expression.objects import Type
 from rhosocial.activerecord.backend.expression.statements.ddl_type import (
-    AlterTypeExpression,
-    CreateTypeExpression,
-    DropTypeExpression,
+    AlterTypeStatement,
+    CreateTypeStatement,
+    DropTypeStatement,
     TypeAlterAction,
     TypeDefinition,
 )
@@ -561,7 +561,7 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
 
     def format_create_type_statement(
         self,
-        expr: CreateTypeExpression,
+        expr: CreateTypeStatement,
     ) -> Tuple[str, tuple]:
         if not self.supports_type_objects() or not self.supports_create_type():
             raise UnsupportedFeatureError(self.name, "CREATE TYPE")
@@ -764,7 +764,7 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
             f"ALTER TYPE action {getattr(expr, 'action_kind', type(expr).__name__)}",
         )
 
-    def format_alter_type_statement(self, expr: AlterTypeExpression) -> Tuple[str, tuple]:
+    def format_alter_type_statement(self, expr: AlterTypeStatement) -> Tuple[str, tuple]:
         if not self.supports_type_objects() or not self.supports_alter_type():
             raise UnsupportedFeatureError(self.name, "ALTER TYPE")
         if expr.if_exists and not self.supports_alter_type_if_exists():
@@ -794,7 +794,7 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
         parts.append(action_sql)
         return " ".join(parts), tuple(action_params)
 
-    def format_drop_type_statement(self, expr: DropTypeExpression) -> Tuple[str, tuple]:
+    def format_drop_type_statement(self, expr: DropTypeStatement) -> Tuple[str, tuple]:
         if not self.supports_type_objects() or not self.supports_drop_type():
             raise UnsupportedFeatureError(self.name, "DROP TYPE")
         if expr.if_exists and not self.supports_drop_type_if_exists():

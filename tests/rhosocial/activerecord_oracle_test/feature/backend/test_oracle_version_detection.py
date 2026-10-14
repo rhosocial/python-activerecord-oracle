@@ -920,7 +920,7 @@ class TestBlastRadiusIsPinned:
         from rhosocial.activerecord.backend.expression.sources import (
             NamedRelationRef,
         )
-        from rhosocial.activerecord.backend.expression import QueryExpression
+        from rhosocial.activerecord.backend.expression import QueryStatement
         from rhosocial.activerecord.backend.expression.types import BooleanType
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
         from rhosocial.activerecord.backend.impl.oracle.expression import (
@@ -942,7 +942,7 @@ class TestBlastRadiusIsPinned:
                     return OracleDropSequenceExpression(
                         d, Sequence(d, "seq"), if_exists=True).to_sql()[0]
                 if label.startswith("CREATE MATERIALIZED VIEW"):
-                    query = QueryExpression(
+                    query = QueryStatement(
                         d, select=[Column(d, "id")],
                         from_=NamedRelationRef(d, Table(d, "t")),
                     )
@@ -1090,9 +1090,9 @@ class TestTypeIfExistsRefusalNamesTheAlternative:
     @pytest.mark.parametrize("name", TYPE_IF_EXISTS_GATES)
     def test_the_message_names_the_feature_and_suggests_a_statement(self, name):
         from rhosocial.activerecord.backend.expression.statements.ddl_type import (
-            AlterTypeExpression,
-            CreateTypeExpression,
-            DropTypeExpression,
+            AlterTypeStatement,
+            CreateTypeStatement,
+            DropTypeStatement,
         )
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
         from rhosocial.activerecord.backend.impl.oracle.expression.ddl.type import (
@@ -1105,15 +1105,15 @@ class TestTypeIfExistsRefusalNamesTheAlternative:
 
         dialect = OracleDialect((21, 0, 0), version_full=MEASURED_21C_FULL, ru_version=3)
         builders = {
-            "supports_create_type_if_not_exists": lambda: CreateTypeExpression(
+            "supports_create_type_if_not_exists": lambda: CreateTypeStatement(
                 dialect, Type(dialect, "forward_t"),
                 OracleIncompleteTypeDefinition(dialect), if_not_exists=True,
             ).to_sql(),
-            "supports_alter_type_if_exists": lambda: AlterTypeExpression(
+            "supports_alter_type_if_exists": lambda: AlterTypeStatement(
                 dialect, Type(dialect, "forward_t"),
                 [OracleAlterTypeCompileAction(dialect)], if_exists=True,
             ).to_sql(),
-            "supports_drop_type_if_exists": lambda: DropTypeExpression(
+            "supports_drop_type_if_exists": lambda: DropTypeStatement(
                 dialect, Type(dialect, "forward_t"), if_exists=True,
             ).to_sql(),
             "supports_create_type_body_if_not_exists": lambda: OracleCreateTypeBodyExpression(

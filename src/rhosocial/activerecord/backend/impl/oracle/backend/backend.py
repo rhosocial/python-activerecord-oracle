@@ -1092,7 +1092,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         This method uses the Expression-Dialect pattern to generate proper Oracle SQL.
         """
         from rhosocial.activerecord.backend.base.operations import _is_sql_expression
-        from rhosocial.activerecord.backend.expression import InsertExpression, Literal
+        from rhosocial.activerecord.backend.expression import InsertStatement, Literal
         from rhosocial.activerecord.backend.expression.objects import Table
         from rhosocial.activerecord.backend.expression.statements import ValuesSource, ReturningClause
         from rhosocial.activerecord.backend.expression import Column as ExprColumn
@@ -1119,10 +1119,10 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
             returning_expressions = [ExprColumn(self.dialect, col) for col in options.returning_columns]
             returning_clause = ReturningClause(self.dialect, returning_expressions)
 
-        # Create InsertExpression and generate SQL. The target is the table
+        # Create InsertStatement and generate SQL. The target is the table
         # object, so its owner -- when there is one -- is quoted by the same
         # rules as every other Oracle name rather than being spliced in here.
-        insert_expr = InsertExpression(
+        insert_expr = InsertStatement(
             dialect=self.dialect,
             into=Table(
                 self.dialect, options.table, schema_name=options.schema_name
@@ -1181,7 +1181,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         This method uses the Expression-Dialect pattern to generate proper Oracle SQL.
         """
         from rhosocial.activerecord.backend.base.operations import _is_sql_expression
-        from rhosocial.activerecord.backend.expression import UpdateExpression, Literal
+        from rhosocial.activerecord.backend.expression import UpdateStatement, Literal
         from rhosocial.activerecord.backend.expression.objects import Table
         from rhosocial.activerecord.backend.expression.statements import ReturningClause
         from rhosocial.activerecord.backend.expression import Column as ExprColumn
@@ -1201,10 +1201,10 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
             returning_expressions = [ExprColumn(self.dialect, col) for col in options.returning_columns]
             returning_clause = ReturningClause(self.dialect, returning_expressions)
 
-        # Create UpdateExpression and generate SQL. The target is the table
+        # Create UpdateStatement and generate SQL. The target is the table
         # object, so its owner -- when there is one -- is quoted by the same
         # rules as every other Oracle name rather than being spliced in here.
-        update_expr = UpdateExpression(
+        update_expr = UpdateStatement(
             dialect=self.dialect,
             table=Table(
                 self.dialect, options.table, schema_name=options.schema_name
@@ -1250,7 +1250,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         Oracle requires RETURNING ... INTO syntax with output bind variables.
         This method uses the Expression-Dialect pattern to generate proper Oracle SQL.
         """
-        from rhosocial.activerecord.backend.expression import DeleteExpression
+        from rhosocial.activerecord.backend.expression import DeleteStatement
         from rhosocial.activerecord.backend.expression.objects import Table
         from rhosocial.activerecord.backend.expression.statements import ReturningClause
         from rhosocial.activerecord.backend.expression import Column as ExprColumn
@@ -1262,10 +1262,10 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
             returning_expressions = [ExprColumn(self.dialect, col) for col in options.returning_columns]
             returning_clause = ReturningClause(self.dialect, returning_expressions)
 
-        # Create DeleteExpression and generate SQL. The target is the table
+        # Create DeleteStatement and generate SQL. The target is the table
         # object, so its owner -- when there is one -- is quoted by the same
         # rules as every other Oracle name rather than being spliced in here.
-        delete_expr = DeleteExpression(
+        delete_expr = DeleteStatement(
             dialect=self.dialect,
             tables=Table(
                 self.dialect, options.table, schema_name=options.schema_name

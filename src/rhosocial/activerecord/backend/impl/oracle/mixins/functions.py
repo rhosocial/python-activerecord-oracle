@@ -7,7 +7,7 @@ for WITHIN GROUP, JSON_TABLE COLUMNS, and other non-standard clauses.
 
 from typing import Any, List, Optional, Tuple, TYPE_CHECKING
 
-from rhosocial.activerecord.backend.expression.core import CastExpression
+from rhosocial.activerecord.backend.expression.core import CastFunction
 from rhosocial.activerecord.backend.expression.operators import RawSQLExpression
 
 if TYPE_CHECKING:
@@ -152,7 +152,7 @@ class OracleFunctionFormatMixin:
         if getattr(expr, "cast_types", None):
             for target_type in expr.cast_types:
                 raw_expr = RawSQLExpression(self, func_sql, params=tuple(all_params))
-                cast_expr = CastExpression(self, raw_expr, target_type)
+                cast_expr = CastFunction(self, raw_expr, target_type)
                 func_sql, pt = self.format_cast_expression(cast_expr)
                 all_params = list(pt)
 

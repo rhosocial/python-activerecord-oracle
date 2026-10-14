@@ -13,7 +13,7 @@ from rhosocial.activerecord.backend.expression.bases import BaseExpression
 from rhosocial.activerecord.backend.expression.objects import Type
 from rhosocial.activerecord.backend.expression.serialization import ExpressionRegistry
 from rhosocial.activerecord.backend.expression.statements.ddl_type import (
-    DropTypeExpression,
+    DropTypeStatement,
     TypeAlterAction,
     TypeDefinition,
 )
@@ -1368,7 +1368,7 @@ class OracleCreateTypeBodyExpression(BaseExpression):
         return "format_create_type_body_statement"
 
 
-class OracleDropTypeExpression(DropTypeExpression):
+class OracleDropTypeExpression(DropTypeStatement):
     """Oracle DROP TYPE expression with FORCE or VALIDATE.
 
     ``schema`` is a deprecated alias of ``schema_name``; both are stored

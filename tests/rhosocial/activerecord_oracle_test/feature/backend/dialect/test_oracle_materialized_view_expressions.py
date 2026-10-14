@@ -15,13 +15,13 @@ import pytest
 
 from rhosocial.activerecord.backend.dialect import UnsupportedFeatureError
 from rhosocial.activerecord.backend.expression import (
-    CreateMaterializedViewExpression,
-    QueryExpression,
+    CreateMaterializedViewStatement,
+    QueryStatement,
 )
 from rhosocial.activerecord.backend.expression.core import Column
 from rhosocial.activerecord.backend.expression.objects import MaterializedView, Table
 from rhosocial.activerecord.backend.expression.statements.ddl_view import (
-    RefreshMaterializedViewExpression,
+    RefreshMaterializedViewStatement,
 )
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.expression import (
@@ -42,7 +42,7 @@ def dialect():
 
 
 def build_query(dialect):
-    return QueryExpression(
+    return QueryStatement(
         dialect,
         select=[Column(dialect, "id"), Column(dialect, "name")],
         from_=Table(dialect, "t"),
@@ -118,7 +118,7 @@ class TestOracleCreateMaterializedViewExpression:
         assert params == ()
 
     def test_core_create_materialized_view_expression(self, dialect):
-        expr = CreateMaterializedViewExpression(
+        expr = CreateMaterializedViewStatement(
             dialect, view=MaterializedView(dialect, "mv"), query=build_query(dialect), no_data=True
         )
         sql, params = expr.to_sql()
@@ -370,8 +370,8 @@ class TestOracleRefreshMaterializedViewExpression:
         assert sql.startswith("BEGIN DBMS_MVIEW.REFRESH(")
 
     def test_generic_expression_routes_here(self, dialect):
-        """The generic RefreshMaterializedViewExpression works on Oracle."""
-        expr = RefreshMaterializedViewExpression(
+        """The generic RefreshMaterializedViewStatement works on Oracle."""
+        expr = RefreshMaterializedViewStatement(
             dialect=dialect, view=MaterializedView(dialect, "mv")
         )
         sql, params = expr.to_sql()
@@ -381,19 +381,19 @@ class TestOracleRefreshMaterializedViewExpression:
     def test_generic_with_data_options_are_refused(self, dialect):
         """Oracle's DBMS_MVIEW.REFRESH always repopulates; neither spelling exists."""
         for kwargs in ({"with_data": True}, {"no_data": True}):
-            expr = RefreshMaterializedViewExpression(
+            expr = RefreshMaterializedViewStatement(
                 dialect=dialect, view=MaterializedView(dialect, "mv"), **kwargs
             )
             with pytest.raises(UnsupportedFeatureError):
                 expr.to_sql()
         # Neither parameter set is the only state that renders.
-        expr = RefreshMaterializedViewExpression(
+        expr = RefreshMaterializedViewStatement(
             dialect=dialect, view=MaterializedView(dialect, "mv")
         )
         assert "WITH NO DATA" not in expr.to_sql()[0]
 
     def test_generic_concurrent_is_rejected(self, dialect):
-        expr = RefreshMaterializedViewExpression(
+        expr = RefreshMaterializedViewStatement(
             dialect=dialect, view=MaterializedView(dialect, "mv"), concurrent=True
         )
         with pytest.raises(UnsupportedFeatureError) as exc:

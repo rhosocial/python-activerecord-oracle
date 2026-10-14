@@ -5,8 +5,8 @@ from typing import Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from rhosocial.activerecord.backend.expression.statements import (
-        CreateViewExpression,
-        DropViewExpression,
+        CreateViewStatement,
+        DropViewStatement,
     )
 
 
@@ -26,7 +26,7 @@ class OracleViewMixin:
         return True
 
     def format_create_view_statement(
-        self, expr: "CreateViewExpression"
+        self, expr: "CreateViewStatement"
     ) -> Tuple[str, tuple]:
         """Format ``CREATE [OR REPLACE] VIEW`` for Oracle.
 
@@ -40,7 +40,7 @@ class OracleViewMixin:
 
         if not isinstance(expr.view, View):
             raise TypeError(
-                f"CreateViewExpression.view must be a View, "
+                f"CreateViewStatement.view must be a View, "
                 f"got {type(expr.view).__name__}"
             )
 
@@ -69,7 +69,7 @@ class OracleViewMixin:
         return " ".join(parts), query_params
 
     def format_drop_view_statement(
-        self, expr: "DropViewExpression"
+        self, expr: "DropViewStatement"
     ) -> Tuple[str, tuple]:
         """Format ``DROP VIEW`` for Oracle.
 
@@ -87,7 +87,7 @@ class OracleViewMixin:
 
         if not isinstance(expr.view, View):
             raise TypeError(
-                f"DropViewExpression.view must be a View, "
+                f"DropViewStatement.view must be a View, "
                 f"got {type(expr.view).__name__}"
             )
 

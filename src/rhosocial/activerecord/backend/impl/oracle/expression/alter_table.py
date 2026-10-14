@@ -15,7 +15,7 @@ supports a set of table-level clauses that are expressed through the same
 
 Each action overrides ``to_sql()`` to delegate to the corresponding dialect
 ``format_*`` formatter implemented by ``OracleModifyColumnMixin``, keeping the
-core ``AlterTableExpression`` action-dispatch mechanism unchanged.
+core ``AlterTableStatement`` action-dispatch mechanism unchanged.
 """
 from __future__ import annotations
 

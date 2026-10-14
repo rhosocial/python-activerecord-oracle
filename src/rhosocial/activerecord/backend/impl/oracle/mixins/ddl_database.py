@@ -8,9 +8,9 @@ from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeature
 
 if TYPE_CHECKING:
     from rhosocial.activerecord.backend.expression.statements.ddl_database import (
-        AlterDatabaseExpression,
-        CreateDatabaseExpression,
-        DropDatabaseExpression,
+        AlterDatabaseStatement,
+        CreateDatabaseStatement,
+        DropDatabaseStatement,
     )
 
 
@@ -45,7 +45,7 @@ class OracleDatabaseMixin:
         return True
 
     def format_create_database_statement(
-        self, expr: CreateDatabaseExpression
+        self, expr: CreateDatabaseStatement
     ) -> Tuple[str, tuple]:
         """Render ``CREATE DATABASE`` for Oracle.
 
@@ -68,7 +68,7 @@ class OracleDatabaseMixin:
 
         if not isinstance(expr.database, Database):
             raise TypeError(
-                f"CreateDatabaseExpression.database must be a Database, "
+                f"CreateDatabaseStatement.database must be a Database, "
                 f"got {type(expr.database).__name__}"
             )
         parts = ["CREATE DATABASE"]
@@ -78,13 +78,13 @@ class OracleDatabaseMixin:
         return " ".join(parts), ()
 
     def format_drop_database_statement(
-        self, expr: DropDatabaseExpression
+        self, expr: DropDatabaseStatement
     ) -> Tuple[str, tuple]:
         parts = ["DROP DATABASE"]
         return " ".join(parts), ()
 
     def format_alter_database_statement(
-        self, expr: AlterDatabaseExpression
+        self, expr: AlterDatabaseStatement
     ) -> Tuple[str, tuple]:
         raise UnsupportedFeatureError(
             self.name, "ALTER DATABASE",

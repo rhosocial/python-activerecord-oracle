@@ -37,24 +37,24 @@ from rhosocial.activerecord.backend.expression.objects import (
     View,
 )
 from rhosocial.activerecord.backend.expression.query_sources import (
-    SetOperationExpression,
+    SetOperationStatement,
 )
 from rhosocial.activerecord.backend.expression.statements import (
-    AlterSequenceExpression,
-    CreateMaterializedViewExpression,
-    CreateSequenceExpression,
-    CreateTableAsExpression,
-    CreateTypeExpression,
-    DropMaterializedViewExpression,
-    DropTableExpression,
-    DropViewExpression,
+    AlterSequenceStatement,
+    CreateMaterializedViewStatement,
+    CreateSequenceStatement,
+    CreateTableAsStatement,
+    CreateTypeStatement,
+    DropMaterializedViewStatement,
+    DropTableStatement,
+    DropViewStatement,
     ForeignKeyConstraint,
     IdentityClause,
-    QueryExpression,
-    RefreshMaterializedViewExpression,
+    QueryStatement,
+    RefreshMaterializedViewStatement,
     TableConstraint,
     TableConstraintType,
-    TruncateExpression,
+    TruncateStatement,
 )
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.expression.alter_table import (
@@ -80,8 +80,8 @@ def _dialect() -> OracleDialect:
     return OracleDialect(version=(19, 0, 0))
 
 
-def _query(dialect: OracleDialect) -> QueryExpression:
-    return QueryExpression(dialect, select=[Literal(dialect, 1)])
+def _query(dialect: OracleDialect) -> QueryStatement:
+    return QueryStatement(dialect, select=[Literal(dialect, 1)])
 
 
 @dataclass(frozen=True)
@@ -136,48 +136,48 @@ def _assert_side(site_name: str, side: str, outcome: Tuple, render: Optional[str
 SITES = (
     # ------------------------------------------------ core sequence via oracle
     PairSite(
-        "CreateSequenceExpression cycle/no_cycle",
-        lambda d, kw: CreateSequenceExpression(d, Sequence(d, "s"), **kw),
+        "CreateSequenceStatement cycle/no_cycle",
+        lambda d, kw: CreateSequenceStatement(d, Sequence(d, "s"), **kw),
         {"none": {}, "a": {"cycle": True}, "b": {"no_cycle": True}, "both": {"cycle": True, "no_cycle": True}},
         a_render=r"(?<!NO)CYCLE",
         b_render=r"NOCYCLE",
         none_forbidden=(r"(?<!NO)CYCLE", r"NOCYCLE"),
     ),
     PairSite(
-        "CreateSequenceExpression order/no_order",
-        lambda d, kw: CreateSequenceExpression(d, Sequence(d, "s"), **kw),
+        "CreateSequenceStatement order/no_order",
+        lambda d, kw: CreateSequenceStatement(d, Sequence(d, "s"), **kw),
         {"none": {}, "a": {"order": True}, "b": {"no_order": True}, "both": {"order": True, "no_order": True}},
         a_render=r"(?<!NO)ORDER",
         b_render=r"NOORDER",
         none_forbidden=(r"(?<!NO)ORDER", r"NOORDER"),
     ),
     PairSite(
-        "CreateSequenceExpression cache/no_cache",
-        lambda d, kw: CreateSequenceExpression(d, Sequence(d, "s"), **kw),
+        "CreateSequenceStatement cache/no_cache",
+        lambda d, kw: CreateSequenceStatement(d, Sequence(d, "s"), **kw),
         {"none": {}, "a": {"cache": 10}, "b": {"no_cache": True}, "both": {"cache": 10, "no_cache": True}},
         a_render=r"(?<!NO)CACHE 10",
         b_render=r"NOCACHE",
         none_forbidden=(r"(?<!NO)CACHE", r"NOCACHE"),
     ),
     PairSite(
-        "AlterSequenceExpression cycle/no_cycle",
-        lambda d, kw: AlterSequenceExpression(d, Sequence(d, "s"), **kw),
+        "AlterSequenceStatement cycle/no_cycle",
+        lambda d, kw: AlterSequenceStatement(d, Sequence(d, "s"), **kw),
         {"none": {}, "a": {"cycle": True}, "b": {"no_cycle": True}, "both": {"cycle": True, "no_cycle": True}},
         a_render=r"(?<!NO)CYCLE",
         b_render=r"NOCYCLE",
         none_forbidden=(r"(?<!NO)CYCLE", r"NOCYCLE"),
     ),
     PairSite(
-        "AlterSequenceExpression order/no_order",
-        lambda d, kw: AlterSequenceExpression(d, Sequence(d, "s"), **kw),
+        "AlterSequenceStatement order/no_order",
+        lambda d, kw: AlterSequenceStatement(d, Sequence(d, "s"), **kw),
         {"none": {}, "a": {"order": True}, "b": {"no_order": True}, "both": {"order": True, "no_order": True}},
         a_render=r"(?<!NO)ORDER",
         b_render=r"NOORDER",
         none_forbidden=(r"(?<!NO)ORDER", r"NOORDER"),
     ),
     PairSite(
-        "AlterSequenceExpression cache/no_cache",
-        lambda d, kw: AlterSequenceExpression(d, Sequence(d, "s"), **kw),
+        "AlterSequenceStatement cache/no_cache",
+        lambda d, kw: AlterSequenceStatement(d, Sequence(d, "s"), **kw),
         {"none": {}, "a": {"cache": 10}, "b": {"no_cache": True}, "both": {"cache": 10, "no_cache": True}},
         a_render=r"(?<!NO)CACHE 10",
         b_render=r"NOCACHE",
@@ -210,16 +210,16 @@ SITES = (
     ),
     # --------------------------------------------------------- core truncate
     PairSite(
-        "TruncateExpression cascade/restrict",
-        lambda d, kw: TruncateExpression(d, Table(d, "t"), **kw),
+        "TruncateStatement cascade/restrict",
+        lambda d, kw: TruncateStatement(d, Table(d, "t"), **kw),
         {"none": {}, "a": {"cascade": True}, "b": {"restrict": True}, "both": {"cascade": True, "restrict": True}},
         a_refuse="TRUNCATE CASCADE",
         b_refuse="TRUNCATE RESTRICT",
         none_forbidden=(r"CASCADE", r"RESTRICT"),
     ),
     PairSite(
-        "TruncateExpression restart_identity/continue_identity",
-        lambda d, kw: TruncateExpression(d, Table(d, "t"), **kw),
+        "TruncateStatement restart_identity/continue_identity",
+        lambda d, kw: TruncateStatement(d, Table(d, "t"), **kw),
         {
             "none": {},
             "a": {"restart_identity": True},
@@ -232,24 +232,24 @@ SITES = (
     ),
     # ------------------------------------------------------------ core drops
     PairSite(
-        "DropViewExpression cascade/restrict",
-        lambda d, kw: DropViewExpression(d, View(d, "v"), **kw),
+        "DropViewStatement cascade/restrict",
+        lambda d, kw: DropViewStatement(d, View(d, "v"), **kw),
         {"none": {}, "a": {"cascade": True}, "b": {"restrict": True}, "both": {"cascade": True, "restrict": True}},
         a_refuse="DROP VIEW CASCADE",
         b_refuse="DROP VIEW RESTRICT",
         none_forbidden=(r"CASCADE", r"RESTRICT"),
     ),
     PairSite(
-        "DropMaterializedViewExpression cascade/restrict",
-        lambda d, kw: DropMaterializedViewExpression(d, MaterializedView(d, "mv"), **kw),
+        "DropMaterializedViewStatement cascade/restrict",
+        lambda d, kw: DropMaterializedViewStatement(d, MaterializedView(d, "mv"), **kw),
         {"none": {}, "a": {"cascade": True}, "b": {"restrict": True}, "both": {"cascade": True, "restrict": True}},
         a_refuse="DROP MATERIALIZED VIEW CASCADE",
         b_refuse="DROP MATERIALIZED VIEW RESTRICT",
         none_forbidden=(r"CASCADE", r"RESTRICT"),
     ),
     PairSite(
-        "DropTableExpression cascade/restrict",
-        lambda d, kw: DropTableExpression(d, Table(d, "t"), **kw),
+        "DropTableStatement cascade/restrict",
+        lambda d, kw: DropTableStatement(d, Table(d, "t"), **kw),
         {"none": {}, "a": {"cascade": True}, "b": {"restrict": True}, "both": {"cascade": True, "restrict": True}},
         a_render=r"CASCADE CONSTRAINTS",
         b_refuse="DROP TABLE ... RESTRICT",
@@ -257,16 +257,16 @@ SITES = (
     ),
     # --------------------------------------------------- materialized views
     PairSite(
-        "CreateMaterializedViewExpression with_data/no_data",
-        lambda d, kw: CreateMaterializedViewExpression(d, MaterializedView(d, "mv"), _query(d), **kw),
+        "CreateMaterializedViewStatement with_data/no_data",
+        lambda d, kw: CreateMaterializedViewStatement(d, MaterializedView(d, "mv"), _query(d), **kw),
         {"none": {}, "a": {"with_data": True}, "b": {"no_data": True}, "both": {"with_data": True, "no_data": True}},
         a_render=r"BUILD IMMEDIATE",
         b_render=r"BUILD DEFERRED",
         none_forbidden=(r"BUILD IMMEDIATE", r"BUILD DEFERRED"),
     ),
     PairSite(
-        "RefreshMaterializedViewExpression with_data/no_data",
-        lambda d, kw: RefreshMaterializedViewExpression(d, MaterializedView(d, "mv"), **kw),
+        "RefreshMaterializedViewStatement with_data/no_data",
+        lambda d, kw: RefreshMaterializedViewStatement(d, MaterializedView(d, "mv"), **kw),
         {"none": {}, "a": {"with_data": True}, "b": {"no_data": True}, "both": {"with_data": True, "no_data": True}},
         a_refuse="REFRESH MATERIALIZED VIEW WITH DATA",
         b_refuse="REFRESH MATERIALIZED VIEW WITH NO DATA",
@@ -323,8 +323,8 @@ SITES = (
     ),
     # ------------------------------------------------------- core set operation
     PairSite(
-        "SetOperationExpression all_/distinct",
-        lambda d, kw: SetOperationExpression(d, left=_query(d), right=_query(d), operation="UNION", **kw),
+        "SetOperationStatement all_/distinct",
+        lambda d, kw: SetOperationStatement(d, left=_query(d), right=_query(d), operation="UNION", **kw),
         {"none": {}, "a": {"all_": True}, "b": {"distinct": True}, "both": {"all_": True, "distinct": True}},
         a_render=r"UNION ALL",
         b_render=r"UNION DISTINCT",
@@ -381,7 +381,7 @@ SITES = (
     ),
     PairSite(
         "OracleObjectTypeDefinition editionable/noneditionable",
-        lambda d, kw: CreateTypeExpression(
+        lambda d, kw: CreateTypeStatement(
             d, Type(d, "t"), OracleObjectTypeDefinition(d, attributes=["a NUMBER"], **kw)
         ),
         {

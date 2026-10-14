@@ -67,7 +67,7 @@ class OracleCreateMaterializedViewExpression(BaseExpression):
         view: the materialized view to create. The object carries its owner,
             so the name is rendered by the dialect rather than concatenated
             here.
-        query: a ``BaseExpression`` (typically a ``QueryExpression``) whose
+        query: a ``BaseExpression`` (typically a ``QueryStatement``) whose
             SQL becomes the ``AS subquery`` clause.
         if_not_exists: if True, emit ``IF NOT EXISTS`` (Oracle 23ai+).
         column_aliases: optional column alias list rendered in parentheses

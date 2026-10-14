@@ -78,7 +78,7 @@ class OracleCreateSequenceExpression(BaseExpression):
 
     Oracle renders sequences with the ``START WITH``/``INCREMENT BY`` option
     set.  Each spellable alternative has its own parameter, matching core's
-    ``CreateSequenceExpression``: ``cycle`` / ``no_cycle``, ``cache`` /
+    ``CreateSequenceStatement``: ``cycle`` / ``no_cycle``, ``cache`` /
     ``no_cache``, ``order`` / ``no_order``.  Setting both of a pair raises
     ``ValueError``; ``cache`` is a positive count and ``no_cache=True`` spells
     ``NOCACHE`` (``cache=0`` is refused, not a spelling).

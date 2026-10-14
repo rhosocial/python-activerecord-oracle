@@ -36,7 +36,7 @@ class OracleTruncateMixin:
 
         if not isinstance(expr.table, Table):
             raise TypeError(
-                f"TruncateExpression.table must be a Table, "
+                f"TruncateStatement.table must be a Table, "
                 f"got {type(expr.table).__name__}"
             )
 

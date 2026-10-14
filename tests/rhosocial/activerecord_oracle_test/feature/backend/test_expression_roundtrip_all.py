@@ -70,7 +70,7 @@ Why the dispatch's refusal is no longer allowed on its type alone
 The two ``UnsupportedFeatureError`` outcomes above were one branch until core
 turned ``trim``/``lpad``/``rpad``/``repeat`` into dedicated nodes. Oracle
 spells ``lpad``/``rpad``/``trim`` natively and has no ``REPEAT`` function, so
-``RepeatExpression`` reaches a dispatch that finds no
+``RepeatFunction`` reaches a dispatch that finds no
 ``format_repeat_expression`` -- and before this split, that refusal read as
 "Oracle lacks the feature" and passed, indistinguishable from a probe declining
 something Oracle genuinely does not have. The exception itself records who is
@@ -140,7 +140,7 @@ from rhosocial.activerecord.backend.expression.statements.ddl_table import (
     TableConstraint,
     TableConstraintType,
 )
-from rhosocial.activerecord.backend.expression.statements.dql import QueryExpression
+from rhosocial.activerecord.backend.expression.statements.dql import QueryStatement
 from rhosocial.activerecord.backend.expression.sources import NamedRelationRef
 from rhosocial.activerecord.backend.expression.types import IntegerType
 from rhosocial.activerecord.testsuite.utils.expression import (
@@ -231,7 +231,7 @@ def _column_predicate(dialect):
 
 def _one_column_query(dialect):
     """A single-column ``SELECT`` over a table."""
-    return QueryExpression(
+    return QueryStatement(
         dialect, select=[Column(dialect, "id")], from_=_table_obj(dialect)
     )
 
@@ -390,7 +390,7 @@ def _register_core_specials():
     # list of definitions and the guess supplies an empty one, which the formatter
     # refuses. CASE likewise needs at least one WHEN/THEN pair.
     from rhosocial.activerecord.backend.expression.advanced_functions import (
-        CaseExpression,
+        CaseFunction,
         WindowClause,
         WindowDefinition,
         WindowSpecification,
@@ -416,8 +416,8 @@ def _register_core_specials():
         ),
     )
     register_special_constructor(
-        "advanced_functions.CaseExpression",
-        lambda dialect: CaseExpression(
+        "advanced_functions.CaseFunction",
+        lambda dialect: CaseFunction(
             dialect,
             cases=[(_column_predicate(dialect), Literal(dialect, 1))],
             else_result=Literal(dialect, 0),
@@ -445,14 +445,14 @@ def _register_core_specials():
     # `.value` off each; the guess supplies strings, so it fails on the first
     # attribute access rather than on a type check.
     from rhosocial.activerecord.backend.expression.statements.ddl_trigger import (
-        CreateTriggerExpression,
+        CreateTriggerStatement,
         TriggerEvent,
         TriggerTiming,
     )
 
     register_special_constructor(
-        "statements.ddl_trigger.CreateTriggerExpression",
-        lambda dialect: CreateTriggerExpression(
+        "statements.ddl_trigger.CreateTriggerStatement",
+        lambda dialect: CreateTriggerStatement(
             dialect,
             trigger=Trigger(dialect, "trg"),
             table=_table_obj(dialect),
@@ -508,12 +508,12 @@ def _register_core_specials():
 
     # COLLATE. The collation name is validated against a whitelist, and the
     # guess's "x" is not a collation any engine has.
-    from rhosocial.activerecord.backend.expression.collation import CollateExpression
+    from rhosocial.activerecord.backend.expression.collation import CollateFunction
     from rhosocial.activerecord.backend.impl.oracle.collation import OracleCollation
 
     register_special_constructor(
-        "collation.CollateExpression",
-        lambda dialect: CollateExpression(
+        "collation.CollateFunction",
+        lambda dialect: CollateFunction(
             dialect, Column(dialect, "name"), OracleCollation.BINARY_CI
         ),
     )
@@ -615,82 +615,82 @@ def _register_core_specials():
     )
     from rhosocial.activerecord.backend.expression.statements import ddl_table as ddl_tbl
     register_special_constructor(
-        "statements.ddl_table.DropTableExpression",
-        lambda d: ddl_tbl.DropTableExpression(d, table=_table_obj(d)),
+        "statements.ddl_table.DropTableStatement",
+        lambda d: ddl_tbl.DropTableStatement(d, table=_table_obj(d)),
     )
     register_special_constructor(
-        "statements.ddl_truncate.TruncateExpression",
-        lambda d: ddl_truncate.TruncateExpression(d, table=_table_obj(d)),
+        "statements.ddl_truncate.TruncateStatement",
+        lambda d: ddl_truncate.TruncateStatement(d, table=_table_obj(d)),
     )
     register_special_constructor(
-        "statements.ddl_index.CreateIndexExpression",
-        lambda d: ddl_index.CreateIndexExpression(
+        "statements.ddl_index.CreateIndexStatement",
+        lambda d: ddl_index.CreateIndexStatement(
             d, index=_index_obj(d), table=_table_obj(d), columns=[Column(d, "a")]
         ),
     )
     register_special_constructor(
-        "statements.ddl_index.DropIndexExpression",
-        lambda d: ddl_index.DropIndexExpression(d, index=_index_obj(d)),
+        "statements.ddl_index.DropIndexStatement",
+        lambda d: ddl_index.DropIndexStatement(d, index=_index_obj(d)),
     )
     register_special_constructor(
-        "statements.ddl_index.CreateFulltextIndexExpression",
-        lambda d: ddl_index.CreateFulltextIndexExpression(
+        "statements.ddl_index.CreateFulltextIndexStatement",
+        lambda d: ddl_index.CreateFulltextIndexStatement(
             d, index=_index_obj(d), table=_table_obj(d), columns=[Column(d, "a")]
         ),
     )
     register_special_constructor(
-        "statements.ddl_index.DropFulltextIndexExpression",
-        lambda d: ddl_index.DropFulltextIndexExpression(
+        "statements.ddl_index.DropFulltextIndexStatement",
+        lambda d: ddl_index.DropFulltextIndexStatement(
             d, index=_index_obj(d), table=_table_obj(d)
         ),
     )
     register_special_constructor(
-        "statements.ddl_schema.CreateSchemaExpression",
-        lambda d: ddl_schema.CreateSchemaExpression(d, schema=_schema_obj(d)),
+        "statements.ddl_schema.CreateSchemaStatement",
+        lambda d: ddl_schema.CreateSchemaStatement(d, schema=_schema_obj(d)),
     )
     register_special_constructor(
-        "statements.ddl_schema.DropSchemaExpression",
-        lambda d: ddl_schema.DropSchemaExpression(d, schema=_schema_obj(d)),
+        "statements.ddl_schema.DropSchemaStatement",
+        lambda d: ddl_schema.DropSchemaStatement(d, schema=_schema_obj(d)),
     )
     register_special_constructor(
-        "statements.ddl_sequence.CreateSequenceExpression",
-        lambda d: ddl_sequence.CreateSequenceExpression(d, sequence=_sequence_obj(d)),
+        "statements.ddl_sequence.CreateSequenceStatement",
+        lambda d: ddl_sequence.CreateSequenceStatement(d, sequence=_sequence_obj(d)),
     )
     register_special_constructor(
-        "statements.ddl_sequence.DropSequenceExpression",
-        lambda d: ddl_sequence.DropSequenceExpression(d, sequence=_sequence_obj(d)),
+        "statements.ddl_sequence.DropSequenceStatement",
+        lambda d: ddl_sequence.DropSequenceStatement(d, sequence=_sequence_obj(d)),
     )
     register_special_constructor(
-        "statements.ddl_sequence.AlterSequenceExpression",
-        lambda d: ddl_sequence.AlterSequenceExpression(
+        "statements.ddl_sequence.AlterSequenceStatement",
+        lambda d: ddl_sequence.AlterSequenceStatement(
             d, sequence=_sequence_obj(d), start=1
         ),
     )
     register_special_constructor(
-        "statements.ddl_view.CreateViewExpression",
-        lambda d: ddl_view.CreateViewExpression(
+        "statements.ddl_view.CreateViewStatement",
+        lambda d: ddl_view.CreateViewStatement(
             d, view=_view_obj(d), query=_one_column_query(d)
         ),
     )
     register_special_constructor(
-        "statements.ddl_view.DropViewExpression",
-        lambda d: ddl_view.DropViewExpression(d, view=_view_obj(d)),
+        "statements.ddl_view.DropViewStatement",
+        lambda d: ddl_view.DropViewStatement(d, view=_view_obj(d)),
     )
     register_special_constructor(
-        "statements.ddl_view.CreateMaterializedViewExpression",
-        lambda d: ddl_view.CreateMaterializedViewExpression(
+        "statements.ddl_view.CreateMaterializedViewStatement",
+        lambda d: ddl_view.CreateMaterializedViewStatement(
             d, view=_materialized_view_obj(d), query=_one_column_query(d)
         ),
     )
     register_special_constructor(
-        "statements.ddl_view.DropMaterializedViewExpression",
-        lambda d: ddl_view.DropMaterializedViewExpression(
+        "statements.ddl_view.DropMaterializedViewStatement",
+        lambda d: ddl_view.DropMaterializedViewStatement(
             d, view=_materialized_view_obj(d)
         ),
     )
     register_special_constructor(
-        "statements.ddl_view.RefreshMaterializedViewExpression",
-        lambda d: ddl_view.RefreshMaterializedViewExpression(
+        "statements.ddl_view.RefreshMaterializedViewStatement",
+        lambda d: ddl_view.RefreshMaterializedViewStatement(
             d, view=_materialized_view_obj(d)
         ),
     )
@@ -702,26 +702,26 @@ def _register_core_specials():
         "statements.ddl_table.ColumnDefinition", _integer_column
     )
     register_special_constructor(
-        "statements.ddl_table.CreateTableExpression",
-        lambda d: ddl_tbl.CreateTableExpression(
+        "statements.ddl_table.CreateTableStatement",
+        lambda d: ddl_tbl.CreateTableStatement(
             d, table=_table_obj(d), columns=[_integer_column(d)]
         ),
     )
     register_special_constructor(
-        "statements.ddl_table.CreateTableAsExpression",
-        lambda d: ddl_tbl.CreateTableAsExpression(
+        "statements.ddl_table.CreateTableAsStatement",
+        lambda d: ddl_tbl.CreateTableAsStatement(
             d, table=_table_obj(d), as_query=_one_column_query(d)
         ),
     )
     register_special_constructor(
-        "statements.ddl_table.CreateTableLikeExpression",
-        lambda d: ddl_tbl.CreateTableLikeExpression(
+        "statements.ddl_table.CreateTableLikeStatement",
+        lambda d: ddl_tbl.CreateTableLikeStatement(
             d, table=_table_obj(d), like_table=Table(d, "other")
         ),
     )
     register_special_constructor(
-        "statements.ddl_table.CreateTableCloneExpression",
-        lambda d: ddl_tbl.CreateTableCloneExpression(
+        "statements.ddl_table.CreateTableCloneStatement",
+        lambda d: ddl_tbl.CreateTableCloneStatement(
             d,
             table=_table_obj(d),
             source_table=Table(d, "other"),
@@ -729,20 +729,20 @@ def _register_core_specials():
         ),
     )
     register_special_constructor(
-        "statements.ddl_table.CreateTableFromTemplateExpression",
-        lambda d: ddl_tbl.CreateTableFromTemplateExpression(
+        "statements.ddl_table.CreateTableFromTemplateStatement",
+        lambda d: ddl_tbl.CreateTableFromTemplateStatement(
             d, table=_table_obj(d), template=_one_column_query(d)
         ),
     )
     register_special_constructor(
-        "statements.ddl_comment.CommentOnExpression",
-        lambda d: ddl_comment.CommentOnExpression(
+        "statements.ddl_comment.CommentOnStatement",
+        lambda d: ddl_comment.CommentOnStatement(
             d, ddl_comment.CommentObjectType.TABLE, _table_obj(d), "a comment"
         ),
     )
     register_special_constructor(
-        "statements.ddl_function.CreateFunctionExpression",
-        lambda d: ddl_fn.CreateFunctionExpression(
+        "statements.ddl_function.CreateFunctionStatement",
+        lambda d: ddl_fn.CreateFunctionStatement(
             d,
             function=_function_obj(d),
             returns=IntegerType(d),
@@ -752,8 +752,8 @@ def _register_core_specials():
     # ALTER TABLE's actions name the index they drop, and the statement names the
     # table it alters; both are objects, so both need one.
     register_special_constructor(
-        "statements.ddl_alter.AlterTableExpression",
-        lambda d: ddl_alter.AlterTableExpression(
+        "statements.ddl_alter.AlterTableStatement",
+        lambda d: ddl_alter.AlterTableStatement(
             d, table=_table_obj(d), actions=[ddl_alter.DropColumn(d, "a")]
         ),
     )
@@ -771,7 +771,7 @@ def _register_core_specials():
             OracleTypeAttribute,
         )
 
-        return ddl_type.CreateTypeExpression(
+        return ddl_type.CreateTypeStatement(
             dialect,
             type=_type_obj(dialect),
             definition=OracleObjectTypeDefinition(
@@ -783,22 +783,22 @@ def _register_core_specials():
         )
 
     register_special_constructor(
-        "statements.ddl_type.CreateTypeExpression", create_type
+        "statements.ddl_type.CreateTypeStatement", create_type
     )
     register_special_constructor(
-        "statements.ddl_type.DropTypeExpression",
-        lambda d: ddl_type.DropTypeExpression(d, type=_type_obj(d)),
+        "statements.ddl_type.DropTypeStatement",
+        lambda d: ddl_type.DropTypeStatement(d, type=_type_obj(d)),
     )
     register_special_constructor(
-        "statements.ddl_trigger.DropTriggerExpression",
-        lambda d: ddl_trigger.DropTriggerExpression(
+        "statements.ddl_trigger.DropTriggerStatement",
+        lambda d: ddl_trigger.DropTriggerStatement(
             d, trigger=Trigger(d, "trg"), table=_table_obj(d)
         ),
     )
     # INSERT names the table it writes; a VALUES source needs one row.
     register_special_constructor(
-        "statements.dml.InsertExpression",
-        lambda d: dml.InsertExpression(
+        "statements.dml.InsertStatement",
+        lambda d: dml.InsertStatement(
             d,
             into=_table_obj(d),
             columns=["a"],
@@ -810,14 +810,14 @@ def _register_core_specials():
         lambda d: dml.ValuesSource(d, [[Literal(d, 1)]]),
     )
     register_special_constructor(
-        "statements.dml.UpdateExpression",
-        lambda d: dml.UpdateExpression(
+        "statements.dml.UpdateStatement",
+        lambda d: dml.UpdateStatement(
             d, table=_table_obj(d), assignments={"a": Literal(d, 1)}
         ),
     )
     register_special_constructor(
-        "dml.DeleteExpression",
-        lambda d: dml.DeleteExpression(d, tables=[_table_obj(d)]),
+        "dml.DeleteStatement",
+        lambda d: dml.DeleteStatement(d, tables=[_table_obj(d)]),
     )
     # A JOIN carries no condition or USING clause unless one is given, so the
     # empty join the guess builds is refused by the formatter.
@@ -878,8 +878,8 @@ def _register_core_specials():
         lambda d: graph_mod.EdgeTable(d, _edge_table_obj(d), ["a"], ["b"]),
     )
     register_special_constructor(
-        "graph.CreatePropertyGraphExpression",
-        lambda d: graph_mod.CreatePropertyGraphExpression(
+        "graph.CreatePropertyGraphStatement",
+        lambda d: graph_mod.CreatePropertyGraphStatement(
             d,
             graph=_property_graph(d),
             vertex_tables=[graph_mod.VertexTable(d, _node_table(d))],
@@ -889,12 +889,12 @@ def _register_core_specials():
         ),
     )
     register_special_constructor(
-        "graph.DropPropertyGraphExpression",
-        lambda d: graph_mod.DropPropertyGraphExpression(d, graph=_property_graph(d)),
+        "graph.DropPropertyGraphStatement",
+        lambda d: graph_mod.DropPropertyGraphStatement(d, graph=_property_graph(d)),
     )
     register_special_constructor(
-        "graph.AlterPropertyGraphExpression",
-        lambda d: graph_mod.AlterPropertyGraphExpression(
+        "graph.AlterPropertyGraphStatement",
+        lambda d: graph_mod.AlterPropertyGraphStatement(
             d, graph=_property_graph(d), action="DROP", target="LABEL v"
         ),
     )
@@ -1435,7 +1435,7 @@ _register_oracle_specials()
 #: :func:`TestMatrixIntegrity.test_unconstructible_list_is_exact` fails in both
 #: directions when the sets disagree.
 UNCONSTRUCTIBLE: tuple = (
-    "rhosocial.activerecord.backend.expression.uuid.UUIDCastExpression",
+    "rhosocial.activerecord.backend.expression.uuid.UUIDCastFunction",
     "rhosocial.activerecord.backend.expression.uuid.UUIDConstantExpression",
     "rhosocial.activerecord.backend.expression.uuid.UUIDGenerationExpression",
 )
@@ -1479,19 +1479,19 @@ LEGITIMATE_NON_RENDERS: Dict[str, tuple] = {
     "rhosocial.activerecord.backend.expression.pivot.UnpivotExpression": (
         UnsupportedFeatureError, "does not support the 'format_unpivot_expression' statement"
     ),
-    "rhosocial.activerecord.backend.expression.predicates.ILIKEExpression": (
+    "rhosocial.activerecord.backend.expression.predicates.ILikePredicate": (
         UnsupportedFeatureError, "does not support the 'format_ilike_expression' statement"
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_database."
-    "AlterDatabaseExpression": (
+    "AlterDatabaseStatement": (
         UnsupportedFeatureError, "does not support the 'format_alter_database_statement' statement"
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_database."
-    "CreateDatabaseExpression": (
+    "CreateDatabaseStatement": (
         UnsupportedFeatureError, "does not support the 'format_create_database_statement' statement"
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_database."
-    "DropDatabaseExpression": (
+    "DropDatabaseStatement": (
         UnsupportedFeatureError, "does not support the 'format_drop_database_statement' statement"
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_domain."
@@ -1499,11 +1499,11 @@ LEGITIMATE_NON_RENDERS: Dict[str, tuple] = {
         UnsupportedFeatureError, "does not support the 'format_domain_alter_action' statement"
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_domain."
-    "AlterDomainExpression": (
+    "AlterDomainStatement": (
         UnsupportedFeatureError, "does not support the 'format_alter_domain_statement' statement"
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_domain."
-    "CreateDomainExpression": (
+    "CreateDomainStatement": (
         UnsupportedFeatureError, "does not support the 'format_create_domain_statement' statement"
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_domain."
@@ -1523,7 +1523,7 @@ LEGITIMATE_NON_RENDERS: Dict[str, tuple] = {
         UnsupportedFeatureError, "does not support the 'format_domain_alter_action' statement"
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_domain."
-    "DropDomainExpression": (
+    "DropDomainStatement": (
         UnsupportedFeatureError, "does not support the 'format_drop_domain_statement' statement"
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_domain."
@@ -1543,7 +1543,7 @@ LEGITIMATE_NON_RENDERS: Dict[str, tuple] = {
         UnsupportedFeatureError, "does not support the 'format_domain_alter_action' statement"
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_function."
-    "DropFunctionExpression": (
+    "DropFunctionStatement": (
         UnsupportedFeatureError, "does not support the 'format_drop_function_statement' statement"
     ),
     # The root of the row-source tree. No concrete source renders through
@@ -1563,7 +1563,7 @@ LEGITIMATE_NON_RENDERS: Dict[str, tuple] = {
     # --- in `to_sql()` inspects what answers a lookup, not what a formatter does
     # --- once called.
     "rhosocial.activerecord.backend.expression.statements.ddl_function."
-    "CreateFunctionExpression": (
+    "CreateFunctionStatement": (
         AttributeError, "has no attribute 'return_keyword'"
     ),
     "rhosocial.activerecord.backend.expression.query_sources."
@@ -1575,7 +1575,7 @@ LEGITIMATE_NON_RENDERS: Dict[str, tuple] = {
         TypeError, "missing 2 required positional arguments"
     ),
     "rhosocial.activerecord.backend.expression.statements.dml."
-    "MergeExpression": (
+    "MergeStatement": (
         TypeError, "missing 5 required positional arguments"
     ),
     # --- group three: the SHOW query layer is defined but not composed.
@@ -1741,7 +1741,7 @@ def _dispatched_formatter(exc):
 #:
 #: These are not defects: they are features Oracle does not have -- or spells
 #: through this backend's own expressions -- which the shared renderer reports
-#: by naming the method it could not find. ``RepeatExpression`` is the one
+#: by naming the method it could not find. ``RepeatFunction`` is the one
 #: that made the accounting necessary: Oracle has no ``REPEAT`` function, the
 #: node dispatches to a formatter no base in this dialect provides, and before
 #: the table existed that refusal was allowed on its type alone.
@@ -2091,7 +2091,7 @@ class TestMatrixIntegrity:
         This is the regression test for the pad/trim incident. Core turned
         ``trim``/``lpad``/``rpad``/``repeat`` into dedicated nodes; Oracle
         spells three of them natively and has no ``REPEAT`` function, so
-        ``RepeatExpression`` is exactly the shape this test exists for: a
+        ``RepeatFunction`` is exactly the shape this test exists for: a
         class whose formatter no base in this dialect provides, which before
         the split was allowed through as "Oracle lacks the feature" without
         anything asking whether the feature was even claimed.

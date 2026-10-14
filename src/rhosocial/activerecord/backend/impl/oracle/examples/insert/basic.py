@@ -3,7 +3,7 @@ INSERT Statements — single, batch, expression-based.
 
 This example demonstrates:
 1. Raw INSERT (inline SQL with positional placeholders :1, :2)
-2. Expression-based INSERT (InsertExpression, ValuesSource) — using Django-style SQL output
+2. Expression-based INSERT (InsertStatement, ValuesSource) — using Django-style SQL output
 3. Batch INSERT
 4. Verifying inserted rows
 
@@ -14,7 +14,7 @@ import os
 
 import re
 
-from rhosocial.activerecord.backend.expression import InsertExpression, ValuesSource
+from rhosocial.activerecord.backend.expression import InsertStatement, ValuesSource
 from rhosocial.activerecord.backend.expression.core import Literal
 from rhosocial.activerecord.backend.expression.objects import Table
 from rhosocial.activerecord.backend.impl.oracle.backend import OracleBackend
@@ -66,13 +66,13 @@ backend.execute(
 print("  Inserted 'Alice' (score=85, active)")
 
 # --- 2. Expression-based INSERT (generate + use raw SQL) ---
-print("\n[2] Expression-based INSERT (build with InsertExpression, generate SQL)")
+print("\n[2] Expression-based INSERT (build with InsertStatement, generate SQL)")
 vals = ValuesSource(
     dialect,
     [[Literal(dialect, "Bob"), Literal(dialect, 92), Literal(dialect, "active")]],
 )
 target = Table(dialect, "eg_insert_demo")
-insert_expr = InsertExpression(
+insert_expr = InsertStatement(
     dialect=dialect,
     into=target,
     source=vals,

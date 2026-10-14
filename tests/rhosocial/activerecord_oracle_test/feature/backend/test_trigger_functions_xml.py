@@ -9,7 +9,7 @@ from xml.etree.ElementTree import Element
 from rhosocial.activerecord.backend.expression import core
 from rhosocial.activerecord.backend.expression.objects import Function, Table, Trigger
 from rhosocial.activerecord.backend.expression.statements.ddl_trigger import (
-    CreateTriggerExpression, DropTriggerExpression, TriggerEvent, TriggerLevel,
+    CreateTriggerStatement, DropTriggerStatement, TriggerEvent, TriggerLevel,
     TriggerTiming,
 )
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
@@ -25,7 +25,7 @@ def dialect() -> OracleDialect:
     return OracleDialect(version=(23, 0, 0))
 
 
-def _trigger(dialect: OracleDialect, **kwargs) -> CreateTriggerExpression:
+def _trigger(dialect: OracleDialect, **kwargs) -> CreateTriggerStatement:
     """Build a trigger; the three objects it names are built from the dialect."""
     defaults = dict(
         trigger=Trigger(dialect, "trg"), table=Table(dialect, "t"),
@@ -33,7 +33,7 @@ def _trigger(dialect: OracleDialect, **kwargs) -> CreateTriggerExpression:
         function=Function(dialect, "proc"), level=TriggerLevel.ROW,
     )
     defaults.update(kwargs)
-    return CreateTriggerExpression(dialect=dialect, **defaults)
+    return CreateTriggerStatement(dialect=dialect, **defaults)
 
 
 class TestTriggerCapabilities:
@@ -103,12 +103,12 @@ class TestCreateTriggerFormatting:
 
 class TestDropAndToggleTriggers:
     def test_drop_trigger(self, dialect):
-        sql, params = DropTriggerExpression(dialect, Trigger(dialect, "trg_x")).to_sql()
+        sql, params = DropTriggerStatement(dialect, Trigger(dialect, "trg_x")).to_sql()
         assert sql == 'DROP TRIGGER "TRG_X"'
         assert params == ()
 
     def test_drop_if_exists_rejected(self, dialect):
-        expr = DropTriggerExpression(dialect, Trigger(dialect, "trg_x"), if_exists=True)
+        expr = DropTriggerStatement(dialect, Trigger(dialect, "trg_x"), if_exists=True)
         with pytest.raises(NotImplementedError):
             expr.to_sql()
 

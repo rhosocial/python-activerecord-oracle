@@ -35,18 +35,18 @@ from rhosocial.activerecord.backend.introspection.executor import (
     AsyncIntrospectorExecutor,
 )
 from rhosocial.activerecord.backend.introspection.types import (
-    DatabaseInfo,
-    TableInfo,
+    IntrospectionDatabaseInfo,
+    IntrospectionTableInfo,
     TableType,
-    ColumnInfo,
+    IntrospectionColumnInfo,
     ColumnNullable,
     IndexInfo,
     IndexColumnInfo,
     IndexType,
-    ForeignKeyInfo,
+    IntrospectionForeignKeyInfo,
     ReferentialAction,
-    ViewInfo,
-    TriggerInfo,
+    IntrospectionViewInfo,
+    IntrospectionTriggerInfo,
     IntrospectionScope,
 )
 from rhosocial.activerecord.backend.expression.types import DataType
@@ -186,7 +186,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
     # Parse methods — pure Python, no I/O
     # ------------------------------------------------------------------ #
 
-    def _parse_database_info(self, rows: List[Dict[str, Any]]) -> DatabaseInfo:
+    def _parse_database_info(self, rows: List[Dict[str, Any]]) -> IntrospectionDatabaseInfo:
         version = self._get_version()
         # Reported as the string "unknown" rather than a fabricated number: this
         # is a status surface, and a status surface that invents a version is the
@@ -198,7 +198,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
 
         db_row = rows[0] if rows else {}
 
-        return DatabaseInfo(
+        return IntrospectionDatabaseInfo(
             name=schema,
             version=version_str,
             version_tuple=version,
@@ -209,12 +209,12 @@ class OracleIntrospectorMixin(IntrospectorMixin):
 
     def _parse_tables(
         self, rows: List[Dict[str, Any]], schema: Optional[str]
-    ) -> List[TableInfo]:
+    ) -> List[IntrospectionTableInfo]:
         target_schema = schema if schema is not None else self._get_default_schema()
         tables = []
         for row in rows:
             tables.append(
-                TableInfo(
+                IntrospectionTableInfo(
                     name=row["TABLE_NAME"],
                     schema=target_schema,
                     table_type=TableType.BASE_TABLE,
@@ -233,7 +233,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
         table_name: str,
         schema: str,
         primary_keys: List[str] = None,
-    ) -> List[ColumnInfo]:
+    ) -> List[IntrospectionColumnInfo]:
         pk_set = set(primary_keys or [])
         columns = []
         for row in rows:
@@ -284,7 +284,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
                 # then degrades to data_type string comparison.
                 parsed_data_type = None
             columns.append(
-                ColumnInfo(
+                IntrospectionColumnInfo(
                     name=col_name,
                     table_name=table_name,
                     schema=schema,
@@ -351,19 +351,19 @@ class OracleIntrospectorMixin(IntrospectorMixin):
         rows: List[Dict[str, Any]],
         table_name: str,
         schema: str,
-    ) -> List[ForeignKeyInfo]:
+    ) -> List[IntrospectionForeignKeyInfo]:
         action_map = {
             "NO ACTION": ReferentialAction.NO_ACTION,
             "CASCADE": ReferentialAction.CASCADE,
             "SET NULL": ReferentialAction.SET_NULL,
             "SET DEFAULT": ReferentialAction.SET_DEFAULT,
         }
-        fk_map: Dict[str, ForeignKeyInfo] = {}
+        fk_map: Dict[str, IntrospectionForeignKeyInfo] = {}
         for row in rows:
             fk_name = row.get("CONSTRAINT_NAME", "")
             if fk_name not in fk_map:
                 delete_rule = (row.get("DELETE_RULE") or "NO ACTION").upper()
-                fk_map[fk_name] = ForeignKeyInfo(
+                fk_map[fk_name] = IntrospectionForeignKeyInfo(
                     name=fk_name,
                     table_name=table_name,
                     schema=schema,
@@ -379,9 +379,9 @@ class OracleIntrospectorMixin(IntrospectorMixin):
 
     def _parse_views(
         self, rows: List[Dict[str, Any]], schema: str
-    ) -> List[ViewInfo]:
+    ) -> List[IntrospectionViewInfo]:
         return [
-            ViewInfo(
+            IntrospectionViewInfo(
                 name=row.get("VIEW_NAME", ""),
                 schema=schema,
                 definition=row.get("TEXT_VC") or row.get("TEXT"),
@@ -396,11 +396,11 @@ class OracleIntrospectorMixin(IntrospectorMixin):
         rows: List[Dict[str, Any]],
         view_name: str,
         schema: str,
-    ) -> Optional[ViewInfo]:
+    ) -> Optional[IntrospectionViewInfo]:
         if not rows:
             return None
         row = rows[0]
-        return ViewInfo(
+        return IntrospectionViewInfo(
             name=row.get("VIEW_NAME", view_name),
             schema=schema,
             definition=row.get("VIEW_DEFINITION"),
@@ -410,7 +410,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
 
     def _parse_triggers(
         self, rows: List[Dict[str, Any]], schema: str
-    ) -> List[TriggerInfo]:
+    ) -> List[IntrospectionTriggerInfo]:
         triggers = []
         for row in rows:
             trigger_type = row.get("TRIGGER_TYPE", "")
@@ -419,7 +419,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
             events = [e.strip() for e in triggering_event.split(" OR ")] if triggering_event else []
 
             triggers.append(
-                TriggerInfo(
+                IntrospectionTriggerInfo(
                     name=row.get("TRIGGER_NAME", ""),
                     table_name=row.get("TABLE_NAME", ""),
                     schema=schema,
@@ -459,7 +459,7 @@ class SyncOracleIntrospector(OracleIntrospectorMixin, SyncAbstractIntrospector):
 
     def get_table_info(
         self, table_name: str, schema: Optional[str] = None
-    ) -> Optional[TableInfo]:
+    ) -> Optional[IntrospectionTableInfo]:
         key = self._make_cache_key(
             IntrospectionScope.TABLE, table_name, schema=schema
         )
@@ -485,7 +485,7 @@ class SyncOracleIntrospector(OracleIntrospectorMixin, SyncAbstractIntrospector):
 
     def list_columns(
         self, table_name: str, schema: Optional[str] = None
-    ) -> List[ColumnInfo]:
+    ) -> List[IntrospectionColumnInfo]:
         target_schema = schema if schema is not None else self._get_default_schema()
         key = self._make_cache_key(
             IntrospectionScope.COLUMN, table_name, schema=target_schema
@@ -537,7 +537,7 @@ class AsyncOracleIntrospector(OracleIntrospectorMixin, AsyncAbstractIntrospector
 
     async def get_table_info(
         self, table_name: str, schema: Optional[str] = None
-    ) -> Optional[TableInfo]:
+    ) -> Optional[IntrospectionTableInfo]:
         key = self._make_cache_key(
             IntrospectionScope.TABLE, table_name, schema=schema
         )
@@ -563,7 +563,7 @@ class AsyncOracleIntrospector(OracleIntrospectorMixin, AsyncAbstractIntrospector
 
     async def list_columns(
         self, table_name: str, schema: Optional[str] = None
-    ) -> List[ColumnInfo]:
+    ) -> List[IntrospectionColumnInfo]:
         target_schema = schema if schema is not None else self._get_default_schema()
         key = self._make_cache_key(
             IntrospectionScope.COLUMN, table_name, schema=target_schema

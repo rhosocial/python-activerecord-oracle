@@ -30,7 +30,7 @@ class OracleCommentMixin:
         """Format a standalone ``COMMENT ON`` statement.
 
         Accepts the Oracle expression and the core
-        :class:`~rhosocial.activerecord.backend.expression.statements.CommentOnExpression`,
+        :class:`~rhosocial.activerecord.backend.expression.statements.CommentOnStatement`,
         which carry the same fields.
 
         The annotated object is rendered by its own protocol, and a column --

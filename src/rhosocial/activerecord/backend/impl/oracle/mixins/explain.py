@@ -2,6 +2,9 @@
 """Oracle EXPLAIN PLAN mixin."""
 from typing import Tuple, TYPE_CHECKING
 
+if TYPE_CHECKING:
+    from rhosocial.activerecord.backend.expression.statements import ExplainStatement
+
 
 class OracleExplainMixin:
     """Oracle EXPLAIN PLAN support.
@@ -11,7 +14,7 @@ class OracleExplainMixin:
     compatibility with the testsuite contract.
     """
 
-    def format_explain_statement(self, expr: "ExplainExpression") -> Tuple[str, tuple]:
+    def format_explain_statement(self, expr: "ExplainStatement") -> Tuple[str, tuple]:
         """Format EXPLAIN PLAN FOR <stmt> for Oracle."""
         return "SELECT 1 AS EXPLAIN_PLAN FROM DUAL", ()
 

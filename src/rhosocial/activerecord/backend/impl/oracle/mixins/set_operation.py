@@ -36,7 +36,7 @@ class OracleSetOperationMixin:
     def supports_set_operation_for_update(self) -> bool:
         return False
 
-    def format_set_operation_expression(self, expr: "BaseExpression") -> Tuple[str, tuple]:
+    def format_set_operation_statement(self, expr: "BaseExpression") -> Tuple[str, tuple]:
         if expr.operation.upper() == "EXCEPT":
             expr.operation = "MINUS"
-        return super().format_set_operation_expression(expr)
+        return super().format_set_operation_statement(expr)

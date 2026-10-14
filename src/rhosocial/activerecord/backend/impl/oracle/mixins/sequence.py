@@ -7,9 +7,9 @@ from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeature
 
 if TYPE_CHECKING:  # pragma: no cover
     from rhosocial.activerecord.backend.expression.statements import (
-        AlterSequenceExpression,
-        CreateSequenceExpression,
-        DropSequenceExpression,
+        AlterSequenceStatement,
+        CreateSequenceStatement,
+        DropSequenceStatement,
     )
 
 
@@ -139,7 +139,7 @@ class OracleSequenceMixin:
         return f"{self.format_identifier(expr.sequence)}.CURRVAL", ()
 
     def format_create_sequence_statement(
-        self, expr: "CreateSequenceExpression"
+        self, expr: "CreateSequenceStatement"
     ) -> Tuple[str, tuple]:
         """Format ``CREATE SEQUENCE`` for Oracle.
 
@@ -294,7 +294,7 @@ class OracleSequenceMixin:
         return " ".join(parts), ()
 
     def format_drop_sequence_statement(
-        self, expr: "DropSequenceExpression"
+        self, expr: "DropSequenceStatement"
     ) -> Tuple[str, tuple]:
         """Format ``DROP SEQUENCE`` for Oracle.
 
@@ -339,7 +339,7 @@ class OracleSequenceMixin:
         return " ".join(parts), ()
 
     def format_alter_sequence_statement(
-        self, expr: "AlterSequenceExpression"
+        self, expr: "AlterSequenceStatement"
     ) -> Tuple[str, tuple]:
         """Format ``ALTER SEQUENCE`` for Oracle.
 

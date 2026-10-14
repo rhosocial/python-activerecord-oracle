@@ -13,10 +13,10 @@ import pytest
 
 from rhosocial.activerecord.backend.dialect import UnsupportedFeatureError
 from rhosocial.activerecord.backend.expression import (
-    CreateSequenceExpression,
-    DropSequenceExpression,
-    InsertExpression,
-    QueryExpression,
+    CreateSequenceStatement,
+    DropSequenceStatement,
+    InsertStatement,
+    QueryStatement,
     ValuesSource,
 )
 from rhosocial.activerecord.backend.expression.core import Literal
@@ -113,7 +113,7 @@ class TestOracleSequenceValueExpression:
 
     def test_nextval_in_select(self, dialect):
         value = OracleSequenceValueExpression(dialect, "user_seq")
-        query = QueryExpression(dialect, select=[value], from_=Table(dialect, "dual"))
+        query = QueryStatement(dialect, select=[value], from_=Table(dialect, "dual"))
         sql, params = query.to_sql()
         assert sql == 'SELECT "USER_SEQ".NEXTVAL FROM "DUAL"'
         assert params == ()
@@ -121,7 +121,7 @@ class TestOracleSequenceValueExpression:
     def test_nextval_in_insert(self, dialect):
         value = OracleSequenceValueExpression(dialect, "user_seq")
         source = ValuesSource(dialect, values_list=[[value, Literal(dialect, "x")]])
-        expr = InsertExpression(dialect, into=Table(dialect, "t"), source=source, columns=["id", "name"])
+        expr = InsertStatement(dialect, into=Table(dialect, "t"), source=source, columns=["id", "name"])
         sql, params = expr.to_sql()
         assert sql == 'INSERT INTO "T" ("ID", "NAME") VALUES ("USER_SEQ".NEXTVAL, ?)'
         assert params == ("x",)
@@ -173,13 +173,13 @@ class TestOracleCreateSequenceExpression:
         assert params == ()
 
     def test_core_create_sequence_expression(self, dialect):
-        expr = CreateSequenceExpression(dialect, sequence=Sequence(dialect, "seq"))
+        expr = CreateSequenceStatement(dialect, sequence=Sequence(dialect, "seq"))
         sql, params = expr.to_sql()
         assert sql == 'CREATE SEQUENCE "SEQ"'
         assert params == ()
 
     def test_owned_by_unsupported(self, dialect):
-        expr = CreateSequenceExpression(dialect, sequence=Sequence(dialect, "seq"), owned_by="t.id")
+        expr = CreateSequenceStatement(dialect, sequence=Sequence(dialect, "seq"), owned_by="t.id")
         with pytest.raises(UnsupportedFeatureError, match="OWNED BY"):
             expr.to_sql()
 
@@ -308,7 +308,7 @@ class TestOracleSequenceOptionProbesAreLoadBearing:
                 "supports_sequence_owned_by",
                 # OracleCreateSequenceExpression has no owned_by field; the
                 # core expression is what the formatter's getattr path serves.
-                CreateSequenceExpression,
+                CreateSequenceStatement,
                 {"owned_by": "t.id"},
                 False,
                 None,  # the declared answer refuses; flipping it must render
@@ -366,7 +366,7 @@ class TestOracleDropSequenceExpression:
         assert params == ()
 
     def test_core_drop_sequence_expression(self, dialect):
-        expr = DropSequenceExpression(dialect, sequence=Sequence(dialect, "seq"))
+        expr = DropSequenceStatement(dialect, sequence=Sequence(dialect, "seq"))
         sql, params = expr.to_sql()
         assert sql == 'DROP SEQUENCE "SEQ"'
         assert params == ()

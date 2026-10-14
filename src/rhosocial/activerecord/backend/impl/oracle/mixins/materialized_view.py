@@ -8,8 +8,8 @@ from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeature
 if TYPE_CHECKING:  # pragma: no cover
     from rhosocial.activerecord.backend.expression.objects import MaterializedView
     from rhosocial.activerecord.backend.expression.statements import (
-        CreateMaterializedViewExpression,
-        DropMaterializedViewExpression,
+        CreateMaterializedViewStatement,
+        DropMaterializedViewStatement,
     )
     from ..expression.materialized_view import (
         OracleCreateMaterializedViewLogExpression,
@@ -58,7 +58,7 @@ class OracleMaterializedViewMixin:
         return True
 
     def format_create_materialized_view_statement(
-        self, expr: "CreateMaterializedViewExpression"
+        self, expr: "CreateMaterializedViewStatement"
     ) -> Tuple[str, tuple]:
         """Format ``CREATE MATERIALIZED VIEW`` with Oracle's option set.
 
@@ -74,7 +74,7 @@ class OracleMaterializedViewMixin:
 
         if not isinstance(expr.view, MaterializedView):
             raise TypeError(
-                f"CreateMaterializedViewExpression.view must be a MaterializedView, "
+                f"CreateMaterializedViewStatement.view must be a MaterializedView, "
                 f"got {type(expr.view).__name__}"
             )
 
@@ -169,7 +169,7 @@ class OracleMaterializedViewMixin:
         return f"CREATE MATERIALIZED VIEW LOG ON {table_sql} WITH {', '.join(with_parts)}", ()
 
     def format_drop_materialized_view_statement(
-        self, expr: "DropMaterializedViewExpression"
+        self, expr: "DropMaterializedViewStatement"
     ) -> Tuple[str, tuple]:
         """Format ``DROP MATERIALIZED VIEW`` for Oracle.
 
@@ -185,7 +185,7 @@ class OracleMaterializedViewMixin:
 
         if not isinstance(expr.view, MaterializedView):
             raise TypeError(
-                f"DropMaterializedViewExpression.view must be a MaterializedView, "
+                f"DropMaterializedViewStatement.view must be a MaterializedView, "
                 f"got {type(expr.view).__name__}"
             )
 
@@ -242,7 +242,7 @@ class OracleMaterializedViewMixin:
         to the ``DBMS_MVIEW`` PL/SQL package, so the rendered SQL is an
         anonymous ``BEGIN ... END;`` block.
 
-        Also serves the generic ``RefreshMaterializedViewExpression``; its
+        Also serves the generic ``RefreshMaterializedViewStatement``; its
         SQL-standard options have no Oracle counterpart and are handled as:
         ``concurrent`` is rejected (Oracle refreshes hold the appropriate locks
         and offer no concurrent mode), and the ``with_data`` / ``no_data``

@@ -4,7 +4,7 @@
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from rhosocial.activerecord.backend.expression.collation import CollateExpression
+    from rhosocial.activerecord.backend.expression.collation import CollateFunction
 
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 from rhosocial.activerecord.backend.impl.oracle.collation import (
@@ -15,7 +15,7 @@ from rhosocial.activerecord.backend.impl.oracle.collation import (
 class OracleCollationMixin:
     """Oracle-specific collation validation."""
 
-    def validate_collation_name(self, expr: "CollateExpression") -> str:
+    def validate_collation_name(self, expr: "CollateFunction") -> str:
         """Validate Oracle collation names and return their SQL representation."""
         if expr.collation_options:
             unsupported = ", ".join(sorted(expr.collation_options))
