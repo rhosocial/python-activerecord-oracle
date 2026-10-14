@@ -137,8 +137,10 @@ from rhosocial.activerecord.backend.expression.serialization import (
     serialize_xml,
 )
 from rhosocial.activerecord.backend.expression.statements.ddl_table import (
+    ColumnConstraint,
+    ColumnNotNullConstraint,
     TableConstraint,
-    TableConstraintType,
+    TablePrimaryKeyConstraint,
 )
 from rhosocial.activerecord.backend.expression.statements.dql import QueryStatement
 from rhosocial.activerecord.backend.expression.sources import NamedRelationRef
@@ -323,38 +325,32 @@ def _register_core_specials():
     )
     from rhosocial.activerecord.backend.expression.types.enum_ import EnumType
 
-    # ALTER CONSTRAINT. `constraint_type` is keyword-only behind defaulted
-    # positionals, so the introspective constructor skips it and the class
-    # refuses an incomplete action; the enforcement keyword is mandatory, so
-    # the factory picks a spelling.
-    def alter_constraint(dialect):
-        return ddl_alter.AlterConstraint(
-            dialect,
-            "c1",
-            constraint_type=TableConstraintType.FOREIGN_KEY,
-            enforced=True,
-        )
+    # ALTER CONSTRAINT / VALIDATE CONSTRAINT are not registered here at all.
+    # Core made ``constraint_kind`` a required keyword-only parameter, and the
+    # introspective constructor skips keyword-only parameters behind defaulted
+    # positionals, so the guess cannot build one; a factory would build it only
+    # to serialise a *branch class* through the three encodings, which is a core
+    # serialisation question rather than one this backend has an oracle for.
+    # They are pinned in ``UNCONSTRUCTIBLE`` instead.
+
+    # Core predicates whose operand slots the generic guess fills with plain
+    # strings. This is the wildcard-split follow-up core's commit ``61a1a458``
+    # calls out: the operand annotations are strings/``Any``, so the guess
+    # supplies a bare string where a value node belongs and the instance cannot
+    # render ("'str' object has no attribute 'to_sql'"). The factories hand them
+    # real value nodes, exactly as core registers them in its own dummy2 matrix.
+    from rhosocial.activerecord.backend.expression.predicates import (
+        ILikePredicate,
+        LikePredicate,
+    )
 
     register_special_constructor(
-        "statements.ddl_alter.AlterConstraint", alter_constraint
+        "predicates.LikePredicate",
+        lambda d: LikePredicate(d, "LIKE", Column(d, "a"), Literal(d, "%x%")),
     )
     register_special_constructor(
-        "statements.ddl_alter.AlterConstraintAction", alter_constraint
-    )
-    register_special_constructor(
-        "statements.ddl_alter.AlterTableConstraint", alter_constraint
-    )
-    register_special_constructor(
-        "statements.ddl_alter.ValidateConstraint",
-        lambda d: ddl_alter.ValidateConstraint(d, "c1"),
-    )
-    register_special_constructor(
-        "statements.ddl_alter.ValidateConstraintAction",
-        lambda d: ddl_alter.ValidateConstraint(d, "c1"),
-    )
-    register_special_constructor(
-        "statements.ddl_alter.ValidateTableConstraint",
-        lambda d: ddl_alter.ValidateConstraint(d, "c1"),
+        "predicates.ILikePredicate",
+        lambda d: ILikePredicate(d, Column(d, "a"), "%x%"),
     )
 
     # ADD DOMAIN CHECK. Widens a SQLPredicate into a DomainCheckConstraint and
@@ -374,7 +370,7 @@ def _register_core_specials():
         lambda d: ddl_alter.AddTableConstraint(
             d,
             TableConstraint(
-                d, TableConstraintType.PRIMARY_KEY, name="c", columns=["a"]
+                d, branch=TablePrimaryKeyConstraint(d, ["a"]), name="c"
             ),
         ),
     )
@@ -481,17 +477,13 @@ def _register_core_specials():
         ),
     )
 
-    # Column constraint. `constraint_type` is an enum and the formatter reads it
-    # as one; the guess supplies a string, which the class itself refuses.
-    from rhosocial.activerecord.backend.expression.statements.ddl_table import (
-        ColumnConstraint,
-        ColumnConstraintType,
-    )
-
+    # Column constraint. The branch names the kind and the production refuses
+    # a branch that is not one; the guess supplies a string where a
+    # ColumnConstraintBranch belongs.
     register_special_constructor(
         "statements.ddl_table.ColumnConstraint",
         lambda dialect: ColumnConstraint(
-            dialect, ColumnConstraintType.NOT_NULL, name="c"
+            dialect, branch=ColumnNotNullConstraint(dialect), name="c"
         ),
     )
 
@@ -1430,11 +1422,24 @@ _register_oracle_specials()
 #: it is given a *valid* ``which``: an invalid one raises ValueError first, which is
 #: a different answer entirely and hides the dialect's.
 #:
+#: ``AlterConstraint`` and ``ValidateConstraint`` fail for a different reason that
+#: is also structural rather than a capability: core made ``constraint_kind`` a
+#: required *keyword-only* parameter and the introspective constructor skips
+#: keyword-only parameters that sit behind defaulted positionals, so no generic
+#: guess reaches it. A dedicated factory would have to hand ``constraint_kind`` a
+#: branch class -- and a class object has no encoding in the dict/JSON/XML channels,
+#: so the round-trip could not be asserted even if it were built. Pinning the two
+#: here records that they are *out of the matrix's reach*, not that Oracle refuses
+#: them; the render path itself is covered by ``test_oracle_clause_pair_guard`` and
+#: the backend's own constraint tests.
+#:
 #: The tuple stays because a class that starts failing to build must be pinned here
 #: with the fault located, not left to become a silent skip;
 #: :func:`TestMatrixIntegrity.test_unconstructible_list_is_exact` fails in both
 #: directions when the sets disagree.
 UNCONSTRUCTIBLE: tuple = (
+    "rhosocial.activerecord.backend.expression.statements.ddl_alter.AlterConstraint",
+    "rhosocial.activerecord.backend.expression.statements.ddl_alter.ValidateConstraint",
     "rhosocial.activerecord.backend.expression.uuid.UUIDCastFunction",
     "rhosocial.activerecord.backend.expression.uuid.UUIDConstantExpression",
     "rhosocial.activerecord.backend.expression.uuid.UUIDGenerationExpression",
@@ -1480,7 +1485,8 @@ LEGITIMATE_NON_RENDERS: Dict[str, tuple] = {
         UnsupportedFeatureError, "does not support the 'format_unpivot_expression' statement"
     ),
     "rhosocial.activerecord.backend.expression.predicates.ILikePredicate": (
-        UnsupportedFeatureError, "does not support the 'format_ilike_expression' statement"
+        UnsupportedFeatureError,
+        "does not support the 'format_ilike_predicate' statement",
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_database."
     "AlterDatabaseStatement": (
@@ -1765,7 +1771,7 @@ UNMODELLED_FORMATTERS = {
     "DDL through its own OracleCreateFunctionExpression family, and composes "
     "no formatter for the core statement)": ("format_drop_function_statement",),
     "ILIKE (Oracle has no ILIKE operator; case-insensitive matching goes "
-    "through UPPER() + LIKE)": ("format_ilike_expression",),
+    "through UPPER() + LIKE)": ("format_ilike_predicate",),
     "the core PIVOT / UNPIVOT expressions (PIVOT goes through this backend's "
     "own PivotExpression and its format_pivot, so the core mixin is not "
     "composed)": (

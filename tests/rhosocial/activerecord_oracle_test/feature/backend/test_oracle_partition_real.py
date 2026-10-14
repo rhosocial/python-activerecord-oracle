@@ -16,7 +16,7 @@ from rhosocial.activerecord.backend.expression import (
     Column,
     ColumnDefinition,
     ColumnConstraint,
-    ColumnConstraintType,
+    ColumnPrimaryKeyConstraint,
     ComparisonPredicate,
     CreateTableStatement,
     DropTableStatement,
@@ -127,7 +127,7 @@ def test_create_range_partitioned_table_real(oracle_backend_single):
             table=Table(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
-                    ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
+                    ColumnConstraint(d, branch=ColumnPrimaryKeyConstraint(d)),
                 ]),
                 ColumnDefinition(d, "AGE", IntegerType(d)),
                 ColumnDefinition(d, "NAME", VarCharType(length=100, dialect=d)),
@@ -170,7 +170,7 @@ def test_create_list_partitioned_table_real(oracle_backend_single):
             table=Table(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
-                    ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
+                    ColumnConstraint(d, branch=ColumnPrimaryKeyConstraint(d)),
                 ]),
                 ColumnDefinition(d, "REGION", VarCharType(length=20, dialect=d)),
             ],
@@ -206,7 +206,7 @@ def test_create_hash_partitioned_table_real(oracle_backend_single):
             table=Table(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
-                    ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
+                    ColumnConstraint(d, branch=ColumnPrimaryKeyConstraint(d)),
                 ]),
                 ColumnDefinition(d, "NAME", VarCharType(length=100, dialect=d)),
             ],
@@ -248,7 +248,7 @@ def test_explain_range_partitioned_table_real(oracle_backend_single):
             table=Table(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
-                    ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
+                    ColumnConstraint(d, branch=ColumnPrimaryKeyConstraint(d)),
                 ]),
                 ColumnDefinition(d, "AGE", IntegerType(d)),
             ],

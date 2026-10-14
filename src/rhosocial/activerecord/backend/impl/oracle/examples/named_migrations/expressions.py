@@ -21,7 +21,7 @@ from rhosocial.activerecord.backend.expression.statements.ddl_table import (
     CreateTableStatement,
     ColumnDefinition,
     ColumnConstraint,
-    ColumnConstraintType,
+    ColumnPrimaryKeyConstraint,
     DropTableStatement,
 )
 from rhosocial.activerecord.backend.expression.types import (
@@ -43,8 +43,7 @@ def create_users_table(dialect):
                 constraints=[
                     ColumnConstraint(
                         dialect,
-                        ColumnConstraintType.PRIMARY_KEY,
-                        is_auto_increment=True,
+                        branch=ColumnPrimaryKeyConstraint(dialect, is_auto_increment=True),
                     ),
                 ],
             ),
@@ -72,8 +71,7 @@ def create_posts_table(dialect):
                 constraints=[
                     ColumnConstraint(
                         dialect,
-                        ColumnConstraintType.PRIMARY_KEY,
-                        is_auto_increment=True,
+                        branch=ColumnPrimaryKeyConstraint(dialect, is_auto_increment=True),
                     ),
                 ],
             ),
@@ -105,8 +103,7 @@ def create_custom_table(dialect, table_name: str = "custom_table"):
                 constraints=[
                     ColumnConstraint(
                         dialect,
-                        ColumnConstraintType.PRIMARY_KEY,
-                        is_auto_increment=True,
+                        branch=ColumnPrimaryKeyConstraint(dialect, is_auto_increment=True),
                     ),
                 ],
             ),

@@ -21,7 +21,7 @@ from rhosocial.activerecord.backend.expression import (
     Column,
     ColumnDefinition,
     ColumnConstraint,
-    ColumnConstraintType,
+    ColumnPrimaryKeyConstraint,
     ComparisonPredicate,
     CreateTableStatement,
     DropTableStatement,
@@ -166,7 +166,7 @@ def test_interval_partition_auto_creates_partition_real(oracle_backend_single):
             table=Table(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
-                    ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
+                    ColumnConstraint(d, branch=ColumnPrimaryKeyConstraint(d)),
                 ]),
                 ColumnDefinition(d, "CREATED_AT", DateType(d)),
             ],
@@ -226,7 +226,7 @@ def test_reference_partitioning_inherits_parent_partitions_real(oracle_backend_s
             table=Table(d, parent_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
-                    ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
+                    ColumnConstraint(d, branch=ColumnPrimaryKeyConstraint(d)),
                 ]),
             ],
             partition=parent_partition,
@@ -238,17 +238,15 @@ def test_reference_partitioning_inherits_parent_partitions_real(oracle_backend_s
         # Child: REFERENCE partitioning via a FOREIGN KEY constraint.
         # The FK constraint must be created inline as a table constraint.
         from rhosocial.activerecord.backend.expression.statements import (
-            TableConstraint,
-            TableConstraintType,
+            ForeignKeyConstraint,
         )
 
-        fk_constraint = TableConstraint(
+        fk_constraint = ForeignKeyConstraint(
             d,
-            name="fk_child_parent",
-            constraint_type=TableConstraintType.FOREIGN_KEY,
             columns=["PARENT_ID"],
             foreign_key_table=Table(d, parent_name),
             foreign_key_columns=["ID"],
+            name="fk_child_parent",
         )
         child_partition = OracleReferencePartitionClause(d, "fk_child_parent")
         child_expr = CreateTableStatement(
@@ -256,7 +254,7 @@ def test_reference_partitioning_inherits_parent_partitions_real(oracle_backend_s
             table=Table(d, child_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
-                    ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
+                    ColumnConstraint(d, branch=ColumnPrimaryKeyConstraint(d)),
                 ]),
                 ColumnDefinition(d, "PARENT_ID", IntegerType(d)),
             ],
@@ -321,7 +319,7 @@ def test_composite_range_hash_partitioning_real(oracle_backend_single):
             table=Table(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
-                    ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
+                    ColumnConstraint(d, branch=ColumnPrimaryKeyConstraint(d)),
                 ]),
                 ColumnDefinition(d, "CREATED_AT", DateType(d)),
             ],
@@ -367,7 +365,7 @@ def test_add_and_drop_partition_real(oracle_backend_single):
             table=Table(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
-                    ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
+                    ColumnConstraint(d, branch=ColumnPrimaryKeyConstraint(d)),
                 ]),
                 ColumnDefinition(d, "NAME", VarCharType(length=100, dialect=d)),
             ],
@@ -417,7 +415,7 @@ def test_split_partition_real(oracle_backend_single):
             table=Table(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
-                    ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
+                    ColumnConstraint(d, branch=ColumnPrimaryKeyConstraint(d)),
                 ]),
             ],
             partition=partition,
@@ -464,7 +462,7 @@ def test_merge_partitions_real(oracle_backend_single):
             table=Table(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
-                    ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
+                    ColumnConstraint(d, branch=ColumnPrimaryKeyConstraint(d)),
                 ]),
             ],
             partition=partition,
@@ -506,7 +504,7 @@ def test_truncate_partition_real(oracle_backend_single):
             table=Table(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
-                    ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
+                    ColumnConstraint(d, branch=ColumnPrimaryKeyConstraint(d)),
                 ]),
             ],
             partition=partition,
@@ -560,7 +558,7 @@ def test_move_partition_real(oracle_backend_single):
             table=Table(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
-                    ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
+                    ColumnConstraint(d, branch=ColumnPrimaryKeyConstraint(d)),
                 ]),
             ],
             partition=partition,
@@ -602,7 +600,7 @@ def test_exchange_partition_real(oracle_backend_single):
             table=Table(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
-                    ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
+                    ColumnConstraint(d, branch=ColumnPrimaryKeyConstraint(d)),
                 ]),
             ],
             partition=partition,
@@ -616,7 +614,7 @@ def test_exchange_partition_real(oracle_backend_single):
             table=Table(d, staging_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
-                    ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
+                    ColumnConstraint(d, branch=ColumnPrimaryKeyConstraint(d)),
                 ]),
             ],
         )

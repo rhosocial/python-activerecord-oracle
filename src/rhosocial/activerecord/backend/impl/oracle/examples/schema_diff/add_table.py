@@ -51,7 +51,7 @@ from rhosocial.activerecord.backend.impl.oracle.schema.differ import (  # noqa: 
 from rhosocial.activerecord.backend.expression.objects import Table  # noqa: E402
 from rhosocial.activerecord.backend.expression import (  # noqa: E402
     CreateTableStatement, ColumnDefinition,
-    ColumnConstraint, ColumnConstraintType,
+    ColumnConstraint, ColumnPrimaryKeyConstraint,
 )
 from rhosocial.activerecord.backend.expression.types import (  # noqa: E402
     IntegerType, VarCharType,
@@ -66,7 +66,7 @@ expr = CreateTableStatement(
     dialect=dialect, table=Table(dialect, "USERS"), columns=[
         ColumnDefinition(dialect, "ID", IntegerType(dialect),
             constraints=[
-                ColumnConstraint(dialect, constraint_type=ColumnConstraintType.PRIMARY_KEY, is_auto_increment=True),
+                ColumnConstraint(dialect, branch=ColumnPrimaryKeyConstraint(dialect, is_auto_increment=True)),
             ]),
         ColumnDefinition(dialect, "NAME", VarCharType(length=100, dialect=dialect)),
     ]

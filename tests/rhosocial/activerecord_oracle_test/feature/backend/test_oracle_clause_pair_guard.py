@@ -53,7 +53,7 @@ from rhosocial.activerecord.backend.expression.statements import (
     QueryStatement,
     RefreshMaterializedViewStatement,
     TableConstraint,
-    TableConstraintType,
+    TableCheckConstraint,
     TruncateStatement,
 )
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
@@ -315,7 +315,9 @@ SITES = (
     ),
     PairSite(
         "TableConstraint(check) enforced/not_enforced",
-        lambda d, kw: TableConstraint(d, TableConstraintType.CHECK, check_condition=Literal(d, 1), **kw),
+        lambda d, kw: TableConstraint(
+            d, branch=TableCheckConstraint(d, Literal(d, 1)), **kw
+        ),
         {"none": {}, "a": {"enforced": True}, "b": {"not_enforced": True}, "both": {"enforced": True, "not_enforced": True}},
         a_refuse="constraint ENFORCED",
         b_refuse="constraint NOT ENFORCED",

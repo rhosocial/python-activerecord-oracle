@@ -41,7 +41,7 @@ from rhosocial.activerecord.backend.dialect.mixins.identity_column import (
 )
 from rhosocial.activerecord.backend.expression import (
     ColumnConstraint,
-    ColumnConstraintType,
+    ColumnPrimaryKeyConstraint,
     ColumnDefinition,
     CreateTableStatement,
 )
@@ -138,8 +138,7 @@ def _column(dialect, *, name="id", attribute=None, constraints=(), invisible=Fal
 def _pk_constraint(dialect, *, is_auto_increment=False):
     return ColumnConstraint(
         dialect,
-        ColumnConstraintType.PRIMARY_KEY,
-        is_auto_increment=is_auto_increment,
+        branch=ColumnPrimaryKeyConstraint(dialect, is_auto_increment=is_auto_increment),
     )
 
 
