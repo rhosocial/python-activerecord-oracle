@@ -5,7 +5,7 @@ Oracle 数据库连接测试脚本
 - Oracle 11g XE: 端口 11520
 - Oracle 18c XE: 端口 11521
 - Oracle 21c XE: 端口 11522
-- Oracle 23c Free: 端口 11523
+- Oracle 26ai Free: 端口 11523
 
 环境变量: ORACLE_HOST, ORACLE_PORT, ORACLE_USER, ORACLE_PASSWORD, ORACLE_SERVICE
 """
@@ -38,7 +38,7 @@ INSTANCES = [
         "sid": "XE",
     },
     {
-        "name": "Oracle 23c Free",
+        "name": "Oracle 26ai Free",
         "port": 11523,
         "service_names": ["FREEPDB1", "FREE"],
         "sid": "FREE",

@@ -108,7 +108,7 @@ def _cleanup(backend) -> None:
 
 @pytest.fixture(scope="module")
 def provisioned():
-    backend_class, config = get_scenario_raw("oracle_23c")
+    backend_class, config = get_scenario_raw("oracle_26ai")
     SchemaCustomer.configure(config, backend_class)
     backend = SchemaCustomer.__backend__
     if not backend._connection:
@@ -168,7 +168,7 @@ async def test_async_insert_is_scoped(provisioned):
         id: _Optional[int] = None
         name: str
 
-    _, config = get_scenario_raw("oracle_23c")
+    _, config = get_scenario_raw("oracle_26ai")
     backend = AsyncOracleBackend(connection_config=config)
     await backend.connect()
     try:

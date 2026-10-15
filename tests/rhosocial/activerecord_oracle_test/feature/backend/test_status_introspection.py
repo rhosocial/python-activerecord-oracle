@@ -12,7 +12,7 @@ from providers.scenarios import get_scenario_raw
 
 @pytest.fixture(scope="module")
 def connected_backend():
-    backend_class, config = get_scenario_raw("oracle_23c")
+    backend_class, config = get_scenario_raw("oracle_26ai")
     backend = backend_class(connection_config=config)
     backend.connect()
     yield backend
@@ -56,7 +56,7 @@ class TestSyncStatusIntrospection:
 async def test_async_status_overview():
     from rhosocial.activerecord.backend.impl.oracle.backend.async_backend import AsyncOracleBackend
 
-    _, config = get_scenario_raw("oracle_23c")
+    _, config = get_scenario_raw("oracle_26ai")
     backend = AsyncOracleBackend(connection_config=config)
     await backend.connect()
     try:
