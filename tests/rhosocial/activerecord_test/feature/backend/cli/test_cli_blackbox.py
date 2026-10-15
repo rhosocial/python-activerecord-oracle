@@ -20,7 +20,7 @@ COMMANDS = [
 
 @pytest.fixture(scope="module")
 def conn_args():
-    backend_cls, config = get_scenario_raw("oracle_23c")
+    backend_cls, config = get_scenario_raw("oracle_26ai")
     _s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     _s.settimeout(2)
     try:

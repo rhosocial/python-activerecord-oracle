@@ -347,7 +347,7 @@ def provisioned():
         return (f"BEGIN EXECUTE IMMEDIATE 'DROP USER {user} CASCADE'; "
                 f"EXCEPTION WHEN OTHERS THEN NULL; END;")
 
-    backend_class, config = get_scenario_raw("oracle_23c")
+    backend_class, config = get_scenario_raw("oracle_26ai")
     DeepCustomer.configure(config, backend_class)
     backend = DeepCustomer.__backend__
     if not backend._connection:
@@ -574,7 +574,7 @@ def boolean_provisioned():
     from rhosocial.activerecord.backend.schema import StatementType
 
     ddl_options = ExecutionOptions(stmt_type=StatementType.DDL)
-    backend_class, config = get_scenario_raw("oracle_23c")
+    backend_class, config = get_scenario_raw("oracle_26ai")
     DeepCustomer.configure(config, backend_class)
     backend = DeepCustomer.__backend__
     if not backend._connection:
@@ -622,7 +622,7 @@ def wired_scenarios() -> List[str]:
     Used as the parametrisation source instead of a fixed tuple of names.
     A fixed tuple is not a list of the servers under test: CI wires **one**
     scenario per job (each job writes its own ``oracle_scenarios.yaml`` with a
-    single entry), so ``get_scenario_raw("oracle_23c")`` in the 21c job
+    single entry), so ``get_scenario_raw("oracle_26ai")`` in the 21c job
     silently answers with the 21c server -- see :func:`scenario_or_skip`.
     Parametrising over what is wired makes the ids tell the truth about which
     server each case ran against.
@@ -638,7 +638,7 @@ def scenario_or_skip(name: str):
     ``get_scenario_raw`` substitutes *the first wired scenario* for a name it
     does not recognise.  That fallback is reasonable for a provider that wants
     "some reachable server" and wrong for a test that says what it is talking
-    to: asking for ``oracle_23c`` in a job that wires only ``oracle_21c`` used
+    to: asking for ``oracle_26ai`` in a job that wires only ``oracle_21c`` used
     to hand back 21c, and a test then asserted things about the 23-line server
     while reading an 21c one.
 
@@ -956,9 +956,9 @@ class TestDialectCarriesTheServersOwnVersion:
         of this test fail for the wrong reason in CI:
 
         * CI wires **one** scenario per job. The 18c and 21c jobs do not wire
-          ``oracle_23c``, and ``get_scenario_raw`` answers an unknown name
+          ``oracle_26ai``, and ``get_scenario_raw`` answers an unknown name
           with the first wired scenario. So this test, which asked for
-          ``oracle_23c``, was silently handed 18c and 21c and then asserted
+          ``oracle_26ai``, was silently handed 18c and 21c and then asserted
           ``version[0] == 23`` about them -- failing with ``assert 18 == 23``
           and ``assert 21 == 23`` (measured, CI run 37245026297). The backend
           had detected each job's own server correctly; the assertion was about
@@ -968,7 +968,7 @@ class TestDialectCarriesTheServersOwnVersion:
           test), so the premise of this scenario was never contradicted by CI
           at all.
 
-        So: this test now skips unless ``oracle_23c`` is genuinely wired
+        So: this test now skips unless ``oracle_26ai`` is genuinely wired
         (:func:`scenario_or_skip`), and where it runs it says out loud which
         two facts about the fixture it depends on -- the line is 23, and the
         brand says 26 -- rather than leaving them implicit in a bare integer
@@ -982,12 +982,12 @@ class TestDialectCarriesTheServersOwnVersion:
         Database 23ai - it remains '23'. The second number of the release
         indicates the year of the release update, e.g. 26 for 2026."
         """
-        backend_class, config = scenario_or_skip("oracle_23c")
+        backend_class, config = scenario_or_skip("oracle_26ai")
         backend = backend_class(connection_config=config)
         try:
             backend.connect()
         except Exception as exc:
-            pytest.skip(f"oracle_23c is not reachable: {exc}")
+            pytest.skip(f"oracle_26ai is not reachable: {exc}")
         try:
             rows = fetch_all(backend, "SELECT VERSION, VERSION_FULL, PRODUCT "
                                       "FROM PRODUCT_COMPONENT_VERSION")
@@ -1009,7 +1009,7 @@ class TestDialectCarriesTheServersOwnVersion:
             )
             backend.introspect_and_adapt()
             assert full is not None, (
-                f"oracle_23c reports no VERSION_FULL, so the release-update "
+                f"oracle_26ai reports no VERSION_FULL, so the release-update "
                 f"number that tells 23ai from 26ai cannot be demonstrated"
             )
             # Both true at once, and neither read from the other: the product
@@ -1043,7 +1043,7 @@ class TestLiveStatusSurface:
 async def test_async_status_tablespaces():
     from rhosocial.activerecord.backend.impl.oracle.backend.async_backend import AsyncOracleBackend
 
-    _, config = get_scenario_raw("oracle_23c")
+    _, config = get_scenario_raw("oracle_26ai")
     backend = AsyncOracleBackend(connection_config=config)
     await backend.connect()
     try:

@@ -33,7 +33,7 @@ from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeature
 class TestPGQProtocolVersionGating:
     """Version gating tests for PGQ support in Oracle."""
 
-    def test_supports_graph_match_oracle_23c(self):
+    def test_supports_graph_match_oracle_26ai(self):
         d = OracleDialect((23, 0, 0))
         assert d.supports_graph_match() is True
 
@@ -43,7 +43,7 @@ class TestPGQProtocolVersionGating:
         assert d.supports_graph_match() is True  # PG features since 12c
 
     @pytest.mark.requires_protocol((GraphTableSupport, "supports_graph_table"))
-    def test_supports_graph_table_oracle_23c(self):
+    def test_supports_graph_table_oracle_26ai(self):
         d = OracleDialect((23, 0, 0))
         assert d.supports_graph_table() is True
 
