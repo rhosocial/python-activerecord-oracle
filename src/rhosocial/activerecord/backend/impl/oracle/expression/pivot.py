@@ -17,7 +17,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
 
 
-class PivotExpression(BaseExpression):
+class Pivot(BaseExpression):
     """Oracle PIVOT clause for row-to-column transformation.
 
     PIVOT allows you to rotate rows into columns, creating a
@@ -29,7 +29,7 @@ class PivotExpression(BaseExpression):
         PIVOT (SUM(amount) FOR month IN ('Jan' AS "Jan", 'Feb' AS "Feb"))
 
     Example usage:
-        pivot = PivotExpression(
+        pivot = Pivot(
             dialect,
             aggregate_function="SUM",
             value_column="amount",
@@ -142,7 +142,7 @@ class PivotXMLExpression(BaseExpression):
         return (sql, ())
 
 
-class UnpivotExpression(BaseExpression):
+class Unpivot(BaseExpression):
     """Oracle UNPIVOT clause for column-to-row transformation.
 
     UNPIVOT rotates columns into rows, essentially the inverse of PIVOT.
@@ -153,7 +153,7 @@ class UnpivotExpression(BaseExpression):
         UNPIVOT (amount FOR month IN (jan_sales, feb_sales, mar_sales))
 
     Example usage:
-        unpivot = UnpivotExpression(
+        unpivot = Unpivot(
             dialect,
             value_column="amount",
             pivot_column="month",

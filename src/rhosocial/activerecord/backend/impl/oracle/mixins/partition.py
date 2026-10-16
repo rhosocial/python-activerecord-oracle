@@ -336,7 +336,7 @@ class OraclePartitionMixin:
             raise ValueError(
                 "INTERVAL partitioning expression must not produce bind "
                 "parameters (Oracle DDL does not accept bind variables). "
-                "Use a RawSQLExpression for the interval expression."
+                "Use a RawSQL for the interval expression."
             )
         sql = f"PARTITION BY RANGE ({key_sql}) INTERVAL ({interval_sql})"
         part_sqls = [self.format_partition_definition(p, strategy="RANGE")[0] for p in expr.partitions]

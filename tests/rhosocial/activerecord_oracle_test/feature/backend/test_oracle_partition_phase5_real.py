@@ -31,7 +31,7 @@ from rhosocial.activerecord.backend.expression import (
 )
 from rhosocial.activerecord.backend.errors import DatabaseError
 from rhosocial.activerecord.backend.expression.objects import Table
-from rhosocial.activerecord.backend.expression.operators import RawSQLExpression
+from rhosocial.activerecord.backend.expression.operators import RawSQL
 from rhosocial.activerecord.backend.expression.types import (
     DateType,
     IntegerType,
@@ -153,7 +153,7 @@ def test_interval_partition_auto_creates_partition_real(oracle_backend_single):
         d = backend.dialect
         partition = OracleIntervalPartitionClause(
             d, [Column(d, "CREATED_AT")],
-            interval=RawSQLExpression(d, "NUMTOYMINTERVAL(1, 'MONTH')"),
+            interval=RawSQL(d, "NUMTOYMINTERVAL(1, 'MONTH')"),
             partitions=[
                 OraclePartitionDefinition(
                     name="p0",

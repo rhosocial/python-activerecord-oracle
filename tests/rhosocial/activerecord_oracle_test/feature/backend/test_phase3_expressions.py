@@ -112,16 +112,16 @@ class TestPivotExpressions:
     def test_import_pivot(self):
         """Test importing PIVOT expressions."""
         from rhosocial.activerecord.backend.impl.oracle.expression import (
-            PivotExpression, UnpivotExpression
+            Pivot, Unpivot
         )
 
     def test_pivot_basic(self):
         """Test basic PIVOT expression."""
-        from rhosocial.activerecord.backend.impl.oracle.expression import PivotExpression
+        from rhosocial.activerecord.backend.impl.oracle.expression import Pivot
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
         dialect = OracleDialect(version=(19, 0, 0))
-        pivot = PivotExpression(
+        pivot = Pivot(
             dialect,
             aggregate_function="SUM",
             value_column="amount",
@@ -137,11 +137,11 @@ class TestPivotExpressions:
 
     def test_pivot_with_alias(self):
         """Test PIVOT with alias."""
-        from rhosocial.activerecord.backend.impl.oracle.expression import PivotExpression
+        from rhosocial.activerecord.backend.impl.oracle.expression import Pivot
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
         dialect = OracleDialect(version=(19, 0, 0))
-        pivot = PivotExpression(
+        pivot = Pivot(
             dialect,
             aggregate_function="COUNT",
             value_column="id",
@@ -155,11 +155,11 @@ class TestPivotExpressions:
 
     def test_unpivot_basic(self):
         """Test basic UNPIVOT expression."""
-        from rhosocial.activerecord.backend.impl.oracle.expression import UnpivotExpression
+        from rhosocial.activerecord.backend.impl.oracle.expression import Unpivot
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
         dialect = OracleDialect(version=(19, 0, 0))
-        unpivot = UnpivotExpression(
+        unpivot = Unpivot(
             dialect,
             value_column="amount",
             pivot_column="month",
@@ -172,11 +172,11 @@ class TestPivotExpressions:
 
     def test_unpivot_include_nulls(self):
         """Test UNPIVOT with INCLUDE NULLS."""
-        from rhosocial.activerecord.backend.impl.oracle.expression import UnpivotExpression
+        from rhosocial.activerecord.backend.impl.oracle.expression import Unpivot
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
         dialect = OracleDialect(version=(19, 0, 0))
-        unpivot = UnpivotExpression(
+        unpivot = Unpivot(
             dialect,
             value_column="amount",
             pivot_column="month",

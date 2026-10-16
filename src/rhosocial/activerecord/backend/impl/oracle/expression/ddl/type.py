@@ -11,7 +11,7 @@ from typing import Any, List, Optional, Sequence, Tuple, TYPE_CHECKING, cast
 
 from rhosocial.activerecord.backend.expression.bases import BaseExpression
 from rhosocial.activerecord.backend.expression.objects import Type
-from rhosocial.activerecord.backend.expression.serialization import ExpressionRegistry
+from rhosocial.activerecord.backend.expression.serialization import register_expression_class
 from rhosocial.activerecord.backend.expression.statements.ddl_type import (
     DropTypeStatement,
     TypeAlterAction,
@@ -1480,7 +1480,7 @@ _EXPRESSION_TYPES = (
     OracleDropTypeBodyExpression,
 )
 for _expression_type in _EXPRESSION_TYPES:
-    ExpressionRegistry.register(_expression_type)
+    register_expression_class(_expression_type)
 
 
 __all__ = [

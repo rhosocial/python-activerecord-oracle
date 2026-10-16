@@ -193,10 +193,10 @@ class TestExpressionModule:
     def test_import_pivot_expressions(self):
         """Test pivot expression imports."""
         from rhosocial.activerecord.backend.impl.oracle.expression import (
-            PivotExpression, UnpivotExpression
+            Pivot, Unpivot
         )
-        assert PivotExpression is not None
-        assert UnpivotExpression is not None
+        assert Pivot is not None
+        assert Unpivot is not None
     
     def test_import_hint_expressions(self):
         """Test hint expression imports."""
@@ -230,10 +230,10 @@ class TestExpressionModule:
     
     def test_pivot_expression(self):
         """Test PIVOT expression."""
-        from rhosocial.activerecord.backend.impl.oracle.expression import PivotExpression
+        from rhosocial.activerecord.backend.impl.oracle.expression import Pivot
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
         dialect = OracleDialect(version=(19, 0, 0))
-        pivot = PivotExpression(
+        pivot = Pivot(
             dialect,
             aggregate_function="SUM",
             value_column="amount",

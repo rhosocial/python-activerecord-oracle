@@ -122,9 +122,9 @@ class TestExpressionModule:
     def test_import_pivot_expressions(self):
         """Test pivot expression imports."""
         from rhosocial.activerecord.backend.impl.oracle.expression import (
-            PivotExpression, UnpivotExpression
+            Pivot, Unpivot
         )
-        assert PivotExpression is not None
+        assert Pivot is not None
     
     def test_import_hint_expressions(self):
         """Test hint expression imports."""

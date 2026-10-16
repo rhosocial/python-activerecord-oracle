@@ -89,9 +89,11 @@ def json_value(
     from rhosocial.activerecord.backend.expression import core
     # Oracle rejects a bound path: ORA-40454 "path expression not a
     # literal". mixins/json.py already inlines it on the expression path;
-    # this is the same requirement on the factory path, and inline_literals
-    # is the switch that does it, with format_literal escaping the value.
-    path_expr = core.Literal(dialect, path, inline_literals=True)
+    # this is the same requirement on the factory path. Whether a literal
+    # inlines is a class-level strategy now, not a per-instance switch, so
+    # the inlining class is DdlLiteral -- the only class declaring
+    # ``inline_params = True`` -- and format_literal escapes the value.
+    path_expr = core.DdlLiteral(dialect, path)
     func = core.FunctionCall(dialect, "JSON_VALUE", json_doc, path_expr)
     if returning is not None:
         func._oracle_returning_type = _coerce_returning_type(dialect, returning)
@@ -108,9 +110,11 @@ def json_query(
     from rhosocial.activerecord.backend.expression import core
     # Oracle rejects a bound path: ORA-40454 "path expression not a
     # literal". mixins/json.py already inlines it on the expression path;
-    # this is the same requirement on the factory path, and inline_literals
-    # is the switch that does it, with format_literal escaping the value.
-    path_expr = core.Literal(dialect, path, inline_literals=True)
+    # this is the same requirement on the factory path. Whether a literal
+    # inlines is a class-level strategy now, not a per-instance switch, so
+    # the inlining class is DdlLiteral -- the only class declaring
+    # ``inline_params = True`` -- and format_literal escapes the value.
+    path_expr = core.DdlLiteral(dialect, path)
     func = core.FunctionCall(dialect, "JSON_QUERY", json_doc, path_expr)
     if returning is not None:
         func._oracle_returning_type = _coerce_returning_type(dialect, returning)
@@ -126,9 +130,11 @@ def json_exists(
     from rhosocial.activerecord.backend.expression import core
     # Oracle rejects a bound path: ORA-40454 "path expression not a
     # literal". mixins/json.py already inlines it on the expression path;
-    # this is the same requirement on the factory path, and inline_literals
-    # is the switch that does it, with format_literal escaping the value.
-    path_expr = core.Literal(dialect, path, inline_literals=True)
+    # this is the same requirement on the factory path. Whether a literal
+    # inlines is a class-level strategy now, not a per-instance switch, so
+    # the inlining class is DdlLiteral -- the only class declaring
+    # ``inline_params = True`` -- and format_literal escapes the value.
+    path_expr = core.DdlLiteral(dialect, path)
     return core.FunctionCall(dialect, "JSON_EXISTS", json_doc, path_expr)
 
 

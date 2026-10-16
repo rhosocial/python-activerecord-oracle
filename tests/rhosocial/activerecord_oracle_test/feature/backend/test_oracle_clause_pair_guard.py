@@ -36,9 +36,6 @@ from rhosocial.activerecord.backend.expression.objects import (
     Type,
     View,
 )
-from rhosocial.activerecord.backend.expression.query_sources import (
-    SetOperationStatement,
-)
 from rhosocial.activerecord.backend.expression.statements import (
     AlterSequenceStatement,
     CreateMaterializedViewStatement,
@@ -324,14 +321,10 @@ SITES = (
         none_forbidden=(r"ENFORCED",),
     ),
     # ------------------------------------------------------- core set operation
-    PairSite(
-        "SetOperationStatement all_/distinct",
-        lambda d, kw: SetOperationStatement(d, left=_query(d), right=_query(d), operation="UNION", **kw),
-        {"none": {}, "a": {"all_": True}, "b": {"distinct": True}, "both": {"all_": True, "distinct": True}},
-        a_render=r"UNION ALL",
-        b_render=r"UNION DISTINCT",
-        none_forbidden=(r"UNION ALL", r"UNION DISTINCT"),
-    ),
+    # The pair guard models two *mutually exclusive* spellings. A set operation
+    # has one required ``op`` word (``union`` / ``union_all`` / ``intersect`` /
+    # ``except``), so it is not a pair and does not belong here; the word forms
+    # are exercised by the roundtrip matrix and the dialect tests instead.
     # --------------------------------------------- oracle-specific sequences
     PairSite(
         "OracleCreateSequenceExpression cycle/no_cycle",

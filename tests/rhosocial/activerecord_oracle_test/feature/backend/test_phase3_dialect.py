@@ -188,10 +188,10 @@ class TestDialectExpressionFormatting:
     def test_format_pivot(self):
         """Test PIVOT formatting."""
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
-        from rhosocial.activerecord.backend.impl.oracle.expression import PivotExpression
+        from rhosocial.activerecord.backend.impl.oracle.expression import Pivot
 
         dialect = OracleDialect(version=(19, 0, 0))
-        pivot = PivotExpression(
+        pivot = Pivot(
             dialect,
             aggregate_function="SUM",
             value_column="amount",

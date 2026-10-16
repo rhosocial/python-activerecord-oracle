@@ -112,7 +112,7 @@ import pytest
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 from rhosocial.activerecord.backend.expression.bases import BaseExpression
 from rhosocial.activerecord.backend.expression.core import Column, Literal
-from rhosocial.activerecord.backend.expression.operators import RawSQLExpression
+from rhosocial.activerecord.backend.expression.operators import RawSQL
 from rhosocial.activerecord.backend.expression.objects import (
     Function,
     Index,
@@ -128,7 +128,8 @@ from rhosocial.activerecord.backend.expression.objects import (
 )
 from rhosocial.activerecord.backend.expression.predicates import ComparisonPredicate
 from rhosocial.activerecord.backend.expression.serialization import (
-    ExpressionRegistry,
+    auto_register_builtins,
+    registered_expression_classes,
     deserialize,
     deserialize_json,
     deserialize_xml,
@@ -192,7 +193,7 @@ def _collect_matrix_classes():
     Keying on the canonical name makes the matrix's keys and the registry's the
     same strings by construction.
     """
-    ExpressionRegistry._auto_register_builtins()
+    auto_register_builtins()
     collected: Dict[str, type] = {}
     for package in (ORACLE_EXPR_PKG, CORE_EXPR_PKG):
         collected.update(collect_expression_classes(package))
@@ -386,7 +387,7 @@ def _register_core_specials():
     # list of definitions and the guess supplies an empty one, which the formatter
     # refuses. CASE likewise needs at least one WHEN/THEN pair.
     from rhosocial.activerecord.backend.expression.advanced_functions import (
-        CaseFunction,
+        CaseExpression,
         WindowClause,
         WindowDefinition,
         WindowSpecification,
@@ -412,8 +413,8 @@ def _register_core_specials():
         ),
     )
     register_special_constructor(
-        "advanced_functions.CaseFunction",
-        lambda dialect: CaseFunction(
+        "advanced_functions.CaseExpression",
+        lambda dialect: CaseExpression(
             dialect,
             cases=[(_column_predicate(dialect), Literal(dialect, 1))],
             else_result=Literal(dialect, 0),
@@ -915,10 +916,10 @@ def _register_core_specials():
 
         return XMLTableExpression(
             dialect,
-            RawSQLExpression(dialect, "'.'"),
+            RawSQL(dialect, "'.'"),
             [
                 XMLTableColumn(
-                    "c", "VARCHAR(10)", path=RawSQLExpression(dialect, "'.'")
+                    "c", "VARCHAR(10)", path=RawSQL(dialect, "'.'")
                 )
             ],
         )
@@ -1113,13 +1114,13 @@ def _register_oracle_specials():
         return part_mod.OraclePartitionByHash(d, [Column(d, "id")], partitions_count=4)
 
     def interval_partition_clause(d):
-        # The interval is a RawSQLExpression, not a Literal: Oracle DDL carries no
+        # The interval is a RawSQL, not a Literal: Oracle DDL carries no
         # bind parameters, and a Literal would render as one -- which the
         # formatter refuses rather than inlining.
         return part_mod.OracleIntervalPartitionClause(
             d,
             [Column(d, "created_at")],
-            interval=RawSQLExpression(d, "INTERVAL '1' MONTH"),
+            interval=RawSQL(d, "INTERVAL '1' MONTH"),
             partitions=[
                 part_mod.OraclePartitionDefinition(
                     name="p1", less_than=[part_mod.OraclePartitionValue(d, 100)]
@@ -1475,14 +1476,14 @@ UNCONSTRUCTIBLE: tuple = (
 #
 # Oracle has no CREATE/DROP/ALTER DATABASE (an Oracle database is an instance),
 # no DOMAIN, no FULLTEXT, and no ILIKE -- case-insensitive matching goes through
-# UPPER() + LIKE. PIVOT and UNPIVOT go through this backend's own PivotExpression
+# UPPER() + LIKE. PIVOT and UNPIVOT go through this backend's own Pivot
 # and its format_pivot, so the core PivotMixin is not composed.
 LEGITIMATE_NON_RENDERS: Dict[str, tuple] = {
-    "rhosocial.activerecord.backend.expression.pivot.PivotExpression": (
-        UnsupportedFeatureError, "does not support the 'format_pivot_expression' statement"
+    "rhosocial.activerecord.backend.expression.pivot.Pivot": (
+        UnsupportedFeatureError, "does not support the 'format_pivot' statement"
     ),
-    "rhosocial.activerecord.backend.expression.pivot.UnpivotExpression": (
-        UnsupportedFeatureError, "does not support the 'format_unpivot_expression' statement"
+    "rhosocial.activerecord.backend.expression.pivot.Unpivot": (
+        UnsupportedFeatureError, "does not support the 'format_unpivot' statement"
     ),
     "rhosocial.activerecord.backend.expression.predicates.ILikePredicate": (
         UnsupportedFeatureError,
@@ -1773,10 +1774,10 @@ UNMODELLED_FORMATTERS = {
     "ILIKE (Oracle has no ILIKE operator; case-insensitive matching goes "
     "through UPPER() + LIKE)": ("format_ilike_predicate",),
     "the core PIVOT / UNPIVOT expressions (PIVOT goes through this backend's "
-    "own PivotExpression and its format_pivot, so the core mixin is not "
+    "own Pivot and its format_pivot, so the core mixin is not "
     "composed)": (
-        "format_pivot_expression",
-        "format_unpivot_expression",
+        "format_pivot",
+        "format_unpivot",
     ),
     "REPEAT (Oracle has no REPEAT function; the node exists for the backends "
     "that spell it natively, and this dialect declares no formatter to "
@@ -2139,7 +2140,7 @@ class TestMatrixIntegrity:
         rather than the registry because the registry also holds whatever
         backends other test modules happened to import.
         """
-        ExpressionRegistry._auto_register_builtins()
+        auto_register_builtins()
         expected = set(_collect_matrix_classes())
         stray = [
             fqn
@@ -2180,8 +2181,8 @@ class TestMatrixIntegrity:
         but the registry cannot resolve would round-trip into the wrong thing or
         nothing at all.
         """
-        ExpressionRegistry._auto_register_builtins()
-        unresolved = sorted(set(REGISTERED) - set(ExpressionRegistry._registry))
+        auto_register_builtins()
+        unresolved = sorted(set(REGISTERED) - set(registered_expression_classes()))
         assert not unresolved, (
             f"the matrix covers classes the registry cannot resolve: {unresolved}"
         )
@@ -2212,7 +2213,7 @@ class TestMatrixIntegrity:
         :data:`UNMODELLED_FORMATTERS`, while a probe's refusal stays
         ``unsupported`` and needs no row.
         """
-        ExpressionRegistry._auto_register_builtins()
+        auto_register_builtins()
         counts: Dict[str, int] = {}
         for fqn in sorted(REGISTERED):
             instance, _source = make_instance(REGISTERED[fqn], oracle_dialect)

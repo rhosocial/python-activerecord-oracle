@@ -9,7 +9,7 @@ from rhosocial.activerecord.backend.expression import (
     LimitOffsetClause,
     LockStrength,
     OrderByClause,
-    OrderByExpression,
+    OrderByItem,
 )
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.expression import OracleForUpdateClause
@@ -34,7 +34,7 @@ def test_nulls_first_last_supported(dialect):
     assert dialect.supports_nulls_first_last() is True
     sql, _ = OrderByClause(
         dialect,
-        expressions=[OrderByExpression(dialect, Column(dialect, "name"), nulls_last=True)],
+        expressions=[OrderByItem(dialect, Column(dialect, "name"), nulls_last=True)],
     ).to_sql()
     assert "NULLS LAST" in sql
 

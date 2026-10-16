@@ -9,7 +9,7 @@ Oracle execution is covered in ``test_oracle_partition_phase5_real.py``.
 import pytest
 
 from rhosocial.activerecord.backend.expression import Column, Literal
-from rhosocial.activerecord.backend.expression.operators import RawSQLExpression
+from rhosocial.activerecord.backend.expression.operators import RawSQL
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.expression.partition import (
@@ -43,7 +43,7 @@ class TestOracleIntervalPartition:
         d = _dialect()
         c = OracleIntervalPartitionClause(
             d, [Column(d, "created_at")],
-            interval=RawSQLExpression(d, "NUMTOYMINTERVAL(1, 'YEAR')"),
+            interval=RawSQL(d, "NUMTOYMINTERVAL(1, 'YEAR')"),
             partitions=[
                 OraclePartitionDefinition(name="p0", less_than=[OraclePartitionValue(d, "2026-01-01")]),
             ],
@@ -59,7 +59,7 @@ class TestOracleIntervalPartition:
         with pytest.raises(ValueError, match="exactly one"):
             OracleIntervalPartitionClause(
                 d, [Column(d, "a"), Column(d, "b")],
-                interval=RawSQLExpression(d, "x"),
+                interval=RawSQL(d, "x"),
                 partitions=[OraclePartitionDefinition(name="p0", less_than=[OraclePartitionValue(d, 1)])],
             )
 
@@ -68,7 +68,7 @@ class TestOracleIntervalPartition:
         with pytest.raises(ValueError, match="seed partition"):
             OracleIntervalPartitionClause(
                 d, [Column(d, "created_at")],
-                interval=RawSQLExpression(d, "x"),
+                interval=RawSQL(d, "x"),
                 partitions=[],
             )
 
@@ -87,7 +87,7 @@ class TestOracleIntervalPartition:
         d = OracleDialect(version=(10, 0, 0))
         c = OracleIntervalPartitionClause(
             d, [Column(d, "created_at")],
-            interval=RawSQLExpression(d, "x"),
+            interval=RawSQL(d, "x"),
             partitions=[OraclePartitionDefinition(name="p0", less_than=[OraclePartitionValue(d, 1)])],
         )
         with pytest.raises(UnsupportedFeatureError):

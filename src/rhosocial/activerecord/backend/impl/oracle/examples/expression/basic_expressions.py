@@ -63,11 +63,11 @@ print("2. PIVOT/UNPIVOT Expressions")
 print("-" * 40)
 
 from rhosocial.activerecord.backend.impl.oracle.expression import (
-    PivotExpression,
-    UnpivotExpression,
+    Pivot,
+    Unpivot,
 )
 
-pivot = PivotExpression(
+pivot = Pivot(
     dialect,
     aggregate_function="SUM",
     value_column="sales",
@@ -79,7 +79,7 @@ print("PIVOT expression:")
 print(f"  SQL: {sql}")
 print(f"  Params: {params}")
 
-unpivot = UnpivotExpression(
+unpivot = Unpivot(
     dialect,
     value_column="sales",
     pivot_column="month",
