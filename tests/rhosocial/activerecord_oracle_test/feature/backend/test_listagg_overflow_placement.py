@@ -30,10 +30,12 @@ def dialect():
 
 
 def _listagg(dialect, within_group=None, on_overflow=None):
-    expr = listagg(dialect, Column(dialect, "x", table="la"))
-    expr._oracle_within_group = within_group
-    expr._oracle_on_overflow = on_overflow
-    return expr
+    return listagg(
+        dialect,
+        Column(dialect, "x", table="la"),
+        within_group_order_by=within_group,
+        on_overflow=on_overflow,
+    )
 
 
 class TestOverflowClausePlacement:
@@ -63,9 +65,16 @@ class TestOverflowClausePlacement:
         assert sql == 'LISTAGG("LA"."X", ?)'
 
     def test_distinct_still_reaches_the_arguments(self, dialect):
-        expr = listagg(dialect, Column(dialect, "x", table="la"))
-        expr.is_distinct = True
-        expr._oracle_on_overflow = "TRUNCATE"
+        from rhosocial.activerecord.backend.impl.oracle.expression.functions import (
+            OracleListaggFunction,
+        )
+
+        expr = OracleListaggFunction(
+            dialect,
+            Column(dialect, "x", table="la"),
+            is_distinct=True,
+            on_overflow="TRUNCATE",
+        )
         sql, _ = expr.to_sql()
         assert sql.startswith("LISTAGG(DISTINCT ")
 
@@ -89,7 +98,7 @@ class TestAgainstTheServer:
                     candidate.read_text()).get("scenarios", {})
                 break
         conn = None
-        for name, s in scenarios.items():
+        for _name, s in scenarios.items():
             try:
                 conn = oracledb.connect(
                     user=s["username"], password=s["password"],

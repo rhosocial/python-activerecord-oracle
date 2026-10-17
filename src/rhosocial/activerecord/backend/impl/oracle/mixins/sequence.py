@@ -281,7 +281,15 @@ class OracleSequenceMixin:
                     ),
                 )
             parts.append("ORDER" if expr.order else "NOORDER")
-        if getattr(expr, "owned_by", None) is not None:
+        # ``owned_by`` is declared by the core CreateSequenceStatement alone;
+        # Oracle's own expression models only the options Oracle spells, so
+        # there is nothing to refuse on that contract. Oracle has no OWNER
+        # clause at all, so a requested one is refused.
+        from rhosocial.activerecord.backend.expression.statements import (
+            CreateSequenceStatement,
+        )
+
+        if isinstance(expr, CreateSequenceStatement) and expr.owned_by is not None:
             if not self.supports_sequence_owned_by():
                 raise UnsupportedFeatureError(
                     self.name,
@@ -484,7 +492,14 @@ class OracleSequenceMixin:
                     ),
                 )
             parts.append("ORDER" if expr.order else "NOORDER")
-        if getattr(expr, "owned_by", None) is not None:
+        # ``owned_by`` is declared by the core AlterSequenceStatement alone;
+        # Oracle's own model has no ALTER statement of its own, and Oracle has
+        # no OWNER clause at all, so a requested one is refused.
+        from rhosocial.activerecord.backend.expression.statements import (
+            AlterSequenceStatement,
+        )
+
+        if isinstance(expr, AlterSequenceStatement) and expr.owned_by is not None:
             if not self.supports_sequence_owned_by():
                 raise UnsupportedFeatureError(
                     self.name,

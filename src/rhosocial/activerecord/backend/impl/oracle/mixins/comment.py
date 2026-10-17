@@ -1,6 +1,7 @@
 # src/rhosocial/activerecord/backend/impl/oracle/mixins/comment.py
 """Oracle COMMENT ON formatter mixin."""
 
+from enum import Enum
 from typing import Tuple
 
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
@@ -61,10 +62,14 @@ class OracleCommentMixin:
                 ),
             )
         object_sql = expr.object.to_sql()[0]
-        column = getattr(expr, "column", None)
-        if column is not None:
-            object_sql = f"{object_sql}.{self.format_identifier(column)}"
-        object_type = getattr(expr.object_type, "value", expr.object_type)
+        if expr.column is not None:
+            object_sql = f"{object_sql}.{self.format_identifier(expr.column)}"
+        # ``object_type`` accepts the enum or its raw spelling; the value is
+        # the enum's, so the rendering asks the declared type rather than
+        # probing for a ``value`` field (expression-dialect rules §11.2).
+        object_type = (
+            expr.object_type.value if isinstance(expr.object_type, Enum) else expr.object_type
+        )
         head = f"COMMENT ON {object_type} {object_sql} IS"
         if expr.comment is None:
             return f"{head} NULL", ()

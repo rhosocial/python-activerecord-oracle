@@ -6,7 +6,6 @@ from typing import Tuple, TYPE_CHECKING
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 
 if TYPE_CHECKING:  # pragma: no cover
-    from rhosocial.activerecord.backend.expression.objects import MaterializedView
     from rhosocial.activerecord.backend.expression.statements import (
         CreateMaterializedViewStatement,
         DropMaterializedViewStatement,
@@ -71,6 +70,7 @@ class OracleMaterializedViewMixin:
                 graceful-DDL option was asked for below 23ai.
         """
         from rhosocial.activerecord.backend.expression.objects import MaterializedView
+        from ..expression.materialized_view import OracleCreateMaterializedViewExpression
 
         if not isinstance(expr.view, MaterializedView):
             raise TypeError(
@@ -88,45 +88,53 @@ class OracleMaterializedViewMixin:
                 ),
             )
         parts = ["CREATE MATERIALIZED VIEW"]
-        if getattr(expr, "if_not_exists", False):
-            if self.version < (23, 0, 0):
-                raise UnsupportedFeatureError(
-                    self.name,
-                    "CREATE MATERIALIZED VIEW IF NOT EXISTS",
-                    suggestion=(
-                        f"Oracle {self.version} does not support IF NOT "
-                        "EXISTS; graceful DDL requires Oracle 23ai or later."
-                    ),
-                )
-            parts.append("IF NOT EXISTS")
+        # The Oracle statement and the core statement are two contracts that
+        # share one formatter: the Oracle one declares ``if_not_exists`` and
+        # the BUILD / REFRESH / QUERY REWRITE option set, the core one the
+        # SQL-standard ``with_data`` / ``no_data`` pair. Each is read on the
+        # contract that declares it, dispatched by class rather than probed.
+        if isinstance(expr, OracleCreateMaterializedViewExpression):
+            if expr.if_not_exists:
+                if self.version < (23, 0, 0):
+                    raise UnsupportedFeatureError(
+                        self.name,
+                        "CREATE MATERIALIZED VIEW IF NOT EXISTS",
+                        suggestion=(
+                            f"Oracle {self.version} does not support IF NOT "
+                            "EXISTS; graceful DDL requires Oracle 23ai or later."
+                        ),
+                    )
+                parts.append("IF NOT EXISTS")
         parts.append(expr.view.to_sql()[0])
         if expr.column_aliases:
             cols = ", ".join(self.format_identifier(c) for c in expr.column_aliases)
             parts.append(f"({cols})")
         if expr.tablespace:
             parts.append(f"TABLESPACE {self.format_identifier(expr.tablespace)}")
-        build_mode = getattr(expr, "build_mode", None)
-        if build_mode is not None:
-            parts.append(f"BUILD {build_mode.value}")
-        elif getattr(expr, "with_data", False):
-            # Oracle spells the SQL-standard WITH DATA as BUILD IMMEDIATE.
-            parts.append("BUILD IMMEDIATE")
-        elif getattr(expr, "no_data", False):
-            # Oracle spells WITH NO DATA as BUILD DEFERRED.
-            parts.append("BUILD DEFERRED")
-        refresh_method = getattr(expr, "refresh_method", None)
-        refresh_trigger = getattr(expr, "refresh_trigger", None)
-        if refresh_method is not None or refresh_trigger is not None:
-            refresh_parts = ["REFRESH"]
-            if refresh_method is not None:
-                refresh_parts.append(refresh_method.value)
-            if refresh_trigger is not None:
-                refresh_parts.append(refresh_trigger.value)
-            parts.append(" ".join(refresh_parts))
-        if getattr(expr, "enable_query_rewrite", False):
-            parts.append("ENABLE QUERY REWRITE")
-        elif getattr(expr, "disable_query_rewrite", False):
-            parts.append("DISABLE QUERY REWRITE")
+        if isinstance(expr, OracleCreateMaterializedViewExpression):
+            build_mode = expr.build_mode
+            if build_mode is not None:
+                parts.append(f"BUILD {build_mode.value}")
+            refresh_method = expr.refresh_method
+            refresh_trigger = expr.refresh_trigger
+            if refresh_method is not None or refresh_trigger is not None:
+                refresh_parts = ["REFRESH"]
+                if refresh_method is not None:
+                    refresh_parts.append(refresh_method.value)
+                if refresh_trigger is not None:
+                    refresh_parts.append(refresh_trigger.value)
+                parts.append(" ".join(refresh_parts))
+            if expr.enable_query_rewrite:
+                parts.append("ENABLE QUERY REWRITE")
+            elif expr.disable_query_rewrite:
+                parts.append("DISABLE QUERY REWRITE")
+        else:
+            # Oracle spells the SQL-standard WITH DATA as BUILD IMMEDIATE
+            # and WITH NO DATA as BUILD DEFERRED.
+            if expr.with_data:
+                parts.append("BUILD IMMEDIATE")
+            elif expr.no_data:
+                parts.append("BUILD DEFERRED")
         query_sql, query_params = expr.query.to_sql()
         parts.append(f"AS {query_sql}")
         return " ".join(parts), query_params
@@ -182,6 +190,7 @@ class OracleMaterializedViewMixin:
                 EXISTS was asked for below 23ai.
         """
         from rhosocial.activerecord.backend.expression.objects import MaterializedView
+        from ..expression.materialized_view import OracleDropMaterializedViewExpression
 
         if not isinstance(expr.view, MaterializedView):
             raise TypeError(
@@ -211,26 +220,33 @@ class OracleMaterializedViewMixin:
                 )
             parts.append("IF EXISTS")
         parts.append(expr.view.to_sql()[0])
-        if getattr(expr, "preserve_table", False):
-            parts.append("PRESERVE TABLE")
-        # Oracle's DROP MATERIALIZED VIEW grammar has no CASCADE; there is no
-        # probe that declares one, so a requested CASCADE is refused by name.
-        # ``getattr`` serves both this backend's expression and the core one.
-        if getattr(expr, "cascade", False):
-            raise UnsupportedFeatureError(
-                self.name,
-                "DROP MATERIALIZED VIEW CASCADE",
-                f"{self.name} does not support DROP MATERIALIZED VIEW CASCADE.",
-            )
-        if getattr(expr, "restrict", False):
-            if not self.supports_materialized_view_restrict():
+        # The two statements share one formatter: the Oracle one declares
+        # PRESERVE TABLE and neither CASCADE nor RESTRICT, while the core one
+        # declares CASCADE / RESTRICT and has no PRESERVE TABLE slot. Each
+        # is read on the contract that declares it, dispatched by class
+        # rather than probed.
+        if isinstance(expr, OracleDropMaterializedViewExpression):
+            if expr.preserve_table:
+                parts.append("PRESERVE TABLE")
+        else:
+            # Oracle's DROP MATERIALIZED VIEW grammar has no CASCADE; there
+            # is no probe that declares one, so a requested CASCADE is
+            # refused by name.
+            if expr.cascade:
                 raise UnsupportedFeatureError(
                     self.name,
-                    "DROP MATERIALIZED VIEW RESTRICT",
-                    f"{self.name} does not support DROP MATERIALIZED VIEW "
-                    "RESTRICT.",
+                    "DROP MATERIALIZED VIEW CASCADE",
+                    f"{self.name} does not support DROP MATERIALIZED VIEW CASCADE.",
                 )
-            parts.append("RESTRICT")
+            if expr.restrict:
+                if not self.supports_materialized_view_restrict():
+                    raise UnsupportedFeatureError(
+                        self.name,
+                        "DROP MATERIALIZED VIEW RESTRICT",
+                        f"{self.name} does not support DROP MATERIALIZED VIEW "
+                        "RESTRICT.",
+                    )
+                parts.append("RESTRICT")
         return " ".join(parts), ()
 
     def format_refresh_materialized_view_statement(
@@ -263,6 +279,7 @@ class OracleMaterializedViewMixin:
                 ``no_data`` was requested.
         """
         from rhosocial.activerecord.backend.expression.objects import MaterializedView
+        from ..expression.materialized_view import OracleRefreshMaterializedViewExpression
 
         if not isinstance(expr.view, MaterializedView):
             raise TypeError(
@@ -270,50 +287,56 @@ class OracleMaterializedViewMixin:
                 f"got {type(expr.view).__name__}"
             )
 
-        if getattr(expr, "concurrent", False):
-            raise UnsupportedFeatureError(
-                self.name,
-                "REFRESH MATERIALIZED VIEW CONCURRENTLY",
-                suggestion=(
-                    "Oracle has no concurrent refresh mode; use "
-                    "DBMS_MVIEW.REFRESH with atomic_refresh or out_of_place."
-                ),
+        # The three SQL-standard options are declared by the core statement
+        # alone; Oracle's own refresh expression carries none of them, and
+        # its PL/SQL procedure call is built from the Oracle statement's own
+        # fields below.
+        if isinstance(expr, OracleRefreshMaterializedViewExpression):
+            standard_options = ()
+        else:
+            standard_options = (
+                (expr.concurrent, "REFRESH MATERIALIZED VIEW CONCURRENTLY",
+                 "Oracle has no concurrent refresh mode; use "
+                 "DBMS_MVIEW.REFRESH with atomic_refresh or out_of_place."),
+                (expr.with_data, "REFRESH MATERIALIZED VIEW WITH DATA",
+                 "Oracle's DBMS_MVIEW.REFRESH always repopulates the view; "
+                 "there is no WITH DATA clause to emit."),
+                (expr.no_data, "REFRESH MATERIALIZED VIEW WITH NO DATA",
+                 "Oracle's DBMS_MVIEW.REFRESH always repopulates the view; "
+                 "it cannot refresh without data."),
             )
-        if getattr(expr, "with_data", False):
-            raise UnsupportedFeatureError(
-                self.name,
-                "REFRESH MATERIALIZED VIEW WITH DATA",
-                "Oracle's DBMS_MVIEW.REFRESH always repopulates the view; "
-                "there is no WITH DATA clause to emit.",
-            )
-        if getattr(expr, "no_data", False):
-            raise UnsupportedFeatureError(
-                self.name,
-                "REFRESH MATERIALIZED VIEW WITH NO DATA",
-                "Oracle's DBMS_MVIEW.REFRESH always repopulates the view; "
-                "it cannot refresh without data.",
-            )
+        for requested, feature, suggestion in standard_options:
+            if requested:
+                raise UnsupportedFeatureError(
+                    self.name,
+                    feature,
+                    suggestion=suggestion,
+                )
 
         name = self._materialized_view_refresh_target(expr)
         args = [f"'{name}'"]
 
-        method = getattr(expr, "method", None)
-        if method is not None:
-            args.append(f"method => '{method.value}'")
-        for attr in (
-            "atomic_refresh",
-            "out_of_place",
-            "nested",
-            "refresh_after_errors",
-            "push_deferred_rpc",
-        ):
-            value = getattr(expr, attr, None)
-            if value is not None:
-                args.append(f"{attr} => {'TRUE' if value else 'FALSE'}")
-        for attr in ("parallelism", "purge_option"):
-            value = getattr(expr, attr, None)
-            if value is not None:
-                args.append(f"{attr} => {value}")
+        if isinstance(expr, OracleRefreshMaterializedViewExpression):
+            method = expr.method
+            if method is not None:
+                args.append(f"method => '{method.value}'")
+            # The named arguments are all declared on the Oracle statement;
+            # each is spelled where the caller supplied it.
+            for flag_name, value in (
+                ("atomic_refresh", expr.atomic_refresh),
+                ("out_of_place", expr.out_of_place),
+                ("nested", expr.nested),
+                ("refresh_after_errors", expr.refresh_after_errors),
+                ("push_deferred_rpc", expr.push_deferred_rpc),
+            ):
+                if value is not None:
+                    args.append(f"{flag_name} => {'TRUE' if value else 'FALSE'}")
+            for value_name, value in (
+                ("parallelism", expr.parallelism),
+                ("purge_option", expr.purge_option),
+            ):
+                if value is not None:
+                    args.append(f"{value_name} => {value}")
 
         call = f"DBMS_MVIEW.REFRESH({', '.join(args)});"
         return f"BEGIN {call} END;", ()

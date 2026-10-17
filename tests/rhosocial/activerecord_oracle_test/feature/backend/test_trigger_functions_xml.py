@@ -57,7 +57,10 @@ class TestCreateTriggerFormatting:
                         events=[TriggerEvent.INSERT, TriggerEvent.UPDATE],
                         function=Function(dialect, "audit_proc"))
         sql, params = expr.to_sql()
-        assert sql == ('CREATE OR REPLACE TRIGGER "TRG_AUDIT" BEFORE INSERT OR UPDATE ON "CUSTOMERS" FOR EACH ROW CALL "AUDIT_PROC"')
+        assert sql == (
+            'CREATE OR REPLACE TRIGGER "TRG_AUDIT" BEFORE INSERT OR UPDATE '
+            'ON "CUSTOMERS" FOR EACH ROW CALL "AUDIT_PROC"'
+        )
         assert params == ()
 
     def test_update_of_columns(self, dialect):
@@ -66,7 +69,10 @@ class TestCreateTriggerFormatting:
                         function=Function(dialect, "do_it"),
                         update_columns=["status", "note"])
         sql, _ = expr.to_sql()
-        assert sql == ('CREATE OR REPLACE TRIGGER "TRG" BEFORE UPDATE OF "STATUS", "NOTE" ON "ORDERS" FOR EACH ROW CALL "DO_IT"')
+        assert sql == (
+            'CREATE OR REPLACE TRIGGER "TRG" BEFORE UPDATE OF "STATUS", '
+            '"NOTE" ON "ORDERS" FOR EACH ROW CALL "DO_IT"'
+        )
 
     def test_instead_of_trigger_on_view(self, dialect):
         expr = _trigger(dialect, trigger=Trigger(dialect, "TRG"),
@@ -129,10 +135,18 @@ class TestOracleFunctionFormatMixin:
         assert func.to_sql() == ('LISTAGG("ENAME", ?)', (",",))
 
     def test_listagg_distinct_within_group_overflow(self, dialect):
-        func = core.FunctionCall(dialect, "LISTAGG", core.Column(dialect, "e"),
-                                 core.Literal(dialect, ";"), is_distinct=True)
-        func._oracle_within_group = "e"
-        func._oracle_on_overflow = "TRUNCATE"
+        from rhosocial.activerecord.backend.impl.oracle.expression.functions import (
+            OracleListaggFunction,
+        )
+
+        func = OracleListaggFunction(
+            dialect,
+            core.Column(dialect, "e"),
+            core.Literal(dialect, ";"),
+            is_distinct=True,
+            within_group_order_by="e",
+            on_overflow="TRUNCATE",
+        )
         sql, params = func.to_sql()
         # ON OVERFLOW sits inside the argument list. Oracle's grammar puts it
         # there and nowhere else -- the form with it after WITHIN GROUP is
@@ -159,8 +173,13 @@ class TestOracleFunctionFormatMixin:
         )
 
     def test_json_table_without_columns(self, dialect):
-        func = core.FunctionCall(dialect, "JSON_TABLE", core.Column(dialect, "doc"),
-                                 core.Literal(dialect, "$"))
+        from rhosocial.activerecord.backend.impl.oracle.expression.functions import (
+            OracleJsonTableFunction,
+        )
+
+        func = OracleJsonTableFunction(
+            dialect, core.Column(dialect, "doc"), core.Literal(dialect, "$")
+        )
         assert func.to_sql() == ('JSON_TABLE("DOC", ?)', ("$",))
 
     def test_plain_function_falls_back_to_generic(self, dialect):

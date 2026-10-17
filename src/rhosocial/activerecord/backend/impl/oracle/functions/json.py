@@ -85,8 +85,13 @@ def json_value(
     path: str,
     returning: Union[str, "DataType", None] = None,
 ) -> "bases.BaseExpression":
-    """Oracle JSON_VALUE: extract a scalar from a JSON document."""
+    """Oracle JSON_VALUE: extract a scalar from a JSON document.
+
+    Builds :class:`OracleJsonValueFunction`, whose ``returning_type``
+    contract field carries the ``RETURNING`` clause to the formatter.
+    """
     from rhosocial.activerecord.backend.expression import core
+    from ..expression.functions import OracleJsonValueFunction
     # Oracle rejects a bound path: ORA-40454 "path expression not a
     # literal". mixins/json.py already inlines it on the expression path;
     # this is the same requirement on the factory path. Whether a literal
@@ -94,10 +99,14 @@ def json_value(
     # the inlining class is DdlLiteral -- the only class declaring
     # ``inline_params = True`` -- and format_literal escapes the value.
     path_expr = core.DdlLiteral(dialect, path)
-    func = core.FunctionCall(dialect, "JSON_VALUE", json_doc, path_expr)
-    if returning is not None:
-        func._oracle_returning_type = _coerce_returning_type(dialect, returning)
-    return func
+    return OracleJsonValueFunction(
+        dialect,
+        json_doc,
+        path_expr,
+        returning_type=(
+            _coerce_returning_type(dialect, returning) if returning is not None else None
+        ),
+    )
 
 
 def json_query(
@@ -106,8 +115,13 @@ def json_query(
     path: str,
     returning: Union[str, "DataType", None] = None,
 ) -> "bases.BaseExpression":
-    """Oracle JSON_QUERY: extract a JSON object/array from a document."""
+    """Oracle JSON_QUERY: extract a JSON object/array from a document.
+
+    Builds :class:`OracleJsonQueryFunction`, whose ``returning_type``
+    contract field carries the ``RETURNING`` clause to the formatter.
+    """
     from rhosocial.activerecord.backend.expression import core
+    from ..expression.functions import OracleJsonQueryFunction
     # Oracle rejects a bound path: ORA-40454 "path expression not a
     # literal". mixins/json.py already inlines it on the expression path;
     # this is the same requirement on the factory path. Whether a literal
@@ -115,10 +129,14 @@ def json_query(
     # the inlining class is DdlLiteral -- the only class declaring
     # ``inline_params = True`` -- and format_literal escapes the value.
     path_expr = core.DdlLiteral(dialect, path)
-    func = core.FunctionCall(dialect, "JSON_QUERY", json_doc, path_expr)
-    if returning is not None:
-        func._oracle_returning_type = _coerce_returning_type(dialect, returning)
-    return func
+    return OracleJsonQueryFunction(
+        dialect,
+        json_doc,
+        path_expr,
+        returning_type=(
+            _coerce_returning_type(dialect, returning) if returning is not None else None
+        ),
+    )
 
 
 def json_exists(
@@ -179,14 +197,16 @@ def json_table(
 ) -> "bases.BaseExpression":
     """Oracle JSON_TABLE: query JSON data as a relational table.
 
-    Uses ``FunctionCall`` with ``_oracle_json_table_columns`` metadata
-    so the ``format_function_call`` override emits the ``COLUMNS (...)``
-    sub-clause after the root path.
+    Builds :class:`OracleJsonTableFunction`, whose ``columns`` contract
+    field carries the ``COLUMNS (...)`` sub-clause to the formatter after
+    the root path.
     """
     from rhosocial.activerecord.backend.expression import core
-    func = core.FunctionCall(
-        dialect, "JSON_TABLE",
-        json_doc, core.Literal(dialect, path),
+    from ..expression.functions import OracleJsonTableFunction
+
+    return OracleJsonTableFunction(
+        dialect,
+        json_doc,
+        core.Literal(dialect, path),
+        columns=columns or None,
     )
-    func._oracle_json_table_columns = columns
-    return func

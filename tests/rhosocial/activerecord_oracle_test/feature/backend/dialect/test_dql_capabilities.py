@@ -34,7 +34,7 @@ def test_nulls_first_last_supported(dialect):
     assert dialect.supports_nulls_first_last() is True
     sql, _ = OrderByClause(
         dialect,
-        expressions=[OrderByItem(dialect, Column(dialect, "name"), nulls_last=True)],
+        expressions=[OrderByItem(dialect, Column(dialect, "name"), nulls="last")],
     ).to_sql()
     assert "NULLS LAST" in sql
 
@@ -45,5 +45,7 @@ def test_wait_lock_renders(dialect):
 
 
 def test_share_strength_raises(dialect):
-    with pytest.raises(Exception):
+    from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
+
+    with pytest.raises(UnsupportedFeatureError):
         ForUpdateClause(dialect, strength=LockStrength.SHARE).to_sql()

@@ -11,7 +11,6 @@ from typing import Any, List, Optional, Sequence, Tuple, TYPE_CHECKING, cast
 
 from rhosocial.activerecord.backend.expression.bases import BaseExpression
 from rhosocial.activerecord.backend.expression.objects import Type
-from rhosocial.activerecord.backend.expression.serialization import register_expression_class
 from rhosocial.activerecord.backend.expression.statements.ddl_type import (
     DropTypeStatement,
     TypeAlterAction,
@@ -1455,32 +1454,6 @@ OracleCompileTypeAction = OracleAlterTypeCompileAction
 OracleSetTypeFinalAction = OracleAlterTypeFinalAction
 OracleSetTypeInstantiableAction = OracleAlterTypeInstantiableAction
 OracleDropTypeWithOptionsExpression = OracleDropTypeExpression
-
-
-_EXPRESSION_TYPES = (
-    OracleObjectTypeDefinition,
-    OracleSqljTypeDefinition,
-    OracleVarrayTypeDefinition,
-    OracleNestedTableTypeDefinition,
-    OracleIncompleteTypeDefinition,
-    OracleAlterTypeAddAttributeAction,
-    OracleAlterTypeModifyAttributeAction,
-    OracleAlterTypeDropAttributeAction,
-    OracleAlterTypeAddMethodAction,
-    OracleAlterTypeDropMethodAction,
-    OracleAlterTypeLimitAction,
-    OracleAlterTypeElementTypeAction,
-    OracleAlterTypeCompileAction,
-    OracleAlterTypeFinalAction,
-    OracleAlterTypeInstantiableAction,
-    OracleAlterTypeResetAction,
-    OracleCreateTypeBodyExpression,
-    OracleDropTypeExpression,
-    DropTypeBodyExpression,
-    OracleDropTypeBodyExpression,
-)
-for _expression_type in _EXPRESSION_TYPES:
-    register_expression_class(_expression_type)
 
 
 __all__ = [

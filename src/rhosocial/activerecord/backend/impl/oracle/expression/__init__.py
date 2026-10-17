@@ -91,6 +91,14 @@ from .sources import OracleNamedRelationRef
 from .vector import VectorLiteralExpression, VectorOperandExpression
 from .table import TableCompressionClauseExpression, TablespaceClauseExpression
 from .trigger import DisableTriggerExpression, EnableTriggerExpression
+from .functions import (
+    OracleListaggFunction,
+    OraclePercentileContFunction,
+    OraclePercentileDiscFunction,
+    OracleJsonValueFunction,
+    OracleJsonQueryFunction,
+    OracleJsonTableFunction,
+)
 
 __all__ = [
 'OracleColumnDefinition', 'OracleColumnOptions',
@@ -171,4 +179,8 @@ __all__ = [
     'TableCompressionClauseExpression', 'TablespaceClauseExpression',
     # Trigger DDL expressions
     'DisableTriggerExpression', 'EnableTriggerExpression',
+    # Oracle derived function-call nodes (LISTAGG / PERCENTILE / JSON)
+    'OracleListaggFunction', 'OraclePercentileContFunction',
+    'OraclePercentileDiscFunction', 'OracleJsonValueFunction',
+    'OracleJsonQueryFunction', 'OracleJsonTableFunction',
 ]

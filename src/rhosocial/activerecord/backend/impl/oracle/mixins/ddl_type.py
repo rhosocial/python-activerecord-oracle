@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Iterable, List, Optional, Tuple, Type, cast
+from typing import Any, Iterable, List, Optional, Tuple, cast
 
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 from rhosocial.activerecord.backend.dialect.mixins.user_defined_type import UserDefinedTypeMixin
@@ -32,16 +32,19 @@ from ..expression.ddl.type import (
     OracleAlterTypeModifyAttributeAction,
     OracleAlterTypeResetAction,
     OracleCreateTypeBodyExpression,
+    OracleDropTypeExpression,
     OracleIncompleteTypeDefinition,
     OracleNestedTableTypeDefinition,
     OracleObjectTypeDefinition,
     OracleSqljTypeDefinition,
     OracleTypeAlterAction,
     OracleTypeAttribute,
+    OracleTypeDefinitionBase,
     OracleTypeMethod,
     OracleVarrayTypeDefinition,
     _normalize_invoker_rights,
     _normalize_method_kind,
+    _ResolvedFlagView,
     _validate_accessible_by,
     _validate_method_name,
     _validate_method_parameter,
@@ -422,37 +425,49 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
         return ", ".join(self._format_method(method) for method in methods)
 
     def _format_flags(self, expr: Any) -> List[str]:
+        """The FINAL / INSTANTIABLE / PERSISTABLE tail, from the merged views.
+
+        Every definition that reaches here declares the three ``resolved_*``
+        properties through :class:`_ResolvedFlagView`; unspecified is the
+        property's own ``None``, so the fields are read directly rather than
+        probed.
+        """
         flags: List[str] = []
-        for attribute, keyword in (
-            ("resolved_final", "FINAL"),
-            ("resolved_instantiable", "INSTANTIABLE"),
-            ("resolved_persistable", "PERSISTABLE"),
+        for merged, keyword in (
+            (expr.resolved_final, "FINAL"),
+            (expr.resolved_instantiable, "INSTANTIABLE"),
+            (expr.resolved_persistable, "PERSISTABLE"),
         ):
-            value = getattr(expr, attribute, None)
-            if value is None:
+            if merged is None:
                 continue
-            flags.append(keyword if value else f"NOT {keyword}")
+            flags.append(keyword if merged else f"NOT {keyword}")
         return flags
 
     def _format_common_prefix(self, expr: Any) -> List[str]:
+        """The FORCE / AUTHID / SHARING / COLLATION / ACCESSIBLE BY prefix.
+
+        Every definition that reaches here declares these through
+        :class:`OracleTypeDefinitionBase`; absent is the field's own
+        ``None`` / ``False``, read directly rather than probed.
+        """
         parts: List[str] = []
-        if getattr(expr, "force", False):
+        if expr.force:
             parts.append("FORCE")
-        authid = getattr(expr, "authid", None)
-        invoker_rights = _normalize_invoker_rights(getattr(expr, "invoker_rights", None))
+        authid = expr.authid
+        invoker_rights = _normalize_invoker_rights(expr.invoker_rights)
         if authid is not None and invoker_rights:
             raise ValueError("authid and invoker_rights are mutually exclusive")
         if invoker_rights:
             parts.append("AUTHID CURRENT_USER")
         elif authid:
             parts.append(f"AUTHID {authid}")
-        sharing = getattr(expr, "sharing", None)
+        sharing = expr.sharing
         if sharing:
             parts.append(sharing)
-        default_collation = getattr(expr, "default_collation", None)
+        default_collation = expr.default_collation
         if default_collation:
             parts.append(f"DEFAULT COLLATION {default_collation}")
-        accessible_by = getattr(expr, "accessible_by", None)
+        accessible_by = expr.accessible_by
         if accessible_by is not None:
             accessors = _validate_accessible_by(accessible_by) or ()
             parts.append(f"ACCESSIBLE BY ({', '.join(accessors)})")
@@ -540,12 +555,19 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
     def format_type_definition(self, expr: TypeDefinition) -> Tuple[str, tuple]:
         if not self.supports_type_objects():
             raise UnsupportedFeatureError(self.name, "TYPE definition")
-        if getattr(expr, "resolved_persistable", None) is not None and not self.supports_type_persistable():
+        # PERSISTABLE is declared on every definition except the incomplete
+        # one, so the merged flag is read where it exists and a definition
+        # without the concept simply has none to check.
+        if (
+            isinstance(expr, _ResolvedFlagView)
+            and expr.resolved_persistable is not None
+            and not self.supports_type_persistable()
+        ):
             raise UnsupportedFeatureError(self.name, "TYPE PERSISTABLE clause")
         if not self.supports_type_definition(type(expr)):
             raise UnsupportedFeatureError(
                 self.name,
-                f"TYPE definition {getattr(expr, 'definition_kind', type(expr).__name__)}",
+                f"TYPE definition {expr.definition_kind}",
             )
         if isinstance(expr, OracleSqljTypeDefinition):
             return self._format_sqlj_definition(expr), ()
@@ -575,7 +597,12 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
             raise UnsupportedFeatureError(self.name, "CREATE OR REPLACE TYPE")
         if expr.if_not_exists and expr.or_replace:
             raise ValueError("CREATE TYPE IF NOT EXISTS and OR REPLACE are mutually exclusive")
-        if expr.if_not_exists and getattr(expr.definition, "force", False):
+        # FORCE is declared on every definition except the incomplete one,
+        # so the flag is read where it exists; an incomplete definition has
+        # no FORCE to combine with IF NOT EXISTS.
+        if expr.if_not_exists and isinstance(
+            expr.definition, _ResolvedFlagView
+        ) and expr.definition.force:
             raise ValueError("CREATE TYPE IF NOT EXISTS cannot be combined with FORCE")
         if not self.supports_type_definition(type(expr.definition)):
             raise UnsupportedFeatureError(
@@ -588,8 +615,13 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
         parts = ["CREATE"]
         if expr.or_replace:
             parts.append("OR REPLACE")
-        editionable = getattr(expr.definition, "editionable", False)
-        noneditionable = getattr(expr.definition, "noneditionable", False)
+        # EDITIONABLE / NONEDITIONABLE belong to the object definitions alone;
+        # the collection and incomplete definitions declare neither.
+        editionable = False
+        noneditionable = False
+        if isinstance(expr.definition, OracleTypeDefinitionBase):
+            editionable = expr.definition.editionable
+            noneditionable = expr.definition.noneditionable
         if editionable:
             parts.append("EDITIONABLE")
         elif noneditionable:
@@ -606,7 +638,7 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
         if not self.supports_type_alter_action(type(action)):
             raise UnsupportedFeatureError(
                 self.name,
-                f"ALTER TYPE action {getattr(action, 'action_kind', type(action).__name__)}",
+                f"ALTER TYPE action {action.action_kind}",
             )
         action_sql, params = action.to_sql()
         return action_sql, tuple(params)
@@ -694,7 +726,7 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
         if not self.supports_type_alter_action(type(expr)):
             raise UnsupportedFeatureError(
                 self.name,
-                f"ALTER TYPE action {getattr(expr, 'action_kind', type(expr).__name__)}",
+                f"ALTER TYPE action {expr.action_kind}",
             )
         if isinstance(expr, OracleAlterTypeInstantiableAction):
             value = "INSTANTIABLE" if expr.resolved_instantiable else "NOT INSTANTIABLE"
@@ -761,7 +793,7 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
             )
         raise UnsupportedFeatureError(
             self.name,
-            f"ALTER TYPE action {getattr(expr, 'action_kind', type(expr).__name__)}",
+            f"ALTER TYPE action {expr.action_kind}",
         )
 
     def format_alter_type_statement(self, expr: AlterTypeStatement) -> Tuple[str, tuple]:
@@ -803,8 +835,15 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
                 "DROP TYPE IF EXISTS",
                 _TYPE_IF_EXISTS_DROP_ALTERNATIVE,
             )
-        force = bool(getattr(expr, "force", False))
-        validate = bool(vars(expr).get("validate", False))
+        # FORCE / VALIDATE are Oracle's own additions to DROP TYPE, declared on
+        # this backend's statement; the core statement has neither, so there
+        # is nothing to read -- and the pair's mutual exclusion was already
+        # enforced when the Oracle statement was constructed.
+        force = False
+        validate = False
+        if isinstance(expr, OracleDropTypeExpression):
+            force = expr.force
+            validate = expr.validate
         if force and validate:
             raise ValueError("DROP TYPE FORCE and VALIDATE are mutually exclusive")
         if force and not self.supports_drop_type_force():

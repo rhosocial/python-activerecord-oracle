@@ -15,6 +15,10 @@ name and the alias -- the flashback clause.
 
 from typing import Tuple, TYPE_CHECKING
 
+from rhosocial.activerecord.backend.expression.core import Subquery
+from rhosocial.activerecord.backend.expression.objects import Table
+from rhosocial.activerecord.backend.expression.sources.base import TableSource
+
 from ..expression.sources import OracleNamedRelationRef
 
 if TYPE_CHECKING:
@@ -97,10 +101,18 @@ class OracleExpressionMixin:
         if len(expr.select) <= 1:
             return sql, params
 
-        from_ = getattr(expr, "from_", None)
+        # The qualifier for a bare ``*`` comes from the FROM source's own
+        # declared field, dispatched by the source's class rather than probed:
+        # a ``TableSource`` (and every subclass -- NamedRelationRef, joins,
+        # VALUES, table functions, LATERAL, graph tables) declares ``alias``,
+        # a bare ``Table`` names itself, and a ``Subquery`` declares ``alias``.
+        # A ``str`` source names the default schema's table and needs no
+        # qualifier here, exactly as before.
         qualifier = None
-        if from_ is not None and not isinstance(from_, (str, list)):
-            qualifier = getattr(from_, "alias", None) or getattr(from_, "name", None)
+        if isinstance(expr.from_, (TableSource, Subquery)):
+            qualifier = expr.from_.alias
+        elif isinstance(expr.from_, Table):
+            qualifier = expr.from_.name
 
         if qualifier is None:
             return sql, params

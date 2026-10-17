@@ -517,8 +517,25 @@ def test_type_ddl_serialization_registration() -> None:
         OracleDropTypeExpression(dialect, Type(dialect, "person_t"), force=True),
         DropTypeBodyExpression(dialect, Type(dialect, "person_t")),
     )
+    # A kind is read back through a caller-supplied whitelist (core
+    # 8d474dc8): the backend package registers nothing at import, so the
+    # registry this test reads through is one it assembles itself --
+    # framework nodes to resolve the nested core nodes, then this tree's
+    # own kinds and the dataclass / enum shapes its artifacts name.
+    from rhosocial.activerecord.backend.expression.registry import ExpressionRegistry
+    from rhosocial.activerecord.backend.expression.serialization import default_registry
+
+    framework = default_registry()
+    registry = ExpressionRegistry()
+    for kind in framework.node_kinds():
+        registry.register_node(framework.resolve_node(kind))
     for expression in expressions:
-        restored = deserialize(serialize(expression), dialect)
+        registry.register_node(type(expression))
+    registry.register_dataclass(OracleTypeAttribute)
+    registry.register_dataclass(OracleTypeMethod)
+    registry.register_enum(OracleAlterTypeDependentHandling)
+    for expression in expressions:
+        restored = deserialize(serialize(expression), dialect, registry=registry)
         assert type(restored) is type(expression)
         assert serialize(restored) == serialize(expression)
 
