@@ -45,6 +45,7 @@ from .transaction import OracleTransactionMixin
 from .trigger import OracleTriggerMixin
 from .truncate import OracleTruncateMixin
 from .types import OracleTypeSupportMixin, OracleTypeSuggestionMixin
+from .typed_value import OracleTypedValueMixin
 from .vector import OracleVectorMixin
 from .ddl_view import OracleViewMixin
 from .explain import OracleExplainMixin
@@ -91,6 +92,7 @@ __all__ = [
     "OracleTruncateMixin",
     "OracleTypeSupportMixin",
     "OracleTypeSuggestionMixin",
+    "OracleTypedValueMixin",
     "OracleVectorMixin",
     "OracleViewMixin",
     "OracleExplainMixin",

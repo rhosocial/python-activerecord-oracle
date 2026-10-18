@@ -50,6 +50,13 @@ from rhosocial.activerecord.backend.dialect.mixins import (
     WindowFunctionMixin,
     JSONMixin,
 
+    # Typed value rendering: the generic tier-1 defaults and explicit
+    # tier-2 failures. The Oracle mixin imported with the local mixins
+    # overrides the kinds Oracle spells differently (TO_DATE / TO_TIMESTAMP
+    # / HEXTORAW / INTERVAL ... DAY TO SECOND / the 23ai TRUE-FALSE gate),
+    # so it composes ahead of this one.
+    TypedValueMixin,
+
     # Named objects: each *NameMixin turns one catalogue object into SQL
     # through its format_<kind>_object, and each inherits NamespaceMixin, so
     # each must precede it. RelationSourceMixin renders the FROM side.
@@ -153,6 +160,7 @@ from .mixins import (
     OracleTruncateMixin,
     OracleTypeSupportMixin,
     OracleTypeSuggestionMixin,
+    OracleTypedValueMixin,
     OracleTypeDDLMixin,
     OracleVectorMixin,
     OracleViewMixin,
@@ -219,6 +227,12 @@ class OracleDialect(
     OracleVectorMixin,
     OracleViewMixin,
     OracleExplainMixin,
+    # Value literals: Oracle's spellings ahead of the base's tier-1
+    # rendering. This order is what resolves format_binary_value,
+    # format_uuid_value, format_interval_value and the tier-1 overrides
+    # (TO_DATE / TO_TIMESTAMP / the 23ai TRUE-FALSE gate).
+    OracleTypedValueMixin,
+    TypedValueMixin,
     # ================================================================
     # Generic fallback mixins – defaults that Oracle-specific mixins
     # above can override.
