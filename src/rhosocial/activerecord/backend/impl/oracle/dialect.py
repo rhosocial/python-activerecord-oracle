@@ -50,13 +50,6 @@ from rhosocial.activerecord.backend.dialect.mixins import (
     WindowFunctionMixin,
     JSONMixin,
 
-    # Typed value rendering: the generic tier-1 defaults and explicit
-    # tier-2 failures. The Oracle mixin imported with the local mixins
-    # overrides the kinds Oracle spells differently (TO_DATE / TO_TIMESTAMP
-    # / HEXTORAW / INTERVAL ... DAY TO SECOND / the 23ai TRUE-FALSE gate),
-    # so it composes ahead of this one.
-    TypedValueMixin,
-
     # Named objects: each *NameMixin turns one catalogue object into SQL
     # through its format_<kind>_object, and each inherits NamespaceMixin, so
     # each must precede it. RelationSourceMixin renders the FROM side.
@@ -160,7 +153,7 @@ from .mixins import (
     OracleTruncateMixin,
     OracleTypeSupportMixin,
     OracleTypeSuggestionMixin,
-    OracleTypedValueMixin,
+    OracleLiteralValueMixin,
     OracleTypeDDLMixin,
     OracleVectorMixin,
     OracleViewMixin,
@@ -176,6 +169,16 @@ if TYPE_CHECKING:
 
 
 class OracleDialect(
+    # Ahead of SQLDialectBase, unlike every other mixin in this list. Those
+    # add methods the base does not have, so their position is a readability
+    # choice; this one overrides ``format_literal``, and a mixin placed after
+    # the class it overrides never wins. It resolves Oracle's tier-2
+    # spellings (HEXTORAW, the INTERVAL literal, the quoted UUID text) and
+    # the tier-1 branches Oracle's grammar re-spells or refuses (TO_DATE /
+    # TO_TIMESTAMP against the session format, TRUE/FALSE gated on 23ai,
+    # the time-of-day refusal), and leaves the base's portable forms and
+    # the literal-construction protocol to it.
+    OracleLiteralValueMixin,
     SQLDialectBase,
     # ================================================================
     # Oracle-specific overrides – listed BEFORE the generic mixins they
@@ -227,12 +230,6 @@ class OracleDialect(
     OracleVectorMixin,
     OracleViewMixin,
     OracleExplainMixin,
-    # Value literals: Oracle's spellings ahead of the base's tier-1
-    # rendering. This order is what resolves format_binary_value,
-    # format_uuid_value, format_interval_value and the tier-1 overrides
-    # (TO_DATE / TO_TIMESTAMP / the 23ai TRUE-FALSE gate).
-    OracleTypedValueMixin,
-    TypedValueMixin,
     # ================================================================
     # Generic fallback mixins – defaults that Oracle-specific mixins
     # above can override.

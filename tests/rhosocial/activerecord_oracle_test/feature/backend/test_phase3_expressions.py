@@ -20,6 +20,14 @@ class TestHierarchicalExpressions:
             ConnectByIsLeafExpression, ConnectByIsCycleExpression,
             LevelExpression, SiblingsExpression
         )
+        assert ConnectByExpression is not None
+        assert PriorExpression is not None
+        assert ConnectByRootExpression is not None
+        assert SysConnectByPathExpression is not None
+        assert ConnectByIsLeafExpression is not None
+        assert ConnectByIsCycleExpression is not None
+        assert LevelExpression is not None
+        assert SiblingsExpression is not None
 
     def test_connect_by_root(self):
         """Test CONNECT_BY_ROOT expression."""
@@ -112,16 +120,18 @@ class TestPivotExpressions:
     def test_import_pivot(self):
         """Test importing PIVOT expressions."""
         from rhosocial.activerecord.backend.impl.oracle.expression import (
-            Pivot, Unpivot
+            OraclePivot, OracleUnpivot
         )
+        assert OraclePivot is not None
+        assert OracleUnpivot is not None
 
     def test_pivot_basic(self):
         """Test basic PIVOT expression."""
-        from rhosocial.activerecord.backend.impl.oracle.expression import Pivot
+        from rhosocial.activerecord.backend.impl.oracle.expression import OraclePivot
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
         dialect = OracleDialect(version=(19, 0, 0))
-        pivot = Pivot(
+        pivot = OraclePivot(
             dialect,
             aggregate_function="SUM",
             value_column="amount",
@@ -137,11 +147,11 @@ class TestPivotExpressions:
 
     def test_pivot_with_alias(self):
         """Test PIVOT with alias."""
-        from rhosocial.activerecord.backend.impl.oracle.expression import Pivot
+        from rhosocial.activerecord.backend.impl.oracle.expression import OraclePivot
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
         dialect = OracleDialect(version=(19, 0, 0))
-        pivot = Pivot(
+        pivot = OraclePivot(
             dialect,
             aggregate_function="COUNT",
             value_column="id",
@@ -155,11 +165,11 @@ class TestPivotExpressions:
 
     def test_unpivot_basic(self):
         """Test basic UNPIVOT expression."""
-        from rhosocial.activerecord.backend.impl.oracle.expression import Unpivot
+        from rhosocial.activerecord.backend.impl.oracle.expression import OracleUnpivot
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
         dialect = OracleDialect(version=(19, 0, 0))
-        unpivot = Unpivot(
+        unpivot = OracleUnpivot(
             dialect,
             value_column="amount",
             pivot_column="month",
@@ -172,11 +182,11 @@ class TestPivotExpressions:
 
     def test_unpivot_include_nulls(self):
         """Test UNPIVOT with INCLUDE NULLS."""
-        from rhosocial.activerecord.backend.impl.oracle.expression import Unpivot
+        from rhosocial.activerecord.backend.impl.oracle.expression import OracleUnpivot
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
         dialect = OracleDialect(version=(19, 0, 0))
-        unpivot = Unpivot(
+        unpivot = OracleUnpivot(
             dialect,
             value_column="amount",
             pivot_column="month",
@@ -197,6 +207,10 @@ class TestHintExpressions:
             OracleHintExpression,
             index_hint, parallel_hint, leading_hint
         )
+        assert OracleHintExpression is not None
+        assert callable(index_hint)
+        assert callable(parallel_hint)
+        assert callable(leading_hint)
 
     def test_single_hint(self):
         """Test single hint expression."""
@@ -273,6 +287,7 @@ class TestLockingExpressions:
     def test_import_locking(self):
         """Test importing locking expressions."""
         from rhosocial.activerecord.backend.impl.oracle.expression import OracleForUpdateExpression
+        assert OracleForUpdateExpression is not None
 
     def test_basic_for_update(self):
         """Test basic FOR UPDATE."""
@@ -430,13 +445,50 @@ class TestDialectSupport:
         dialect = OracleDialect(version=(19, 0, 0))
         assert dialect.supports_for_update_wait() is True
 
-    def test_format_methods_exist(self):
-        """Test that dialect has format methods for expressions."""
+    def test_legacy_self_rendering_expressions_render(self):
+        """The hierarchical / pivot / hint expressions render themselves.
+
+        These nodes predate the format_method dispatch and override
+        ``to_sql`` directly, so the dialect declares no ``format_connect_by``
+        / ``format_pivot`` / ``format_unpivot`` / ``format_hint`` for them --
+        the stubs that used to sit here called ``expr.to_sql()`` back, which
+        is not a formatter (an infinite loop for any node that does dispatch,
+        dead code for ones that do not). What is asserted instead is what
+        the callers actually rely on: the classes render, and the loop
+        formatters are gone.
+        """
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
+        from rhosocial.activerecord.backend.impl.oracle.expression import (
+            ConnectByExpression,
+            OracleHintExpression,
+            OraclePivot,
+            OracleUnpivot,
+        )
+        from rhosocial.activerecord.backend.impl.oracle.expression.hierarchical import (
+            PriorExpression,
+        )
+        from rhosocial.activerecord.backend.expression.core import Column
+        from rhosocial.activerecord.backend.expression.predicates import IsNullPredicate
 
         dialect = OracleDialect(version=(19, 0, 0))
-        assert hasattr(dialect, 'format_connect_by')
-        assert hasattr(dialect, 'format_pivot')
-        assert hasattr(dialect, 'format_unpivot')
-        assert hasattr(dialect, 'format_hint')
-        assert hasattr(dialect, 'format_for_update')
+        assert "CONNECT BY" in ConnectByExpression(
+            dialect,
+            condition=PriorExpression(dialect, column="employee_id"),
+            start_with=IsNullPredicate(dialect, Column(dialect, "manager_id")),
+        ).to_sql()[0]
+        assert "PIVOT" in OraclePivot(
+            dialect, aggregate_function="SUM", value_column="amount",
+            pivot_column="month", values=["Jan"],
+        ).to_sql()[0]
+        assert "UNPIVOT" in OracleUnpivot(
+            dialect, value_column="amount", pivot_column="month",
+            columns=["jan_sales"],
+        ).to_sql()[0]
+        assert "/*+" in OracleHintExpression(
+            dialect, hints=["FULL(t)"]
+        ).to_sql()[0]
+        for gone in (
+            "format_connect_by", "format_pivot", "format_unpivot",
+            "format_hint", "format_for_update",
+        ):
+            assert not hasattr(dialect, gone), gone

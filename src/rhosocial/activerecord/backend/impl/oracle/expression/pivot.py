@@ -6,6 +6,14 @@ PIVOT rotates rows to columns, creating a cross-tabulation query.
 UNPIVOT rotates columns to rows, the inverse of PIVOT.
 
 These operations are useful for reporting and data transformation.
+
+The two self-rendering clauses are Oracle's own nodes and carry the backend
+prefix in their class names (rules §3: a backend-specific node's name starts
+with the backend's), which is what keeps their kinds -- ``oracle_pivot`` /
+``oracle_unpivot`` -- distinct from core's classed ``pivot`` / ``unpivot``
+nodes. An artifact carries the kind, so two same-named classes would be one
+ambiguous kind no reader could resolve; the split registry names the
+collision at assembly time rather than reading one class as the other.
 """
 from __future__ import annotations
 
@@ -17,7 +25,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
 
 
-class Pivot(BaseExpression):
+class OraclePivot(BaseExpression):
     """Oracle PIVOT clause for row-to-column transformation.
 
     PIVOT allows you to rotate rows into columns, creating a
@@ -29,7 +37,7 @@ class Pivot(BaseExpression):
         PIVOT (SUM(amount) FOR month IN ('Jan' AS "Jan", 'Feb' AS "Feb"))
 
     Example usage:
-        pivot = Pivot(
+        pivot = OraclePivot(
             dialect,
             aggregate_function="SUM",
             value_column="amount",
@@ -142,7 +150,7 @@ class PivotXMLExpression(BaseExpression):
         return (sql, ())
 
 
-class Unpivot(BaseExpression):
+class OracleUnpivot(BaseExpression):
     """Oracle UNPIVOT clause for column-to-row transformation.
 
     UNPIVOT rotates columns into rows, essentially the inverse of PIVOT.
@@ -153,7 +161,7 @@ class Unpivot(BaseExpression):
         UNPIVOT (amount FOR month IN (jan_sales, feb_sales, mar_sales))
 
     Example usage:
-        unpivot = Unpivot(
+        unpivot = OracleUnpivot(
             dialect,
             value_column="amount",
             pivot_column="month",

@@ -12,7 +12,7 @@ from .hierarchical import (
     ConnectByIsLeafExpression, ConnectByIsCycleExpression,
     LevelExpression, SiblingsExpression
 )
-from .pivot import Pivot, Unpivot
+from .pivot import OraclePivot, OracleUnpivot
 from .hint import (
     OracleHintExpression,
     index_hint, index_asc_hint, index_desc_hint,
@@ -108,7 +108,7 @@ __all__ = [
 'ConnectByIsLeafExpression', 'ConnectByIsCycleExpression',
 'LevelExpression', 'SiblingsExpression',
     # PIVOT/UNPIVOT expressions
-    'Pivot', 'Unpivot',
+    'OraclePivot', 'OracleUnpivot',
     # Query hints
     'OracleHintExpression',
     'index_hint', 'index_asc_hint', 'index_desc_hint',

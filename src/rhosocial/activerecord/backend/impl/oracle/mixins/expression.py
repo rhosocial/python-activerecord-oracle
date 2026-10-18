@@ -66,21 +66,6 @@ class OracleExpressionMixin:
             name_sql = f"{name_sql} {flashback_sql}"
         return name_sql, tuple(params) + tuple(flashback_params)
 
-    def format_connect_by(self, expr: "BaseExpression") -> Tuple[str, tuple]:
-        return expr.to_sql()
-
-    def format_pivot(self, expr: "BaseExpression") -> Tuple[str, tuple]:
-        return expr.to_sql()
-
-    def format_unpivot(self, expr: "BaseExpression") -> Tuple[str, tuple]:
-        return expr.to_sql()
-
-    def format_hint(self, expr: "BaseExpression") -> Tuple[str, tuple]:
-        return expr.to_sql()
-
-    def format_for_update(self, expr: "BaseExpression") -> Tuple[str, tuple]:
-        return expr.to_sql()
-
     def format_query_statement(self, expr: "BaseExpression") -> Tuple[str, tuple]:
         """Oracle SELECT builder.
 

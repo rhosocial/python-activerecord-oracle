@@ -95,10 +95,11 @@ def json_value(
     # Oracle rejects a bound path: ORA-40454 "path expression not a
     # literal". mixins/json.py already inlines it on the expression path;
     # this is the same requirement on the factory path. Whether a literal
-    # inlines is a class-level strategy now, not a per-instance switch, so
-    # the inlining class is DdlLiteral -- the only class declaring
-    # ``inline_params = True`` -- and format_literal escapes the value.
-    path_expr = core.DdlLiteral(dialect, path)
+    # inlines is a per-position flag on the one Literal class (core
+    # 239678e5 -- the DdlLiteral class became ``inline=True``), so the
+    # path is a Literal saying inline=True, and format_literal escapes
+    # the value.
+    path_expr = core.Literal(dialect, path, inline=True)
     return OracleJsonValueFunction(
         dialect,
         json_doc,
@@ -125,10 +126,11 @@ def json_query(
     # Oracle rejects a bound path: ORA-40454 "path expression not a
     # literal". mixins/json.py already inlines it on the expression path;
     # this is the same requirement on the factory path. Whether a literal
-    # inlines is a class-level strategy now, not a per-instance switch, so
-    # the inlining class is DdlLiteral -- the only class declaring
-    # ``inline_params = True`` -- and format_literal escapes the value.
-    path_expr = core.DdlLiteral(dialect, path)
+    # inlines is a per-position flag on the one Literal class (core
+    # 239678e5 -- the DdlLiteral class became ``inline=True``), so the
+    # path is a Literal saying inline=True, and format_literal escapes
+    # the value.
+    path_expr = core.Literal(dialect, path, inline=True)
     return OracleJsonQueryFunction(
         dialect,
         json_doc,
@@ -149,10 +151,11 @@ def json_exists(
     # Oracle rejects a bound path: ORA-40454 "path expression not a
     # literal". mixins/json.py already inlines it on the expression path;
     # this is the same requirement on the factory path. Whether a literal
-    # inlines is a class-level strategy now, not a per-instance switch, so
-    # the inlining class is DdlLiteral -- the only class declaring
-    # ``inline_params = True`` -- and format_literal escapes the value.
-    path_expr = core.DdlLiteral(dialect, path)
+    # inlines is a per-position flag on the one Literal class (core
+    # 239678e5 -- the DdlLiteral class became ``inline=True``), so the
+    # path is a Literal saying inline=True, and format_literal escapes
+    # the value.
+    path_expr = core.Literal(dialect, path, inline=True)
     return core.FunctionCall(dialect, "JSON_EXISTS", json_doc, path_expr)
 
 
