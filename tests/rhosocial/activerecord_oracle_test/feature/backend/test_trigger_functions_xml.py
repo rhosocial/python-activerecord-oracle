@@ -199,6 +199,34 @@ class TestOracleFunctionFormatMixin:
 
 
 class TestStringFunctionFactories:
+    def test_char_length_keeps_the_default_length_spelling(self, dialect):
+        """Oracle's LENGTH counts characters, which is CHAR_LENGTH's own
+        semantics -- LENGTHB is the byte counter -- so the core default
+        spelling is the right one and this dialect overrides nothing."""
+        from rhosocial.activerecord.backend.expression.functions.string import (
+            CharLengthFunction,
+        )
+
+        sql, params = CharLengthFunction(dialect, core.Column(dialect, "name")).to_sql()
+        assert sql == 'LENGTH("NAME")'
+        assert params == ()
+
+    def test_coalesce_builds_the_classed_node(self, dialect):
+        """COALESCE is a classed core node now, so the factory builds
+        CoalesceFunction rather than hanging the name on a generic call."""
+        from rhosocial.activerecord.backend.expression.functions.string import (
+            CoalesceFunction,
+        )
+        from rhosocial.activerecord.backend.impl.oracle.functions.null import (
+            coalesce_oracle,
+        )
+
+        call = coalesce_oracle(
+            dialect, core.Column(dialect, "a"), core.Literal(dialect, 0)
+        )
+        assert isinstance(call, CoalesceFunction)
+        assert call.to_sql() == ('COALESCE("A", ?)', (0,))
+
     def test_decode_with_default(self, dialect):
         call = string_funcs.decode_expr(dialect, core.Column(dialect, "status"),
                                         "A", 1, "B", 2, default=0)
