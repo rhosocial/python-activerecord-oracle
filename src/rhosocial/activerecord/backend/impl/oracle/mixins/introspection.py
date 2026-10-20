@@ -230,7 +230,7 @@ class OracleIntrospectionMixin:
         """
         from rhosocial.activerecord.backend.expression import (
             ArithmeticOperation, JoinClause, JoinType, Literal, OrderByClause,
-            QueryStatement, SetOperation,
+            QueryStatement, SetOperation, Subquery,
         )
         from rhosocial.activerecord.backend.expression.query_sources import (
             SetOperationKind,
@@ -319,13 +319,21 @@ class OracleIntrospectionMixin:
         # is the FROM of the statement that sorts the result. The compound query
         # itself carries no ordering -- Oracle applies one ORDER BY to the whole
         # compound, which is why it belongs here rather than to either side.
+        #
+        # The set operation is wrapped in a ``Subquery`` because Oracle requires
+        # a derived table to carry an alias (``ORA-00907`` otherwise), and the
+        # alias is also what the outer projection is allowed to name.
         first = QueryStatement(self, select=sides[0][0], from_=sides[0][1], where=sides[0][2])
         second = QueryStatement(self, select=sides[1][0], from_=sides[1][1], where=sides[1][2])
         return QueryStatement(
             self,
             select=[self._column(alias) for alias in _TABLE_LIST_PROJECTION],
-            from_=SetOperation(
-                self, op=SetOperationKind.UNION_ALL, left=first, right=second
+            from_=Subquery(
+                self,
+                SetOperation(
+                    self, op=SetOperationKind.UNION_ALL, left=first, right=second
+                ),
+                alias="TABLE_LIST",
             ),
             order_by=OrderByClause(self, [self._column("TABLE_NAME")]),
         ).to_sql()
