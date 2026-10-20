@@ -12,7 +12,7 @@ from rhosocial.activerecord.backend.dialect.protocols import GraphTableSupport
 from rhosocial.activerecord.backend.expression import (
     GraphVertex, GraphEdge, GraphEdgeDirection, MatchClause,
     GraphColumn, ColumnsClause, GraphTableExpression,
-    TablePropertiesClause, VertexTable, EdgeTable,
+    TablePropertiesClause, VertexTable, EdgeTableDefinition,
     CreatePropertyGraphStatement, DropPropertyGraphStatement,
     CreateTableStatement, DropTableStatement, ColumnDefinition,
     ColumnConstraint, ColumnForeignKeyConstraint, ColumnPrimaryKeyConstraint,
@@ -158,15 +158,15 @@ def social_graph_data(oracle_backend):
     vt_people = VertexTable(dialect, NodeTable(dialect, "people"),
                             labels=["person"],
                             properties=TablePropertiesClause(dialect, columns=["id", "name", "city"]))
-    et_follows = EdgeTable(dialect, EdgeTableObject(dialect, "follows"), ["follower_id"], ["followed_id"],
+    et_follows = EdgeTableDefinition(dialect, EdgeTableObject(dialect, "follows"), ["follower_id"], ["followed_id"],
                            references_source=("people", ["id"]),
                            references_destination=("people", ["id"]),
                            labels=["follows"])
-    et_posts = EdgeTable(dialect, EdgeTableObject(dialect, "posts"), ["author_id"], ["id"],
+    et_posts = EdgeTableDefinition(dialect, EdgeTableObject(dialect, "posts"), ["author_id"], ["id"],
                          references_source=("people", ["id"]),
                          references_destination=("posts", ["id"]),
                          labels=["posts"])
-    et_likes = EdgeTable(dialect, EdgeTableObject(dialect, "likes"), ["user_id"], ["post_id"],
+    et_likes = EdgeTableDefinition(dialect, EdgeTableObject(dialect, "likes"), ["user_id"], ["post_id"],
                          references_source=("people", ["id"]),
                          references_destination=("posts", ["id"]),
                          labels=["likes"])
@@ -398,7 +398,7 @@ class TestOracleSocialGraph:
         backend.execute(*DropPropertyGraphStatement(dialect, PropertyGraph(dialect, GRAPH_NAME)).to_sql())
 
         vt = VertexTable(dialect, NodeTable(dialect, "people"), labels=["person"])
-        et = EdgeTable(dialect, EdgeTableObject(dialect, "follows"), ["follower_id"], ["followed_id"],
+        et = EdgeTableDefinition(dialect, EdgeTableObject(dialect, "follows"), ["follower_id"], ["followed_id"],
                        references_source=("people", ["id"]),
                        references_destination=("people", ["id"]),
                        labels=["follows"])
@@ -487,7 +487,7 @@ class TestAsyncOracleSocialGraph:
         await backend.execute(*InsertStatement(dialect, Table(dialect, "follows"), source=follows_data).to_sql())
 
         vt = VertexTable(dialect, NodeTable(dialect, "people"), labels=["person"])
-        et = EdgeTable(dialect, EdgeTableObject(dialect, "follows"), ["follower_id"], ["followed_id"],
+        et = EdgeTableDefinition(dialect, EdgeTableObject(dialect, "follows"), ["follower_id"], ["followed_id"],
                        references_source=("people", ["id"]),
                        references_destination=("people", ["id"]),
                        labels=["follows"])

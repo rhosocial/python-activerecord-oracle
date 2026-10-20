@@ -10,7 +10,7 @@ from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.expression import (
     GraphVertex, GraphEdge, GraphEdgeDirection, MatchClause,
     GraphColumn, ColumnsClause, GraphTableExpression,
-    TablePropertiesClause, VertexTable, EdgeTable,
+    TablePropertiesClause, VertexTable, EdgeTableDefinition,
     CreatePropertyGraphStatement, DropPropertyGraphStatement,
     AlterPropertyGraphStatement,
 )
@@ -22,7 +22,7 @@ from rhosocial.activerecord.backend.expression.objects import (
     PropertyGraph,
 )
 # The graph *expressions* above name an object; the objects themselves come from
-# the object tree, where EdgeTable is the catalogue entry rather than the
+# the object tree, where the catalogue entry is aliased rather than the
 # CREATE PROPERTY GRAPH clause -- hence the alias.
 from rhosocial.activerecord.backend.expression.objects import (
     EdgeTable as EdgeTableObject,
@@ -134,7 +134,7 @@ class TestPGQDDLFormat:
                          labels=["person"],
                          key_columns=["id"],
                          properties=TablePropertiesClause(o23c_dialect, columns=["id", "name"]))
-        et = EdgeTable(o23c_dialect, EdgeTableObject(o23c_dialect, "knows"), ["person_a"], ["person_b"],
+        et = EdgeTableDefinition(o23c_dialect, EdgeTableObject(o23c_dialect, "knows"), ["person_a"], ["person_b"],
                        labels=["knows"],
                        properties=TablePropertiesClause(o23c_dialect, columns=["since"]))
         expr = CreatePropertyGraphStatement(o23c_dialect, PropertyGraph(o23c_dialect, "test_graph"), [vt], [et])

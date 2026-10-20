@@ -48,6 +48,12 @@ from rhosocial.activerecord.backend.expression.bases import BaseExpression
 # constraint actions, not relations, and a substring test would hand them a
 # Table. ``SchemaObject`` is the base every catalogue object shares, so an
 # annotation naming it wants an object too.
+#
+# ``EdgeTable`` here is the one in the *object* tree -- the catalogue entry,
+# kind ``edge_table`` -- and not the graph module's ``EdgeTableDefinition``,
+# which is the CREATE PROPERTY GRAPH clause. Core renamed the clause and left
+# the catalogue entry alone, so the two names now denote two different nodes
+# and this matcher must keep naming the catalogue one.
 _MENTIONS_RELATION = re.compile(
     r"\b(Table|View|MaterializedView|Index|Sequence|Type|Domain|Function|Trigger"
     r"|Schema|Database|RelationObject|SchemaObject|NodeTable|EdgeTable)\b"
