@@ -11,13 +11,21 @@ delegation. The core implementation renders the relation through the
 relation's own ``format_<kind>_object``, appends the engine-specific
 time-travel clause and then the alias; Oracle adds one thing between the
 name and the alias -- the flashback clause.
+
+``format_query_statement`` is the second. Oracle requires a select-list
+``*`` that shares the list with other items to be qualified (``t.*``);
+this backend binds the qualifier to the ``AllColumnsWildcard`` node and
+lets the ordinary wildcard formatter render it, rather than rewriting the
+finished SQL text.
 """
 
-from typing import Tuple, TYPE_CHECKING
+import copy
+from typing import TYPE_CHECKING, Optional, Tuple
 
-from rhosocial.activerecord.backend.expression.core import Subquery
+from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
+from rhosocial.activerecord.backend.expression.core import AllColumnsWildcard
 from rhosocial.activerecord.backend.expression.objects import Table
-from rhosocial.activerecord.backend.expression.sources.base import TableSource
+from rhosocial.activerecord.backend.expression.sources import NamedRelationRef
 
 from ..expression.sources import OracleNamedRelationRef
 
@@ -67,66 +75,132 @@ class OracleExpressionMixin:
         return name_sql, tuple(params) + tuple(flashback_params)
 
     def format_query_statement(self, expr: "BaseExpression") -> Tuple[str, tuple]:
-        """Oracle SELECT builder.
+        """Oracle SELECT builder that qualifies the select-list wildcard.
 
         Oracle (unlike PostgreSQL/MySQL/SQLite) rejects ``SELECT *, expr AS x``
-        with ``ORA-00923: FROM keyword not found where expected``. The wildcard
-        must be qualified with a table qualifier (``t.*``) whenever it shares
-        the select-list with other expressions — which is exactly the shape
-        produced by ActiveRecord's ``derived=True`` query option.
+        with ``ORA-00923: FROM keyword not found where expected``: a ``*`` that
+        shares the select list with another item must be written ``t.*``. That
+        is exactly the shape ActiveRecord's ``derived=True`` produces --
+        ``select_columns`` starts as one bare ``AllColumnsWildcard`` and the
+        derived expressions are appended to it.
 
-        This override runs the core builder, then post-processes the resulting
-        SQL by qualifying any bare ``*`` select-item with the FROM source's
-        table alias (or name, when no alias is present). The rewrite is only
-        applied when a bare ``*`` coexists with other select items, so single-
-        column selects and plain ``SELECT *`` statements are untouched.
+        The qualification happens **on the node**, before the statement is
+        rendered: each bare wildcard is replaced by the same node bound to the
+        FROM source, and the ordinary ``format_all_columns_wildcard`` path
+        renders it. The rendered SQL is never parsed or sliced afterwards, so
+        a select item whose text contains a comma or an asterisk
+        (``CONCAT('x, y')``, a quoted identifier, an inline ``*`` inside a
+        function call) cannot be mistaken for a separator or for the wildcard.
+
+        A lone wildcard keeps its bare spelling -- ``SELECT *`` is legal Oracle
+        and qualifying it would change nothing for one source while breaking
+        ``SELECT *`` over a join.
+
+        Args:
+            expr: The ``QueryStatement`` being rendered.
+
+        Returns:
+            Tuple of (SQL string, parameters tuple).
+
+        Raises:
+            UnsupportedFeatureError: A bare ``*`` shares the select list and
+                the FROM clause does not name a single, qualifiable source
+                (a join without an alias, several comma-separated sources, no
+                source at all). Oracle needs one qualifier there and the
+                statement does not say which, so the query is refused instead
+                of guessed.
         """
-        sql, params = super().format_query_statement(expr)
+        wildcard_relation = self._select_list_wildcard_relation(expr)
+        if wildcard_relation is None:
+            return super().format_query_statement(expr)
 
-        if len(expr.select) <= 1:
-            return sql, params
+        # Bind the qualifier to the node and leave the caller's statement
+        # untouched: the select list is shared with the query object that
+        # built it, and rendering must not rewrite it.
+        bound_select = [
+            (
+                AllColumnsWildcard(expr.dialect, relation=wildcard_relation)
+                if isinstance(item, AllColumnsWildcard) and item.relation is None
+                else item
+            )
+            for item in expr.select
+        ]
+        bound_statement = copy.copy(expr)
+        bound_statement.select = bound_select
+        return super().format_query_statement(bound_statement)
 
-        # The qualifier for a bare ``*`` comes from the FROM source's own
-        # declared field, dispatched by the source's class rather than probed:
-        # a ``TableSource`` (and every subclass -- NamedRelationRef, joins,
-        # VALUES, table functions, LATERAL, graph tables) declares ``alias``,
-        # a bare ``Table`` names itself, and a ``Subquery`` declares ``alias``.
-        # A ``str`` source names the default schema's table and needs no
-        # qualifier here, exactly as before.
-        qualifier = None
-        if isinstance(expr.from_, (TableSource, Subquery)):
-            qualifier = expr.from_.alias
-        elif isinstance(expr.from_, Table):
-            qualifier = expr.from_.name
+    def _select_list_wildcard_relation(self, expr: "BaseExpression") -> Optional[NamedRelationRef]:
+        """The row source a bare select-list ``*`` must be qualified by.
 
-        if qualifier is None:
-            return sql, params
+        Returns ``None`` when no bare wildcard shares the select list -- either
+        there is none, or the select list is the wildcard alone, which Oracle
+        accepts unqualified.
+        """
+        shares_select_list = [
+            item
+            for item in expr.select
+            if isinstance(item, AllColumnsWildcard) and item.relation is None
+        ]
+        if not shares_select_list or len(expr.select) == 1:
+            return None
+        return self._row_source_qualifier(expr.from_, expr.dialect)
 
-        try:
-            upper_sql = sql.upper()
-            sel_idx = upper_sql.find("SELECT")
-            if sel_idx == -1:
-                return sql, params
-            # Skip past optional DISTINCT/ALL modifier to reach the select list.
-            from_idx = upper_sql.find(" FROM ", sel_idx + 6)
-            if from_idx == -1:
-                return sql, params
-            select_body = sql[sel_idx + 6:from_idx]
-            upper_body = select_body.upper()
-            items = [s.strip() for s in select_body.split(",")]
-            upper_items = [s.strip() for s in upper_body.split(",")]
+    def _row_source_qualifier(self, from_, dialect) -> NamedRelationRef:
+        """Build the reference that names *from_* in a select list.
 
-            wildcard_positions = [
-                i for i, item in enumerate(upper_items) if item == "*"
-            ]
-            if not wildcard_positions:
-                return sql, params
+        The qualifier is the spelling the query itself uses for the source --
+        the alias when there is one, the relation's own name otherwise -- so it
+        is read off the source node rather than from the rendered FROM text.
+        A source is qualified by identity, never by position: when identity is
+        not available the caller is told to write the wildcard out, because
+        guessing which of several sources a ``*`` spans is exactly what Oracle
+        refuses to do.
 
-            qualifier_sql = self.format_identifier(qualifier)
-            for i in wildcard_positions:
-                items[i] = f"{qualifier_sql}.*"
+        Args:
+            from_: The statement's FROM clause.
+            dialect: The dialect the qualifier is rendered with.
 
-            new_select_body = ", ".join(items)
-            return sql[:sel_idx + 6] + " " + new_select_body + sql[from_idx:], params
-        except Exception:
-            return sql, params
+        Returns:
+            A ``NamedRelationRef`` naming the single source.
+
+        Raises:
+            UnsupportedFeatureError: The FROM clause has no single nameable
+                source.
+        """
+        if isinstance(from_, NamedRelationRef):
+            # A flashback clause says *when* the relation is read, not *which*
+            # relation it is, so it stays on the FROM reference and out of the
+            # qualifier.
+            return NamedRelationRef(
+                dialect,
+                from_.relation,
+                alias=from_.alias,
+                alias_need_quote=from_.alias_need_quote,
+            )
+        if isinstance(from_, Table):
+            return NamedRelationRef(dialect, from_)
+        if isinstance(from_, str):
+            return NamedRelationRef(dialect, Table(dialect, from_))
+
+        # Any other single source is still nameable through its alias: a
+        # derived table, a VALUES list, a table function or an aliased join
+        # renders as ``... <alias>`` and is referred to by that alias alone.
+        alias = getattr(from_, "alias", None)
+        if alias:
+            return NamedRelationRef(
+                dialect,
+                Table(dialect, alias),
+                alias=alias,
+                alias_need_quote=getattr(from_, "alias_need_quote", True),
+            )
+
+        source = "no FROM source" if from_ is None else f"a {type(from_).__name__} source"
+        raise UnsupportedFeatureError(
+            self.name,
+            f"an unqualified '*' beside other select items over {source}",
+            "Oracle needs exactly one table qualifier for '*' and this FROM "
+            "clause does not name a single, referenceable relation. Write the "
+            "wildcard explicitly, e.g. AllColumnsWildcard(dialect, "
+            "relation=NamedRelationRef(dialect, Table(dialect, 't'), alias='t')) "
+            "for 't.*'.",
+        )
