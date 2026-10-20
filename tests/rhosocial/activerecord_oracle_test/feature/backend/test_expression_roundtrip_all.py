@@ -419,12 +419,21 @@ def _register_core_specials():
     # real value nodes, exactly as core registers them in its own dummy2 matrix.
     from rhosocial.activerecord.backend.expression.predicates import (
         ILikePredicate,
+        LikeOperator,
         LikePredicate,
     )
 
+    # The operator is a member of the closed enum, not the word. Core's
+    # ``f2bdf386`` split the LIKE family the way the comparison family was
+    # already split: the word is what the artifact carries and the keyword is
+    # a spelling the dialect owns, so a node constructed with a bare string
+    # renders a wire word into the SQL -- which is the whole defect that
+    # commit fixed, and passing ``"LIKE"`` here reintroduced it in the matrix.
     register_special_constructor(
         "predicates.LikePredicate",
-        lambda d: LikePredicate(d, "LIKE", Column(d, "a"), Literal(d, "%x%")),
+        lambda d: LikePredicate(
+            d, LikeOperator.LIKE, Column(d, "a"), Literal(d, "%x%")
+        ),
     )
     register_special_constructor(
         "predicates.ILikePredicate",

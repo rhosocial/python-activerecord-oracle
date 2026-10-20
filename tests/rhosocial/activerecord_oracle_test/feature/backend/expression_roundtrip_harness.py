@@ -39,6 +39,7 @@ import inspect
 import re
 import typing
 import warnings
+from enum import Enum
 from typing import Any, Callable, Dict, Type
 
 from rhosocial.activerecord.backend.expression.bases import BaseExpression
@@ -132,6 +133,29 @@ def _is_predicate_class(annotation: Any, raw: Any) -> bool:
     return False
 
 
+def _operator_of(annotation: Any, raw: Any):
+    """The closed-enum an ``op`` slot takes, as the annotation names it.
+
+    Each predicate family carries one: ``ComparisonPredicate`` takes a
+    :class:`ComparisonOperator`, ``LikePredicate`` a :class:`LikeOperator`.
+    They are separate enums whose member *names* overlap and whose member
+    *values* differ, so the class named by the annotation is the only thing
+    that says which one to build -- a heuristic that guessed from the
+    parameter's name alone would hand a LIKE slot a comparison member and
+    have core's formatter read ``.keyword`` off an object that carries
+    ``.symbol``.
+
+    Returns:
+        A member of the named enum, or ``None`` when the annotation names no
+        operator enum (a forward reference, or a parameter the caller did not
+        type), so the caller can fall back.
+    """
+    for candidate in (raw, annotation):
+        if isinstance(candidate, type) and issubclass(candidate, Enum):
+            return next(iter(candidate))
+    return None
+
+
 def _placeholder_for(param: inspect.Parameter, dialect: Any = None):
     """Return a heuristic construction value for a required parameter."""
     annotation = param.annotation
@@ -209,17 +233,25 @@ def _placeholder_for(param: inspect.Parameter, dialect: Any = None):
     # the structural branches above never see them.
     if name in ("count", "length", "start", "size", "digits", "precision"):
         return _literal_int(dialect)
-    # An operator slot. ``ComparisonPredicate`` normalizes whatever it is
-    # given, but only a member of the closed set (or one of the characters it
-    # still accepts) survives: the guess's ``"x"`` fallback is refused, which
-    # makes the class look unbuildable when the shape is simply one a guess
-    # cannot name. The members are the word form, so this is also the value an
-    # artifact carries.
+    # An operator slot. The predicate families each carry a member of their own
+    # closed operator enum, and each enum is its own class:
+    # ``ComparisonPredicate`` normalizes whatever it is given, but only a member
+    # of the closed set (or one of the characters it still accepts) survives,
+    # and the LIKE family reads ``.keyword`` off the member -- so the guess's
+    # ``"x"`` fallback both fails the construct and, where it does not, fails
+    # the render. Handing every ``op`` the same member is what made
+    # ``LikePredicate`` read ``'str' object has no attribute 'keyword'`` from
+    # inside core's formatter. Read the annotation, and name the member the
+    # family it names uses: the annotation is the contract, and two enums with
+    # the same member names are not interchangeable.
     if name == "op":
         from rhosocial.activerecord.backend.expression.predicates import (
             ComparisonOperator,
         )
 
+        operator = _operator_of(annotation, raw)
+        if operator is not None:
+            return operator
         return ComparisonOperator.EQ
     if name in ("left", "right") or "predicate" in name or "condition" in name:
         return _comparison(dialect)
