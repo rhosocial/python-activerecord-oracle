@@ -79,6 +79,27 @@ def _dialect_of(introspector):
     return introspector._backend.dialect
 
 
+def _oracle_statement(introspector, sql, params):
+    """Render a *dialect*-rendered statement for the driver, and bind to it.
+
+    A dialect renders ``?`` for every bind -- that is the placeholder the
+    org rules make the single source of truth for the marker -- and Oracle
+    numbers its binds, so the marker has to become ``:1``, ``:2`` and so on
+    before the statement reaches the driver. The conversion lives on the
+    backend because it is the layer that knows the statement is going to
+    *this* driver, and running it here rather than in the introspector keeps
+    the sync and async spellings from each growing their own copy of it.
+
+    Without this step the driver is handed ``?`` and cannot bind, so the
+    statement fails -- and the introspector's own error handling turns that
+    into an empty result, which reads as "the server has no configuration"
+    rather than "the marker was never converted". That is the failure this
+    closes: a correct node rendered correctly and then handed over
+    unconverted.
+    """
+    return introspector._backend._convert_placeholders_to_oracle(sql, params)
+
+
 @dataclass
 class TablespaceInfo:
     """Oracle tablespace information."""
@@ -158,10 +179,11 @@ class SyncOracleStatusIntrospector(OracleStatusIntrospectorMixin, SyncAbstractSt
     ) -> List[Dict[str, Any]]:
         cursor = self._backend._connection.cursor()
         try:
-            if params:
-                cursor.execute(sql, params)
+            oracle_sql, oracle_params = _oracle_statement(self, sql, params)
+            if oracle_params:
+                cursor.execute(oracle_sql, oracle_params)
             else:
-                cursor.execute(sql)
+                cursor.execute(oracle_sql)
             columns = [desc[0].lower() for desc in cursor.description]
             return [dict(zip(columns, row)) for row in cursor.fetchall()]
         finally:
@@ -375,10 +397,11 @@ class AsyncOracleStatusIntrospector(OracleStatusIntrospectorMixin, AsyncAbstract
     ) -> List[Dict[str, Any]]:
         cursor = self._backend._connection.cursor()
         try:
-            if params:
-                await cursor.execute(sql, params)
+            oracle_sql, oracle_params = _oracle_statement(self, sql, params)
+            if oracle_params:
+                await cursor.execute(oracle_sql, oracle_params)
             else:
-                await cursor.execute(sql)
+                await cursor.execute(oracle_sql)
             columns = [desc[0].lower() for desc in cursor.description]
             rows = await cursor.fetchall()
             return [dict(zip(columns, row)) for row in rows]
