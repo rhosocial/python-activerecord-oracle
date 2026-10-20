@@ -163,6 +163,7 @@ from .protocols.partition import OraclePartitionSupport
 from .protocols.data_type import OracleDataTypeSupport
 from .protocols.ddl_type import OracleTypeDDLSupport
 from .reserved_words import ORACLE_RESERVED_WORDS
+from .show import OracleShowDialectMixin
 
 if TYPE_CHECKING:
     pass
@@ -216,6 +217,12 @@ class OracleDialect(
     OracleNamespaceMixin,
     OracleRoutineMixin,
     OracleSchemaMixin,
+    # The SHOW-style data dictionary composer: its ``compose_query_*``
+    # methods are what ``expression/show.py`` delegates to, so the mixin has
+    # to be composed for those expressions to render at all. It was exported
+    # from ``.show`` and documented as composed here, but never listed, which
+    # left every ``OracleQuery*Expression`` failing on a missing attribute.
+    OracleShowDialectMixin,
     OracleSequenceMixin,
     OracleSetOperationMixin,
     OracleSpatialMixin,

@@ -830,8 +830,16 @@ class OracleIncompleteTypeDefinition(TypeDefinition):
         super().__init__(dialect)
 
 
-class OracleAlterTypeDependentHandling(Enum):
-    """Dependent handling clauses accepted after ALTER TYPE actions."""
+class OracleAlterTypeDependentHandling(str, Enum):
+    """Dependent handling clauses accepted after ALTER TYPE actions.
+
+    A word, carried by the artifact as the str it is: ``(str, Enum)`` alone
+    is not enough, because ``Enum.__str__`` wins over the mixin and writes
+    ``OracleAlterTypeDependentHandling.CASCADE`` -- a name nothing on the
+    wire can read.
+    """
+
+    __str__ = str.__str__
 
     INVALIDATE = "INVALIDATE"
     CASCADE = "CASCADE"

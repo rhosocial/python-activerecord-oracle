@@ -138,7 +138,7 @@ class OracleShowDialectMixin:
         name_pattern = params.get("name_pattern")
         binds = []
 
-        view = self._select_objects_view(params.get("-owner"))
+        view = self._select_objects_view(params.get("owner"))
         p = self.get_parameter_placeholder()
         where_parts: list = []
         if not include_invalid:
@@ -150,17 +150,16 @@ class OracleShowDialectMixin:
             where_parts.append(f"object_name LIKE {p}")
             binds.append(name_pattern)
 
-        sql = (
-            f"SELECT owner, object_name, object_type, object_id, "
-            f"TO_CHAR(created, 'YYYY-MM-DD HH24:MI:SS') AS created, "
-            f"TO_CHAR(last_ddl_time, 'YYYY-MM-DD HH24:MI:SS') AS last_ddl_time, "
-            f"status, temporary "
-            f"FROM {view}"
+        selection = (
+            "SELECT owner, object_name, object_type, object_id, "
+            "TO_CHAR(created, 'YYYY-MM-DD HH24:MI:SS') AS created, "
+            "TO_CHAR(last_ddl_time, 'YYYY-MM-DD HH24:MI:SS') AS last_ddl_time, "
+            f"status, temporary FROM {view}"
         )
+        ordering = " ORDER BY object_type, object_name"
         if where_parts:
-            sql += " WHERE " + " AND ".join(where_parts)
-        sql += " ORDER BY object_type, object_name"
-        return sql, tuple(binds)
+            return f"{selection} WHERE {' AND '.join(where_parts)}{ordering}", tuple(binds)
+        return f"{selection}{ordering}", tuple(binds)
 
     # ============================================================
     # Locks (V$LOCK)

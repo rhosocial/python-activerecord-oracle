@@ -26,11 +26,32 @@ if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
 
 
-class OracleSequenceValueMode(Enum):
+class OracleSequenceValueMode(str, Enum):
     """Oracle sequence pseudo-column access modes."""
+
+    __str__ = str.__str__
 
     NEXTVAL = "NEXTVAL"
     CURRVAL = "CURRVAL"
+
+
+def normalize_sequence_value_mode(
+    mode: Union[str, OracleSequenceValueMode],
+) -> OracleSequenceValueMode:
+    """A member passes through; the word it carries becomes that member.
+
+    The artifact carries the word, so a constructor reading one back gets a
+    str and must be able to spell the member from it.
+    """
+    if isinstance(mode, OracleSequenceValueMode):
+        return mode
+    normalized = str(mode).strip().upper()
+    if normalized in OracleSequenceValueMode._value2member_map_:
+        return OracleSequenceValueMode(normalized)
+    raise ValueError(
+        f"unsupported sequence access mode: {mode!r}; expected one of "
+        f"{[member.value for member in OracleSequenceValueMode]}"
+    )
 
 
 class OracleSequenceValueExpression(BaseExpression):
@@ -46,26 +67,20 @@ class OracleSequenceValueExpression(BaseExpression):
         mode: access mode; ``NEXTVAL`` (default) or ``CURRVAL``.
 
     Raises:
-        ValueError: if ``sequence`` is empty.
-        TypeError: if ``mode`` is not an :class:`OracleSequenceValueMode`.
+        ValueError: if ``sequence`` is empty, or ``mode`` names no member.
     """
 
     def __init__(
         self,
         dialect: "OracleDialect",
         sequence: str,
-        mode: OracleSequenceValueMode = OracleSequenceValueMode.NEXTVAL,
+        mode: Union[str, OracleSequenceValueMode] = OracleSequenceValueMode.NEXTVAL,
     ):
         super().__init__(dialect)
         if not isinstance(sequence, str) or not sequence.strip():
             raise ValueError("sequence must be a non-empty string")
-        if not isinstance(mode, OracleSequenceValueMode):
-            raise TypeError(
-                "mode must be an OracleSequenceValueMode value, "
-                f"got {type(mode).__name__}"
-            )
         self.sequence = sequence
-        self.mode = mode
+        self.mode = normalize_sequence_value_mode(mode)
 
     def to_sql(self) -> SQLQueryAndParams:
         if self.mode is OracleSequenceValueMode.NEXTVAL:

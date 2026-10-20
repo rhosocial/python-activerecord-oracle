@@ -1,9 +1,24 @@
 # src/rhosocial/activerecord/backend/impl/oracle/mixins/datetime_op.py
 """Oracle date/time expression formatting mixin."""
 
+from enum import Enum
 from typing import Any, Tuple
 
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
+
+
+def _word(value: Any) -> Any:
+    """The word a datetime field or interval unit *is*, whichever way it came.
+
+    A parameter typed as a word-or-enum arrives either as the member (the
+    constructor normalized it) or as the bare word an artifact carries and the
+    constructor read back. Both are legitimate, so the reader asks which it
+    has rather than reaching for one attribute name: a member carries the
+    word in ``.value`` and a word has no such attribute, and the failure that
+    produces -- ``'str' object has no attribute 'value'``, from inside the
+    formatter -- names neither the field nor the node that held it.
+    """
+    return value.value if isinstance(value, Enum) else value
 
 
 class OracleDateTimeMixin:
@@ -32,18 +47,19 @@ class OracleDateTimeMixin:
             "hour": "HH24",
             "minute": "MI",
         }
-        if expr.field.value == "second":
+        field = _word(expr.field)
+        if field == "second":
             sql = source_sql
-        elif expr.field.value in formats:
-            sql = f"TRUNC({source_sql}, '{formats[expr.field.value]}')"
+        elif field in formats:
+            sql = f"TRUNC({source_sql}, '{formats[field]}')"
         else:
             raise UnsupportedFeatureError(
-                self.name, f"date_trunc({expr.field.value})"
+                self.name, f"date_trunc({field})"
             )
         return self.apply_alias(sql, source_params, expr)
 
     def format_interval_expression(self, expr: "Any") -> Tuple[str, Tuple]:
-        unit = expr.unit.value.upper()
+        unit = _word(expr.unit).upper()
         if unit in {"YEAR", "MONTH"}:
             sql = f"NUMTOYMINTERVAL({self.p()}, '{unit}')"
         elif unit == "WEEK":

@@ -94,8 +94,11 @@ class OracleLockingMixin(object):
         from ..expression.locking import OracleForUpdateClause
 
         if clause.strength != LockStrength.UPDATE:
+            # The message names the strength the way a SQL writer spells it,
+            # which is `.phrase`; `.value` is the word an artifact carries and
+            # reads as a bare `update` with no `FOR ` in front of it.
             raise UnsupportedFeatureError(
-                self.name, f"{clause.strength.value} (unsupported lock strength)"
+                self.name, f"{clause.strength.phrase} (unsupported lock strength)"
             )
 
         sql_parts: List[str] = ["FOR UPDATE"]

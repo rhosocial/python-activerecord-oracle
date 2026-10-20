@@ -37,24 +37,27 @@ if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
 
 
-class MaterializedViewRefreshMethod(Enum):
+class MaterializedViewRefreshMethod(str, Enum):
     """Oracle materialized view refresh methods."""
 
+    __str__ = str.__str__
     FAST = "FAST"
     COMPLETE = "COMPLETE"
     FORCE = "FORCE"
 
 
-class MaterializedViewRefreshTrigger(Enum):
+class MaterializedViewRefreshTrigger(str, Enum):
     """Oracle materialized view refresh trigger modes."""
 
+    __str__ = str.__str__
     ON_COMMIT = "ON COMMIT"
     ON_DEMAND = "ON DEMAND"
 
 
-class MaterializedViewBuildMode(Enum):
+class MaterializedViewBuildMode(str, Enum):
     """Oracle materialized view build (initial population) modes."""
 
+    __str__ = str.__str__
     IMMEDIATE = "IMMEDIATE"
     DEFERRED = "DEFERRED"
 
@@ -214,14 +217,14 @@ class OracleDropMaterializedViewExpression(BaseExpression):
         return "format_drop_materialized_view_statement"
 
 
-class OracleRefreshMethod(Enum):
+class OracleRefreshMethod(str, Enum):
     """``DBMS_MVIEW.REFRESH`` method codes.
 
     These are the *procedure* codes, which differ from the ``REFRESH ON DEMAND``
     / ``REFRESH FAST`` DDL keywords: ``f`` fast, ``C`` complete, ``?`` force,
-    ``P`` partition change tracking, ``A`` always (equivalent to complete).
-    """
+    ``P`` partition change tracking, ``A`` always (equivalent to complete)."""
 
+    __str__ = str.__str__
     FAST = "F"
     COMPLETE = "C"
     FORCE = "?"

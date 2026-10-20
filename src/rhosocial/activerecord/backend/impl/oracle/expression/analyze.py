@@ -26,14 +26,35 @@ if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
 
 
-class OracleAnalyzeMode(Enum):
+class OracleAnalyzeMode(str, Enum):
     """Oracle ``ANALYZE TABLE`` operation modes."""
+
+    __str__ = str.__str__
 
     COMPUTE_STATISTICS = "COMPUTE STATISTICS"
     ESTIMATE_STATISTICS = "ESTIMATE STATISTICS"
     VALIDATE_STRUCTURE = "VALIDATE STRUCTURE"
     LIST_CHAINED_ROWS = "LIST CHAINED ROWS"
     DELETE_SYSTEM_STATISTICS = "DELETE SYSTEM STATISTICS"
+
+
+def normalize_analyze_mode(
+    mode: Union[str, OracleAnalyzeMode],
+) -> OracleAnalyzeMode:
+    """A member passes through; the word it carries becomes that member.
+
+    The artifact carries the word, so a constructor reading one back gets a
+    str and must be able to spell the member from it.
+    """
+    if isinstance(mode, OracleAnalyzeMode):
+        return mode
+    normalized = str(mode).strip().upper()
+    if normalized in OracleAnalyzeMode._value2member_map_:
+        return OracleAnalyzeMode(normalized)
+    raise ValueError(
+        f"unsupported ANALYZE mode: {mode!r}; expected one of "
+        f"{[member.value for member in OracleAnalyzeMode]}"
+    )
 
 
 class OracleAnalyzeExpression(BaseExpression):
@@ -58,15 +79,19 @@ class OracleAnalyzeExpression(BaseExpression):
             outside ``ESTIMATE STATISTICS``, ``cascade`` is used outside
             ``VALIDATE STRUCTURE``, or ``into`` is used outside
             ``LIST CHAINED ROWS``.
-        TypeError: if ``table`` is not a :class:`Table`, ``mode`` is not an
-            :class:`OracleAnalyzeMode`, or ``sample_percent`` is not an int.
+        TypeError: if ``table`` is not a :class:`Table`, or ``sample_percent``
+            is not an int.
+        ValueError: if ``mode`` names no member, if ``sample_percent`` is used
+            outside ``ESTIMATE STATISTICS``, ``cascade`` is used outside
+            ``VALIDATE STRUCTURE``, or ``into`` is used outside
+            ``LIST CHAINED ROWS``.
     """
 
     def __init__(
         self,
         dialect: "OracleDialect",
         table: Table,
-        mode: OracleAnalyzeMode,
+        mode: Union[str, OracleAnalyzeMode],
         sample_percent: Optional[int] = None,
         cascade: bool = False,
         into: Optional[str] = None,
@@ -76,11 +101,7 @@ class OracleAnalyzeExpression(BaseExpression):
             raise TypeError(
                 f"table must be a Table, got {type(table).__name__}"
             )
-        if not isinstance(mode, OracleAnalyzeMode):
-            raise TypeError(
-                "mode must be an OracleAnalyzeMode value, "
-                f"got {type(mode).__name__}"
-            )
+        mode = normalize_analyze_mode(mode)
         if sample_percent is not None:
             if not isinstance(sample_percent, int) or isinstance(sample_percent, bool):
                 raise TypeError(

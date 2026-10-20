@@ -22,7 +22,7 @@ All expressions delegate SQL generation to the dialect through the public
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Any, Optional, TYPE_CHECKING, Union
 
 from rhosocial.activerecord.backend.expression.bases import BaseExpression
 from rhosocial.activerecord.backend.expression.objects import Index, Table
@@ -31,18 +31,27 @@ if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
 
 
-class OracleAsOfMode(Enum):
+class OracleAsOfMode(str, Enum):
     """Oracle ``AS OF`` clause point-in-time modes."""
 
     TIMESTAMP = "TIMESTAMP"
     SCN = "SCN"
 
+    #: A member *is* the word it carries, so ``str()`` and f-string
+    #: interpolation yield the word rather than ``OracleAsOfMode.TIMESTAMP``.
+    #: ``(str, Enum)`` alone does not give that -- ``Enum.__str__`` wins over
+    #: the mixin -- so it is stated once here. The word is what a plain-JSON
+    #: artifact can encode and what a formatter spells.
+    __str__ = str.__str__
 
-class OracleVersionsBetweenMode(Enum):
+
+class OracleVersionsBetweenMode(str, Enum):
     """Oracle ``VERSIONS BETWEEN`` clause range modes."""
 
     TIMESTAMP = "TIMESTAMP"
     SCN = "SCN"
+
+    __str__ = str.__str__
 
 
 class OracleAsOfClause(BaseExpression):
@@ -56,13 +65,13 @@ class OracleAsOfClause(BaseExpression):
 
     Args:
         dialect: the Oracle dialect instance.
-        mode: ``TIMESTAMP`` or ``SCN``.
+        mode: ``TIMESTAMP`` or ``SCN`` -- the member, or the word it carries.
         value: the timestamp/SCN value. Accepts a ``BaseExpression`` (rendered
             via ``to_sql()``) or a raw SQL fragment string, e.g.
             ``"SYSTIMESTAMP - INTERVAL '1' DAY"``.
 
     Raises:
-        TypeError: if ``mode`` is not an :class:`OracleAsOfMode`.
+        ValueError: if ``mode`` names no member.
     """
 
     def __init__(
@@ -72,12 +81,7 @@ class OracleAsOfClause(BaseExpression):
         value: Any,
     ):
         super().__init__(dialect)
-        if not isinstance(mode, OracleAsOfMode):
-            raise TypeError(
-                "mode must be an OracleAsOfMode value, "
-                f"got {type(mode).__name__}"
-            )
-        self.mode = mode
+        self.mode = normalize_as_of_mode(mode)
         self.value = value
 
     @property
@@ -94,12 +98,12 @@ class OracleVersionsBetweenClause(BaseExpression):
 
     Args:
         dialect: the Oracle dialect instance.
-        mode: ``TIMESTAMP`` or ``SCN``.
+        mode: ``TIMESTAMP`` or ``SCN`` -- the member, or the word it carries.
         low_value: the lower bound of the range.
         high_value: the upper bound of the range.
 
     Raises:
-        TypeError: if ``mode`` is not an :class:`OracleVersionsBetweenMode`.
+        ValueError: if ``mode`` names no member.
     """
 
     def __init__(
@@ -110,12 +114,7 @@ class OracleVersionsBetweenClause(BaseExpression):
         high_value: Any,
     ):
         super().__init__(dialect)
-        if not isinstance(mode, OracleVersionsBetweenMode):
-            raise TypeError(
-                "mode must be an OracleVersionsBetweenMode value, "
-                f"got {type(mode).__name__}"
-            )
-        self.mode = mode
+        self.mode = normalize_versions_between_mode(mode)
         self.low_value = low_value
         self.high_value = high_value
 
@@ -197,12 +196,64 @@ class OracleFlashbackTableExpression(BaseExpression):
         return "format_flashback_table_statement"
 
 
-class OraclePurgeObjectType(Enum):
+class OraclePurgeObjectType(str, Enum):
     """Oracle ``PURGE`` statement target object kinds."""
 
     TABLE = "TABLE"
     INDEX = "INDEX"
     RECYCLEBIN = "RECYCLEBIN"
+
+    __str__ = str.__str__
+
+
+def normalize_as_of_mode(mode: Union[str, OracleAsOfMode]) -> OracleAsOfMode:
+    """A member passes through; the word it carries becomes that member.
+
+    An artifact carries the *word* -- a plain-JSON artifact has no place for
+    an enum member, and a str-Enum member is exactly the str the encoder
+    writes -- so a constructor that reads one back gets a word, not a member.
+    Refusing the word would make every deserialized node unbuildable, which
+    is not a capability answer.
+    """
+    if isinstance(mode, OracleAsOfMode):
+        return mode
+    normalized = str(mode).strip().upper()
+    if normalized in OracleAsOfMode._value2member_map_:
+        return OracleAsOfMode(normalized)
+    raise ValueError(
+        f"unsupported AS OF mode: {mode!r}; expected one of "
+        f"{[member.value for member in OracleAsOfMode]}"
+    )
+
+
+def normalize_versions_between_mode(
+    mode: Union[str, OracleVersionsBetweenMode],
+) -> OracleVersionsBetweenMode:
+    """A member passes through; the word it carries becomes that member."""
+    if isinstance(mode, OracleVersionsBetweenMode):
+        return mode
+    normalized = str(mode).strip().upper()
+    if normalized in OracleVersionsBetweenMode._value2member_map_:
+        return OracleVersionsBetweenMode(normalized)
+    raise ValueError(
+        f"unsupported VERSIONS BETWEEN mode: {mode!r}; expected one of "
+        f"{[member.value for member in OracleVersionsBetweenMode]}"
+    )
+
+
+def normalize_purge_object_type(
+    object_type: Union[str, OraclePurgeObjectType],
+) -> OraclePurgeObjectType:
+    """A member passes through; the word it carries becomes that member."""
+    if isinstance(object_type, OraclePurgeObjectType):
+        return object_type
+    normalized = str(object_type).strip().upper()
+    if normalized in OraclePurgeObjectType._value2member_map_:
+        return OraclePurgeObjectType(normalized)
+    raise ValueError(
+        f"unsupported PURGE object type: {object_type!r}; expected one of "
+        f"{[member.value for member in OraclePurgeObjectType]}"
+    )
 
 
 class OraclePurgeExpression(BaseExpression):
@@ -220,7 +271,7 @@ class OraclePurgeExpression(BaseExpression):
             kind must agree with ``object_type``.
 
     Raises:
-        TypeError: if ``object_type`` is not an :class:`OraclePurgeObjectType`,
+        ValueError: if ``object_type`` names no member.
             or ``target`` is not the kind ``object_type`` names.
         ValueError: if ``object_type`` is ``TABLE``/``INDEX`` without a
             target, or ``RECYCLEBIN`` with one.
@@ -233,11 +284,7 @@ class OraclePurgeExpression(BaseExpression):
         target: Optional[object] = None,
     ):
         super().__init__(dialect)
-        if not isinstance(object_type, OraclePurgeObjectType):
-            raise TypeError(
-                "object_type must be an OraclePurgeObjectType value, "
-                f"got {type(object_type).__name__}"
-            )
+        object_type = normalize_purge_object_type(object_type)
         if object_type is OraclePurgeObjectType.RECYCLEBIN:
             if target is not None:
                 raise ValueError("RECYCLEBIN purge does not take a target object")
