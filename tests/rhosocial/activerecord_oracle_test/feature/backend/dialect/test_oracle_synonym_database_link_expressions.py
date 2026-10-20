@@ -258,9 +258,11 @@ class TestOracleDblinkTableReference:
             dialect, OracleTable(dialect, "remote_table", dblink="dl"), alias="r"
         )
         sql, params = ref.to_sql()
-        # The alias keeps the core's ``AS`` separator, as it does for every
-        # other backend: Oracle accepts ``FROM t AS r``.
-        assert sql == '"REMOTE_TABLE"@"DL" AS "R"'
+        # The alias is written bare, not with ``AS``: Oracle allows ``AS`` for a
+        # column alias and rejects it for a row source's (``FROM t AS r`` is
+        # ORA-00933), so the separator comes from the dialect's
+        # ``source_alias_separator`` -- a space here.
+        assert sql == '"REMOTE_TABLE"@"DL" "R"'
         assert params == ()
 
     def test_dblink_rendered_by_the_table_object(self, dialect):

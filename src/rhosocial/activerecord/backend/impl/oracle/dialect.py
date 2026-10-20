@@ -166,7 +166,7 @@ from .reserved_words import ORACLE_RESERVED_WORDS
 from .show import OracleShowDialectMixin
 
 if TYPE_CHECKING:
-    pass
+    from rhosocial.activerecord.backend.expression.bases import BaseExpression
 
 
 class OracleDialect(
@@ -469,6 +469,37 @@ class OracleDialect(
         ``:1, :2, ...`` at execution time.
         """
         return "?"
+
+    def source_alias_separator(self) -> str:
+        """The token before a row source's alias: a single space, no ``AS``.
+
+        Oracle allows ``AS`` for a *column* alias and rejects it for a row
+        source's: ``FROM emp AS e`` is ``ORA-00933``, and an inline view spelled
+        ``FROM (...) AS x`` is ``ORA-00907`` ("missing right parenthesis", which
+        is this parser's way of saying the alias form is not recognized). ``AS``
+        is optional for columns and forbidden here, so the bare space is the one
+        spelling legal in both positions. Every row source in this backend
+        renders through this method, which is why the answer lives at this level
+        rather than in each formatter.
+        """
+        return " "
+
+    def format_subquery(self, expr: "BaseExpression") -> Tuple[str, tuple]:
+        """Render a parenthesized query, aliased the way a row source is.
+
+        An inline view's alias is a correlation name, so it takes the same
+        separator a table alias does (see :meth:`source_alias_separator`) -- on
+        Oracle that is a bare space. An inline view also *requires* an alias in
+        ``FROM``; a caller that leaves one off gets Oracle's own refusal rather
+        than a silently unnameable derived table.
+        """
+        sql = f"({expr.query_input})"
+        if expr.alias:
+            sql = (
+                f"{sql}{self.source_alias_separator()}"
+                f"{self.format_identifier(expr.alias)}"
+            )
+        return sql, expr.query_params
 
     def get_server_version(self) -> Tuple[int, int, int]:
         """Return the configured Oracle version tuple."""

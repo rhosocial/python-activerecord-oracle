@@ -83,8 +83,11 @@ class TestOracleAsOfClause:
         )
         sql, params = ref.to_sql()
         # The flashback clause is a clause on the statement, so it lands
-        # between the name and the alias; the alias keeps the core's ``AS``.
-        assert sql == '"T" AS OF SCN 100 AS "X"'
+        # between the name and the alias. The alias itself is written bare:
+        # Oracle allows ``AS`` for a column alias and rejects it for a row
+        # source's (``FROM t AS x`` is ORA-00933), so the separator is the
+        # dialect's ``source_alias_separator`` -- a space here.
+        assert sql == '"T" AS OF SCN 100 "X"'
         assert params == ()
 
     def test_schema_qualified_with_flashback(self, dialect):
