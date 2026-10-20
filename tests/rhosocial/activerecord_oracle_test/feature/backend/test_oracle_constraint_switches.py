@@ -495,7 +495,7 @@ class TestRenderedDdlStillMatchesTheSwitches:
             ComparisonPredicate,
         )
         from rhosocial.activerecord.backend.expression.statements import (
-            AddTableConstraint,
+            AddTableConstraintAction,
             TableCheckConstraint,
             TableConstraint,
         )
@@ -504,7 +504,7 @@ class TestRenderedDdlStillMatchesTheSwitches:
         # Column-to-column, so the rendered CHECK carries no bind parameter --
         # a DDL predicate with a bind is not something the server would take.
         predicate = ComparisonPredicate(dialect, ">", Column(dialect, "a"), Column(dialect, "b"))
-        action = AddTableConstraint(
+        action = AddTableConstraintAction(
             dialect,
             TableConstraint(
                 dialect, branch=TableCheckConstraint(dialect, predicate), name="CK"
@@ -517,11 +517,11 @@ class TestRenderedDdlStillMatchesTheSwitches:
 
     def test_drop_table_constraint_renders(self):
         from rhosocial.activerecord.backend.expression.statements import (
-            DropTableConstraint,
+            DropTableConstraintAction,
         )
 
         dialect = _dialect()
-        sql, params = DropTableConstraint(dialect, "CK").to_sql()
+        sql, params = DropTableConstraintAction(dialect, "CK").to_sql()
         assert "DROP CONSTRAINT" in sql
         assert "IF EXISTS" not in sql
         assert params == ()
