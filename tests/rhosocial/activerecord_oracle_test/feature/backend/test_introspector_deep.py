@@ -136,14 +136,14 @@ class TestSqlBuilders:
     def test_dialect_index_and_fk_queries_join_constraints(self):
         dialect = OracleDialect(version=(23, 0, 0))
         idx_sql, idx_params = dialect.format_index_info_query(
-            IndexInfoExpression(dialect, "orders").schema("ar_shop")
+            IndexInfoExpression(dialect, "orders", schema="ar_shop")
         )
         assert "ALL_INDEXES" in idx_sql.upper()
         assert "ALL_IND_COLUMNS" in idx_sql.upper()
         assert [str(p) for p in idx_params] == ["AR_SHOP", "ORDERS"]
 
         fk_sql, fk_params = dialect.format_foreign_key_query(
-            ForeignKeyExpression(dialect, "orders").schema("ar_shop")
+            ForeignKeyExpression(dialect, "orders", schema="ar_shop")
         )
         assert "'R'" in fk_sql
         assert [str(p) for p in fk_params] == ["AR_SHOP", "ORDERS"]
