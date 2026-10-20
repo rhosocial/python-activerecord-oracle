@@ -1554,50 +1554,38 @@ def _register_oracle_specials():
         ("sequence.OracleDropSequenceExpression", drop_sequence),
         ("trigger.DisableTriggerExpression", disable_trigger),
         ("trigger.EnableTriggerExpression", enable_trigger),
-        # The Oracle TYPE tree exports every action and definition under two
-        # names (OracleAlterTypeXxxAction and OracleTypeXxxAction). Both names
-        # are collected, so both are registered to the same factory.
+        # The Oracle TYPE tree once exported every action and definition under
+        # two names (OracleAlterTypeXxxAction and an OracleTypeXxxAction /
+        # OracleAddTypeXxxAction alias). Both were registered to the same
+        # factory here, which read as belt-and-braces but was dead work in one
+        # direction: a registration key is a *suffix* matched against the
+        # class's own name, and an alias is not the class's name. The alias
+        # keys matched nothing, so the factory they named never ran, and the
+        # class fell through to the heuristic instead -- exactly the silent
+        # failure the harness's own docstring warns a suffix key can produce.
+        # The aliases are gone from the package now, and one key per class
+        # remains: the one spelled the way the class calls itself.
         ("type.OracleAlterTypeAddAttributeAction", add_attribute),
-        ("type.OracleTypeAddAttributeAction", add_attribute),
-        ("type.OracleAddTypeAttributeAction", add_attribute),
         # MODIFY shares ADD's payload -- the same attribute declaration, a
         # different keyword -- so it is built the same way.
         ("type.OracleAlterTypeModifyAttributeAction", modify_attribute),
-        ("type.OracleTypeModifyAttributeAction", modify_attribute),
-        ("type.OracleModifyTypeAttributeAction", modify_attribute),
         ("type.OracleAlterTypeDropAttributeAction", drop_attribute),
-        ("type.OracleTypeDropAttributeAction", drop_attribute),
-        ("type.OracleDropTypeAttributeAction", drop_attribute),
         ("type.OracleAlterTypeAddMethodAction", add_method),
-        ("type.OracleTypeAddMethodAction", add_method),
-        ("type.OracleAddTypeMethodAction", add_method),
         ("type.OracleAlterTypeDropMethodAction", drop_method),
-        ("type.OracleTypeDropMethodAction", drop_method),
-        ("type.OracleDropTypeMethodAction", drop_method),
         ("type.OracleAlterTypeFinalAction", final_action),
-        ("type.OracleTypeFinalAction", final_action),
-        ("type.OracleSetTypeFinalAction", final_action),
         ("type.OracleAlterTypeInstantiableAction", instantiable_action),
-        ("type.OracleTypeInstantiableAction", instantiable_action),
-        ("type.OracleSetTypeInstantiableAction", instantiable_action),
         ("type.OracleAlterTypeElementTypeAction", element_type),
-        ("type.OracleTypeElementTypeAction", element_type),
         ("type.OracleAlterTypeLimitAction", limit_action),
-        ("type.OracleTypeLimitAction", limit_action),
-        ("type.OracleModifyTypeLimitAction", limit_action),
-        ("type.OracleAlterTypeModifyLimitAction", limit_action),
         ("type.OracleObjectTypeDefinition", object_definition),
         ("type.OracleSqljTypeDefinition", sqlj_definition),
         ("type.OracleVarrayTypeDefinition", varray_definition),
         ("type.OracleNestedTableTypeDefinition", nested_table_definition),
         ("type.DropTypeBodyExpression", drop_type_body),
         ("type.OracleDropTypeBodyExpression", drop_type_body),
-        ("type.OracleTypeBodyDropExpression", drop_type_body),
         # Oracle's own DROP TYPE adds FORCE / VALIDATE, and the guess hands it
         # strings for the type and the flags, which its superclass refuses.
         ("type.OracleDropTypeExpression", drop_type),
         ("type.OracleCreateTypeBodyExpression", create_type_body),
-        ("type.OracleTypeBodyCreateExpression", create_type_body),
         # The abstract partition-maintenance base declares no formatter, so it is
         # built here only so the matrix can assert it says so by name.
         ("partition_lifecycle._OraclePartitionMaintenanceExpression", partition_maintenance_base),

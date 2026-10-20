@@ -1435,35 +1435,6 @@ class OracleDropTypeBodyExpression(DropTypeBodyExpression):
     """Oracle-prefixed alias for DROP TYPE BODY."""
 
 
-OracleTypeAddAttributeAction = OracleAlterTypeAddAttributeAction
-OracleTypeModifyAttributeAction = OracleAlterTypeModifyAttributeAction
-OracleTypeDropAttributeAction = OracleAlterTypeDropAttributeAction
-OracleTypeAddMethodAction = OracleAlterTypeAddMethodAction
-OracleTypeDropMethodAction = OracleAlterTypeDropMethodAction
-OracleTypeLimitAction = OracleAlterTypeLimitAction
-OracleTypeElementTypeAction = OracleAlterTypeElementTypeAction
-OracleTypeCompileAction = OracleAlterTypeCompileAction
-OracleTypeFinalAction = OracleAlterTypeFinalAction
-OracleTypeInstantiableAction = OracleAlterTypeInstantiableAction
-OracleTypeResetAction = OracleAlterTypeResetAction
-OracleAddTypeAttributeAction = OracleAlterTypeAddAttributeAction
-OracleModifyTypeAttributeAction = OracleAlterTypeModifyAttributeAction
-OracleDropTypeAttributeAction = OracleAlterTypeDropAttributeAction
-OracleAddTypeMethodAction = OracleAlterTypeAddMethodAction
-OracleDropTypeMethodAction = OracleAlterTypeDropMethodAction
-OracleModifyTypeLimitAction = OracleAlterTypeLimitAction
-OracleTypeBodyCreateExpression = OracleCreateTypeBodyExpression
-OracleTypeBodyDropExpression = DropTypeBodyExpression
-OracleTypeDependentHandling = OracleAlterTypeDependentHandling
-OracleAlterTypeAttributeAction = OracleAlterTypeAddAttributeAction
-OracleAlterTypeMethodAction = OracleAlterTypeAddMethodAction
-OracleAlterTypeModifyLimitAction = OracleAlterTypeLimitAction
-OracleCompileTypeAction = OracleAlterTypeCompileAction
-OracleSetTypeFinalAction = OracleAlterTypeFinalAction
-OracleSetTypeInstantiableAction = OracleAlterTypeInstantiableAction
-OracleDropTypeWithOptionsExpression = OracleDropTypeExpression
-
-
 __all__ = [
     "OracleTypeAttribute",
     "OracleTypeMethod",
@@ -1489,31 +1460,4 @@ __all__ = [
     "OracleDropTypeExpression",
     "DropTypeBodyExpression",
     "OracleDropTypeBodyExpression",
-    "OracleTypeAddAttributeAction",
-    "OracleTypeModifyAttributeAction",
-    "OracleTypeDropAttributeAction",
-    "OracleTypeAddMethodAction",
-    "OracleTypeDropMethodAction",
-    "OracleTypeLimitAction",
-    "OracleTypeElementTypeAction",
-    "OracleTypeCompileAction",
-    "OracleTypeFinalAction",
-    "OracleTypeInstantiableAction",
-    "OracleTypeResetAction",
-    "OracleAddTypeAttributeAction",
-    "OracleModifyTypeAttributeAction",
-    "OracleDropTypeAttributeAction",
-    "OracleAddTypeMethodAction",
-    "OracleDropTypeMethodAction",
-    "OracleModifyTypeLimitAction",
-    "OracleTypeBodyCreateExpression",
-    "OracleTypeBodyDropExpression",
-    "OracleTypeDependentHandling",
-    "OracleAlterTypeAttributeAction",
-    "OracleAlterTypeMethodAction",
-    "OracleAlterTypeModifyLimitAction",
-    "OracleCompileTypeAction",
-    "OracleSetTypeFinalAction",
-    "OracleSetTypeInstantiableAction",
-    "OracleDropTypeWithOptionsExpression",
 ]

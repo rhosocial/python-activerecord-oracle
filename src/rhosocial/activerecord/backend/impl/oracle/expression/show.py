@@ -21,7 +21,7 @@ setters here either: a builder that patches a node after construction has
 no parameter an artifact can name (expression-dialect §7).
 """
 
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 
 from rhosocial.activerecord.backend.expression.bases import (
     BaseExpression,
