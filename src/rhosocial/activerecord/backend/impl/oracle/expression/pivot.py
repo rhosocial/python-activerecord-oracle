@@ -73,35 +73,17 @@ class OraclePivot(BaseExpression):
         self.alias = alias
         self.default = default
 
-    def to_sql(self) -> SQLQueryAndParams:
-        """Generate PIVOT SQL."""
-        dialect = self.dialect
-        # Format values with aliases
-        value_parts = []
-        for v in self.values:
-            if isinstance(v, str):
-                value_parts.append(f"'{v}' AS \"{v}\"")
-            else:
-                value_parts.append(f"{v} AS \"{v}\"")
+    @property
+    def format_method(self) -> str:
+        """The dialect method that renders this clause.
 
-        values_str = ", ".join(value_parts)
-
-        sql = (
-            f"PIVOT ("
-            f"{self.aggregate_function}({dialect.format_identifier(self.value_column)}) "
-            f"FOR {dialect.format_identifier(self.pivot_column)} "
-            f"IN ({values_str})"
-        )
-
-        if self.default is not None:
-            sql += f" DEFAULT {dialect.format_literal(self.default)}"
-
-        sql += ")"
-
-        if self.alias:
-            sql = f"{sql} {dialect.format_identifier(self.alias)}"
-
-        return (sql, ())
+        A node collects its parameters and a dialect formatter produces the
+        SQL; this clause used to assemble its own text inside ``to_sql()``,
+        which is the shape the org rules put under §16.2. The rendering
+        moved to :meth:`OraclePivotMixin.format_oracle_pivot`, and the node
+        names it the way every other expression here does.
+        """
+        return "format_oracle_pivot"
 
 
 class PivotXMLExpression(BaseExpression):
