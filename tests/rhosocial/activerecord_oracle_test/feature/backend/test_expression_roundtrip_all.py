@@ -1958,14 +1958,6 @@ CORE_ARTIFACT_GAPS: Dict[str, tuple] = {
     # needs either a kind on the parameter's class or an encoder
     # branch, both of which are core's to write.
     # ---------------------------------------------------------------
-    "rhosocial.activerecord.backend.expression.statements.ddl_comment.CommentOnStatement":
-        ("dict", "json", "xml"),
-    "rhosocial.activerecord.backend.expression.statements.ddl_table.ColumnGeneratedConstraint":
-        ("dict", "json", "xml"),
-    "rhosocial.activerecord.backend.expression.statements.ddl_table.ForeignKeyConstraint":
-        ("dict", "json", "xml"),
-    "rhosocial.activerecord.backend.expression.statements.ddl_trigger.CreateTriggerStatement":
-        ("dict", "json", "xml"),
     "rhosocial.activerecord.backend.expression.statements.ddl_type.CreateTypeStatement":
         ("dict", "json", "xml"),
     "rhosocial.activerecord.backend.expression.statements.ddl_view.CreateViewStatement":
@@ -1998,30 +1990,38 @@ CORE_ARTIFACT_GAPS: Dict[str, tuple] = {
         ("dict", "json", "xml"),
 
     # ---------------------------------------------------------------
-    # Two: the XML channel alone. ``DateTimeField`` and ``IntervalUnit``
-    # are ``(str, Enum)`` so JSON writes the word and the constructor
-    # reads it back; the XML encoder writes them through ``str()``,
-    # and the members do not set ``__str__ = str.__str__`` the way
+    # Two: the XML channel alone used to lose the datetime family.
+    # ``DateTimeField`` and ``IntervalUnit`` are ``(str, Enum)``, so
+    # JSON wrote the word the member carries and the constructor read
+    # it back; the XML encoder wrote them through ``str()`` instead,
+    # and neither family set ``__str__ = str.__str__`` the way
     # ``TriggerTiming``, ``ComparisonOperator``, ``SetOperationKind``
-    # and ``ArithmeticOperator`` do. dict and json round-trip.
+    # and ``ArithmeticOperator`` do. Core gave them the missing
+    # ``__str__``, so the encoder writes "year" / "day" and the
+    # normaliser accepts it. No rows left here, and the block stays to
+    # say why the family was the one place the XML channel diverged.
     # ---------------------------------------------------------------
-    "rhosocial.activerecord.backend.expression.datetime.DatePartExpression": ("xml",),
-    "rhosocial.activerecord.backend.expression.datetime.DateTimeAddExpression": ("xml",),
-    "rhosocial.activerecord.backend.expression.datetime.DateTimeDiffExpression": ("xml",),
-    "rhosocial.activerecord.backend.expression.datetime.DateTimeSubtractExpression": ("xml",),
-    "rhosocial.activerecord.backend.expression.datetime.DateTruncExpression": ("xml",),
-    "rhosocial.activerecord.backend.expression.datetime.ExtractExpression": ("xml",),
-    "rhosocial.activerecord.backend.expression.datetime.ExtractFieldExpression": ("xml",),
-    "rhosocial.activerecord.backend.expression.datetime.IntervalExpression": ("xml",),
-    "rhosocial.activerecord.backend.expression.datetime._ExtractBase": ("xml",),
 
     # ---------------------------------------------------------------
-    # Three: JSON and XML decode an enum parameter into a bare word
-    # the node's own constructor refuses. The spelling core uses on
-    # the parameters that do work is a word-or-enum constructor
-    # argument normalised to the member, which these three families
-    # do not have.
+    # Three: a word-or-enum parameter whose constructor does not
+    # normalise the word back into the member. ``GraphEdge``,
+    # ``XMLParseExpression`` and ``XMLSerializeExpression`` refuse the
+    # word outright; ``CreateTriggerStatement`` stores it, so the node
+    # it decodes to cannot render. Either way the fix is a
+    # normalising constructor argument, which is core's to add.
+    #
+    # ``CommentOnStatement``, ``ColumnGeneratedConstraint`` and
+    # ``ForeignKeyConstraint`` used to sit in the all-channels block
+    # beside this one. Core made ``CommentObjectType``,
+    # ``GeneratedColumnType`` and ``ReferentialAction`` str enums, so
+    # the writer carries them on every channel and the classes
+    # round-trip here: measured against the SQL and the bind
+    # parameters, a parameter that comes back as the member's word is
+    # the same SQL. They are gone from the table rather than narrowed,
+    # because no channel loses them any more.
     # ---------------------------------------------------------------
+    "rhosocial.activerecord.backend.expression.statements.ddl_trigger.CreateTriggerStatement":
+        ("json", "xml"),
     "rhosocial.activerecord.backend.expression.graph.GraphEdge": ("json", "xml"),
     "rhosocial.activerecord.backend.expression.xml.XMLParseExpression": ("json", "xml"),
     "rhosocial.activerecord.backend.expression.xml.XMLSerializeExpression": ("json", "xml"),
