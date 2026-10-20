@@ -20,6 +20,63 @@ from rhosocial.activerecord.backend.introspection.status import (
     SyncAbstractStatusIntrospector,
     AsyncAbstractStatusIntrospector,
 )
+from rhosocial.activerecord.backend.expression.core import Column, Literal
+from rhosocial.activerecord.backend.expression.predicates import InPredicate
+from rhosocial.activerecord.backend.expression.statements.dql import QueryStatement
+
+
+def _parameter_query(dialect) -> QueryStatement:
+    """The ``V$PARAMETER`` read this introspector performs, as a node.
+
+    A data-dictionary query is built from the same expression nodes any
+    other query is, and this is the one the configuration reader wants:
+    three columns out of ``V$PARAMETER``, narrowed to the parameter names
+    the caller asked about. The names are *bind parameters*, not text
+    written into the SQL, and that is the part that matters -- a name
+    interpolated into the statement is a name the database has to parse as
+    SQL, and a name bound through a placeholder is a value the database
+    never has to trust. The previous spelling joined the names into an
+    ``IN`` list inside an f-string, which put the request's own data into
+    its SQL text, which is the shape the org rules put under §16.2.
+
+    Returns:
+        A :class:`QueryStatement`, whose ``to_sql()`` the caller renders
+        through the dialect the way every other statement here is.
+    """
+    return QueryStatement(
+        dialect,
+        select=[
+            Column(dialect, "name"),
+            Column(dialect, "value"),
+            Column(dialect, "isdefault"),
+        ],
+        from_="V$PARAMETER",
+        where=InPredicate(
+            dialect,
+            Column(dialect, "name"),
+            # The list travels as one tuple-valued Literal, which is the
+            # spelling core's own ``in_`` helper uses: a tuple rather than a
+            # list, because the tuple is what survives the round-trip and a
+            # list is what an IN clause from hand-joined SQL would have
+            # produced.
+            Literal(
+                dialect,
+                tuple(name for name, *_ in ORACLE_CONFIG_PARAMS),
+            ),
+        ),
+    )
+
+
+def _dialect_of(introspector):
+    """The dialect an introspector renders through.
+
+    The introspectors reach the connection through ``self._backend``, and
+    the backend is the thing that owns a dialect, so the node's ``to_sql()``
+    is a dialect call and the dialect comes from there. Reading it here
+    rather than in each caller keeps the two spellings -- sync and async,
+    which are two classes -- from drifting apart.
+    """
+    return introspector._backend.dialect
 
 
 @dataclass
@@ -96,10 +153,15 @@ class SyncOracleStatusIntrospector(OracleStatusIntrospectorMixin, SyncAbstractSt
         finally:
             cursor.close()
 
-    def _execute_query_dict(self, sql: str) -> List[Dict[str, Any]]:
+    def _execute_query_dict(
+        self, sql: str, params: Optional[tuple] = None
+    ) -> List[Dict[str, Any]]:
         cursor = self._backend._connection.cursor()
         try:
-            cursor.execute(sql)
+            if params:
+                cursor.execute(sql, params)
+            else:
+                cursor.execute(sql)
             columns = [desc[0].lower() for desc in cursor.description]
             return [dict(zip(columns, row)) for row in cursor.fetchall()]
         finally:
@@ -127,11 +189,9 @@ class SyncOracleStatusIntrospector(OracleStatusIntrospectorMixin, SyncAbstractSt
 
     def list_configuration(self, category: Optional[StatusCategory] = None) -> List[StatusItem]:
         items: List[StatusItem] = []
-        param_names = [p[0] for p in ORACLE_CONFIG_PARAMS]
-        placeholders = ", ".join(f"'{n}'" for n in param_names)
-        sql = f"SELECT name, value, isdefault FROM V$PARAMETER WHERE name IN ({placeholders})"
+        sql, params = _parameter_query(_dialect_of(self)).to_sql()
         try:
-            rows = self._execute_query_dict(sql)
+            rows = self._execute_query_dict(sql, params)
         except Exception:
             return items
 
@@ -310,10 +370,15 @@ class AsyncOracleStatusIntrospector(OracleStatusIntrospectorMixin, AsyncAbstract
         finally:
             await cursor.close()
 
-    async def _execute_query_dict(self, sql: str) -> List[Dict[str, Any]]:
+    async def _execute_query_dict(
+        self, sql: str, params: Optional[tuple] = None
+    ) -> List[Dict[str, Any]]:
         cursor = self._backend._connection.cursor()
         try:
-            await cursor.execute(sql)
+            if params:
+                await cursor.execute(sql, params)
+            else:
+                await cursor.execute(sql)
             columns = [desc[0].lower() for desc in cursor.description]
             rows = await cursor.fetchall()
             return [dict(zip(columns, row)) for row in rows]
@@ -342,11 +407,9 @@ class AsyncOracleStatusIntrospector(OracleStatusIntrospectorMixin, AsyncAbstract
 
     async def list_configuration(self, category: Optional[StatusCategory] = None) -> List[StatusItem]:
         items: List[StatusItem] = []
-        param_names = [p[0] for p in ORACLE_CONFIG_PARAMS]
-        placeholders = ", ".join(f"'{n}'" for n in param_names)
-        sql = f"SELECT name, value, isdefault FROM V$PARAMETER WHERE name IN ({placeholders})"
+        sql, params = _parameter_query(_dialect_of(self)).to_sql()
         try:
-            rows = await self._execute_query_dict(sql)
+            rows = await self._execute_query_dict(sql, params)
         except Exception:
             return items
 
