@@ -313,7 +313,11 @@ SITES = (
     PairSite(
         "TableConstraint(check) enforced/not_enforced",
         lambda d, kw: TableConstraint(
-            d, branch=TableCheckConstraint(d, Literal(d, 1)), **kw
+            # A CHECK's condition sits in a DDL position, which holds no bind
+            # parameters -- the value has to be inlined or the constraint
+            # formatter refuses it. Spelling the Literal with ``inline=True``
+            # is the same thing every other caller of a DDL condition writes.
+            d, branch=TableCheckConstraint(d, Literal(d, 1, inline=True)), **kw
         ),
         {"none": {}, "a": {"enforced": True}, "b": {"not_enforced": True}, "both": {"enforced": True, "not_enforced": True}},
         a_refuse="constraint ENFORCED",
