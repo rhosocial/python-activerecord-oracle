@@ -102,8 +102,18 @@ class TestOracleAnalyzeExpression:
             OracleAnalyzeExpression(dialect, "t", OracleAnalyzeMode.COMPUTE_STATISTICS)
 
     def test_invalid_mode_rejected(self, dialect):
-        with pytest.raises(TypeError, match="mode must be an OracleAnalyzeMode"):
-            OracleAnalyzeExpression(dialect, Table(dialect, "t"), "COMPUTE STATISTICS")
+        """An unknown mode is refused, and the message says what was accepted.
+
+        ``ValueError`` rather than ``TypeError`` because the parameter is a
+        word-or-enum: a node reading one out of an artifact carries the *word*
+        a member spells, and a constructor that refused every word would make
+        each deserialized node unbuildable. So the member passes through, the
+        word is normalized to it, and anything that names no member is a value
+        problem rather than a type problem. The message lists the members, so a
+        reader learns the accepted vocabulary instead of only the refusal.
+        """
+        with pytest.raises(ValueError, match="unsupported ANALYZE mode"):
+            OracleAnalyzeExpression(dialect, Table(dialect, "t"), "NOT A MODE")
 
     def test_sample_with_compute_statistics_rejected(self, dialect):
         with pytest.raises(ValueError, match="sample_percent requires ESTIMATE STATISTICS"):

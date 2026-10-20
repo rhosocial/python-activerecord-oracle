@@ -97,8 +97,8 @@ class TestOracleAsOfClause:
         assert params == ()
 
     def test_invalid_mode_rejected(self, dialect):
-        with pytest.raises(TypeError, match="mode must be an OracleAsOfMode"):
-            OracleAsOfClause(dialect, "TIMESTAMP", "x")
+        with pytest.raises(ValueError, match="unsupported AS OF mode"):
+            OracleAsOfClause(dialect, "SOMETHING ELSE", "x")
 
 
 class TestOracleVersionsBetweenClause:
@@ -144,8 +144,8 @@ class TestOracleVersionsBetweenClause:
         assert params == ("a", "b")
 
     def test_invalid_mode_rejected(self, dialect):
-        with pytest.raises(TypeError, match="mode must be an OracleVersionsBetweenMode"):
-            OracleVersionsBetweenClause(dialect, "SCN", "1", "2")
+        with pytest.raises(ValueError, match="unsupported VERSIONS BETWEEN mode"):
+            OracleVersionsBetweenClause(dialect, "SOMETHING ELSE", "1", "2")
 
 
 class TestOracleFlashbackTableExpression:
@@ -269,8 +269,8 @@ class TestOraclePurgeExpression:
             )
 
     def test_invalid_object_type_rejected(self, dialect):
-        with pytest.raises(TypeError, match="object_type must be an OraclePurgeObjectType"):
-            OraclePurgeExpression(dialect, "TABLE", Table(dialect, "t"))
+        with pytest.raises(ValueError, match="unsupported PURGE object type"):
+            OraclePurgeExpression(dialect, "NOT A TYPE", Table(dialect, "t"))
 
 
 class TestOracleFlashbackVersionBoundary:

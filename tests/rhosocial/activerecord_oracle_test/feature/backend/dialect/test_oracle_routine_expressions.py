@@ -147,8 +147,8 @@ class TestOracleCreateProcedureExpression:
 
 class TestOracleRoutineParameter:
     def test_invalid_mode_rejected(self, dialect):
-        with pytest.raises(TypeError, match="mode must be an OracleRoutineParameterMode"):
-            OracleRoutineParameter("x", "NUMBER", mode="IN")
+        with pytest.raises(ValueError, match="unsupported routine parameter mode"):
+            OracleRoutineParameter("x", "NUMBER", mode="NOT A MODE")
 
     def test_empty_name_rejected(self):
         with pytest.raises(ValueError, match="parameter name must be a non-empty string"):
@@ -351,8 +351,8 @@ class TestOracleDropRoutineExpression:
         assert expr.to_sql()[0] == 'DROP PROCEDURE "SCOTT"."P"'
 
     def test_invalid_object_type_rejected(self, dialect):
-        with pytest.raises(TypeError, match="object_type must be an OracleDropRoutineObjectType"):
-            OracleDropRoutineExpression(dialect, "PROCEDURE", Procedure(dialect, "p"))
+        with pytest.raises(ValueError, match="unsupported DROP routine object type"):
+            OracleDropRoutineExpression(dialect, "NOT A TYPE", Procedure(dialect, "p"))
 
     def test_routine_kind_must_match_the_keyword(self, dialect):
         """A PROCEDURE drop naming a function would name the wrong object."""

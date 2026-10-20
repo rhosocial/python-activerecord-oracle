@@ -144,8 +144,8 @@ class TestOracleCommentExpression:
         assert params == ()
 
     def test_invalid_object_type_rejected(self, dialect):
-        with pytest.raises(TypeError, match="object_type must be an OracleCommentObjectType"):
-            OracleCommentExpression(dialect, "TABLE", Table(dialect, "t"), "x")
+        with pytest.raises(ValueError, match="unsupported COMMENT ON object type"):
+            OracleCommentExpression(dialect, "NOT A TYPE", Table(dialect, "t"), "x")
 
     def test_object_kind_must_match_the_keyword(self, dialect):
         """A TABLE comment cannot hold a view: the statement would name the wrong object."""

@@ -104,8 +104,8 @@ class TestOracleSequenceValueExpression:
         assert params == ()
 
     def test_invalid_mode_rejected(self, dialect):
-        with pytest.raises(TypeError, match="mode must be an OracleSequenceValueMode"):
-            OracleSequenceValueExpression(dialect, "seq", mode="NEXTVAL")
+        with pytest.raises(ValueError, match="unsupported sequence access mode"):
+            OracleSequenceValueExpression(dialect, "seq", mode="NOT A MODE")
 
     def test_empty_sequence_rejected(self, dialect):
         with pytest.raises(ValueError, match="sequence must be a non-empty string"):
