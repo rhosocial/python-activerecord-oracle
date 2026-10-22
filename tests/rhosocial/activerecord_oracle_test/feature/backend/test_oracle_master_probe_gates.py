@@ -49,7 +49,7 @@ from rhosocial.activerecord.backend.expression.statements.ddl_view import (
 from rhosocial.activerecord.backend.expression.statements.dql import QueryStatement
 from rhosocial.activerecord.backend.expression.transaction import (
     BeginTransactionStatement,
-    SetTransactionExpression,
+    SetTransactionStatement,
 )
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
@@ -260,13 +260,13 @@ class TestTransactionWaitGate:
 
     def test_set_transaction_wait_is_refused_by_name(self):
         d = _dialect()
-        _refuse(SetTransactionExpression(d, wait=True), "SET TRANSACTION WAIT")
+        _refuse(SetTransactionStatement(d, wait=True), "SET TRANSACTION WAIT")
 
     def test_set_transaction_no_wait_is_refused_by_name(self):
         d = _dialect()
-        _refuse(SetTransactionExpression(d, no_wait=True), "SET TRANSACTION NO WAIT")
+        _refuse(SetTransactionStatement(d, no_wait=True), "SET TRANSACTION NO WAIT")
 
     def test_unspecified_still_renders(self):
         d = _dialect()
-        sql, _params = SetTransactionExpression(d).to_sql()
+        sql, _params = SetTransactionStatement(d).to_sql()
         assert sql == "SET TRANSACTION", sql
