@@ -59,7 +59,12 @@ def _dialect() -> OracleDialect:
 
 
 def _query(dialect: OracleDialect) -> QueryStatement:
-    return QueryStatement(dialect, select=[Literal(dialect, 1)])
+    """One row over nothing.
+
+    An inlined literal: Oracle's DDL statements never carry bind variables,
+    so a binding one would be refused before the server sees it (DPY-4009).
+    """
+    return QueryStatement(dialect, select=[Literal(dialect, 1, inline=True)])
 
 
 def _refuse(expr, expected_feature: str) -> UnsupportedFeatureError:

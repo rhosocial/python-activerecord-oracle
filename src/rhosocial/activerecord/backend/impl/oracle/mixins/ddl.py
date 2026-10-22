@@ -3,9 +3,11 @@
 
 from typing import Any, List, Optional, Tuple, TYPE_CHECKING
 
+from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
+
 if TYPE_CHECKING:
     from rhosocial.activerecord.backend.expression.statements import (
-        CreateTableStatement, ColumnDefinition, TableConstraint,
+        CreateTableAsStatement, CreateTableStatement, ColumnDefinition, TableConstraint,
     )
 
 
@@ -35,6 +37,36 @@ class OracleDDLMixin:
         and its per-kind siblings.
         """
         return True
+
+    def format_create_table_as_statement(
+        self, expr: "CreateTableAsStatement"
+    ) -> Tuple[str, tuple]:
+        """Format ``CREATE TABLE ... AS`` for Oracle.
+
+        Oracle's DDL statements never carry bind variables. The driver
+        refuses such a statement before the server sees it -- "DPY-4009: 0
+        positional bind values are required but 1 were provided" -- so the
+        request is refused by name, with the way out named, instead of being
+        rendered for the driver to reject.
+
+        The body of a CTAS is executed once, so a bound value would have
+        been meaningful where the engine accepts it; Oracle is the engine
+        that does not. Build the query with an inlined literal instead.
+        """
+        sql, params = super().format_create_table_as_statement(expr)
+        if params:
+            raise UnsupportedFeatureError(
+                self.name,
+                "CREATE TABLE ... AS with bound parameters",
+                suggestion=(
+                    "Oracle's DDL statements never carry bind variables; the "
+                    "driver refuses the statement before the server sees it "
+                    "('DPY-4009: 0 positional bind values are required but 1 "
+                    "were provided'). Build the query with an inlined literal "
+                    "instead."
+                ),
+            )
+        return sql, params
 
     def format_create_table_statement(
         self, expr: "CreateTableStatement"
