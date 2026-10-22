@@ -713,7 +713,7 @@ class OraclePartitionMixin:
 
         Mirrors MySQL ``format_partition_value`` semantics. Only scalar
         types that are valid Oracle partition boundary values are accepted;
-        all string/byte values are escaped through ``_escape_sql_string``.
+        all string/byte values are escaped through ``escape_sql_string``.
         """
         if value is None:
             return "NULL"
@@ -730,13 +730,13 @@ class OraclePartitionMixin:
                 raise ValueError("partition boundary Decimal must be finite")
             return str(value)
         if isinstance(value, datetime):
-            escaped = self._escape_sql_string(value.isoformat(sep=" "))
+            escaped = self.escape_sql_string(value.isoformat(sep=" "))
             return f"TIMESTAMP '{escaped}'"
         if isinstance(value, date):
-            escaped = self._escape_sql_string(value.isoformat())
+            escaped = self.escape_sql_string(value.isoformat())
             return f"DATE '{escaped}'"
         if isinstance(value, str):
-            escaped = self._escape_sql_string(value)
+            escaped = self.escape_sql_string(value)
             return f"'{escaped}'"
         raise TypeError(
             "partition boundary value must be str, int, float, Decimal, "

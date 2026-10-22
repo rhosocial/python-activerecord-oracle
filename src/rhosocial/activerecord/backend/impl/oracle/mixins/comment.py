@@ -73,5 +73,5 @@ class OracleCommentMixin:
         head = f"COMMENT ON {object_type} {object_sql} IS"
         if expr.comment is None:
             return f"{head} NULL", ()
-        escaped = self._escape_sql_string(expr.comment)
+        escaped = self.escape_sql_string(expr.comment)
         return f"{head} '{escaped}'", ()

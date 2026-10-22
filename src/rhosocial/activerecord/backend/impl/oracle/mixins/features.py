@@ -10,6 +10,19 @@ from typing import Dict
 
 
 class OracleFeaturesMixin:
+    def _ddl_bind_parameter_reason(self, feature: str) -> str:
+        """Why Oracle refuses bind parameters in a DDL body.
+
+        Oracle's DDL statements never take bind variables, and the driver
+        refuses the statement before the server sees it (measured on
+        18c / 21c / 26ai).
+        """
+        return (
+            "Oracle's DDL statements never carry bind variables; the driver "
+            "refuses the statement before the server sees it ('DPY-4009: 0 "
+            "positional bind values are required but 1 were provided')."
+        )
+
     """Aggregated Oracle feature-capability checks.
 
     Each domain-specific mixin (``OraclePivotMixin``, etc.) carries its

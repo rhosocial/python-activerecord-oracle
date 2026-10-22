@@ -53,7 +53,7 @@ class OracleDatabaseLinkMixin:
                 f"IDENTIFIED BY {self.format_identifier(expr.identified_by)}"
             )
         if expr.using:
-            escaped = self._escape_sql_string(expr.using)
+            escaped = self.escape_sql_string(expr.using)
             parts.append(f"USING '{escaped}'")
         return " ".join(parts), ()
 

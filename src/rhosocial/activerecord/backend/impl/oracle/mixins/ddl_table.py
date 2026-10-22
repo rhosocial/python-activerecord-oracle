@@ -36,6 +36,16 @@ class OracleTableMixin(object):
         """Oracle has no CREATE TABLE LIKE; use CTAS instead."""
         return False
 
+
+    def supports_create_table_as_bind_parameters(self) -> bool:
+        """Oracle's DDL statements never carry bind variables.
+
+        Measured on 18c / 21c / 26ai: the driver rejects the statement
+        before the server sees it -- "DPY-4009: 0 positional bind values are
+        required but 1 were provided" -- so the portable spelling is
+        refused rather than rendered for the driver to reject.
+        """
+        return False
     def supports_inline_index(self) -> bool:
         """Indexes must be defined via a separate CREATE INDEX statement."""
         return False

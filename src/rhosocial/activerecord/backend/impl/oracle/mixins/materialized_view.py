@@ -29,6 +29,15 @@ class OracleMaterializedViewMixin:
     def supports_materialized_view(self) -> bool:
         return True
 
+
+    def supports_materialized_view_bind_parameters(self) -> bool:
+        """Oracle's DDL statements never carry bind variables.
+
+        Measured on 18c / 21c / 26ai: the driver rejects the statement
+        before the server sees it -- "DPY-4009: 0 positional bind values are
+        required but 1 were provided".
+        """
+        return False
     def supports_with_data_clause(self) -> bool:
         """Oracle has no ``WITH [NO] DATA`` clause.
 
@@ -136,22 +145,8 @@ class OracleMaterializedViewMixin:
             elif expr.no_data:
                 parts.append("BUILD DEFERRED")
         query_sql, query_params = expr.query.to_sql()
-        if query_params:
-            # Oracle's DDL statements never carry bind variables, and the
-            # driver refuses the statement before the server sees it
-            # ("DPY-4009: 0 positional bind values are required but 1 were
-            # provided").  The statement is refused by name instead.
-            raise UnsupportedFeatureError(
-                self.name,
-                "CREATE MATERIALIZED VIEW with bound parameters",
-                suggestion=(
-                    "Oracle's DDL statements never carry bind variables; the "
-                    "driver refuses the statement before the server sees it "
-                    "('DPY-4009: 0 positional bind values are required but 1 "
-                    "were provided'). Build the query with an inlined literal "
-                    "instead."
-                ),
-            )
+        if query_params and not self.supports_materialized_view_bind_parameters():
+            self._refuse_ddl_bind_parameters("CREATE MATERIALIZED VIEW with bound parameters")
         parts.append(f"AS {query_sql}")
         return " ".join(parts), query_params
 

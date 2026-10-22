@@ -25,6 +25,15 @@ class OracleViewMixin:
         """Oracle supports ``WITH [LOCAL|CASCADED] CHECK OPTION`` on views."""
         return True
 
+
+    def supports_create_view_bind_parameters(self) -> bool:
+        """Oracle's DDL statements never carry bind variables.
+
+        Measured on 18c / 21c / 26ai: the driver rejects the statement
+        before the server sees it -- "DPY-4009: 0 positional bind values are
+        required but 1 were provided".
+        """
+        return False
     def format_create_view_statement(
         self, expr: "CreateViewStatement"
     ) -> Tuple[str, tuple]:
@@ -56,6 +65,8 @@ class OracleViewMixin:
             cols = ", ".join(self.format_identifier(c) for c in expr.column_aliases)
             parts.append(f"({cols})")
         query_sql, query_params = expr.query.to_sql()
+        if query_params and not self.supports_create_view_bind_parameters():
+            self._refuse_ddl_bind_parameters("CREATE VIEW with bound parameters")
         parts.append(f"AS {query_sql}")
         if expr.options and expr.options.check_option:
             if not self.supports_view_check_option():
