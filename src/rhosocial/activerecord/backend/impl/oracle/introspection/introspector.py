@@ -15,6 +15,8 @@ Architecture:
 Key behaviours:
   - Queries USER_TABLES, USER_TAB_COLUMNS, USER_INDEXES,
     USER_CONSTRAINTS, USER_VIEWS, USER_TRIGGERS
+  - Queries ALL_SEQUENCES, ALL_SYNONYMS and ALL_OBJECTS for the
+    backend-specific sequence/synonym/package families
   - _parse_* methods are pure Python — shared by sync and async introspectors
 
 Design principle: Sync and Async are separate and cannot coexist.
@@ -55,6 +57,19 @@ from .status_introspector import (
     SyncOracleStatusIntrospector,
     AsyncOracleStatusIntrospector,
 )
+from .types import (
+    OraclePackageInfo,
+    OracleSequenceInfo,
+    OracleSynonymInfo,
+)
+
+#: Cache namespaces for the schema-object families core has no scope for.
+#: Sequences have ``IntrospectionScope.SEQUENCE`` of their own; synonyms and
+#: packages are schema-level objects, so they share
+#: ``IntrospectionScope.SCHEMA`` and are told apart by these ``extra`` values
+#: rather than by overloading a scope that means something else.
+_SYNONYM_FAMILY = "oracle:synonyms"
+_PACKAGE_FAMILY = "oracle:packages"
 
 
 class OracleIntrospectorMixin(IntrospectorMixin):
@@ -72,6 +87,20 @@ class OracleIntrospectorMixin(IntrospectorMixin):
         if hasattr(self._backend, 'config') and hasattr(self._backend.config, 'username'):
             return self._backend.config.username.upper() if self._backend.config.username else ""
         return ""
+
+    def _normalise_owner(self, owner: Optional[str]) -> str:
+        """Fold an optional owner to the spelling the data dictionary uses.
+
+        Every query in this module filters ``..._owner = ?`` with an upper
+        case bind, because Oracle stores unquoted identifiers upper case.
+        Folding here as well means the cache key and the bind value agree:
+        ``owner="ar_crm"`` and ``owner="AR_CRM"`` are one question, asked
+        once. ``None`` means "the connected user's schema", the same
+        default the table and view methods take.
+        """
+        if owner is None:
+            return self._get_default_schema()
+        return owner.upper()
 
     def _get_version(self) -> Optional[Tuple[int, ...]]:
         """Return the Oracle server version tuple from the backend, or ``None``.
@@ -181,6 +210,141 @@ class OracleIntrospectorMixin(IntrospectorMixin):
             ORDER BY cols.position
         """,
             (table_name.upper(), schema.upper()),
+        )
+
+    def _build_sequence_list_sql(self, owner: str) -> tuple:
+        """Build SQL to list the sequences one schema owns.
+
+        ``ALL_SEQUENCES`` is used rather than ``USER_SEQUENCES`` so that
+        ``owner`` is a real filter instead of "whoever is connected". The
+        owner column in this view is ``SEQUENCE_OWNER``, not ``OWNER``.
+
+        Returns:
+            Tuple of (SQL, params), with the owner bound, never
+            interpolated.
+        """
+        return (
+            """
+            SELECT
+                sequence_owner,
+                sequence_name,
+                min_value,
+                max_value,
+                increment_by,
+                cycle_flag,
+                order_flag,
+                cache_size,
+                last_number
+            FROM all_sequences
+            WHERE sequence_owner = ?
+            ORDER BY sequence_name
+        """,
+            (owner.upper(),),
+        )
+
+    def _build_sequence_info_sql(self, name: str, owner: str) -> tuple:
+        """Build SQL to read one sequence.
+
+        Returns:
+            Tuple of (SQL, params); both name and owner travel as binds.
+        """
+        return (
+            """
+            SELECT
+                sequence_owner,
+                sequence_name,
+                min_value,
+                max_value,
+                increment_by,
+                cycle_flag,
+                order_flag,
+                cache_size,
+                last_number
+            FROM all_sequences
+            WHERE sequence_name = ?
+              AND sequence_owner = ?
+        """,
+            (name.upper(), owner.upper()),
+        )
+
+    def _build_synonym_list_sql(self, owner: str) -> tuple:
+        """Build SQL to list the synonyms one schema owns.
+
+        Public synonyms are rows of the same view with ``owner='PUBLIC'``:
+        ``PUBLIC`` is not a schema a user connects as, but it is the owner
+        the dictionary records for them. Passing ``owner="PUBLIC"`` is
+        therefore how public synonyms are asked for -- they are never
+        mixed into a schema's private list, because a caller inspecting a
+        schema should not silently receive every global alias on the
+        instance.
+
+        Returns:
+            Tuple of (SQL, params), owner bound.
+        """
+        return (
+            """
+            SELECT
+                owner,
+                synonym_name,
+                table_owner,
+                table_name,
+                db_link
+            FROM all_synonyms
+            WHERE owner = ?
+            ORDER BY synonym_name
+        """,
+            (owner.upper(),),
+        )
+
+    def _build_synonym_info_sql(self, name: str, owner: str) -> tuple:
+        """Build SQL to read one synonym.
+
+        Returns:
+            Tuple of (SQL, params); name and owner travel as binds, so the
+            ``PUBLIC`` owner works here too.
+        """
+        return (
+            """
+            SELECT
+                owner,
+                synonym_name,
+                table_owner,
+                table_name,
+                db_link
+            FROM all_synonyms
+            WHERE synonym_name = ?
+              AND owner = ?
+        """,
+            (name.upper(), owner.upper()),
+        )
+
+    def _build_package_list_sql(self, owner: str) -> tuple:
+        """Build SQL to list the PL/SQL package specifications one schema owns.
+
+        ``ALL_OBJECTS`` carries both halves of a package -- ``PACKAGE``
+        and ``PACKAGE BODY`` -- so the object type is part of the filter
+        rather than something the parser sorts out afterwards: a package
+        body without a specification is not a package, and counting both
+        rows would report every package twice.
+
+        Returns:
+            Tuple of (SQL, params), owner bound; the object type is a
+            literal because it is part of the question, not caller data.
+        """
+        return (
+            """
+            SELECT
+                owner,
+                object_name,
+                status,
+                created,
+                last_ddl_time
+            FROM all_objects
+            WHERE object_type = 'PACKAGE'
+              AND owner = ?
+            ORDER BY object_name
+        """,
+            (owner.upper(),),
         )
 
     # ------------------------------------------------------------------ #
@@ -431,6 +595,103 @@ class OracleIntrospectorMixin(IntrospectorMixin):
             )
         return triggers
 
+    # ------------------------------------------------------------------ #
+    # Parse methods — the schema-object families
+    # ------------------------------------------------------------------ #
+
+    def _parse_sequences(self, rows: List[Dict[str, Any]]) -> List[OracleSequenceInfo]:
+        """Turn ``ALL_SEQUENCES`` rows into sequence value objects."""
+        return [
+            OracleSequenceInfo(
+                name=row.get("SEQUENCE_NAME", ""),
+                owner=row.get("SEQUENCE_OWNER", ""),
+                min_value=row.get("MIN_VALUE"),
+                max_value=row.get("MAX_VALUE"),
+                increment=row.get("INCREMENT_BY"),
+                cycle=row.get("CYCLE_FLAG") == "Y",
+                cache_size=row.get("CACHE_SIZE"),
+                order=row.get("ORDER_FLAG") == "Y",
+                last_number=row.get("LAST_NUMBER"),
+            )
+            for row in rows
+        ]
+
+    def _parse_sequence_info(
+        self, rows: List[Dict[str, Any]], name: str, owner: str
+    ) -> Optional[OracleSequenceInfo]:
+        """Turn one ``ALL_SEQUENCES`` row into a sequence value object.
+
+        ``None`` means the sequence is not visible in that schema, which
+        is a real answer: the caller asked about one object and there is
+        no such object.
+        """
+        if not rows:
+            return None
+        row = rows[0]
+        return OracleSequenceInfo(
+            name=row.get("SEQUENCE_NAME", name),
+            owner=row.get("SEQUENCE_OWNER", owner),
+            min_value=row.get("MIN_VALUE"),
+            max_value=row.get("MAX_VALUE"),
+            increment=row.get("INCREMENT_BY"),
+            cycle=row.get("CYCLE_FLAG") == "Y",
+            cache_size=row.get("CACHE_SIZE"),
+            order=row.get("ORDER_FLAG") == "Y",
+            last_number=row.get("LAST_NUMBER"),
+        )
+
+    def _parse_synonyms(self, rows: List[Dict[str, Any]]) -> List[OracleSynonymInfo]:
+        """Turn ``ALL_SYNONYMS`` rows into synonym value objects.
+
+        ``is_public`` is derived from the owner rather than from a flag:
+        Oracle has no separate public-synonym view, and ``PUBLIC`` is the
+        owner row that marks one.
+        """
+        return [
+            OracleSynonymInfo(
+                name=row.get("SYNONYM_NAME", ""),
+                owner=row.get("OWNER", ""),
+                table_owner=row.get("TABLE_OWNER", ""),
+                table_name=row.get("TABLE_NAME", ""),
+                db_link=row.get("DB_LINK"),
+                is_public=row.get("OWNER") == "PUBLIC",
+            )
+            for row in rows
+        ]
+
+    def _parse_synonym_info(
+        self, rows: List[Dict[str, Any]], name: str, owner: str
+    ) -> Optional[OracleSynonymInfo]:
+        """Turn one ``ALL_SYNONYMS`` row into a synonym value object."""
+        if not rows:
+            return None
+        row = rows[0]
+        return OracleSynonymInfo(
+            name=row.get("SYNONYM_NAME", name),
+            owner=row.get("OWNER", owner),
+            table_owner=row.get("TABLE_OWNER", ""),
+            table_name=row.get("TABLE_NAME", ""),
+            db_link=row.get("DB_LINK"),
+            is_public=row.get("OWNER") == "PUBLIC",
+        )
+
+    def _parse_packages(self, rows: List[Dict[str, Any]]) -> List[OraclePackageInfo]:
+        """Turn ``ALL_OBJECTS`` package-specification rows into value objects."""
+        packages = []
+        for row in rows:
+            created = row.get("CREATED")
+            last_ddl = row.get("LAST_DDL_TIME")
+            packages.append(
+                OraclePackageInfo(
+                    name=row.get("OBJECT_NAME", ""),
+                    owner=row.get("OWNER", ""),
+                    status=row.get("STATUS", ""),
+                    created_time=str(created) if created is not None else None,
+                    last_ddl_time=str(last_ddl) if last_ddl is not None else None,
+                )
+            )
+        return packages
+
 
 class SyncOracleIntrospector(OracleIntrospectorMixin, SyncAbstractIntrospector):
     """Synchronous introspector for Oracle backends.
@@ -509,6 +770,170 @@ class SyncOracleIntrospector(OracleIntrospectorMixin, SyncAbstractIntrospector):
 
         self._cache.set(key, columns)
         return columns
+
+    # ------------------------------------------------------------------ #
+    # Schema objects: sequences, synonyms, packages
+    #
+    # These are Oracle's own answer to "what else is in this schema". They
+    # are filtered by ``owner`` -- the schema argument every other method
+    # calls ``schema`` -- and cached under the scope the object belongs to,
+    # with an ``extra`` namespace where an existing scope would otherwise
+    # be shared with a different family.
+    # ------------------------------------------------------------------ #
+
+    def list_sequences(self, owner: Optional[str] = None) -> List[OracleSequenceInfo]:
+        """Return the sequences owned by *owner*.
+
+        Args:
+            owner: Oracle schema (owner) to list. ``None`` means the
+                connected user's schema.
+
+        Returns:
+            The sequences, ordered by name. ``last_number`` is the next
+            value the sequence would hand out, not the last one it handed
+            out -- see :class:`~.types.OracleSequenceInfo`.
+        """
+        target_owner = self._normalise_owner(owner)
+        key = self._cache.key(IntrospectionScope.SEQUENCE, schema=target_owner)
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        sql, params = self._build_sequence_list_sql(target_owner)
+        sequences = self._parse_sequences(self._executor.execute(sql, params))
+
+        self._cache.set(key, sequences)
+        return sequences
+
+    def get_sequence_info(
+        self, name: str, owner: Optional[str] = None
+    ) -> Optional[OracleSequenceInfo]:
+        """Return one sequence by name, or ``None`` if it does not exist.
+
+        Args:
+            name: Sequence name; folded to upper case like the dictionary
+                stores it.
+            owner: Oracle schema (owner) to look in. ``None`` means the
+                connected user's schema.
+
+        Returns:
+            The sequence, or ``None``. A missing sequence is not cached:
+            the cache cannot store ``None`` as a hit without turning
+            "absent" into a value, so the next call asks again.
+        """
+        target_owner = self._normalise_owner(owner)
+        key = self._cache.key(
+            IntrospectionScope.SEQUENCE, name.upper(), schema=target_owner
+        )
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        sql, params = self._build_sequence_info_sql(name, target_owner)
+        sequence = self._parse_sequence_info(
+            self._executor.execute(sql, params), name.upper(), target_owner
+        )
+        if sequence is None:
+            return None
+
+        self._cache.set(key, sequence)
+        return sequence
+
+    def list_synonyms(self, owner: Optional[str] = None) -> List[OracleSynonymInfo]:
+        """Return the synonyms owned by *owner*.
+
+        Public synonyms have no schema of their own: they belong to
+        ``PUBLIC``, and ``ALL_SYNONYMS`` records that as the ``OWNER``
+        value rather than leaving it empty. So they are listed by asking
+        for ``owner="PUBLIC"`` explicitly, never by folding them into a
+        schema's private list -- a caller inspecting ``AR_CRM`` gets
+        ``AR_CRM``'s aliases and not every global alias on the instance.
+
+        Args:
+            owner: Oracle schema (owner) to list, or ``"PUBLIC"`` for the
+                public synonyms. ``None`` means the connected user's
+                schema.
+
+        Returns:
+            The synonyms, ordered by name; ``is_public`` is true for the
+            ``PUBLIC`` family.
+        """
+        target_owner = self._normalise_owner(owner)
+        key = self._cache.key(
+            IntrospectionScope.SCHEMA, schema=target_owner, extra=_SYNONYM_FAMILY
+        )
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        sql, params = self._build_synonym_list_sql(target_owner)
+        synonyms = self._parse_synonyms(self._executor.execute(sql, params))
+
+        self._cache.set(key, synonyms)
+        return synonyms
+
+    def get_synonym_info(
+        self, name: str, owner: Optional[str] = None
+    ) -> Optional[OracleSynonymInfo]:
+        """Return one synonym by name, or ``None`` if it does not exist.
+
+        Args:
+            name: Synonym name.
+            owner: Oracle schema (owner) to look in, or ``"PUBLIC"``.
+                ``None`` means the connected user's schema.
+
+        Returns:
+            The synonym, or ``None``.
+        """
+        target_owner = self._normalise_owner(owner)
+        key = self._cache.key(
+            IntrospectionScope.SCHEMA,
+            name.upper(),
+            schema=target_owner,
+            extra=_SYNONYM_FAMILY,
+        )
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        sql, params = self._build_synonym_info_sql(name, target_owner)
+        synonym = self._parse_synonym_info(
+            self._executor.execute(sql, params), name.upper(), target_owner
+        )
+        if synonym is None:
+            return None
+
+        self._cache.set(key, synonym)
+        return synonym
+
+    def list_packages(self, owner: Optional[str] = None) -> List[OraclePackageInfo]:
+        """Return the PL/SQL package specifications owned by *owner*.
+
+        Package bodies are not included: one package is one specification
+        plus an optional body, and ``ALL_OBJECTS`` holds a row for each.
+        Filtering on ``OBJECT_TYPE = 'PACKAGE'`` keeps the count honest.
+
+        Args:
+            owner: Oracle schema (owner) to list. ``None`` means the
+                connected user's schema.
+
+        Returns:
+            The packages, ordered by name, with their compile status and
+            last-DDL time.
+        """
+        target_owner = self._normalise_owner(owner)
+        key = self._cache.key(
+            IntrospectionScope.SCHEMA, schema=target_owner, extra=_PACKAGE_FAMILY
+        )
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        sql, params = self._build_package_list_sql(target_owner)
+        packages = self._parse_packages(self._executor.execute(sql, params))
+
+        self._cache.set(key, packages)
+        return packages
 
 
 class AsyncOracleIntrospector(OracleIntrospectorMixin, AsyncAbstractIntrospector):
@@ -589,3 +1014,107 @@ class AsyncOracleIntrospector(OracleIntrospectorMixin, AsyncAbstractIntrospector
 
         self._cache.set(key, columns)
         return columns
+
+    # ------------------------------------------------------------------ #
+    # Schema objects: sequences, synonyms, packages
+    #
+    # Same names and signatures as the sync class, awaited. See the sync
+    # implementation for what each family means.
+    # ------------------------------------------------------------------ #
+
+    async def list_sequences(self, owner: Optional[str] = None) -> List[OracleSequenceInfo]:
+        """Return the sequences owned by *owner*."""
+        target_owner = self._normalise_owner(owner)
+        key = self._cache.key(IntrospectionScope.SEQUENCE, schema=target_owner)
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        sql, params = self._build_sequence_list_sql(target_owner)
+        sequences = self._parse_sequences(await self._executor.execute(sql, params))
+
+        self._cache.set(key, sequences)
+        return sequences
+
+    async def get_sequence_info(
+        self, name: str, owner: Optional[str] = None
+    ) -> Optional[OracleSequenceInfo]:
+        """Return one sequence by name, or ``None`` if it does not exist."""
+        target_owner = self._normalise_owner(owner)
+        key = self._cache.key(
+            IntrospectionScope.SEQUENCE, name.upper(), schema=target_owner
+        )
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        sql, params = self._build_sequence_info_sql(name, target_owner)
+        sequence = self._parse_sequence_info(
+            await self._executor.execute(sql, params), name.upper(), target_owner
+        )
+        if sequence is None:
+            return None
+
+        self._cache.set(key, sequence)
+        return sequence
+
+    async def list_synonyms(self, owner: Optional[str] = None) -> List[OracleSynonymInfo]:
+        """Return the synonyms owned by *owner*.
+
+        Public synonyms are listed with ``owner="PUBLIC"``; see the sync
+        method for why they are not folded into a schema's list.
+        """
+        target_owner = self._normalise_owner(owner)
+        key = self._cache.key(
+            IntrospectionScope.SCHEMA, schema=target_owner, extra=_SYNONYM_FAMILY
+        )
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        sql, params = self._build_synonym_list_sql(target_owner)
+        synonyms = self._parse_synonyms(await self._executor.execute(sql, params))
+
+        self._cache.set(key, synonyms)
+        return synonyms
+
+    async def get_synonym_info(
+        self, name: str, owner: Optional[str] = None
+    ) -> Optional[OracleSynonymInfo]:
+        """Return one synonym by name, or ``None`` if it does not exist."""
+        target_owner = self._normalise_owner(owner)
+        key = self._cache.key(
+            IntrospectionScope.SCHEMA,
+            name.upper(),
+            schema=target_owner,
+            extra=_SYNONYM_FAMILY,
+        )
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        sql, params = self._build_synonym_info_sql(name, target_owner)
+        synonym = self._parse_synonym_info(
+            await self._executor.execute(sql, params), name.upper(), target_owner
+        )
+        if synonym is None:
+            return None
+
+        self._cache.set(key, synonym)
+        return synonym
+
+    async def list_packages(self, owner: Optional[str] = None) -> List[OraclePackageInfo]:
+        """Return the PL/SQL package specifications owned by *owner*."""
+        target_owner = self._normalise_owner(owner)
+        key = self._cache.key(
+            IntrospectionScope.SCHEMA, schema=target_owner, extra=_PACKAGE_FAMILY
+        )
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        sql, params = self._build_package_list_sql(target_owner)
+        packages = self._parse_packages(await self._executor.execute(sql, params))
+
+        self._cache.set(key, packages)
+        return packages

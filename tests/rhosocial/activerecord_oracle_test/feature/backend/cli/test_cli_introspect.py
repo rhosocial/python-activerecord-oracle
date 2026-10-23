@@ -69,9 +69,17 @@ class FakeIntrospector:
         self.calls.append(("foreign_keys", name, schema))
         return TABLE_INFO.foreign_keys
 
-    def list_sequences(self, schema=None):
-        self.calls.append(("sequences", schema))
+    def list_sequences(self, owner=None):
+        self.calls.append(("sequences", owner))
         return [{"SEQUENCE_NAME": "CUSTOMERS_SEQ"}]
+
+    def list_synonyms(self, owner=None):
+        self.calls.append(("synonyms", owner))
+        return [{"SYNONYM_NAME": "CUSTOMERS_SYN"}]
+
+    def list_packages(self, owner=None):
+        self.calls.append(("packages", owner))
+        return [{"OBJECT_NAME": "CUSTOMERS_PKG"}]
 
     def get_database_info(self):
         self.calls.append(("database",))
@@ -118,20 +126,25 @@ def patch_sync_backend(monkeypatch, introspector: Any,
 
 
 def patch_async_backend(monkeypatch, introspector: Any) -> List[Any]:
-    """Async fake whose introspector exposes only the ``*_async`` methods."""
+    """Async fake whose introspector mirrors the real async contract.
+
+    The async introspector keeps the sync method names (no ``_async``
+    suffix) and is awaited, so the facade exposes exactly those names.
+    """
     instances: List[Any] = []
 
     class AsyncFacade:
         def __init__(self, sync: Any) -> None:
             for attr in ("list_tables", "list_views", "get_table_info",
                          "list_columns", "list_indexes", "list_foreign_keys",
-                         "list_sequences", "get_database_info"):
+                         "list_sequences", "list_synonyms", "list_packages",
+                         "get_database_info"):
                 fn = getattr(sync, attr)
 
                 async def call(*a: Any, _fn: Any = fn, **k: Any) -> Any:
                     return _fn(*a, **k)
 
-                setattr(self, f"{attr}_async", call)
+                setattr(self, attr, call)
 
     class FakeAsyncBackend:
         def __init__(self, connection_config: Any = None) -> None:
@@ -180,6 +193,10 @@ class TestIntrospectParserContract:
     def test_sequences_is_oracle_specific_type(self):
         assert "sequences" in cli_introspect.INTROSPECT_TYPES
 
+    def test_schema_object_types_are_oracle_specific(self):
+        for itype in ("sequences", "synonyms", "packages"):
+            assert itype in cli_introspect.INTROSPECT_TYPES
+
     def test_invalid_type_rejected(self):
         with pytest.raises(SystemExit):
             build_parser().parse_args(["introspect", "grants"])
@@ -198,6 +215,8 @@ class TestHandleSyncBranches:
         ("tables", None, "Tables", None, "CUSTOMERS"),
         ("views", None, "Views", None, "V_CUSTOMERS"),
         ("sequences", None, "Sequences", None, "CUSTOMERS_SEQ"),
+        ("synonyms", None, "Synonyms", None, "CUSTOMERS_SYN"),
+        ("packages", None, "Packages", None, "CUSTOMERS_PKG"),
     ])
     def test_list_branches(self, provider, monkeypatch, itype, name, title,
                            data_key, value):
@@ -217,6 +236,19 @@ class TestHandleSyncBranches:
             ["introspect", "tables", "--owner", "AR_SHOP", "--include-system"]
         ))
         assert insp.calls[-1] == ("tables", "AR_SHOP", True)
+
+    def test_schema_object_branches_pass_owner(self, provider, monkeypatch):
+        insp = FakeIntrospector()
+        patch_sync_backend(monkeypatch, insp)
+        for itype in ("sequences", "synonyms", "packages"):
+            cli_introspect.handle(build_parser().parse_args(
+                ["introspect", itype, "--owner", "AR_CRM"]
+            ))
+        assert insp.calls == [
+            ("sequences", "AR_CRM"),
+            ("synonyms", "AR_CRM"),
+            ("packages", "AR_CRM"),
+        ]
 
     def test_table_detail_renders_columns_indexes_fks(self, provider, monkeypatch):
         insp = FakeIntrospector()
@@ -352,6 +384,8 @@ class TestHandleAsyncBranches:
         ("indexes", "customers", "Indexes of customers"),
         ("foreign-keys", "orders", "Foreign Keys of orders"),
         ("sequences", None, "Sequences"),
+        ("synonyms", None, "Synonyms"),
+        ("packages", None, "Packages"),
     ])
     def test_async_branches(self, provider, monkeypatch, itype, name, title):
         insp = FakeIntrospector()

@@ -174,4 +174,12 @@ EXAMPLES_META = {
         'max_version': '23ai',
         'note': 'Requires Oracle 23ai (FREEPDB1 in the reference scenario).',
     },
+    'introspection_schema_objects.py': {
+        'title': 'Schema-Object Introspection (Sequences, Synonyms, Packages)',
+        'dialect_protocols': [],
+        'priority': 35,
+        'min_version': '12c',
+        'max_version': '23ai',
+        'note': 'Reads ALL_SEQUENCES, ALL_SYNONYMS and ALL_OBJECTS through backend.introspector, and shows what its cache saves.',
+    },
 }

@@ -390,7 +390,7 @@ class AsyncOracleStatusIntrospector(OracleStatusIntrospectorMixin, AsyncAbstract
             await cursor.execute(sql)
             return await cursor.fetchall()
         finally:
-            await cursor.close()
+            cursor.close()
 
     async def _execute_query_dict(
         self, sql: str, params: Optional[tuple] = None
@@ -406,7 +406,9 @@ class AsyncOracleStatusIntrospector(OracleStatusIntrospectorMixin, AsyncAbstract
             rows = await cursor.fetchall()
             return [dict(zip(columns, row)) for row in rows]
         finally:
-            await cursor.close()
+            # AsyncCursor.close() is synchronous in oracledb; awaiting it
+            # fails after the query has already succeeded.
+            cursor.close()
 
     async def get_overview(self) -> ServerOverview:
         version = await self._get_version_string()

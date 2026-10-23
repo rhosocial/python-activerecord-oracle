@@ -1,8 +1,8 @@
 # src/rhosocial/activerecord/backend/impl/oracle/cli/introspect.py
 """introspect subcommand - Database introspection.
 
-Oracle introspect includes the 'sequences' type in addition to
-the standard types.
+Oracle introspect includes the schema-object types 'sequences', 'synonyms'
+and 'packages' in addition to the standard types.
 """
 
 import argparse
@@ -23,7 +23,8 @@ OUTPUT_CHOICES = ['table', 'json', 'csv', 'tsv']
 
 INTROSPECT_TYPES = [
     "tables", "views", "table", "columns",
-    "indexes", "foreign-keys", "sequences", "database"
+    "indexes", "foreign-keys", "sequences", "synonyms", "packages",
+    "database"
 ]
 
 
@@ -47,6 +48,13 @@ def create_parser(subparsers):
 
   # List sequences (Oracle specific)
   %(prog)s sequences
+
+  # List private synonyms of a schema, or the public ones
+  %(prog)s synonyms --owner AR_CRM
+  %(prog)s synonyms --owner PUBLIC
+
+  # List PL/SQL packages with their compile status
+  %(prog)s packages --owner AR_CRM
 
   # Output as JSON
   %(prog)s tables -o json
@@ -194,9 +202,19 @@ def _handle_introspect_sync(args, backend: OracleBackend, provider):
             provider.display_results(data, title=f"Foreign Keys of {args.name}")
 
         elif args.type == "sequences":
-            sequences = introspector.list_sequences(schema=args.owner)
+            sequences = introspector.list_sequences(owner=args.owner)
             data = _serialize_for_output(sequences)
             provider.display_results(data, title="Sequences")
+
+        elif args.type == "synonyms":
+            synonyms = introspector.list_synonyms(owner=args.owner)
+            data = _serialize_for_output(synonyms)
+            provider.display_results(data, title="Synonyms")
+
+        elif args.type == "packages":
+            packages = introspector.list_packages(owner=args.owner)
+            data = _serialize_for_output(packages)
+            provider.display_results(data, title="Packages")
 
         elif args.type == "database":
             info = introspector.get_database_info()
@@ -224,7 +242,7 @@ async def _handle_introspect_async(args, backend: AsyncOracleBackend, provider):
         introspector = backend.introspector
 
         if args.type == "tables":
-            tables = await introspector.list_tables_async(
+            tables = await introspector.list_tables(
                 schema=args.owner,
                 include_system=args.include_system
             )
@@ -232,7 +250,7 @@ async def _handle_introspect_async(args, backend: AsyncOracleBackend, provider):
             provider.display_results(data, title="Tables")
 
         elif args.type == "views":
-            views = await introspector.list_views_async(schema=args.owner)
+            views = await introspector.list_views(schema=args.owner)
             data = _serialize_for_output(views)
             provider.display_results(data, title="Views")
 
@@ -240,7 +258,7 @@ async def _handle_introspect_async(args, backend: AsyncOracleBackend, provider):
             if not args.name:
                 print("Error: Table name is required for 'table' introspection", file=sys.stderr)
                 sys.exit(1)
-            info = await introspector.get_table_info_async(args.name, schema=args.owner)
+            info = await introspector.get_table_info(args.name, schema=args.owner)
             if info:
                 provider.display_results(_serialize_for_output(info.columns), title=f"Columns of {args.name}")
                 if info.indexes:
@@ -255,7 +273,7 @@ async def _handle_introspect_async(args, backend: AsyncOracleBackend, provider):
             if not args.name:
                 print("Error: Table name is required for 'columns' introspection", file=sys.stderr)
                 sys.exit(1)
-            columns = await introspector.list_columns_async(args.name, schema=args.owner)
+            columns = await introspector.list_columns(args.name, schema=args.owner)
             data = _serialize_for_output(columns)
             provider.display_results(data, title=f"Columns of {args.name}")
 
@@ -263,7 +281,7 @@ async def _handle_introspect_async(args, backend: AsyncOracleBackend, provider):
             if not args.name:
                 print("Error: Table name is required for 'indexes' introspection", file=sys.stderr)
                 sys.exit(1)
-            indexes = await introspector.list_indexes_async(args.name, schema=args.owner)
+            indexes = await introspector.list_indexes(args.name, schema=args.owner)
             data = _serialize_for_output(indexes)
             provider.display_results(data, title=f"Indexes of {args.name}")
 
@@ -271,17 +289,27 @@ async def _handle_introspect_async(args, backend: AsyncOracleBackend, provider):
             if not args.name:
                 print("Error: Table name is required for 'foreign-keys' introspection", file=sys.stderr)
                 sys.exit(1)
-            fks = await introspector.list_foreign_keys_async(args.name, schema=args.owner)
+            fks = await introspector.list_foreign_keys(args.name, schema=args.owner)
             data = _serialize_for_output(fks)
             provider.display_results(data, title=f"Foreign Keys of {args.name}")
 
         elif args.type == "sequences":
-            sequences = await introspector.list_sequences_async(schema=args.owner)
+            sequences = await introspector.list_sequences(owner=args.owner)
             data = _serialize_for_output(sequences)
             provider.display_results(data, title="Sequences")
 
+        elif args.type == "synonyms":
+            synonyms = await introspector.list_synonyms(owner=args.owner)
+            data = _serialize_for_output(synonyms)
+            provider.display_results(data, title="Synonyms")
+
+        elif args.type == "packages":
+            packages = await introspector.list_packages(owner=args.owner)
+            data = _serialize_for_output(packages)
+            provider.display_results(data, title="Packages")
+
         elif args.type == "database":
-            info = await introspector.get_database_info_async()
+            info = await introspector.get_database_info()
             data = _serialize_for_output(info)
             provider.display_results([data], title="Database Info")
 
