@@ -212,140 +212,50 @@ class OracleIntrospectorMixin(IntrospectorMixin):
             (table_name.upper(), schema.upper()),
         )
 
+    # ------------------------------------------------------------------ #
+    # Schema objects — the questions, as trees the dialect spells
+    #
+    # Sequences, synonyms and packages are Oracle's own, so their shapes live
+    # in ``expression/introspection.py`` and are rendered by the dialect's
+    # ``format_*_query_statement``: the projection, the filter and the ordering
+    # are structure, and a caller's owner travels as a bind parameter rather
+    # than part of the text (org rules §16.2).
+    # ------------------------------------------------------------------ #
+
     def _build_sequence_list_sql(self, owner: str) -> tuple:
-        """Build SQL to list the sequences one schema owns.
+        """The sequences one schema owns, as a rendered statement."""
+        from ..expression.introspection import OracleSequenceListQueryStatement
 
-        ``ALL_SEQUENCES`` is used rather than ``USER_SEQUENCES`` so that
-        ``owner`` is a real filter instead of "whoever is connected". The
-        owner column in this view is ``SEQUENCE_OWNER``, not ``OWNER``.
-
-        Returns:
-            Tuple of (SQL, params), with the owner bound, never
-            interpolated.
-        """
-        return (
-            """
-            SELECT
-                sequence_owner,
-                sequence_name,
-                min_value,
-                max_value,
-                increment_by,
-                cycle_flag,
-                order_flag,
-                cache_size,
-                last_number
-            FROM all_sequences
-            WHERE sequence_owner = ?
-            ORDER BY sequence_name
-        """,
-            (owner.upper(),),
-        )
+        return OracleSequenceListQueryStatement(self.dialect, owner=owner.upper()).to_sql()
 
     def _build_sequence_info_sql(self, name: str, owner: str) -> tuple:
-        """Build SQL to read one sequence.
+        """One sequence, as a rendered statement."""
+        from ..expression.introspection import OracleSequenceInfoQueryStatement
 
-        Returns:
-            Tuple of (SQL, params); both name and owner travel as binds.
-        """
-        return (
-            """
-            SELECT
-                sequence_owner,
-                sequence_name,
-                min_value,
-                max_value,
-                increment_by,
-                cycle_flag,
-                order_flag,
-                cache_size,
-                last_number
-            FROM all_sequences
-            WHERE sequence_name = ?
-              AND sequence_owner = ?
-        """,
-            (name.upper(), owner.upper()),
-        )
+        return OracleSequenceInfoQueryStatement(
+            self.dialect, sequence_name=name.upper(), owner=owner.upper()
+        ).to_sql()
 
     def _build_synonym_list_sql(self, owner: str) -> tuple:
-        """Build SQL to list the synonyms one schema owns.
+        """The synonyms one owner has, ``PUBLIC`` included when asked for."""
+        from ..expression.introspection import OracleSynonymListQueryStatement
 
-        Public synonyms are rows of the same view with ``owner='PUBLIC'``:
-        ``PUBLIC`` is not a schema a user connects as, but it is the owner
-        the dictionary records for them. Passing ``owner="PUBLIC"`` is
-        therefore how public synonyms are asked for -- they are never
-        mixed into a schema's private list, because a caller inspecting a
-        schema should not silently receive every global alias on the
-        instance.
-
-        Returns:
-            Tuple of (SQL, params), owner bound.
-        """
-        return (
-            """
-            SELECT
-                owner,
-                synonym_name,
-                table_owner,
-                table_name,
-                db_link
-            FROM all_synonyms
-            WHERE owner = ?
-            ORDER BY synonym_name
-        """,
-            (owner.upper(),),
-        )
+        return OracleSynonymListQueryStatement(self.dialect, owner=owner.upper()).to_sql()
 
     def _build_synonym_info_sql(self, name: str, owner: str) -> tuple:
-        """Build SQL to read one synonym.
+        """One synonym, as a rendered statement."""
+        from ..expression.introspection import OracleSynonymInfoQueryStatement
 
-        Returns:
-            Tuple of (SQL, params); name and owner travel as binds, so the
-            ``PUBLIC`` owner works here too.
-        """
-        return (
-            """
-            SELECT
-                owner,
-                synonym_name,
-                table_owner,
-                table_name,
-                db_link
-            FROM all_synonyms
-            WHERE synonym_name = ?
-              AND owner = ?
-        """,
-            (name.upper(), owner.upper()),
-        )
+        return OracleSynonymInfoQueryStatement(
+            self.dialect, synonym_name=name.upper(), owner=owner.upper()
+        ).to_sql()
 
     def _build_package_list_sql(self, owner: str) -> tuple:
-        """Build SQL to list the PL/SQL package specifications one schema owns.
+        """The PL/SQL package specifications one schema owns."""
+        from ..expression.introspection import OraclePackageListQueryStatement
 
-        ``ALL_OBJECTS`` carries both halves of a package -- ``PACKAGE``
-        and ``PACKAGE BODY`` -- so the object type is part of the filter
-        rather than something the parser sorts out afterwards: a package
-        body without a specification is not a package, and counting both
-        rows would report every package twice.
+        return OraclePackageListQueryStatement(self.dialect, owner=owner.upper()).to_sql()
 
-        Returns:
-            Tuple of (SQL, params), owner bound; the object type is a
-            literal because it is part of the question, not caller data.
-        """
-        return (
-            """
-            SELECT
-                owner,
-                object_name,
-                status,
-                created,
-                last_ddl_time
-            FROM all_objects
-            WHERE object_type = 'PACKAGE'
-              AND owner = ?
-            ORDER BY object_name
-        """,
-            (owner.upper(),),
-        )
 
     # ------------------------------------------------------------------ #
     # Parse methods — pure Python, no I/O

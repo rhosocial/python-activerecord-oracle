@@ -33,6 +33,13 @@ if TYPE_CHECKING:
         ViewInfoQueryStatement,
         TriggerListQueryStatement,
     )
+    from ...expression.introspection import (
+        OracleSequenceListQueryStatement,
+        OracleSequenceInfoQueryStatement,
+        OracleSynonymListQueryStatement,
+        OracleSynonymInfoQueryStatement,
+        OraclePackageListQueryStatement,
+    )
 
 _SYSTEM_OWNERS = (
     "SYS", "SYSTEM", "XDB", "MDSYS", "CTXSYS", "ORDSYS", "OUTLN", "DBSNMP",
@@ -593,4 +600,135 @@ class OracleIntrospectionMixin:
                 table_predicate,
             ),
             order_by=OrderByClause(self, [self._column("trigger_name")]),
+        ).to_sql()
+
+    # ------------------------------------------------------------------ #
+    # Schema objects: sequences, synonyms, packages
+    #
+    # Three families core has no object for. They are stated here as trees in
+    # the same shape as the table-list read above, so the dialect spells them
+    # and no value is ever part of the text.
+    # ------------------------------------------------------------------ #
+
+    #: The five positions every sequence read projects, in dictionary order.
+    _SEQUENCE_PROJECTION = (
+        "sequence_owner", "sequence_name", "min_value", "max_value",
+        "increment_by", "cycle_flag", "order_flag", "cache_size", "last_number",
+    )
+
+    #: The five positions every synonym read projects.
+    _SYNONYM_PROJECTION = (
+        "owner", "synonym_name", "table_owner", "table_name", "db_link",
+    )
+
+    #: The five positions every package read projects. ``created`` is here
+    #: because the parser reads it: dropping a projected column would quietly
+    #: turn ``created_time`` into ``None`` rather than fail.
+    _PACKAGE_PROJECTION = (
+        "object_name", "object_type", "status", "created", "last_ddl_time",
+    )
+
+    def format_sequence_list_query_statement(
+        self, expr: "OracleSequenceListQueryStatement"
+    ) -> Tuple[str, tuple]:
+        """The sequences one owner has, in name order."""
+        from rhosocial.activerecord.backend.expression import (
+            Literal, OrderByClause, QueryStatement,
+        )
+
+        params = expr.get_params()
+        owner = params.get("owner") or ""
+        return QueryStatement(
+            self,
+            select=[self._column(c) for c in self._SEQUENCE_PROJECTION],
+            from_=self._relation("all_sequences"),
+            where=self._where(
+                self._equals(self._column("sequence_owner"), Literal(self, owner))
+            ),
+            order_by=OrderByClause(self, [self._column("sequence_name")]),
+        ).to_sql()
+
+    def format_sequence_info_query_statement(
+        self, expr: "OracleSequenceInfoQueryStatement"
+    ) -> Tuple[str, tuple]:
+        """One sequence, narrowed by name and owner."""
+        from rhosocial.activerecord.backend.expression import Literal, QueryStatement
+
+        params = expr.get_params()
+        owner = params.get("owner") or ""
+        sequence_name = params.get("sequence_name", "")
+        return QueryStatement(
+            self,
+            select=[self._column(c) for c in self._SEQUENCE_PROJECTION],
+            from_=self._relation("all_sequences"),
+            where=self._where(
+                self._equals(self._column("sequence_name"), Literal(self, sequence_name)),
+                self._equals(self._column("sequence_owner"), Literal(self, owner)),
+            ),
+        ).to_sql()
+
+    def format_synonym_list_query_statement(
+        self, expr: "OracleSynonymListQueryStatement"
+    ) -> Tuple[str, tuple]:
+        """The synonyms one owner has, public ones included when asked for."""
+        from rhosocial.activerecord.backend.expression import (
+            Literal, OrderByClause, QueryStatement,
+        )
+
+        owner = expr.get_params().get("owner") or ""
+        return QueryStatement(
+            self,
+            select=[self._column(c) for c in self._SYNONYM_PROJECTION],
+            from_=self._relation("all_synonyms"),
+            where=self._where(
+                self._equals(self._column("owner"), Literal(self, owner))
+            ),
+            order_by=OrderByClause(self, [self._column("synonym_name")]),
+        ).to_sql()
+
+    def format_synonym_info_query_statement(
+        self, expr: "OracleSynonymInfoQueryStatement"
+    ) -> Tuple[str, tuple]:
+        """One synonym, narrowed by name and owner."""
+        from rhosocial.activerecord.backend.expression import Literal, QueryStatement
+
+        params = expr.get_params()
+        owner = params.get("owner") or ""
+        synonym_name = params.get("synonym_name", "")
+        return QueryStatement(
+            self,
+            select=[self._column(c) for c in self._SYNONYM_PROJECTION],
+            from_=self._relation("all_synonyms"),
+            where=self._where(
+                self._equals(self._column("synonym_name"), Literal(self, synonym_name)),
+                self._equals(self._column("owner"), Literal(self, owner)),
+            ),
+        ).to_sql()
+
+    def format_package_list_query_statement(
+        self, expr: "OraclePackageListQueryStatement"
+    ) -> Tuple[str, tuple]:
+        """The PL/SQL package specifications one owner has.
+
+        ``OBJECT_TYPE`` is a fact about what is being asked for rather than
+        caller data, so it rides the tree as an inline literal and stops the
+        ``PACKAGE BODY`` row for the same name from being counted twice.
+        """
+        from rhosocial.activerecord.backend.expression import (
+            Literal, OrderByClause, QueryStatement,
+        )
+
+        owner = expr.get_params().get("owner") or ""
+        return QueryStatement(
+            self,
+            select=[self._column(c) for c in self._PACKAGE_PROJECTION],
+            from_=self._relation("all_objects"),
+            where=self._where(
+                self._equals(self._column("owner"), Literal(self, owner)),
+                self._equals(
+                    self._column("object_type"),
+                    Literal(self, "PACKAGE", inline=True),
+                ),
+            ),
+            order_by=OrderByClause(self, [self._column("object_name")]),
         ).to_sql()

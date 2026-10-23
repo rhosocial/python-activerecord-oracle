@@ -141,45 +141,79 @@ def make_async(
 
 
 class TestSqlBuilders:
+    """The builders ask the dictionary, and every value travels as a bind.
+
+    The dialect spells the tree, so what is asserted here is the *contract* --
+    which view is read, and that a caller's value is compared against a
+    parameter rather than being part of the text -- and not the identifier
+    spelling the dialect chose. ``_squash`` drops whitespace and quoting, so a
+    quoted ``"SEQUENCE_OWNER"`` and a bare one are the same name here: pinning
+    either spelling would test the dialect rather than this layer.
+    """
+
+    @staticmethod
+    def _squash(sql):
+        """Whitespace-free, quote-free SQL, for shape assertions."""
+        return "".join(sql.lower().split()).replace('"', "")
+
     def test_sequence_list_reads_all_sequences_and_binds_owner(self):
         insp, _ = make_sync()
         sql, params = insp._build_sequence_list_sql("ar_obj")
-        assert "ALL_SEQUENCES" in sql.upper()
-        assert "SEQUENCE_OWNER = ?" in sql.upper()
-        assert "AR_OBJ" not in sql.upper()
+        assert "all_sequences" in self._squash(sql)
+        assert "sequence_owner=?" in self._squash(sql)
+        assert "ar_obj" not in sql.lower()
         assert params == ("AR_OBJ",)
 
     def test_sequence_info_binds_name_and_owner(self):
         insp, _ = make_sync()
         sql, params = insp._build_sequence_info_sql("seq_gate", "ar_obj")
-        assert "SEQUENCE_NAME = ?" in sql.upper()
-        assert "SEQUENCE_OWNER = ?" in sql.upper()
-        assert "SEQ_GATE" not in sql.upper() and "AR_OBJ" not in sql.upper()
+        assert "sequence_name=?" in self._squash(sql)
+        assert "sequence_owner=?" in self._squash(sql)
+        assert "seq_gate" not in sql.lower()
+        assert "ar_obj" not in sql.lower()
         assert params == ("SEQ_GATE", "AR_OBJ")
 
     def test_synonym_queries_read_all_synonyms(self):
         insp, _ = make_sync()
+
         list_sql, list_params = insp._build_synonym_list_sql("public")
-        assert "ALL_SYNONYMS" in list_sql.upper()
-        assert "PUBLIC" not in list_sql.upper()
+        assert "all_synonyms" in self._squash(list_sql)
+        assert "owner=?" in self._squash(list_sql)
+        assert "public" not in list_sql.lower()
         assert list_params == ("PUBLIC",)
 
         info_sql, info_params = insp._build_synonym_info_sql("syn_gate", "ar_obj")
-        assert "SYNONYM_NAME = ?" in info_sql.upper()
+        assert "synonym_name=?" in self._squash(info_sql)
+        assert "owner=?" in self._squash(info_sql)
         assert info_params == ("SYN_GATE", "AR_OBJ")
 
     def test_package_query_reads_specifications_only(self):
         insp, _ = make_sync()
         sql, params = insp._build_package_list_sql("ar_obj")
-        assert "ALL_OBJECTS" in sql.upper()
-        assert "OBJECT_TYPE = 'PACKAGE'" in sql.upper()
-        assert "PACKAGE BODY" not in sql.upper()
-        assert "AR_OBJ" not in sql.upper()
+        squashed = self._squash(sql)
+        assert "all_objects" in squashed
+        assert "object_type='package'" in squashed
+        # A body row for the same name would double every package.
+        assert "packagebody" not in squashed.replace("'", "")
+        assert "ar_obj" not in sql.lower()
         assert params == ("AR_OBJ",)
+
+    def test_the_package_projection_carries_what_the_parser_reads(self):
+        """``created`` is projected because ``_parse_packages`` reads it.
+
+        Dropping it would not fail: the parser would report ``None`` for a
+        column the server was never asked for, which is a silent wrong answer.
+        """
+        insp, _ = make_sync()
+        sql, _ = insp._build_package_list_sql("ar_obj")
+        squashed = self._squash(sql)
+        assert "created," in squashed
+        assert "last_ddl_time" in squashed
 
     def test_a_name_carrying_sql_is_bound_as_data(self):
         insp, _ = make_sync()
-        _, params = insp._build_synonym_info_sql("s' OR '1'='1", "ar_obj")
+        sql, params = insp._build_synonym_info_sql("s' OR '1'='1", "ar_obj")
+        assert "1'='1" not in sql
         assert params == ("S' OR '1'='1", "AR_OBJ")
 
 
