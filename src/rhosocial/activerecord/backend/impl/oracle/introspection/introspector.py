@@ -30,6 +30,7 @@ from rhosocial.activerecord.backend.introspection.base import (
     SyncAbstractIntrospector,
     AsyncAbstractIntrospector,
 )
+from rhosocial.activerecord.backend.introspection.cache import IntrospectionCache
 from rhosocial.activerecord.backend.introspection.executor import (
     SyncIntrospectorExecutor,
     AsyncIntrospectorExecutor,
@@ -438,8 +439,13 @@ class SyncOracleIntrospector(OracleIntrospectorMixin, SyncAbstractIntrospector):
     the data dictionary views (ALL_TABLES, ALL_TAB_COLUMNS, etc.).
     """
 
-    def __init__(self, backend: Any, executor: SyncIntrospectorExecutor) -> None:
-        super().__init__(backend, executor)
+    def __init__(
+        self,
+        backend: Any,
+        executor: SyncIntrospectorExecutor,
+        cache: Optional[IntrospectionCache] = None,
+    ) -> None:
+        super().__init__(backend, executor, cache)
         self._status_instance: Optional[SyncOracleStatusIntrospector] = None
 
     # ------------------------------------------------------------------ #
@@ -460,10 +466,8 @@ class SyncOracleIntrospector(OracleIntrospectorMixin, SyncAbstractIntrospector):
     def get_table_info(
         self, table_name: str, schema: Optional[str] = None
     ) -> Optional[IntrospectionTableInfo]:
-        key = self.make_cache_key(
-            IntrospectionScope.TABLE, table_name, schema=schema
-        )
-        cached = self.get_cached(key)
+        key = self._cache.key(IntrospectionScope.TABLE, table_name, schema=schema)
+        cached = self._cache.get(key)
         if cached is not None:
             return cached
 
@@ -476,7 +480,7 @@ class SyncOracleIntrospector(OracleIntrospectorMixin, SyncAbstractIntrospector):
         table.columns = self.list_columns(table_name, schema)
         table.indexes = self.list_indexes(table_name, schema)
         table.foreign_keys = self.list_foreign_keys(table_name, schema)
-        self.set_cached(key, table)
+        self._cache.set(key, table)
         return table
 
     # ------------------------------------------------------------------ #
@@ -487,10 +491,8 @@ class SyncOracleIntrospector(OracleIntrospectorMixin, SyncAbstractIntrospector):
         self, table_name: str, schema: Optional[str] = None
     ) -> List[IntrospectionColumnInfo]:
         target_schema = schema if schema is not None else self._get_default_schema()
-        key = self.make_cache_key(
-            IntrospectionScope.COLUMN, table_name, schema=target_schema
-        )
-        cached = self.get_cached(key)
+        key = self._cache.key(IntrospectionScope.COLUMN, table_name, schema=target_schema)
+        cached = self._cache.get(key)
         if cached is not None:
             return cached
 
@@ -505,7 +507,7 @@ class SyncOracleIntrospector(OracleIntrospectorMixin, SyncAbstractIntrospector):
         rows = self._executor.execute(sql, params)
         columns = self._parse_columns(rows, table_name, target_schema, primary_keys)
 
-        self.set_cached(key, columns)
+        self._cache.set(key, columns)
         return columns
 
 
@@ -516,8 +518,13 @@ class AsyncOracleIntrospector(OracleIntrospectorMixin, AsyncAbstractIntrospector
     the data dictionary views (ALL_TABLES, ALL_TAB_COLUMNS, etc.).
     """
 
-    def __init__(self, backend: Any, executor: AsyncIntrospectorExecutor) -> None:
-        super().__init__(backend, executor)
+    def __init__(
+        self,
+        backend: Any,
+        executor: AsyncIntrospectorExecutor,
+        cache: Optional[IntrospectionCache] = None,
+    ) -> None:
+        super().__init__(backend, executor, cache)
         self._status_instance: Optional[AsyncOracleStatusIntrospector] = None
 
     # ------------------------------------------------------------------ #
@@ -538,10 +545,8 @@ class AsyncOracleIntrospector(OracleIntrospectorMixin, AsyncAbstractIntrospector
     async def get_table_info(
         self, table_name: str, schema: Optional[str] = None
     ) -> Optional[IntrospectionTableInfo]:
-        key = self.make_cache_key(
-            IntrospectionScope.TABLE, table_name, schema=schema
-        )
-        cached = self.get_cached(key)
+        key = self._cache.key(IntrospectionScope.TABLE, table_name, schema=schema)
+        cached = self._cache.get(key)
         if cached is not None:
             return cached
 
@@ -554,7 +559,7 @@ class AsyncOracleIntrospector(OracleIntrospectorMixin, AsyncAbstractIntrospector
         table.columns = await self.list_columns(table_name, schema)
         table.indexes = await self.list_indexes(table_name, schema)
         table.foreign_keys = await self.list_foreign_keys(table_name, schema)
-        self.set_cached(key, table)
+        self._cache.set(key, table)
         return table
 
     # ------------------------------------------------------------------ #
@@ -565,10 +570,8 @@ class AsyncOracleIntrospector(OracleIntrospectorMixin, AsyncAbstractIntrospector
         self, table_name: str, schema: Optional[str] = None
     ) -> List[IntrospectionColumnInfo]:
         target_schema = schema if schema is not None else self._get_default_schema()
-        key = self.make_cache_key(
-            IntrospectionScope.COLUMN, table_name, schema=target_schema
-        )
-        cached = self.get_cached(key)
+        key = self._cache.key(IntrospectionScope.COLUMN, table_name, schema=target_schema)
+        cached = self._cache.get(key)
         if cached is not None:
             return cached
 
@@ -584,5 +587,5 @@ class AsyncOracleIntrospector(OracleIntrospectorMixin, AsyncAbstractIntrospector
         rows = await self._executor.execute(sql, params)
         columns = self._parse_columns(rows, table_name, target_schema, primary_keys)
 
-        self.set_cached(key, columns)
+        self._cache.set(key, columns)
         return columns
