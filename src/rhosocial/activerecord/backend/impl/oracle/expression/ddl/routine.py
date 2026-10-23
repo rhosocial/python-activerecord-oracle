@@ -7,15 +7,15 @@ procedures, functions and packages:
 * ``OracleRoutineParameterMode`` / ``OracleRoutineParameter`` — formal
   parameter declarations (name, optional ``IN``/``OUT``/``IN OUT`` mode,
   data type).
-* ``OracleCreateProcedureExpression`` — ``CREATE [OR REPLACE] PROCEDURE
+* ``OracleCreateProcedureStatement`` — ``CREATE [OR REPLACE] PROCEDURE
   p (x IN NUMBER) AS ...``.
-* ``OracleCreateFunctionExpression`` — ``CREATE [OR REPLACE] FUNCTION
+* ``OracleCreateFunctionStatement`` — ``CREATE [OR REPLACE] FUNCTION
   f (x NUMBER) RETURN NUMBER AS ...``.
-* ``OracleCreatePackageExpression`` — ``CREATE [OR REPLACE] PACKAGE pk
+* ``OracleCreatePackageStatement`` — ``CREATE [OR REPLACE] PACKAGE pk
   AS ...``.
-* ``OracleCreatePackageBodyExpression`` — ``CREATE [OR REPLACE] PACKAGE
+* ``OracleCreatePackageBodyStatement`` — ``CREATE [OR REPLACE] PACKAGE
   BODY pk AS ...``.
-* ``OracleDropRoutineObjectType`` / ``OracleDropRoutineExpression`` —
+* ``OracleDropRoutineObjectType`` / ``OracleDropRoutineStatement`` —
   ``DROP PROCEDURE/FUNCTION/PACKAGE [BODY] ...``.
 
 Routine bodies are passed through verbatim as raw PL/SQL strings; the
@@ -107,7 +107,7 @@ class OracleRoutineParameter:
         self.mode = mode
 
 
-class OracleCreateProcedureExpression(BaseExpression):
+class OracleCreateProcedureStatement(BaseExpression):
     """Oracle ``CREATE [OR REPLACE] PROCEDURE ...`` expression.
 
     Args:
@@ -155,7 +155,7 @@ class OracleCreateProcedureExpression(BaseExpression):
         return "format_create_procedure_statement"
 
 
-class OracleCreateFunctionExpression(BaseExpression):
+class OracleCreateFunctionStatement(BaseExpression):
     """Oracle ``CREATE [OR REPLACE] FUNCTION ...`` expression.
 
     Args:
@@ -214,7 +214,7 @@ class OracleCreateFunctionExpression(BaseExpression):
         return "format_create_function_statement"
 
 
-class OracleCreatePackageExpression(BaseExpression):
+class OracleCreatePackageStatement(BaseExpression):
     """Oracle ``CREATE [OR REPLACE] PACKAGE ...`` expression.
 
     Args:
@@ -261,7 +261,7 @@ class OracleCreatePackageExpression(BaseExpression):
         return "format_create_package_statement"
 
 
-class OracleCreatePackageBodyExpression(BaseExpression):
+class OracleCreatePackageBodyStatement(BaseExpression):
     """Oracle ``CREATE [OR REPLACE] PACKAGE BODY ...`` expression.
 
     Args:
@@ -335,7 +335,7 @@ def normalize_drop_routine_object_type(
     )
 
 
-class OracleDropRoutineExpression(BaseExpression):
+class OracleDropRoutineStatement(BaseExpression):
     """Oracle ``DROP PROCEDURE/FUNCTION/PACKAGE [BODY] ...`` expression.
 
     Args:

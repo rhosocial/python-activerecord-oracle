@@ -18,7 +18,7 @@ class OracleDatabaseLinkSupport(Protocol):
         ...  # pragma: no cover
     def supports_drop_database_link(self) -> bool:
         ...  # pragma: no cover
-    def format_create_database_link_statement(self, expr: 'OracleCreateDatabaseLinkExpression') -> Tuple[str, tuple]:
+    def format_create_database_link_statement(self, expr: 'OracleCreateDatabaseLinkStatement') -> Tuple[str, tuple]:
         ...  # pragma: no cover
-    def format_drop_database_link_statement(self, expr: 'OracleDropDatabaseLinkExpression') -> Tuple[str, tuple]:
+    def format_drop_database_link_statement(self, expr: 'OracleDropDatabaseLinkStatement') -> Tuple[str, tuple]:
         ...  # pragma: no cover

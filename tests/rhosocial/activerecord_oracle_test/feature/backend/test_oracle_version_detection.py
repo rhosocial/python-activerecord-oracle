@@ -924,10 +924,10 @@ class TestBlastRadiusIsPinned:
         from rhosocial.activerecord.backend.expression.types import BooleanType
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
         from rhosocial.activerecord.backend.impl.oracle.expression import (
-            OracleCreateMaterializedViewExpression,
-            OracleCreateSequenceExpression,
-            OracleDropMaterializedViewExpression,
-            OracleDropSequenceExpression,
+            OracleCreateMaterializedViewStatement,
+            OracleCreateSequenceStatement,
+            OracleDropMaterializedViewStatement,
+            OracleDropSequenceStatement,
         )
 
         def attempt(version):
@@ -936,21 +936,21 @@ class TestBlastRadiusIsPinned:
                 if label == "format BOOLEAN column":
                     return d.format_data_type(BooleanType(dialect=d))[0]
                 if label.startswith("CREATE SEQUENCE"):
-                    return OracleCreateSequenceExpression(
+                    return OracleCreateSequenceStatement(
                         d, Sequence(d, "seq"), if_not_exists=True).to_sql()[0]
                 if label.startswith("DROP SEQUENCE"):
-                    return OracleDropSequenceExpression(
+                    return OracleDropSequenceStatement(
                         d, Sequence(d, "seq"), if_exists=True).to_sql()[0]
                 if label.startswith("CREATE MATERIALIZED VIEW"):
                     query = QueryStatement(
                         d, select=[Column(d, "id")],
                         from_=NamedRelationRef(d, Table(d, "t")),
                     )
-                    return OracleCreateMaterializedViewExpression(
+                    return OracleCreateMaterializedViewStatement(
                         d, MaterializedView(d, "mv"), query=query,
                         if_not_exists=True).to_sql()[0]
                 if label.startswith("DROP MATERIALIZED VIEW"):
-                    return OracleDropMaterializedViewExpression(
+                    return OracleDropMaterializedViewStatement(
                         d, MaterializedView(d, "mv"), if_exists=True).to_sql()[0]
             except Exception as exc:
                 return type(exc).__name__
@@ -1097,7 +1097,7 @@ class TestTypeIfExistsRefusalNamesTheAlternative:
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
         from rhosocial.activerecord.backend.impl.oracle.expression.ddl.type import (
             OracleAlterTypeCompileAction,
-            OracleCreateTypeBodyExpression,
+            OracleCreateTypeBodyStatement,
             OracleDropTypeBodyExpression,
             OracleIncompleteTypeDefinition,
         )
@@ -1116,7 +1116,7 @@ class TestTypeIfExistsRefusalNamesTheAlternative:
             "supports_drop_type_if_exists": lambda: DropTypeStatement(
                 dialect, Type(dialect, "forward_t"), if_exists=True,
             ).to_sql(),
-            "supports_create_type_body_if_not_exists": lambda: OracleCreateTypeBodyExpression(
+            "supports_create_type_body_if_not_exists": lambda: OracleCreateTypeBodyStatement(
                 dialect, Type(dialect, "forward_t"), "BEGIN NULL; END;", if_not_exists=True,
             ).to_sql(),
             "supports_drop_type_body_if_exists": lambda: OracleDropTypeBodyExpression(

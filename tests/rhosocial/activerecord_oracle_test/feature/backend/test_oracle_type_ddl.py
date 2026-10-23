@@ -24,7 +24,7 @@ from rhosocial.activerecord.backend.impl.oracle.backend import OracleBackend
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.mixins import OracleTypeDDLMixin
 from rhosocial.activerecord.backend.impl.oracle.expression.ddl.type import (
-    DropTypeBodyExpression,
+    DropTypeBodyStatement,
     OracleAlterTypeAddAttributeAction,
     OracleAlterTypeAddMethodAction,
     OracleAlterTypeCompileAction,
@@ -35,7 +35,7 @@ from rhosocial.activerecord.backend.impl.oracle.expression.ddl.type import (
     OracleAlterTypeInstantiableAction,
     OracleAlterTypeLimitAction,
     OracleAlterTypeModifyAttributeAction,
-    OracleCreateTypeBodyExpression,
+    OracleCreateTypeBodyStatement,
     OracleDropTypeExpression,
     OracleIncompleteTypeDefinition,
     OracleNestedTableTypeDefinition,
@@ -333,7 +333,7 @@ def test_alter_actions_and_dependent_handling() -> None:
 
 def test_body_and_force_validate_drop_are_separate_expressions() -> None:
     dialect = _dialect(version_full=(19, 28, 0, 0, 0))
-    body = OracleCreateTypeBodyExpression(
+    body = OracleCreateTypeBodyStatement(
         dialect,
         Type(dialect, "person_t"),
         "MEMBER FUNCTION display RETURN VARCHAR2 IS BEGIN RETURN name; END;",
@@ -341,7 +341,7 @@ def test_body_and_force_validate_drop_are_separate_expressions() -> None:
     )
     force_drop = OracleDropTypeExpression(dialect, Type(dialect, "person_t"), force=True)
     validate_drop = OracleDropTypeExpression(dialect, Type(dialect, "person_t"), validate=True)
-    body_drop = DropTypeBodyExpression(dialect, Type(dialect, "person_t"), if_exists=True)
+    body_drop = DropTypeBodyStatement(dialect, Type(dialect, "person_t"), if_exists=True)
 
     assert body.to_sql()[0].startswith("CREATE OR REPLACE TYPE BODY")
     assert force_drop.to_sql()[0] == 'DROP TYPE "PERSON_T" FORCE'
@@ -374,7 +374,7 @@ def test_if_clauses_require_reliable_19_28_ru_source() -> None:
     with pytest.raises(UnsupportedFeatureError):
         CreateTypeStatement(base, Type(base, "forward_t"), definition, if_not_exists=True).to_sql()
     with pytest.raises(UnsupportedFeatureError):
-        DropTypeBodyExpression(base, Type(base, "forward_t"), if_exists=True).to_sql()
+        DropTypeBodyStatement(base, Type(base, "forward_t"), if_exists=True).to_sql()
     assert CreateTypeStatement(
         supported,
         Type(supported, "forward_t"),
@@ -521,9 +521,9 @@ def test_type_ddl_serialization_registration() -> None:
         OracleAlterTypeCompileAction(dialect),
         OracleAlterTypeFinalAction(dialect, final=True),
         OracleAlterTypeInstantiableAction(dialect, instantiable=True),
-        OracleCreateTypeBodyExpression(dialect, Type(dialect, "person_t"), "BEGIN NULL; END;"),
+        OracleCreateTypeBodyStatement(dialect, Type(dialect, "person_t"), "BEGIN NULL; END;"),
         OracleDropTypeExpression(dialect, Type(dialect, "person_t"), force=True),
-        DropTypeBodyExpression(dialect, Type(dialect, "person_t")),
+        DropTypeBodyStatement(dialect, Type(dialect, "person_t")),
         OracleAlterTypeAddAttributeAction(dialect, "id", "NUMBER"),
         OracleAlterTypeModifyAttributeAction(dialect, "id", "NUMBER"),
         OracleAlterTypeDropAttributeAction(dialect, "id"),

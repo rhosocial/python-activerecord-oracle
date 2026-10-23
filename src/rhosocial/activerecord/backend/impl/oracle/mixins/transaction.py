@@ -90,10 +90,10 @@ class OracleTransactionMixin:
             )
         return ("", ())
 
-    def format_commit_transaction_statement(self, expr) -> Tuple[str, tuple]:
+    def format_commit_statement(self, expr) -> Tuple[str, tuple]:
         return ("COMMIT", ())
 
-    def format_rollback_transaction_statement(self, expr) -> Tuple[str, tuple]:
+    def format_rollback_statement(self, expr) -> Tuple[str, tuple]:
         params = expr.get_params()
         savepoint = params.get("savepoint")
         if savepoint:
@@ -106,7 +106,7 @@ class OracleTransactionMixin:
     def format_release_savepoint_statement(self, expr) -> Tuple[str, tuple]:
         return ("", ())
 
-    def format_set_transaction(self, expr) -> Tuple[str, tuple]:
+    def format_set_transaction_statement(self, expr) -> Tuple[str, tuple]:
         """Format SET TRANSACTION for Oracle.
 
         ``deferrable`` renders the declared ``DEFERRABLE`` spelling; the

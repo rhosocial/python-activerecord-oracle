@@ -31,8 +31,8 @@ from rhosocial.activerecord.backend.expression.types import (
     BlobType, BooleanType, IntegerType, VarCharType,
 )
 from rhosocial.activerecord.backend.expression.introspection import (
-    ForeignKeyExpression, IndexInfoExpression, TableListExpression,
-    TriggerListExpression, ViewListExpression,
+    ForeignKeyQueryStatement, IndexInfoQueryStatement, TableListQueryStatement,
+    TriggerListQueryStatement, ViewListQueryStatement,
 )
 from rhosocial.activerecord.backend.introspection.types import ColumnNullable
 from rhosocial.activerecord.model import ActiveRecord
@@ -121,43 +121,43 @@ class TestSqlBuilders:
 
     def test_dialect_table_list_query_scopes_owner(self):
         dialect = OracleDialect(version=(23, 0, 0))
-        sql, params = dialect.format_table_list_query(
-            TableListExpression(dialect, schema="ar_shop",
+        sql, params = dialect.format_table_list_query_statement(
+            TableListQueryStatement(dialect, schema="ar_shop",
                                 include_views=False)
         )
         assert "ALL_TABLES" in sql.upper() and "ALL_VIEWS" not in sql.upper()
         assert "AR_SHOP" in [str(p) for p in params]
 
-        sql_all, _ = dialect.format_table_list_query(
-            TableListExpression(dialect)
+        sql_all, _ = dialect.format_table_list_query_statement(
+            TableListQueryStatement(dialect)
         )
         assert "UNION ALL" in sql_all and "ALL_VIEWS" in sql_all.upper()
 
     def test_dialect_index_and_fk_queries_join_constraints(self):
         dialect = OracleDialect(version=(23, 0, 0))
-        idx_sql, idx_params = dialect.format_index_info_query(
-            IndexInfoExpression(dialect, "orders", schema="ar_shop")
+        idx_sql, idx_params = dialect.format_index_info_query_statement(
+            IndexInfoQueryStatement(dialect, "orders", schema="ar_shop")
         )
         assert "ALL_INDEXES" in idx_sql.upper()
         assert "ALL_IND_COLUMNS" in idx_sql.upper()
         assert [str(p) for p in idx_params] == ["AR_SHOP", "ORDERS"]
 
-        fk_sql, fk_params = dialect.format_foreign_key_query(
-            ForeignKeyExpression(dialect, "orders", schema="ar_shop")
+        fk_sql, fk_params = dialect.format_foreign_key_query_statement(
+            ForeignKeyQueryStatement(dialect, "orders", schema="ar_shop")
         )
         assert "'R'" in fk_sql
         assert [str(p) for p in fk_params] == ["AR_SHOP", "ORDERS"]
 
     def test_dialect_view_and_trigger_queries_target_dictionary(self):
         dialect = OracleDialect(version=(23, 0, 0))
-        view_sql, view_params = dialect.format_view_list_query(
-            ViewListExpression(dialect, schema="ar_crm")
+        view_sql, view_params = dialect.format_view_list_query_statement(
+            ViewListQueryStatement(dialect, schema="ar_crm")
         )
         assert "ALL_VIEWS" in view_sql.upper()
         assert [str(p) for p in view_params] == ["AR_CRM"]
 
-        trig_sql, trig_params = dialect.format_trigger_list_query(
-            TriggerListExpression(dialect, schema="ar_crm", table_name="customers")
+        trig_sql, trig_params = dialect.format_trigger_list_query_statement(
+            TriggerListQueryStatement(dialect, schema="ar_crm", table_name="customers")
         )
         assert "ALL_TRIGGERS" in trig_sql.upper()
         assert [str(p) for p in trig_params] == ["AR_CRM", "CUSTOMERS"]

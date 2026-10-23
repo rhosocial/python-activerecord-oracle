@@ -2,7 +2,7 @@
 """Oracle VECTOR data type expression wrappers.
 
 This module defines backend-specific expressions that wrap the mixin
-format methods ``format_vector_literal`` and ``format_vector_operand``
+format methods ``format_vector_literal_expression`` and ``format_vector_operand_expression``
 into proper :class:`BaseExpression` subclasses, making them composable
 within the expression tree and renderable through the unified
 :meth:`BaseExpression.to_sql` entry point.
@@ -18,7 +18,7 @@ if TYPE_CHECKING:  # pragma: no cover
 
 
 class VectorLiteralExpression(BaseExpression):
-    """Expression wrapping ``format_vector_literal``.
+    """Expression wrapping ``format_vector_literal_expression``.
 
     Formats a vector value as an Oracle ``VECTOR`` string literal suitable
     for inline SQL embedding.
@@ -40,11 +40,11 @@ class VectorLiteralExpression(BaseExpression):
     @property
     def format_method(self) -> str:
         """The dialect formatting method that renders this expression."""
-        return "format_vector_literal"
+        return "format_vector_literal_expression"
 
 
 class VectorOperandExpression(BaseExpression):
-    """Expression wrapping ``format_vector_operand``.
+    """Expression wrapping ``format_vector_operand_expression``.
 
     Formats a single vector operand for embedding in SQL, appending the
     bind-parameter value to *params* and returning the placeholder.
@@ -65,4 +65,4 @@ class VectorOperandExpression(BaseExpression):
     @property
     def format_method(self) -> str:
         """The dialect formatting method that renders this expression."""
-        return "format_vector_operand"
+        return "format_vector_operand_expression"

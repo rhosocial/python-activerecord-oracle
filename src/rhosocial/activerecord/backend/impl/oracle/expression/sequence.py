@@ -6,10 +6,10 @@ This module defines backend-specific expressions for Oracle sequences:
 * ``OracleSequenceValueExpression`` — the ``seq.NEXTVAL`` / ``seq.CURRVAL``
   pseudo-column value expression (Oracle's substitute for the SQL-standard
   ``NEXT VALUE FOR``).
-* ``OracleCreateSequenceExpression`` — ``CREATE SEQUENCE ...`` with the
+* ``OracleCreateSequenceStatement`` — ``CREATE SEQUENCE ...`` with the
   Oracle option set (START WITH / INCREMENT BY / MINVALUE / MAXVALUE /
   CYCLE | NOCYCLE / CACHE | NOCACHE / ORDER | NOORDER).
-* ``OracleDropSequenceExpression`` — ``DROP SEQUENCE ...``.
+* ``OracleDropSequenceStatement`` — ``DROP SEQUENCE ...``.
 
 All expressions delegate SQL generation to the dialect through the public
 ``format_*`` formatters implemented by ``OracleSequenceMixin``.
@@ -88,7 +88,7 @@ class OracleSequenceValueExpression(BaseExpression):
         return self.dialect.format_currval(self)
 
 
-class OracleCreateSequenceExpression(BaseExpression):
+class OracleCreateSequenceStatement(BaseExpression):
     """Oracle ``CREATE SEQUENCE ...`` DDL expression.
 
     Oracle renders sequences with the ``START WITH``/``INCREMENT BY`` option
@@ -178,7 +178,7 @@ class OracleCreateSequenceExpression(BaseExpression):
         return "format_create_sequence_statement"
 
 
-class OracleDropSequenceExpression(BaseExpression):
+class OracleDropSequenceStatement(BaseExpression):
     """Oracle ``DROP SEQUENCE ...`` DDL expression.
 
     Args:

@@ -11,8 +11,8 @@ if TYPE_CHECKING:  # pragma: no cover
         DropMaterializedViewStatement,
     )
     from ..expression.materialized_view import (
-        OracleCreateMaterializedViewLogExpression,
-        OracleRefreshMaterializedViewExpression,
+        OracleCreateMaterializedViewLogStatement,
+        OracleRefreshMaterializedViewStatement,
     )
 
 
@@ -79,7 +79,7 @@ class OracleMaterializedViewMixin:
                 graceful-DDL option was asked for below 23ai.
         """
         from rhosocial.activerecord.backend.expression.objects import MaterializedView
-        from ..expression.materialized_view import OracleCreateMaterializedViewExpression
+        from ..expression.materialized_view import OracleCreateMaterializedViewStatement
 
         if not isinstance(expr.view, MaterializedView):
             raise TypeError(
@@ -102,7 +102,7 @@ class OracleMaterializedViewMixin:
         # the BUILD / REFRESH / QUERY REWRITE option set, the core one the
         # SQL-standard ``with_data`` / ``no_data`` pair. Each is read on the
         # contract that declares it, dispatched by class rather than probed.
-        if isinstance(expr, OracleCreateMaterializedViewExpression):
+        if isinstance(expr, OracleCreateMaterializedViewStatement):
             if expr.if_not_exists:
                 if self.version < (23, 0, 0):
                     raise UnsupportedFeatureError(
@@ -120,7 +120,7 @@ class OracleMaterializedViewMixin:
             parts.append(f"({cols})")
         if expr.tablespace:
             parts.append(f"TABLESPACE {self.format_identifier(expr.tablespace)}")
-        if isinstance(expr, OracleCreateMaterializedViewExpression):
+        if isinstance(expr, OracleCreateMaterializedViewStatement):
             build_mode = expr.build_mode
             if build_mode is not None:
                 parts.append(f"BUILD {build_mode.value}")
@@ -151,7 +151,7 @@ class OracleMaterializedViewMixin:
         return " ".join(parts), query_params
 
     def format_create_materialized_view_log_statement(
-        self, expr: "OracleCreateMaterializedViewLogExpression"
+        self, expr: "OracleCreateMaterializedViewLogStatement"
     ) -> Tuple[str, tuple]:
         """Format ``CREATE MATERIALIZED VIEW LOG`` for Oracle.
 
@@ -166,7 +166,7 @@ class OracleMaterializedViewMixin:
 
         if not isinstance(expr.table, Table):
             raise TypeError(
-                f"OracleCreateMaterializedViewLogExpression.table must be a Table, "
+                f"OracleCreateMaterializedViewLogStatement.table must be a Table, "
                 f"got {type(expr.table).__name__}"
             )
 
@@ -201,7 +201,7 @@ class OracleMaterializedViewMixin:
                 EXISTS was asked for below 23ai.
         """
         from rhosocial.activerecord.backend.expression.objects import MaterializedView
-        from ..expression.materialized_view import OracleDropMaterializedViewExpression
+        from ..expression.materialized_view import OracleDropMaterializedViewStatement
 
         if not isinstance(expr.view, MaterializedView):
             raise TypeError(
@@ -236,7 +236,7 @@ class OracleMaterializedViewMixin:
         # declares CASCADE / RESTRICT and has no PRESERVE TABLE slot. Each
         # is read on the contract that declares it, dispatched by class
         # rather than probed.
-        if isinstance(expr, OracleDropMaterializedViewExpression):
+        if isinstance(expr, OracleDropMaterializedViewStatement):
             if expr.preserve_table:
                 parts.append("PRESERVE TABLE")
         else:
@@ -261,7 +261,7 @@ class OracleMaterializedViewMixin:
         return " ".join(parts), ()
 
     def format_refresh_materialized_view_statement(
-        self, expr: "OracleRefreshMaterializedViewExpression"
+        self, expr: "OracleRefreshMaterializedViewStatement"
     ) -> Tuple[str, tuple]:
         """Refresh a materialized view via ``DBMS_MVIEW.REFRESH``.
 
@@ -290,7 +290,7 @@ class OracleMaterializedViewMixin:
                 ``no_data`` was requested.
         """
         from rhosocial.activerecord.backend.expression.objects import MaterializedView
-        from ..expression.materialized_view import OracleRefreshMaterializedViewExpression
+        from ..expression.materialized_view import OracleRefreshMaterializedViewStatement
 
         if not isinstance(expr.view, MaterializedView):
             raise TypeError(
@@ -302,7 +302,7 @@ class OracleMaterializedViewMixin:
         # alone; Oracle's own refresh expression carries none of them, and
         # its PL/SQL procedure call is built from the Oracle statement's own
         # fields below.
-        if isinstance(expr, OracleRefreshMaterializedViewExpression):
+        if isinstance(expr, OracleRefreshMaterializedViewStatement):
             standard_options = ()
         else:
             standard_options = (
@@ -327,7 +327,7 @@ class OracleMaterializedViewMixin:
         name = self._materialized_view_refresh_target(expr)
         args = [f"'{name}'"]
 
-        if isinstance(expr, OracleRefreshMaterializedViewExpression):
+        if isinstance(expr, OracleRefreshMaterializedViewStatement):
             method = expr.method
             if method is not None:
                 args.append(f"method => '{method.value}'")

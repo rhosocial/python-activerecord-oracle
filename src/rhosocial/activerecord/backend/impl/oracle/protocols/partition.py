@@ -27,13 +27,13 @@ if TYPE_CHECKING:  # pragma: no cover
         OracleSubpartitionDefinition,
     )
     from ..expression.partition_lifecycle import (
-        OracleAddPartitionExpression,
-        OracleDropPartitionExpression,
-        OracleExchangePartitionExpression,
-        OracleMergePartitionsExpression,
-        OracleMovePartitionExpression,
-        OracleSplitPartitionExpression,
-        OracleTruncatePartitionExpression,
+        OracleAddPartitionStatement,
+        OracleDropPartitionStatement,
+        OracleExchangePartitionStatement,
+        OracleMergePartitionsStatement,
+        OracleMovePartitionStatement,
+        OracleSplitPartitionStatement,
+        OracleTruncatePartitionStatement,
     )
 
 
@@ -143,43 +143,43 @@ class OraclePartitionSupport(PartitionSupport):
     # Maintenance statement formatters
     # ------------------------------------------------------------------
     def format_add_partition_statement(
-        self, expr: "OracleAddPartitionExpression"
+        self, expr: "OracleAddPartitionStatement"
     ) -> Tuple[str, tuple]:
         """Format ``ALTER TABLE ... ADD PARTITION``."""
         ...  # pragma: no cover
 
     def format_drop_partition_statement(
-        self, expr: "OracleDropPartitionExpression"
+        self, expr: "OracleDropPartitionStatement"
     ) -> Tuple[str, tuple]:
         """Format ``ALTER TABLE ... DROP PARTITION``."""
         ...  # pragma: no cover
 
     def format_split_partition_statement(
-        self, expr: "OracleSplitPartitionExpression"
+        self, expr: "OracleSplitPartitionStatement"
     ) -> Tuple[str, tuple]:
         """Format ``ALTER TABLE ... SPLIT PARTITION ...``."""
         ...  # pragma: no cover
 
     def format_merge_partitions_statement(
-        self, expr: "OracleMergePartitionsExpression"
+        self, expr: "OracleMergePartitionsStatement"
     ) -> Tuple[str, tuple]:
         """Format ``ALTER TABLE ... MERGE PARTITIONS ... INTO ...``."""
         ...  # pragma: no cover
 
     def format_exchange_partition_statement(
-        self, expr: "OracleExchangePartitionExpression"
+        self, expr: "OracleExchangePartitionStatement"
     ) -> Tuple[str, tuple]:
         """Format ``ALTER TABLE ... EXCHANGE PARTITION ... WITH TABLE ...``."""
         ...  # pragma: no cover
 
     def format_move_partition_statement(
-        self, expr: "OracleMovePartitionExpression"
+        self, expr: "OracleMovePartitionStatement"
     ) -> Tuple[str, tuple]:
         """Format ``ALTER TABLE ... MOVE PARTITION ...``."""
         ...  # pragma: no cover
 
     def format_truncate_partition_statement(
-        self, expr: "OracleTruncatePartitionExpression"
+        self, expr: "OracleTruncatePartitionStatement"
     ) -> Tuple[str, tuple]:
         """Format ``ALTER TABLE ... TRUNCATE PARTITION ...``."""
         ...  # pragma: no cover

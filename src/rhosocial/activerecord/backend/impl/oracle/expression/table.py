@@ -2,8 +2,8 @@
 """Oracle table-clause expression wrappers.
 
 This module defines backend-specific expressions that wrap the mixin
-format methods ``format_table_compression_clause`` and
-``format_tablespace_clause`` into proper :class:`BaseExpression`
+format methods ``format_table_compression_clause_expression`` and
+``format_tablespace_clause_expression`` into proper :class:`BaseExpression`
 subclasses, making them composable within the expression tree and
 renderable through the unified :meth:`BaseExpression.to_sql` entry
 point.
@@ -19,7 +19,7 @@ if TYPE_CHECKING:  # pragma: no cover
 
 
 class TableCompressionClauseExpression(BaseExpression):
-    """Expression wrapping ``format_table_compression_clause``.
+    """Expression wrapping ``format_table_compression_clause_expression``.
 
     Renders an Oracle table-compression clause such as ``NOCOMPRESS``
     or ``COMPRESS FOR OLTP``.
@@ -42,11 +42,11 @@ class TableCompressionClauseExpression(BaseExpression):
     @property
     def format_method(self) -> str:
         """The dialect formatting method that renders this expression."""
-        return "format_table_compression_clause"
+        return "format_table_compression_clause_expression"
 
 
 class TablespaceClauseExpression(BaseExpression):
-    """Expression wrapping ``format_tablespace_clause``.
+    """Expression wrapping ``format_tablespace_clause_expression``.
 
     Renders an Oracle ``TABLESPACE <name>`` clause.
 
@@ -66,4 +66,4 @@ class TablespaceClauseExpression(BaseExpression):
     @property
     def format_method(self) -> str:
         """The dialect formatting method that renders this expression."""
-        return "format_tablespace_clause"
+        return "format_tablespace_clause_expression"

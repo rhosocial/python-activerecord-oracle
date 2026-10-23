@@ -1327,7 +1327,7 @@ class OracleAlterTypeResetAction(OracleTypeAlterAction):
         super().__init__(dialect, dependent_handling=dependent_handling, force=force)
 
 
-class OracleCreateTypeBodyExpression(BaseExpression):
+class OracleCreateTypeBodyStatement(BaseExpression):
     """Oracle CREATE TYPE BODY expression.
 
     ``schema`` is a deprecated alias of ``schema_name``; both are stored
@@ -1404,7 +1404,7 @@ class OracleDropTypeExpression(DropTypeStatement):
         self.validate = validate
 
 
-class DropTypeBodyExpression(BaseExpression):
+class DropTypeBodyStatement(BaseExpression):
     """Oracle DROP TYPE BODY expression.
 
     ``schema`` is a deprecated alias of ``schema_name``; both are stored
@@ -1431,7 +1431,7 @@ class DropTypeBodyExpression(BaseExpression):
         return "format_drop_type_body_statement"
 
 
-class OracleDropTypeBodyExpression(DropTypeBodyExpression):
+class OracleDropTypeBodyExpression(DropTypeBodyStatement):
     """Oracle-prefixed alias for DROP TYPE BODY."""
 
 
@@ -1456,8 +1456,8 @@ __all__ = [
     "OracleAlterTypeFinalAction",
     "OracleAlterTypeInstantiableAction",
     "OracleAlterTypeResetAction",
-    "OracleCreateTypeBodyExpression",
+    "OracleCreateTypeBodyStatement",
     "OracleDropTypeExpression",
-    "DropTypeBodyExpression",
+    "DropTypeBodyStatement",
     "OracleDropTypeBodyExpression",
 ]

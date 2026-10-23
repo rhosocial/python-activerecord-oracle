@@ -9,11 +9,11 @@ from ..expression.objects import OraclePackage
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..expression.ddl.routine import (
-        OracleCreateFunctionExpression,
-        OracleCreatePackageBodyExpression,
-        OracleCreatePackageExpression,
-        OracleCreateProcedureExpression,
-        OracleDropRoutineExpression,
+        OracleCreateFunctionStatement,
+        OracleCreatePackageBodyStatement,
+        OracleCreatePackageStatement,
+        OracleCreateProcedureStatement,
+        OracleDropRoutineStatement,
     )
 
 
@@ -83,7 +83,7 @@ class OracleRoutineMixin:
         return ", ".join(rendered), ()
 
     def format_create_procedure_statement(
-        self, expr: "OracleCreateProcedureExpression"
+        self, expr: "OracleCreateProcedureStatement"
     ) -> Tuple[str, tuple]:
         """Format ``CREATE [OR REPLACE] PROCEDURE`` for Oracle.
 
@@ -97,7 +97,7 @@ class OracleRoutineMixin:
 
         if not isinstance(expr.procedure, Procedure):
             raise TypeError(
-                f"OracleCreateProcedureExpression.procedure must be a Procedure, "
+                f"OracleCreateProcedureStatement.procedure must be a Procedure, "
                 f"got {type(expr.procedure).__name__}"
             )
 
@@ -122,7 +122,7 @@ class OracleRoutineMixin:
         return " ".join(parts), ()
 
     def format_create_function_statement(
-        self, expr: "OracleCreateFunctionExpression"
+        self, expr: "OracleCreateFunctionStatement"
     ) -> Tuple[str, tuple]:
         """Format ``CREATE [OR REPLACE] FUNCTION`` for Oracle.
 
@@ -136,7 +136,7 @@ class OracleRoutineMixin:
 
         if not isinstance(expr.function, Function):
             raise TypeError(
-                f"OracleCreateFunctionExpression.function must be a Function, "
+                f"OracleCreateFunctionStatement.function must be a Function, "
                 f"got {type(expr.function).__name__}"
             )
 
@@ -164,7 +164,7 @@ class OracleRoutineMixin:
         return " ".join(parts), ()
 
     def format_create_package_statement(
-        self, expr: "OracleCreatePackageExpression"
+        self, expr: "OracleCreatePackageStatement"
     ) -> Tuple[str, tuple]:
         """Format ``CREATE [OR REPLACE] PACKAGE`` for Oracle.
 
@@ -176,7 +176,7 @@ class OracleRoutineMixin:
         """
         if not isinstance(expr.package, OraclePackage):
             raise TypeError(
-                f"OracleCreatePackageExpression.package must be an OraclePackage, "
+                f"OracleCreatePackageStatement.package must be an OraclePackage, "
                 f"got {type(expr.package).__name__}"
             )
 
@@ -199,7 +199,7 @@ class OracleRoutineMixin:
         return " ".join(parts), ()
 
     def format_create_package_body_statement(
-        self, expr: "OracleCreatePackageBodyExpression"
+        self, expr: "OracleCreatePackageBodyStatement"
     ) -> Tuple[str, tuple]:
         """Format ``CREATE [OR REPLACE] PACKAGE BODY`` for Oracle.
 
@@ -209,7 +209,7 @@ class OracleRoutineMixin:
         """
         if not isinstance(expr.package, OraclePackage):
             raise TypeError(
-                f"OracleCreatePackageBodyExpression.package must be an OraclePackage, "
+                f"OracleCreatePackageBodyStatement.package must be an OraclePackage, "
                 f"got {type(expr.package).__name__}"
             )
 
@@ -232,7 +232,7 @@ class OracleRoutineMixin:
         return " ".join(parts), ()
 
     def format_drop_routine_statement(
-        self, expr: "OracleDropRoutineExpression"
+        self, expr: "OracleDropRoutineStatement"
     ) -> Tuple[str, tuple]:
         """Format ``DROP <ROUTINE KIND>`` for Oracle.
 
@@ -247,7 +247,7 @@ class OracleRoutineMixin:
 
         if not isinstance(expr.routine, RoutineObject):
             raise TypeError(
-                f"OracleDropRoutineExpression.routine must be a RoutineObject, "
+                f"OracleDropRoutineStatement.routine must be a RoutineObject, "
                 f"got {type(expr.routine).__name__}"
             )
 

@@ -23,8 +23,8 @@ from rhosocial.activerecord.backend.expression.core import Literal
 from rhosocial.activerecord.backend.expression.objects import Sequence, Table
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.expression import (
-    OracleCreateSequenceExpression,
-    OracleDropSequenceExpression,
+    OracleCreateSequenceStatement,
+    OracleDropSequenceStatement,
     OracleSequenceValueExpression,
     OracleSequenceValueMode,
 )
@@ -129,7 +129,7 @@ class TestOracleSequenceValueExpression:
 
 class TestOracleCreateSequenceExpression:
     def test_full_options(self, dialect):
-        expr = OracleCreateSequenceExpression(
+        expr = OracleCreateSequenceStatement(
             dialect,
             sequence=Sequence(dialect, "seq"),
             start=1,
@@ -147,13 +147,13 @@ class TestOracleCreateSequenceExpression:
         assert params == ()
 
     def test_minimal_omits_optional_clauses(self, dialect):
-        expr = OracleCreateSequenceExpression(dialect, sequence=Sequence(dialect, "seq"))
+        expr = OracleCreateSequenceStatement(dialect, sequence=Sequence(dialect, "seq"))
         sql, params = expr.to_sql()
         assert sql == 'CREATE SEQUENCE "SEQ"'
         assert params == ()
 
     def test_nocycle_nocache_noorder(self, dialect):
-        expr = OracleCreateSequenceExpression(
+        expr = OracleCreateSequenceStatement(
             dialect,
             sequence=Sequence(dialect, "seq"),
             no_cycle=True,
@@ -165,7 +165,7 @@ class TestOracleCreateSequenceExpression:
         assert params == ()
 
     def test_order_and_cache(self, dialect):
-        expr = OracleCreateSequenceExpression(
+        expr = OracleCreateSequenceStatement(
             dialect, sequence=Sequence(dialect, "seq"), order=True, cache=100
         )
         sql, params = expr.to_sql()
@@ -184,7 +184,7 @@ class TestOracleCreateSequenceExpression:
             expr.to_sql()
 
     def test_if_not_exists_pre_23ai_raises(self, dialect):
-        expr = OracleCreateSequenceExpression(dialect, sequence=Sequence(dialect, "seq"), if_not_exists=True)
+        expr = OracleCreateSequenceStatement(dialect, sequence=Sequence(dialect, "seq"), if_not_exists=True)
         # The refusal is now the capability gate's, not the formatter's own
         # version-interpolated one, so the pin names the gate's feature.
         with pytest.raises(
@@ -195,16 +195,16 @@ class TestOracleCreateSequenceExpression:
 
     def test_if_not_exists_23ai(self):
         d23 = OracleDialect(version=(23, 0, 0))
-        expr = OracleCreateSequenceExpression(d23, sequence=Sequence(d23, "seq"), if_not_exists=True)
+        expr = OracleCreateSequenceStatement(d23, sequence=Sequence(d23, "seq"), if_not_exists=True)
         sql, params = expr.to_sql()
         assert sql == 'CREATE SEQUENCE IF NOT EXISTS "SEQ"'
         assert params == ()
 
     def test_negative_cache_rejected(self, dialect):
         with pytest.raises(ValueError, match="cache must be a positive integer"):
-            OracleCreateSequenceExpression(dialect, sequence=Sequence(dialect, "seq"), cache=-1)
+            OracleCreateSequenceStatement(dialect, sequence=Sequence(dialect, "seq"), cache=-1)
         with pytest.raises(ValueError, match="cache must be a positive integer"):
-            OracleCreateSequenceExpression(dialect, sequence=Sequence(dialect, "seq"), cache=0)
+            OracleCreateSequenceStatement(dialect, sequence=Sequence(dialect, "seq"), cache=0)
 
     def test_pair_options_are_mutually_exclusive(self, dialect):
         for kwargs in (
@@ -213,7 +213,7 @@ class TestOracleCreateSequenceExpression:
             {"cache": 10, "no_cache": True},
         ):
             with pytest.raises(ValueError, match="mutually exclusive"):
-                OracleCreateSequenceExpression(
+                OracleCreateSequenceStatement(
                     dialect, sequence=Sequence(dialect, "seq"), **kwargs
                 )
 
@@ -236,77 +236,77 @@ class TestOracleSequenceOptionProbesAreLoadBearing:
         cases = [
             (
                 "supports_sequence_start",
-                OracleCreateSequenceExpression,
+                OracleCreateSequenceStatement,
                 {"start": 1},
                 True,
                 'CREATE SEQUENCE "SEQ" START WITH 1',
             ),
             (
                 "supports_sequence_increment",
-                OracleCreateSequenceExpression,
+                OracleCreateSequenceStatement,
                 {"increment": 10},
                 True,
                 'CREATE SEQUENCE "SEQ" INCREMENT BY 10',
             ),
             (
                 "supports_sequence_minvalue",
-                OracleCreateSequenceExpression,
+                OracleCreateSequenceStatement,
                 {"minvalue": 1},
                 True,
                 'CREATE SEQUENCE "SEQ" MINVALUE 1',
             ),
             (
                 "supports_sequence_maxvalue",
-                OracleCreateSequenceExpression,
+                OracleCreateSequenceStatement,
                 {"maxvalue": 999999},
                 True,
                 'CREATE SEQUENCE "SEQ" MAXVALUE 999999',
             ),
             (
                 "supports_sequence_cycle",
-                OracleCreateSequenceExpression,
+                OracleCreateSequenceStatement,
                 {"cycle": True},
                 True,
                 'CREATE SEQUENCE "SEQ" CYCLE',
             ),
             (
                 "supports_sequence_cycle",
-                OracleCreateSequenceExpression,
+                OracleCreateSequenceStatement,
                 {"no_cycle": True},
                 True,
                 'CREATE SEQUENCE "SEQ" NOCYCLE',
             ),
             (
                 "supports_sequence_cache",
-                OracleCreateSequenceExpression,
+                OracleCreateSequenceStatement,
                 {"cache": 20},
                 True,
                 'CREATE SEQUENCE "SEQ" CACHE 20',
             ),
             (
                 "supports_sequence_cache",
-                OracleCreateSequenceExpression,
+                OracleCreateSequenceStatement,
                 {"no_cache": True},
                 True,
                 'CREATE SEQUENCE "SEQ" NOCACHE',
             ),
             (
                 "supports_sequence_order",
-                OracleCreateSequenceExpression,
+                OracleCreateSequenceStatement,
                 {"order": True},
                 True,
                 'CREATE SEQUENCE "SEQ" ORDER',
             ),
             (
                 "supports_sequence_order",
-                OracleCreateSequenceExpression,
+                OracleCreateSequenceStatement,
                 {"no_order": True},
                 True,
                 'CREATE SEQUENCE "SEQ" NOORDER',
             ),
             (
                 "supports_sequence_owned_by",
-                # OracleCreateSequenceExpression has no owned_by field; the
+                # OracleCreateSequenceStatement has no owned_by field; the
                 # core expression is what the formatter's getattr path serves.
                 CreateSequenceStatement,
                 {"owned_by": "t.id"},
@@ -360,7 +360,7 @@ class TestOracleSequenceOptionProbesAreLoadBearing:
 
 class TestOracleDropSequenceExpression:
     def test_basic_drop(self, dialect):
-        expr = OracleDropSequenceExpression(dialect, sequence=Sequence(dialect, "seq"))
+        expr = OracleDropSequenceStatement(dialect, sequence=Sequence(dialect, "seq"))
         sql, params = expr.to_sql()
         assert sql == 'DROP SEQUENCE "SEQ"'
         assert params == ()
@@ -372,7 +372,7 @@ class TestOracleDropSequenceExpression:
         assert params == ()
 
     def test_if_exists_pre_23ai_raises(self, dialect):
-        expr = OracleDropSequenceExpression(dialect, sequence=Sequence(dialect, "seq"), if_exists=True)
+        expr = OracleDropSequenceStatement(dialect, sequence=Sequence(dialect, "seq"), if_exists=True)
         # As with IF NOT EXISTS above: the gate's message, not the formatter's.
         with pytest.raises(
             UnsupportedFeatureError,
@@ -382,7 +382,7 @@ class TestOracleDropSequenceExpression:
 
     def test_if_exists_23ai(self):
         d23 = OracleDialect(version=(23, 0, 0))
-        expr = OracleDropSequenceExpression(d23, sequence=Sequence(d23, "seq"), if_exists=True)
+        expr = OracleDropSequenceStatement(d23, sequence=Sequence(d23, "seq"), if_exists=True)
         sql, params = expr.to_sql()
         assert sql == 'DROP SEQUENCE IF EXISTS "SEQ"'
         assert params == ()
@@ -403,17 +403,17 @@ class TestOracleSequenceVersionBoundary:
 
     def test_create_below_9i_raises(self):
         d8 = OracleDialect(version=(8, 1, 0))
-        expr = OracleCreateSequenceExpression(d8, sequence=Sequence(d8, "seq"))
+        expr = OracleCreateSequenceStatement(d8, sequence=Sequence(d8, "seq"))
         with pytest.raises(UnsupportedFeatureError, match="CREATE SEQUENCE"):
             expr.to_sql()
 
     def test_drop_below_9i_raises(self):
         d8 = OracleDialect(version=(8, 1, 0))
-        expr = OracleDropSequenceExpression(d8, sequence=Sequence(d8, "seq"))
+        expr = OracleDropSequenceStatement(d8, sequence=Sequence(d8, "seq"))
         with pytest.raises(UnsupportedFeatureError, match="DROP SEQUENCE"):
             expr.to_sql()
 
     def test_at_9i_works(self):
         d9 = OracleDialect(version=(9, 0, 0))
         assert OracleSequenceValueExpression(d9, "seq").to_sql()[0] == '"SEQ".NEXTVAL'
-        assert OracleCreateSequenceExpression(d9, Sequence(d9, "seq")).to_sql()[0] == 'CREATE SEQUENCE "SEQ"'
+        assert OracleCreateSequenceStatement(d9, Sequence(d9, "seq")).to_sql()[0] == 'CREATE SEQUENCE "SEQ"'

@@ -9,10 +9,10 @@ technology, available since Oracle 10g:
   existed at a past point in time.
 * ``OracleVersionsBetweenClause`` — the ``VERSIONS BETWEEN ...`` clause used
   to query the versions of a row over a time/SCN range.
-* ``OracleFlashbackTableExpression`` — the ``FLASHBACK TABLE`` statement that
+* ``OracleFlashbackTableStatement`` — the ``FLASHBACK TABLE`` statement that
   restores a dropped table from the recycle bin (``TO BEFORE DROP``) or
   rewinds a table to a past SCN/TIMESTAMP.
-* ``OraclePurgeExpression`` — the ``PURGE`` statement that permanently
+* ``OraclePurgeStatement`` — the ``PURGE`` statement that permanently
   removes a table/index from the recycle bin, or empties the whole recycle
   bin (``PURGE RECYCLEBIN``).
 
@@ -124,7 +124,7 @@ class OracleVersionsBetweenClause(BaseExpression):
         return "format_versions_between_clause"
 
 
-class OracleFlashbackTableExpression(BaseExpression):
+class OracleFlashbackTableStatement(BaseExpression):
     """Oracle ``FLASHBACK TABLE ...`` statement expression.
 
     Restores a dropped table from the recycle bin (``TO BEFORE DROP``,
@@ -256,7 +256,7 @@ def normalize_purge_object_type(
     )
 
 
-class OraclePurgeExpression(BaseExpression):
+class OraclePurgeStatement(BaseExpression):
     """Oracle ``PURGE`` statement expression.
 
     Permanently drops a table or index from the recycle bin (``PURGE

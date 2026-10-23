@@ -82,7 +82,7 @@ class OracleTableMixin(object):
         """Oracle has no copyright-compatibility mode (e.g. MySQL forks)."""
         return False
 
-    def format_table_compression_clause(self, expr: "TableCompressionClauseExpression") -> Tuple[str, tuple]:
+    def format_table_compression_clause_expression(self, expr: "TableCompressionClauseExpression") -> Tuple[str, tuple]:
         """Format a TableCompressionClauseExpression into SQL and params."""
         mode = expr.mode
         if mode is None:
@@ -92,18 +92,6 @@ class OracleTableMixin(object):
             return "NOCOMPRESS", ()
         return f"COMPRESS FOR {normalized}", ()
 
-    def format_tablespace_clause(self, expr: "TablespaceClauseExpression") -> Tuple[str, tuple]:
+    def format_tablespace_clause_expression(self, expr: "TablespaceClauseExpression") -> Tuple[str, tuple]:
         """Format a TablespaceClauseExpression into SQL and params."""
         return f"TABLESPACE {self.format_identifier(expr.tablespace_name)}", ()
-
-    def format_table_compression_clause_expression(
-        self, expr: "TableCompressionClauseExpression"
-    ) -> Tuple[str, tuple]:
-        """Alias for format_table_compression_clause."""
-        return self.format_table_compression_clause(expr)
-
-    def format_tablespace_clause_expression(
-        self, expr: "TablespaceClauseExpression"
-    ) -> Tuple[str, tuple]:
-        """Alias for format_tablespace_clause."""
-        return self.format_tablespace_clause(expr)

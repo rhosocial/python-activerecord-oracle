@@ -3,8 +3,8 @@
 
 Covers the six new expression classes (VectorLiteralExpression,
 VectorOperandExpression, TableCompressionClauseExpression,
-TablespaceClauseExpression, DisableTriggerExpression,
-EnableTriggerExpression) and the ``format_vector_operand`` placeholder
+TablespaceClauseExpression, DisableTriggerStatement,
+EnableTriggerStatement) and the ``format_vector_operand_expression`` placeholder
 fix (``%s`` → ``?``).
 
 Pure-construction tests: no database connection is required.
@@ -23,8 +23,8 @@ from rhosocial.activerecord.backend.impl.oracle.expression.table import (
     TablespaceClauseExpression,
 )
 from rhosocial.activerecord.backend.impl.oracle.expression.trigger import (
-    DisableTriggerExpression,
-    EnableTriggerExpression,
+    DisableTriggerStatement,
+    EnableTriggerStatement,
 )
 
 
@@ -97,33 +97,33 @@ class TestTablespaceClauseExpression:
         assert params == ()
 
 
-# ── DisableTriggerExpression ─────────────────────────────────────────
+# ── DisableTriggerStatement ─────────────────────────────────────────
 
 class TestDisableTriggerExpression:
     def test_basic(self, dialect):
-        expr = DisableTriggerExpression(dialect, Trigger(dialect, 'trg_audit'))
+        expr = DisableTriggerStatement(dialect, Trigger(dialect, 'trg_audit'))
         sql, params = expr.to_sql()
         assert sql == 'ALTER TRIGGER "TRG_AUDIT" DISABLE'
         assert params == ()
 
     def test_with_table_name(self, dialect):
-        expr = DisableTriggerExpression(dialect, Trigger(dialect, 'trg_audit'), table=Table(dialect, 'employees'))
+        expr = DisableTriggerStatement(dialect, Trigger(dialect, 'trg_audit'), table=Table(dialect, 'employees'))
         sql, params = expr.to_sql()
         assert sql == 'ALTER TRIGGER "TRG_AUDIT" DISABLE'
         assert params == ()
 
 
-# ── EnableTriggerExpression ──────────────────────────────────────────
+# ── EnableTriggerStatement ──────────────────────────────────────────
 
 class TestEnableTriggerExpression:
     def test_basic(self, dialect):
-        expr = EnableTriggerExpression(dialect, Trigger(dialect, 'trg_audit'))
+        expr = EnableTriggerStatement(dialect, Trigger(dialect, 'trg_audit'))
         sql, params = expr.to_sql()
         assert sql == 'ALTER TRIGGER "TRG_AUDIT" ENABLE'
         assert params == ()
 
     def test_with_table_name(self, dialect):
-        expr = EnableTriggerExpression(dialect, Trigger(dialect, 'trg_audit'), table=Table(dialect, 'employees'))
+        expr = EnableTriggerStatement(dialect, Trigger(dialect, 'trg_audit'), table=Table(dialect, 'employees'))
         sql, params = expr.to_sql()
         assert sql == 'ALTER TRIGGER "TRG_AUDIT" ENABLE'
         assert params == ()
@@ -133,7 +133,7 @@ class TestEnableTriggerExpression:
 
 class TestVectorOperandPlaceholder:
     def test_uses_question_mark_placeholder(self, dialect):
-        """Verify format_vector_operand returns '?' not '%s'."""
+        """Verify format_vector_operand_expression returns '?' not '%s'."""
         from rhosocial.activerecord.backend.impl.oracle.expression.vector import VectorOperandExpression
         expr = VectorOperandExpression(dialect, 'some_value')
         sql, params = expr.to_sql()

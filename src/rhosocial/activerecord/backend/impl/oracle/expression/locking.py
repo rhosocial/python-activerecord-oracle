@@ -196,7 +196,7 @@ def for_update_skip_locked(
     return OracleForUpdateExpression(dialect, columns=columns, skip_locked=True)
 
 
-class OracleLockTableExpression(BaseExpression):
+class OracleLockTableStatement(BaseExpression):
     """Oracle LOCK TABLE statement.
 
     Locks an entire table in exclusive or share mode.

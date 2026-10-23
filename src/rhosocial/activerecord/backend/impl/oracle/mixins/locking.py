@@ -136,7 +136,7 @@ class OracleLockingMixin(object):
     # endregion
 
     def format_oracle_lock_table_statement(self, expr) -> Tuple[str, tuple]:
-        """Render an ``OracleLockTableExpression``.
+        """Render an ``OracleLockTableStatement``.
 
         A table-level lock is a statement the dialect spells, so the node
         holds the table, the mode and the NOWAIT flag and the text is

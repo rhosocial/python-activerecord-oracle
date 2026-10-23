@@ -21,11 +21,11 @@ class OracleCommentMixin:
 
         Oracle annotates schema objects through the standalone statement;
         always ``True`` (the version gate lives in
-        :meth:`format_comment_statement`).
+        :meth:`format_comment_on_statement`).
         """
         return True
 
-    def format_comment_statement(
+    def format_comment_on_statement(
         self, expr
     ) -> Tuple[str, tuple]:
         """Format a standalone ``COMMENT ON`` statement.

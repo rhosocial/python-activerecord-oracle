@@ -7,7 +7,7 @@ objects. Oracle has no inline column-comment clause (unlike MySQL's
 ``COMMENT '...'``); comments are always issued through a standalone
 ``COMMENT ON`` statement.
 
-* ``OracleCommentExpression`` — ``COMMENT ON {TABLE|COLUMN|...} obj IS
+* ``OracleCommentOnStatement`` — ``COMMENT ON {TABLE|COLUMN|...} obj IS
   'text'``.
 
 The object being annotated is held as the object it is, so an owner is quoted
@@ -18,7 +18,7 @@ identity is scoped to its table, not to the catalogue, so
 the column ``ID``, not an object called ``ORDERS.ID``.
 
 The expression delegates SQL generation to the dialect through the public
-``format_comment_statement`` formatter implemented by
+``format_comment_on_statement`` formatter implemented by
 ``OracleCommentMixin``.
 """
 from __future__ import annotations
@@ -107,7 +107,7 @@ _COMMENT_OBJECT_KINDS = {
 }
 
 
-class OracleCommentExpression(BaseExpression):
+class OracleCommentOnStatement(BaseExpression):
     """Oracle ``COMMENT ON ... IS ...`` statement expression.
 
     Args:
@@ -163,4 +163,4 @@ class OracleCommentExpression(BaseExpression):
     @property
     def format_method(self) -> str:
         """The dialect formatting method that renders this expression."""
-        return "format_comment_statement"
+        return "format_comment_on_statement"

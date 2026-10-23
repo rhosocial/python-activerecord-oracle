@@ -49,7 +49,7 @@ class OracleVectorMixin(object):
             return vec
         raise TypeError(f"Cannot format vector literal from {type(vec).__name__}")
 
-    def format_vector_literal(self, expr: "VectorLiteralExpression") -> Tuple[str, tuple]:
+    def format_vector_literal_expression(self, expr: "VectorLiteralExpression") -> Tuple[str, tuple]:
         """Format a VectorLiteralExpression as Oracle VECTOR string literal."""
         return self._format_vector_literal_value(expr.vec), ()
 
@@ -111,7 +111,7 @@ class OracleVectorMixin(object):
         params.append(operand)
         return self.p()
 
-    def format_vector_operand(self, expr: "VectorOperandExpression") -> Tuple[str, tuple]:
+    def format_vector_operand_expression(self, expr: "VectorOperandExpression") -> Tuple[str, tuple]:
         """Format a VectorOperandExpression into SQL and params."""
         params: List[Any] = []
         sql = self._format_vector_operand_raw(expr.operand, params)

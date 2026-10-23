@@ -1169,27 +1169,27 @@ def _register_oracle_specials():
         OracleRowMovementAction,
     )
     from rhosocial.activerecord.backend.impl.oracle.expression.analyze import (
-        OracleAnalyzeExpression,
+        OracleAnalyzeStatement,
         OracleAnalyzeMode,
     )
     from rhosocial.activerecord.backend.impl.oracle.expression.column import (
         OracleColumnDefinition,
     )
     from rhosocial.activerecord.backend.impl.oracle.expression.comment import (
-        OracleCommentExpression,
+        OracleCommentOnStatement,
         OracleCommentObjectType,
     )
     from rhosocial.activerecord.backend.impl.oracle.expression.ddl.routine import (
-        OracleCreateFunctionExpression,
-        OracleCreatePackageBodyExpression,
-        OracleCreatePackageExpression,
-        OracleCreateProcedureExpression,
-        OracleDropRoutineExpression,
+        OracleCreateFunctionStatement,
+        OracleCreatePackageBodyStatement,
+        OracleCreatePackageStatement,
+        OracleCreateProcedureStatement,
+        OracleDropRoutineStatement,
         OracleDropRoutineObjectType,
     )
     from rhosocial.activerecord.backend.impl.oracle.expression.ddl.synonym import (
-        OracleCreateSynonymExpression,
-        OracleDropSynonymExpression,
+        OracleCreateSynonymStatement,
+        OracleDropSynonymStatement,
     )
     from rhosocial.activerecord.backend.impl.oracle.expression.ddl.type import (
         OracleAlterTypeAddAttributeAction,
@@ -1200,7 +1200,7 @@ def _register_oracle_specials():
         OracleAlterTypeFinalAction,
         OracleAlterTypeInstantiableAction,
         OracleAlterTypeLimitAction,
-        OracleCreateTypeBodyExpression,
+        OracleCreateTypeBodyStatement,
         OracleDropTypeBodyExpression,
         OracleDropTypeExpression,
         OracleNestedTableTypeDefinition,
@@ -1213,33 +1213,33 @@ def _register_oracle_specials():
     from rhosocial.activerecord.backend.impl.oracle.expression.flashback import (
         OracleAsOfClause,
         OracleAsOfMode,
-        OracleFlashbackTableExpression,
-        OraclePurgeExpression,
+        OracleFlashbackTableStatement,
+        OraclePurgeStatement,
         OraclePurgeObjectType,
         OracleVersionsBetweenClause,
         OracleVersionsBetweenMode,
     )
     from rhosocial.activerecord.backend.impl.oracle.expression.materialized_view import (
-        OracleCreateMaterializedViewExpression,
-        OracleCreateMaterializedViewLogExpression,
-        OracleDropMaterializedViewExpression,
-        OracleRefreshMaterializedViewExpression,
+        OracleCreateMaterializedViewStatement,
+        OracleCreateMaterializedViewLogStatement,
+        OracleDropMaterializedViewStatement,
+        OracleRefreshMaterializedViewStatement,
     )
     from rhosocial.activerecord.backend.impl.oracle.expression.objects import (
         OraclePackage,
         OracleTable,
     )
     from rhosocial.activerecord.backend.impl.oracle.expression.sequence import (
-        OracleCreateSequenceExpression,
-        OracleDropSequenceExpression,
+        OracleCreateSequenceStatement,
+        OracleDropSequenceStatement,
     )
     from rhosocial.activerecord.backend.impl.oracle.expression.trigger import (
-        DisableTriggerExpression,
-        EnableTriggerExpression,
+        DisableTriggerStatement,
+        EnableTriggerStatement,
     )
 
     def analyze_expression(d):
-        return OracleAnalyzeExpression(
+        return OracleAnalyzeStatement(
             d, table=_table_obj(d), mode=OracleAnalyzeMode.COMPUTE_STATISTICS
         )
 
@@ -1254,7 +1254,7 @@ def _register_oracle_specials():
         return OracleRowMovementAction(d, enable=True)
 
     def comment_expression(d):
-        return OracleCommentExpression(
+        return OracleCommentOnStatement(
             d,
             object_type=OracleCommentObjectType.TABLE,
             object=_table_obj(d),
@@ -1275,33 +1275,33 @@ def _register_oracle_specials():
         )
 
     def flashback_table_expression(d):
-        return OracleFlashbackTableExpression(
+        return OracleFlashbackTableStatement(
             d, table=_table_obj(d), to_before_drop=True, rename_to="t2"
         )
 
     def purge_expression(d):
-        return OraclePurgeExpression(
+        return OraclePurgeStatement(
             d, object_type=OraclePurgeObjectType.TABLE, target=_table_obj(d)
         )
 
     def materialized_view_log_expression(d):
-        return OracleCreateMaterializedViewLogExpression(
+        return OracleCreateMaterializedViewLogStatement(
             d, table=_table_obj(d), with_rowid=True
         )
 
     def create_materialized_view(d):
-        return OracleCreateMaterializedViewExpression(
+        return OracleCreateMaterializedViewStatement(
             d, view=MaterializedView(d, "mv"), query=_one_column_query(d)
         )
 
     def drop_materialized_view(d):
-        return OracleDropMaterializedViewExpression(d, view=MaterializedView(d, "mv"))
+        return OracleDropMaterializedViewStatement(d, view=MaterializedView(d, "mv"))
 
     def refresh_materialized_view(d):
-        return OracleRefreshMaterializedViewExpression(d, view=MaterializedView(d, "mv"))
+        return OracleRefreshMaterializedViewStatement(d, view=MaterializedView(d, "mv"))
 
     def drop_routine_expression(d):
-        return OracleDropRoutineExpression(
+        return OracleDropRoutineStatement(
             d,
             object_type=OracleDropRoutineObjectType.PROCEDURE,
             routine=Procedure(d, "p"),
@@ -1343,12 +1343,12 @@ def _register_oracle_specials():
         definition = part_mod.OraclePartitionDefinition(
             name="p_new", less_than=[part_mod.OraclePartitionMaxValue(d)]
         )
-        return pl_mod.OracleAddPartitionExpression(
+        return pl_mod.OracleAddPartitionStatement(
             d, table=_table_obj(d), partition=definition
         )
 
     def drop_partition_expression(d):
-        return pl_mod.OracleDropPartitionExpression(
+        return pl_mod.OracleDropPartitionStatement(
             d, table=_table_obj(d), partition_name="p1"
         )
 
@@ -1356,7 +1356,7 @@ def _register_oracle_specials():
         # SPLIT PARTITION splits one partition into exactly two, so the class
         # refuses a definition carrying any other number -- which is why the
         # introspective guess (no new partitions at all) cannot build it.
-        return pl_mod.OracleSplitPartitionExpression(
+        return pl_mod.OracleSplitPartitionStatement(
             d,
             table=_table_obj(d),
             partition_name="p_old",
@@ -1372,7 +1372,7 @@ def _register_oracle_specials():
         )
 
     def merge_partitions_expression(d):
-        return pl_mod.OracleMergePartitionsExpression(
+        return pl_mod.OracleMergePartitionsStatement(
             d,
             table=_table_obj(d),
             partition_names=["p1", "p2"],
@@ -1382,7 +1382,7 @@ def _register_oracle_specials():
         )
 
     def exchange_partition_expression(d):
-        return pl_mod.OracleExchangePartitionExpression(
+        return pl_mod.OracleExchangePartitionStatement(
             d,
             table=_table_obj(d),
             partition_name="p1",
@@ -1390,12 +1390,12 @@ def _register_oracle_specials():
         )
 
     def move_partition_expression(d):
-        return pl_mod.OracleMovePartitionExpression(
+        return pl_mod.OracleMovePartitionStatement(
             d, table=_table_obj(d), partition_name="p1"
         )
 
     def truncate_partition_expression(d):
-        return pl_mod.OracleTruncatePartitionExpression(
+        return pl_mod.OracleTruncatePartitionStatement(
             d, table=_table_obj(d), partition_name="p1"
         )
 
@@ -1409,12 +1409,12 @@ def _register_oracle_specials():
         return OracleColumnDefinition(d, "c", IntegerType(d))
 
     def create_procedure(d):
-        return OracleCreateProcedureExpression(
+        return OracleCreateProcedureStatement(
             d, procedure=Procedure(d, "p"), body="BEGIN NULL; END;"
         )
 
     def create_function(d):
-        return OracleCreateFunctionExpression(
+        return OracleCreateFunctionStatement(
             d,
             function=Function(d, "f"),
             return_type="NUMBER",
@@ -1425,34 +1425,34 @@ def _register_oracle_specials():
         return OraclePackage(d, "pkg", schema_name="ar_crm")
 
     def create_package(d):
-        return OracleCreatePackageExpression(
+        return OracleCreatePackageStatement(
             d, package=_package(d), body="END pkg;"
         )
 
     def create_package_body(d):
-        return OracleCreatePackageBodyExpression(
+        return OracleCreatePackageBodyStatement(
             d, package=_package(d), body="END pkg;"
         )
 
     def create_synonym(d):
-        return OracleCreateSynonymExpression(
+        return OracleCreateSynonymStatement(
             d, synonym=Synonym(d, "s"), table=_table_obj(d)
         )
 
     def drop_synonym(d):
-        return OracleDropSynonymExpression(d, synonym=Synonym(d, "s"))
+        return OracleDropSynonymStatement(d, synonym=Synonym(d, "s"))
 
     def create_sequence(d):
-        return OracleCreateSequenceExpression(d, sequence=Sequence(d, "seq"))
+        return OracleCreateSequenceStatement(d, sequence=Sequence(d, "seq"))
 
     def drop_sequence(d):
-        return OracleDropSequenceExpression(d, sequence=Sequence(d, "seq"))
+        return OracleDropSequenceStatement(d, sequence=Sequence(d, "seq"))
 
     def disable_trigger(d):
-        return DisableTriggerExpression(d, trigger=Trigger(d, "trg"))
+        return DisableTriggerStatement(d, trigger=Trigger(d, "trg"))
 
     def enable_trigger(d):
-        return EnableTriggerExpression(d, trigger=Trigger(d, "trg"))
+        return EnableTriggerStatement(d, trigger=Trigger(d, "trg"))
 
     def drop_type_body(d):
         return OracleDropTypeBodyExpression(d, type=_type_obj(d))
@@ -1461,7 +1461,7 @@ def _register_oracle_specials():
         return OracleDropTypeExpression(d, type=_type_obj(d), if_exists=True)
 
     def create_type_body(d):
-        return OracleCreateTypeBodyExpression(d, type=Type(d, "t"), body="END;")
+        return OracleCreateTypeBodyStatement(d, type=Type(d, "t"), body="END;")
 
     def _attribute(d):
         return OracleTypeAttribute(name="attr", data_type=IntegerType(d))
@@ -1527,24 +1527,24 @@ def _register_oracle_specials():
     registrations = (
         ("alter_table.OracleReadOnlyAction", read_only_action),
         ("alter_table.OracleRowMovementAction", row_movement_action),
-        ("analyze.OracleAnalyzeExpression", analyze_expression),
+        ("analyze.OracleAnalyzeStatement", analyze_expression),
         ("column.OracleColumnDefinition", oracle_column_definition),
-        ("comment.OracleCommentExpression", comment_expression),
-        ("ddl.routine.OracleCreateProcedureExpression", create_procedure),
-        ("ddl.routine.OracleCreateFunctionExpression", create_function),
-        ("ddl.routine.OracleCreatePackageExpression", create_package),
-        ("ddl.routine.OracleCreatePackageBodyExpression", create_package_body),
-        ("ddl.routine.OracleDropRoutineExpression", drop_routine_expression),
-        ("ddl.synonym.OracleCreateSynonymExpression", create_synonym),
-        ("ddl.synonym.OracleDropSynonymExpression", drop_synonym),
+        ("comment.OracleCommentOnStatement", comment_expression),
+        ("ddl.routine.OracleCreateProcedureStatement", create_procedure),
+        ("ddl.routine.OracleCreateFunctionStatement", create_function),
+        ("ddl.routine.OracleCreatePackageStatement", create_package),
+        ("ddl.routine.OracleCreatePackageBodyStatement", create_package_body),
+        ("ddl.routine.OracleDropRoutineStatement", drop_routine_expression),
+        ("ddl.synonym.OracleCreateSynonymStatement", create_synonym),
+        ("ddl.synonym.OracleDropSynonymStatement", drop_synonym),
         ("flashback.OracleAsOfClause", as_of_clause),
         ("flashback.OracleVersionsBetweenClause", versions_between_clause),
-        ("flashback.OracleFlashbackTableExpression", flashback_table_expression),
-        ("flashback.OraclePurgeExpression", purge_expression),
-        ("materialized_view.OracleCreateMaterializedViewExpression", create_materialized_view),
-        ("materialized_view.OracleCreateMaterializedViewLogExpression", materialized_view_log_expression),
-        ("materialized_view.OracleDropMaterializedViewExpression", drop_materialized_view),
-        ("materialized_view.OracleRefreshMaterializedViewExpression", refresh_materialized_view),
+        ("flashback.OracleFlashbackTableStatement", flashback_table_expression),
+        ("flashback.OraclePurgeStatement", purge_expression),
+        ("materialized_view.OracleCreateMaterializedViewStatement", create_materialized_view),
+        ("materialized_view.OracleCreateMaterializedViewLogStatement", materialized_view_log_expression),
+        ("materialized_view.OracleDropMaterializedViewStatement", drop_materialized_view),
+        ("materialized_view.OracleRefreshMaterializedViewStatement", refresh_materialized_view),
         ("objects.OracleTable", oracle_table),
         ("partition.OracleSubpartitionClause", subpartition_clause),
         ("partition.OraclePartitionClause", partition_clause),
@@ -1552,17 +1552,17 @@ def _register_oracle_specials():
         ("partition.OraclePartitionByList", partition_by_list),
         ("partition.OraclePartitionByHash", partition_by_hash),
         ("partition.OracleIntervalPartitionClause", interval_partition_clause),
-        ("partition_lifecycle.OracleAddPartitionExpression", add_partition_expression),
-        ("partition_lifecycle.OracleDropPartitionExpression", drop_partition_expression),
-        ("partition_lifecycle.OracleSplitPartitionExpression", split_partition_expression),
-        ("partition_lifecycle.OracleMergePartitionsExpression", merge_partitions_expression),
-        ("partition_lifecycle.OracleExchangePartitionExpression", exchange_partition_expression),
-        ("partition_lifecycle.OracleMovePartitionExpression", move_partition_expression),
-        ("partition_lifecycle.OracleTruncatePartitionExpression", truncate_partition_expression),
-        ("sequence.OracleCreateSequenceExpression", create_sequence),
-        ("sequence.OracleDropSequenceExpression", drop_sequence),
-        ("trigger.DisableTriggerExpression", disable_trigger),
-        ("trigger.EnableTriggerExpression", enable_trigger),
+        ("partition_lifecycle.OracleAddPartitionStatement", add_partition_expression),
+        ("partition_lifecycle.OracleDropPartitionStatement", drop_partition_expression),
+        ("partition_lifecycle.OracleSplitPartitionStatement", split_partition_expression),
+        ("partition_lifecycle.OracleMergePartitionsStatement", merge_partitions_expression),
+        ("partition_lifecycle.OracleExchangePartitionStatement", exchange_partition_expression),
+        ("partition_lifecycle.OracleMovePartitionStatement", move_partition_expression),
+        ("partition_lifecycle.OracleTruncatePartitionStatement", truncate_partition_expression),
+        ("sequence.OracleCreateSequenceStatement", create_sequence),
+        ("sequence.OracleDropSequenceStatement", drop_sequence),
+        ("trigger.DisableTriggerStatement", disable_trigger),
+        ("trigger.EnableTriggerStatement", enable_trigger),
         # The Oracle TYPE tree once exported every action and definition under
         # two names (OracleAlterTypeXxxAction and an OracleTypeXxxAction /
         # OracleAddTypeXxxAction alias). Both were registered to the same
@@ -1589,12 +1589,12 @@ def _register_oracle_specials():
         ("type.OracleSqljTypeDefinition", sqlj_definition),
         ("type.OracleVarrayTypeDefinition", varray_definition),
         ("type.OracleNestedTableTypeDefinition", nested_table_definition),
-        ("type.DropTypeBodyExpression", drop_type_body),
+        ("type.DropTypeBodyStatement", drop_type_body),
         ("type.OracleDropTypeBodyExpression", drop_type_body),
         # Oracle's own DROP TYPE adds FORCE / VALIDATE, and the guess hands it
         # strings for the type and the flags, which its superclass refuses.
         ("type.OracleDropTypeExpression", drop_type),
-        ("type.OracleCreateTypeBodyExpression", create_type_body),
+        ("type.OracleCreateTypeBodyStatement", create_type_body),
         # The abstract partition-maintenance base declares no formatter, so it is
         # built here only so the matrix can assert it says so by name.
         ("partition_lifecycle._OraclePartitionMaintenanceExpression", partition_maintenance_base),
@@ -1982,11 +1982,11 @@ CORE_ARTIFACT_GAPS: Dict[str, tuple] = {
         ("dict", "json", "xml"),
     "rhosocial.activerecord.backend.impl.oracle.expression.partition.OracleIntervalPartitionClause":
         ("dict", "json", "xml"),
-    "rhosocial.activerecord.backend.impl.oracle.expression.partition_lifecycle.OracleAddPartitionExpression":
+    "rhosocial.activerecord.backend.impl.oracle.expression.partition_lifecycle.OracleAddPartitionStatement":
         ("dict", "json", "xml"),
-    "rhosocial.activerecord.backend.impl.oracle.expression.partition_lifecycle.OracleMergePartitionsExpression":
+    "rhosocial.activerecord.backend.impl.oracle.expression.partition_lifecycle.OracleMergePartitionsStatement":
         ("dict", "json", "xml"),
-    "rhosocial.activerecord.backend.impl.oracle.expression.partition_lifecycle.OracleSplitPartitionExpression":
+    "rhosocial.activerecord.backend.impl.oracle.expression.partition_lifecycle.OracleSplitPartitionStatement":
         ("dict", "json", "xml"),
 
     # ---------------------------------------------------------------
@@ -2136,7 +2136,7 @@ UNMODELLED_FORMATTERS = {
         "format_domain_value_expression",
     ),
     "the core SQL/PSM DROP FUNCTION statement (this backend renders routine "
-    "DDL through its own OracleCreateFunctionExpression family, and composes "
+    "DDL through its own OracleCreateFunctionStatement family, and composes "
     "no formatter for the core statement)": ("format_drop_function_statement",),
     "ILIKE (Oracle has no ILIKE operator; case-insensitive matching goes "
     "through UPPER() + LIKE)": ("format_ilike_predicate",),

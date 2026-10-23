@@ -7,8 +7,8 @@ from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeature
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..expression.ddl.database_link import (
-        OracleCreateDatabaseLinkExpression,
-        OracleDropDatabaseLinkExpression,
+        OracleCreateDatabaseLinkStatement,
+        OracleDropDatabaseLinkStatement,
     )
 
 
@@ -29,7 +29,7 @@ class OracleDatabaseLinkMixin:
         return True
 
     def format_create_database_link_statement(
-        self, expr: "OracleCreateDatabaseLinkExpression"
+        self, expr: "OracleCreateDatabaseLinkStatement"
     ) -> Tuple[str, tuple]:
         if self.version < (9, 0, 0):
             raise UnsupportedFeatureError(
@@ -58,7 +58,7 @@ class OracleDatabaseLinkMixin:
         return " ".join(parts), ()
 
     def format_drop_database_link_statement(
-        self, expr: "OracleDropDatabaseLinkExpression"
+        self, expr: "OracleDropDatabaseLinkStatement"
     ) -> Tuple[str, tuple]:
         if self.version < (9, 0, 0):
             raise UnsupportedFeatureError(

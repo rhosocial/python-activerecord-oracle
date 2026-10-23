@@ -26,5 +26,5 @@ class OracleMaterializedViewSupport(Protocol):
 
     def supports_materialized_view_log(self) -> bool:
         ...  # pragma: no cover
-    def format_create_materialized_view_log_statement(self, expr: 'OracleCreateMaterializedViewLogExpression') -> Tuple[str, tuple]:
+    def format_create_materialized_view_log_statement(self, expr: 'OracleCreateMaterializedViewLogStatement') -> Tuple[str, tuple]:
         ...  # pragma: no cover

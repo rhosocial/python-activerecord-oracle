@@ -7,7 +7,7 @@ This module defines the backend-specific expression for the Oracle
 * ``OracleAnalyzeMode`` — the allowed operation modes (``COMPUTE
   STATISTICS``, ``ESTIMATE STATISTICS``, ``VALIDATE STRUCTURE``,
   ``LIST CHAINED ROWS``, ``DELETE SYSTEM STATISTICS``).
-* ``OracleAnalyzeExpression`` — ``ANALYZE TABLE t <mode>`` with the
+* ``OracleAnalyzeStatement`` — ``ANALYZE TABLE t <mode>`` with the
   ``SAMPLE n PERCENT`` (estimate) and ``CASCADE`` (validate) options.
 
 The expression delegates SQL generation to the dialect through the public
@@ -57,7 +57,7 @@ def normalize_analyze_mode(
     )
 
 
-class OracleAnalyzeExpression(BaseExpression):
+class OracleAnalyzeStatement(BaseExpression):
     """Oracle ``ANALYZE TABLE t <mode>`` statement expression.
 
     Args:

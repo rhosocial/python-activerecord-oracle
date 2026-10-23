@@ -50,7 +50,7 @@ class _OraclePartitionMaintenanceExpression(BaseExpression):
         self.table = table
 
 
-class OracleAddPartitionExpression(_OraclePartitionMaintenanceExpression):
+class OracleAddPartitionStatement(_OraclePartitionMaintenanceExpression):
     """``ALTER TABLE ... ADD PARTITION`` expression.
 
     Adds a single partition to a RANGE or LIST partitioned table. For
@@ -89,7 +89,7 @@ class OracleAddPartitionExpression(_OraclePartitionMaintenanceExpression):
         return "format_add_partition_statement"
 
 
-class OracleDropPartitionExpression(_OraclePartitionMaintenanceExpression):
+class OracleDropPartitionStatement(_OraclePartitionMaintenanceExpression):
     """``ALTER TABLE ... DROP PARTITION`` expression.
 
     Args:
@@ -122,7 +122,7 @@ class OracleDropPartitionExpression(_OraclePartitionMaintenanceExpression):
         return "format_drop_partition_statement"
 
 
-class OracleSplitPartitionExpression(_OraclePartitionMaintenanceExpression):
+class OracleSplitPartitionStatement(_OraclePartitionMaintenanceExpression):
     """``ALTER TABLE ... SPLIT PARTITION p AT (...) INTO (p1, p2)`` expression.
 
     Oracle-specific: splits an existing partition at a boundary value into
@@ -177,7 +177,7 @@ class OracleSplitPartitionExpression(_OraclePartitionMaintenanceExpression):
         return "format_split_partition_statement"
 
 
-class OracleMergePartitionsExpression(_OraclePartitionMaintenanceExpression):
+class OracleMergePartitionsStatement(_OraclePartitionMaintenanceExpression):
     """``ALTER TABLE ... MERGE PARTITIONS p1, p2 INTO p3`` expression.
 
     Merges two adjacent partitions into a single new partition.
@@ -223,7 +223,7 @@ class OracleMergePartitionsExpression(_OraclePartitionMaintenanceExpression):
         return "format_merge_partitions_statement"
 
 
-class OracleExchangePartitionExpression(_OraclePartitionMaintenanceExpression):
+class OracleExchangePartitionStatement(_OraclePartitionMaintenanceExpression):
     """``ALTER TABLE ... EXCHANGE PARTITION p WITH TABLE other`` expression.
 
     Exchanges the data segments of a partition with a standalone
@@ -271,7 +271,7 @@ class OracleExchangePartitionExpression(_OraclePartitionMaintenanceExpression):
         return "format_exchange_partition_statement"
 
 
-class OracleMovePartitionExpression(_OraclePartitionMaintenanceExpression):
+class OracleMovePartitionStatement(_OraclePartitionMaintenanceExpression):
     """``ALTER TABLE ... MOVE PARTITION p`` expression.
 
     Oracle-specific: physically moves a partition's segments (e.g. to
@@ -310,7 +310,7 @@ class OracleMovePartitionExpression(_OraclePartitionMaintenanceExpression):
         return "format_move_partition_statement"
 
 
-class OracleTruncatePartitionExpression(_OraclePartitionMaintenanceExpression):
+class OracleTruncatePartitionStatement(_OraclePartitionMaintenanceExpression):
     """``ALTER TABLE ... TRUNCATE PARTITION p`` expression.
 
     Removes all rows from a partition (and its subpartitions).

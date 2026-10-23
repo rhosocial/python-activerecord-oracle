@@ -54,13 +54,13 @@ from ..expression.partition import (
     OracleSubpartitionDefinition,
 )
 from ..expression.partition_lifecycle import (
-    OracleAddPartitionExpression,
-    OracleDropPartitionExpression,
-    OracleExchangePartitionExpression,
-    OracleMergePartitionsExpression,
-    OracleMovePartitionExpression,
-    OracleSplitPartitionExpression,
-    OracleTruncatePartitionExpression,
+    OracleAddPartitionStatement,
+    OracleDropPartitionStatement,
+    OracleExchangePartitionStatement,
+    OracleMergePartitionsStatement,
+    OracleMovePartitionStatement,
+    OracleSplitPartitionStatement,
+    OracleTruncatePartitionStatement,
 )
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -552,7 +552,7 @@ class OraclePartitionMixin:
         )
 
     def format_add_partition_statement(
-        self, expr: OracleAddPartitionExpression
+        self, expr: OracleAddPartitionStatement
     ) -> Tuple[str, tuple]:
         """Format ``ALTER TABLE t ADD PARTITION (...)``."""
         if not self.supports_add_partition():
@@ -573,7 +573,7 @@ class OraclePartitionMixin:
         return f"ALTER TABLE {table_sql} ADD {part_sql}", ()
 
     def format_drop_partition_statement(
-        self, expr: OracleDropPartitionExpression
+        self, expr: OracleDropPartitionStatement
     ) -> Tuple[str, tuple]:
         """Format ``ALTER TABLE t DROP PARTITION p [UPDATE INDEXES]``."""
         if not self.supports_drop_partition():
@@ -590,7 +590,7 @@ class OraclePartitionMixin:
         return sql, ()
 
     def format_split_partition_statement(
-        self, expr: OracleSplitPartitionExpression
+        self, expr: OracleSplitPartitionStatement
     ) -> Tuple[str, tuple]:
         """Format ``ALTER TABLE t SPLIT PARTITION p AT (...) INTO (p1, p2)``."""
         if not self.supports_split_partition():
@@ -615,7 +615,7 @@ class OraclePartitionMixin:
         )
 
     def format_merge_partitions_statement(
-        self, expr: OracleMergePartitionsExpression
+        self, expr: OracleMergePartitionsStatement
     ) -> Tuple[str, tuple]:
         """Format ``ALTER TABLE t MERGE PARTITIONS p1, p2 INTO p3``."""
         if not self.supports_merge_partition():
@@ -634,7 +634,7 @@ class OraclePartitionMixin:
         )
 
     def format_exchange_partition_statement(
-        self, expr: OracleExchangePartitionExpression
+        self, expr: OracleExchangePartitionStatement
     ) -> Tuple[str, tuple]:
         """Format ``ALTER TABLE t EXCHANGE PARTITION p WITH TABLE other``."""
         if not self.supports_exchange_partition():
@@ -666,7 +666,7 @@ class OraclePartitionMixin:
         return sql, ()
 
     def format_move_partition_statement(
-        self, expr: OracleMovePartitionExpression
+        self, expr: OracleMovePartitionStatement
     ) -> Tuple[str, tuple]:
         """Format ``ALTER TABLE t MOVE PARTITION p [TABLESPACE ts]``."""
         if not self.supports_move_partition():
@@ -684,7 +684,7 @@ class OraclePartitionMixin:
         return sql, ()
 
     def format_truncate_partition_statement(
-        self, expr: OracleTruncatePartitionExpression
+        self, expr: OracleTruncatePartitionStatement
     ) -> Tuple[str, tuple]:
         """Format ``ALTER TABLE t TRUNCATE PARTITION p [UPDATE INDEXES]``."""
         if not self.supports_truncate_partition():

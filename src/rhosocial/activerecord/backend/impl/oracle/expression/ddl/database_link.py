@@ -4,9 +4,9 @@
 This module defines the backend-specific expressions for Oracle database
 links, which enable cross-database/instance queries:
 
-* ``OracleCreateDatabaseLinkExpression`` — ``CREATE [SHARED] [PUBLIC]
+* ``OracleCreateDatabaseLinkStatement`` — ``CREATE [SHARED] [PUBLIC]
   DATABASE LINK dl CONNECT TO u IDENTIFIED BY pwd USING 'conn_str'``.
-* ``OracleDropDatabaseLinkExpression`` — ``DROP [PUBLIC] DATABASE LINK dl``.
+* ``OracleDropDatabaseLinkStatement`` — ``DROP [PUBLIC] DATABASE LINK dl``.
 
 Remote table references are expressed with the ``@dblink`` suffix, which is part
 of the remote object's name: see
@@ -25,7 +25,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from ...dialect import OracleDialect
 
 
-class OracleCreateDatabaseLinkExpression(BaseExpression):
+class OracleCreateDatabaseLinkStatement(BaseExpression):
     """Oracle ``CREATE [SHARED] [PUBLIC] DATABASE LINK ...`` expression.
 
     Args:
@@ -72,7 +72,7 @@ class OracleCreateDatabaseLinkExpression(BaseExpression):
         return "format_create_database_link_statement"
 
 
-class OracleDropDatabaseLinkExpression(BaseExpression):
+class OracleDropDatabaseLinkStatement(BaseExpression):
     """Oracle ``DROP [PUBLIC] DATABASE LINK ...`` expression.
 
     Args:

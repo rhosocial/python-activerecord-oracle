@@ -50,13 +50,13 @@ from rhosocial.activerecord.backend.impl.oracle.expression.partition import (
     OracleSubpartitionStrategy,
 )
 from rhosocial.activerecord.backend.impl.oracle.expression.partition_lifecycle import (
-    OracleAddPartitionExpression,
-    OracleDropPartitionExpression,
-    OracleExchangePartitionExpression,
-    OracleMergePartitionsExpression,
-    OracleMovePartitionExpression,
-    OracleSplitPartitionExpression,
-    OracleTruncatePartitionExpression,
+    OracleAddPartitionStatement,
+    OracleDropPartitionStatement,
+    OracleExchangePartitionStatement,
+    OracleMergePartitionsStatement,
+    OracleMovePartitionStatement,
+    OracleSplitPartitionStatement,
+    OracleTruncatePartitionStatement,
 )
 from rhosocial.activerecord.backend.impl.oracle.protocols.partition import (
     OraclePartitionSupport,
@@ -376,7 +376,7 @@ def test_add_and_drop_partition_real(oracle_backend_single):
         assert _count_partitions(backend, table_name) == 1
 
         # ADD a new partition p2 with boundary 200.
-        add_expr = OracleAddPartitionExpression(
+        add_expr = OracleAddPartitionStatement(
             d, Table(d, table_name),
             OraclePartitionDefinition(name="p2", less_than=[OraclePartitionValue(d, 200)]),
         )
@@ -385,7 +385,7 @@ def test_add_and_drop_partition_real(oracle_backend_single):
         assert _partition_names(backend, table_name) == {"P1", "P2"}
 
         # DROP p1.
-        drop_expr = OracleDropPartitionExpression(d, Table(d, table_name), "p1")
+        drop_expr = OracleDropPartitionStatement(d, Table(d, table_name), "p1")
         sql, params = drop_expr.to_sql()
         backend.execute(sql, params)
         assert _partition_names(backend, table_name) == {"P2"}
@@ -425,7 +425,7 @@ def test_split_partition_real(oracle_backend_single):
         assert _partition_names(backend, table_name) == {"P1", "P_MAX"}
 
         # SPLIT p_max at 200 into p2 (<200) and p_max (MAXVALUE).
-        split_expr = OracleSplitPartitionExpression(
+        split_expr = OracleSplitPartitionStatement(
             d, Table(d, table_name), "p_max",
             at_values=[OraclePartitionValue(d, 200)],
             new_partitions=[
@@ -472,7 +472,7 @@ def test_merge_partitions_real(oracle_backend_single):
         assert _count_partitions(backend, table_name) == 3
 
         # MERGE p1 and p2 into p12 (<200).
-        merge_expr = OracleMergePartitionsExpression(
+        merge_expr = OracleMergePartitionsStatement(
             d, Table(d, table_name), ["p1", "p2"],
             OraclePartitionDefinition(name="p12", less_than=[OraclePartitionValue(d, 200)]),
         )
@@ -524,7 +524,7 @@ def test_truncate_partition_real(oracle_backend_single):
         assert len(_exec_query(backend, sql, params)) == 2
 
         # TRUNCATE p1 (contains ID=1).
-        trunc_expr = OracleTruncatePartitionExpression(d, Table(d, table_name), "p1")
+        trunc_expr = OracleTruncatePartitionStatement(d, Table(d, table_name), "p1")
         sql, params = trunc_expr.to_sql()
         backend.execute(sql, params)
 
@@ -567,7 +567,7 @@ def test_move_partition_real(oracle_backend_single):
         backend.execute(sql, params)
 
         # MOVE p1. No assertion on tablespace; we just verify it executes.
-        move_expr = OracleMovePartitionExpression(d, Table(d, table_name), "p1")
+        move_expr = OracleMovePartitionStatement(d, Table(d, table_name), "p1")
         sql, params = move_expr.to_sql()
         backend.execute(sql, params)
 
@@ -622,7 +622,7 @@ def test_exchange_partition_real(oracle_backend_single):
         backend.execute(sql, params)
 
         # EXCHANGE p1 with the staging table (WITHOUT VALIDATION for speed).
-        exch_expr = OracleExchangePartitionExpression(
+        exch_expr = OracleExchangePartitionStatement(
             d, Table(d, table_name), "p1", Table(d, staging_name), with_validation=False,
         )
         sql, params = exch_expr.to_sql()

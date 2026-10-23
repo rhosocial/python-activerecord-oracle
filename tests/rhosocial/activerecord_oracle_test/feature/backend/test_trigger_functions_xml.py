@@ -120,12 +120,12 @@ class TestDropAndToggleTriggers:
 
     def test_disable_and_enable(self, dialect):
         from rhosocial.activerecord.backend.impl.oracle.expression.trigger import (
-            DisableTriggerExpression,
-            EnableTriggerExpression,
+            DisableTriggerStatement,
+            EnableTriggerStatement,
         )
-        assert DisableTriggerExpression(dialect, Trigger(dialect, "trg_a")).to_sql() == \
+        assert DisableTriggerStatement(dialect, Trigger(dialect, "trg_a")).to_sql() == \
             ('ALTER TRIGGER "TRG_A" DISABLE', ())
-        assert EnableTriggerExpression(dialect, Trigger(dialect, "trg_a")).to_sql() == \
+        assert EnableTriggerStatement(dialect, Trigger(dialect, "trg_a")).to_sql() == \
             ('ALTER TRIGGER "TRG_A" ENABLE', ())
 
 

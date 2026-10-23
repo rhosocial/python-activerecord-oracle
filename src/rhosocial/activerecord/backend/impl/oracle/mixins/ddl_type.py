@@ -19,7 +19,7 @@ from rhosocial.activerecord.backend.expression.statements.ddl_type import (
 )
 
 from ..expression.ddl.type import (
-    DropTypeBodyExpression,
+    DropTypeBodyStatement,
     OracleAlterTypeAddAttributeAction,
     OracleAlterTypeAddMethodAction,
     OracleAlterTypeCompileAction,
@@ -31,7 +31,7 @@ from ..expression.ddl.type import (
     OracleAlterTypeLimitAction,
     OracleAlterTypeModifyAttributeAction,
     OracleAlterTypeResetAction,
-    OracleCreateTypeBodyExpression,
+    OracleCreateTypeBodyStatement,
     OracleDropTypeExpression,
     OracleIncompleteTypeDefinition,
     OracleNestedTableTypeDefinition,
@@ -862,7 +862,7 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
 
     def format_create_type_body_statement(
         self,
-        expr: OracleCreateTypeBodyExpression,
+        expr: OracleCreateTypeBodyStatement,
     ) -> Tuple[str, tuple]:
         if not self.supports_type_objects() or not self.supports_create_type_body():
             raise UnsupportedFeatureError(self.name, "CREATE TYPE BODY")
@@ -892,7 +892,7 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
 
     def format_drop_type_body_statement(
         self,
-        expr: DropTypeBodyExpression,
+        expr: DropTypeBodyStatement,
     ) -> Tuple[str, tuple]:
         if not self.supports_type_objects() or not self.supports_drop_type_body():
             raise UnsupportedFeatureError(self.name, "DROP TYPE BODY")

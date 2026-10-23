@@ -61,15 +61,15 @@ from rhosocial.activerecord.backend.impl.oracle.expression.alter_table import (
 from rhosocial.activerecord.backend.impl.oracle.expression.ddl.type import (
     OracleAlterTypeFinalAction,
     OracleAlterTypeInstantiableAction,
-    OracleCreateTypeBodyExpression,
+    OracleCreateTypeBodyStatement,
     OracleObjectTypeDefinition,
     OracleVarrayTypeDefinition,
 )
 from rhosocial.activerecord.backend.impl.oracle.expression.materialized_view import (
-    OracleCreateMaterializedViewExpression,
+    OracleCreateMaterializedViewStatement,
 )
 from rhosocial.activerecord.backend.impl.oracle.expression.sequence import (
-    OracleCreateSequenceExpression,
+    OracleCreateSequenceStatement,
 )
 
 
@@ -336,24 +336,24 @@ SITES = (
     # are exercised by the roundtrip matrix and the dialect tests instead.
     # --------------------------------------------- oracle-specific sequences
     PairSite(
-        "OracleCreateSequenceExpression cycle/no_cycle",
-        lambda d, kw: OracleCreateSequenceExpression(d, Sequence(d, "s"), **kw),
+        "OracleCreateSequenceStatement cycle/no_cycle",
+        lambda d, kw: OracleCreateSequenceStatement(d, Sequence(d, "s"), **kw),
         {"none": {}, "a": {"cycle": True}, "b": {"no_cycle": True}, "both": {"cycle": True, "no_cycle": True}},
         a_render=r"(?<!NO)CYCLE",
         b_render=r"NOCYCLE",
         none_forbidden=(r"(?<!NO)CYCLE", r"NOCYCLE"),
     ),
     PairSite(
-        "OracleCreateSequenceExpression order/no_order",
-        lambda d, kw: OracleCreateSequenceExpression(d, Sequence(d, "s"), **kw),
+        "OracleCreateSequenceStatement order/no_order",
+        lambda d, kw: OracleCreateSequenceStatement(d, Sequence(d, "s"), **kw),
         {"none": {}, "a": {"order": True}, "b": {"no_order": True}, "both": {"order": True, "no_order": True}},
         a_render=r"(?<!NO)ORDER",
         b_render=r"NOORDER",
         none_forbidden=(r"(?<!NO)ORDER", r"NOORDER"),
     ),
     PairSite(
-        "OracleCreateSequenceExpression cache/no_cache",
-        lambda d, kw: OracleCreateSequenceExpression(d, Sequence(d, "s"), **kw),
+        "OracleCreateSequenceStatement cache/no_cache",
+        lambda d, kw: OracleCreateSequenceStatement(d, Sequence(d, "s"), **kw),
         {"none": {}, "a": {"cache": 10}, "b": {"no_cache": True}, "both": {"cache": 10, "no_cache": True}},
         a_render=r"(?<!NO)CACHE 10",
         b_render=r"NOCACHE",
@@ -399,8 +399,8 @@ SITES = (
         none_forbidden=(r"EDITIONABLE",),
     ),
     PairSite(
-        "OracleCreateTypeBodyExpression editionable/noneditionable",
-        lambda d, kw: OracleCreateTypeBodyExpression(d, Type(d, "t"), "END;", **kw),
+        "OracleCreateTypeBodyStatement editionable/noneditionable",
+        lambda d, kw: OracleCreateTypeBodyStatement(d, Type(d, "t"), "END;", **kw),
         {
             "none": {},
             "a": {"editionable": True},
@@ -421,8 +421,8 @@ SITES = (
     ),
     # ------------------------------------------------ oracle materialized view
     PairSite(
-        "OracleCreateMaterializedViewExpression enable/disable query rewrite",
-        lambda d, kw: OracleCreateMaterializedViewExpression(d, MaterializedView(d, "mv"), _query(d), **kw),
+        "OracleCreateMaterializedViewStatement enable/disable query rewrite",
+        lambda d, kw: OracleCreateMaterializedViewStatement(d, MaterializedView(d, "mv"), _query(d), **kw),
         {
             "none": {},
             "a": {"enable_query_rewrite": True},

@@ -2,7 +2,7 @@
 from typing import Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover
-    from ..expression.trigger import DisableTriggerExpression, EnableTriggerExpression
+    from ..expression.trigger import DisableTriggerStatement, EnableTriggerStatement
 
 
 class OracleTriggerMixin(object):
@@ -150,7 +150,7 @@ class OracleTriggerMixin(object):
 
         return " ".join(parts), ()
 
-    def format_disable_trigger_statement(self, expr: "DisableTriggerExpression") -> Tuple[str, tuple]:
+    def format_disable_trigger_statement(self, expr: "DisableTriggerStatement") -> Tuple[str, tuple]:
         """Format ALTER TRIGGER ... DISABLE statement (Oracle syntax)."""
         if not self.supports_disable_trigger():
             from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
@@ -159,7 +159,7 @@ class OracleTriggerMixin(object):
         parts = ["ALTER TRIGGER", self._trigger_name_sql(expr), "DISABLE"]
         return " ".join(parts), ()
 
-    def format_enable_trigger_statement(self, expr: "EnableTriggerExpression") -> Tuple[str, tuple]:
+    def format_enable_trigger_statement(self, expr: "EnableTriggerStatement") -> Tuple[str, tuple]:
         """Format ALTER TRIGGER ... ENABLE statement (Oracle syntax)."""
         if not self.supports_disable_trigger():
             from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError

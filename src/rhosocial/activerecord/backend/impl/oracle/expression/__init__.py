@@ -25,30 +25,30 @@ from .hint import (
     monitor_hint, no_monitor_hint
 )
 from .locking import (
-    OracleForUpdateExpression, OracleForUpdateClause, OracleLockTableExpression,
+    OracleForUpdateExpression, OracleForUpdateClause, OracleLockTableStatement,
     for_update, for_update_nowait, for_update_wait, for_update_skip_locked,
 )
 from .sequence import (
     OracleSequenceValueMode, OracleSequenceValueExpression,
-    OracleCreateSequenceExpression, OracleDropSequenceExpression,
+    OracleCreateSequenceStatement, OracleDropSequenceStatement,
 )
 from .materialized_view import (
     MaterializedViewRefreshMethod, MaterializedViewRefreshTrigger,
     MaterializedViewBuildMode,
-    OracleCreateMaterializedViewExpression,
-    OracleCreateMaterializedViewLogExpression,
-    OracleDropMaterializedViewExpression,
-    OracleRefreshMaterializedViewExpression,
+    OracleCreateMaterializedViewStatement,
+    OracleCreateMaterializedViewLogStatement,
+    OracleDropMaterializedViewStatement,
+    OracleRefreshMaterializedViewStatement,
     OracleRefreshMethod,
 )
 from .comment import (
-    OracleCommentObjectType, OracleCommentExpression,
+    OracleCommentObjectType, OracleCommentOnStatement,
 )
 from .flashback import (
     OracleAsOfMode, OracleVersionsBetweenMode,
     OracleAsOfClause, OracleVersionsBetweenClause,
-    OracleFlashbackTableExpression,
-    OraclePurgeObjectType, OraclePurgeExpression,
+    OracleFlashbackTableStatement,
+    OraclePurgeObjectType, OraclePurgeStatement,
 )
 from .column import (
     OracleColumnDefinition,
@@ -60,12 +60,12 @@ from .alter_table import (
     OracleReadOnlyAction, OracleRowMovementAction,
 )
 from .ddl import (
-    OracleCreateSynonymExpression, OracleDropSynonymExpression,
-    OracleCreateDatabaseLinkExpression, OracleDropDatabaseLinkExpression,
+    OracleCreateSynonymStatement, OracleDropSynonymStatement,
+    OracleCreateDatabaseLinkStatement, OracleDropDatabaseLinkStatement,
     OracleRoutineParameterMode, OracleRoutineParameter,
-    OracleCreateProcedureExpression, OracleCreateFunctionExpression,
-    OracleCreatePackageExpression, OracleCreatePackageBodyExpression,
-    OracleDropRoutineObjectType, OracleDropRoutineExpression,
+    OracleCreateProcedureStatement, OracleCreateFunctionStatement,
+    OracleCreatePackageStatement, OracleCreatePackageBodyStatement,
+    OracleDropRoutineObjectType, OracleDropRoutineStatement,
     OracleTypeAttribute, OracleTypeMethod,
     OracleObjectTypeDefinition, OracleSqljTypeDefinition,
     OracleVarrayTypeDefinition, OracleNestedTableTypeDefinition,
@@ -76,17 +76,17 @@ from .ddl import (
     OracleAlterTypeLimitAction, OracleAlterTypeElementTypeAction,
     OracleAlterTypeCompileAction, OracleAlterTypeFinalAction,
     OracleAlterTypeInstantiableAction, OracleAlterTypeResetAction,
-    OracleCreateTypeBodyExpression, OracleDropTypeExpression,
-    DropTypeBodyExpression, OracleDropTypeBodyExpression,
+    OracleCreateTypeBodyStatement, OracleDropTypeExpression,
+    DropTypeBodyStatement, OracleDropTypeBodyExpression,
 )
 from .analyze import (
-    OracleAnalyzeMode, OracleAnalyzeExpression,
+    OracleAnalyzeMode, OracleAnalyzeStatement,
 )
 from .objects import OracleRemoteName, OraclePackage, OracleTable
 from .sources import OracleNamedRelationRef
 from .vector import VectorLiteralExpression, VectorOperandExpression
 from .table import TableCompressionClauseExpression, TablespaceClauseExpression
-from .trigger import DisableTriggerExpression, EnableTriggerExpression
+from .trigger import DisableTriggerStatement, EnableTriggerStatement
 from .functions import (
     OracleListaggFunction,
     OraclePercentileContFunction,
@@ -116,38 +116,38 @@ __all__ = [
     'dynamic_sampling_hint', 'gather_plan_statistics_hint',
     'monitor_hint', 'no_monitor_hint',
     # Locking expressions
-    'OracleForUpdateExpression', 'OracleForUpdateClause', 'OracleLockTableExpression',
+    'OracleForUpdateExpression', 'OracleForUpdateClause', 'OracleLockTableStatement',
     'for_update', 'for_update_nowait', 'for_update_wait', 'for_update_skip_locked',
     # Sequence expressions
     'OracleSequenceValueMode', 'OracleSequenceValueExpression',
-    'OracleCreateSequenceExpression', 'OracleDropSequenceExpression',
+    'OracleCreateSequenceStatement', 'OracleDropSequenceStatement',
     # Materialized view expressions
     'MaterializedViewRefreshMethod', 'MaterializedViewRefreshTrigger',
     'MaterializedViewBuildMode',
-    'OracleCreateMaterializedViewExpression',
-    'OracleCreateMaterializedViewLogExpression',
-    'OracleDropMaterializedViewExpression',
-    'OracleRefreshMaterializedViewExpression',
+    'OracleCreateMaterializedViewStatement',
+    'OracleCreateMaterializedViewLogStatement',
+    'OracleDropMaterializedViewStatement',
+    'OracleRefreshMaterializedViewStatement',
     'OracleRefreshMethod',
     # COMMENT ON expressions
-    'OracleCommentObjectType', 'OracleCommentExpression',
+    'OracleCommentObjectType', 'OracleCommentOnStatement',
     # FLASHBACK family expressions
     'OracleAsOfMode', 'OracleVersionsBetweenMode',
     'OracleAsOfClause', 'OracleVersionsBetweenClause',
-    'OracleFlashbackTableExpression',
-    'OraclePurgeObjectType', 'OraclePurgeExpression',
+    'OracleFlashbackTableStatement',
+    'OraclePurgeObjectType', 'OraclePurgeStatement',
     # ALTER TABLE table-level clause actions
     'OracleSetUnusedColumnsAction', 'OracleDropUnusedColumnsAction',
     'OracleMoveTableAction', 'OracleShrinkSpaceAction',
     'OracleReadOnlyAction', 'OracleRowMovementAction',
     # SYNONYM / DATABASE LINK expressions
-    'OracleCreateSynonymExpression', 'OracleDropSynonymExpression',
-    'OracleCreateDatabaseLinkExpression', 'OracleDropDatabaseLinkExpression',
+    'OracleCreateSynonymStatement', 'OracleDropSynonymStatement',
+    'OracleCreateDatabaseLinkStatement', 'OracleDropDatabaseLinkStatement',
     # PL/SQL routine and package expressions
     'OracleRoutineParameterMode', 'OracleRoutineParameter',
-    'OracleCreateProcedureExpression', 'OracleCreateFunctionExpression',
-    'OracleCreatePackageExpression', 'OracleCreatePackageBodyExpression',
-    'OracleDropRoutineObjectType', 'OracleDropRoutineExpression',
+    'OracleCreateProcedureStatement', 'OracleCreateFunctionStatement',
+    'OracleCreatePackageStatement', 'OracleCreatePackageBodyStatement',
+    'OracleDropRoutineObjectType', 'OracleDropRoutineStatement',
     # User-defined TYPE DDL expressions
     'OracleTypeAttribute', 'OracleTypeMethod',
     'OracleObjectTypeDefinition', 'OracleSqljTypeDefinition',
@@ -159,10 +159,10 @@ __all__ = [
     'OracleAlterTypeLimitAction', 'OracleAlterTypeElementTypeAction',
     'OracleAlterTypeCompileAction', 'OracleAlterTypeFinalAction',
     'OracleAlterTypeInstantiableAction', 'OracleAlterTypeResetAction',
-    'OracleCreateTypeBodyExpression', 'OracleDropTypeExpression',
-    'DropTypeBodyExpression', 'OracleDropTypeBodyExpression',
+    'OracleCreateTypeBodyStatement', 'OracleDropTypeExpression',
+    'DropTypeBodyStatement', 'OracleDropTypeBodyExpression',
     # ANALYZE TABLE expressions
-    'OracleAnalyzeMode', 'OracleAnalyzeExpression',
+    'OracleAnalyzeMode', 'OracleAnalyzeStatement',
     # Schema objects and named-relation references
     'OracleRemoteName', 'OraclePackage', 'OracleTable', 'OracleNamedRelationRef',
     # Vector expressions
@@ -170,7 +170,7 @@ __all__ = [
     # Table clause expressions
     'TableCompressionClauseExpression', 'TablespaceClauseExpression',
     # Trigger DDL expressions
-    'DisableTriggerExpression', 'EnableTriggerExpression',
+    'DisableTriggerStatement', 'EnableTriggerStatement',
     # Oracle derived function-call nodes (LISTAGG / PERCENTILE / JSON)
     'OracleListaggFunction', 'OraclePercentileContFunction',
     'OraclePercentileDiscFunction', 'OracleJsonValueFunction',

@@ -6,25 +6,25 @@ class, e.g. synonyms and database links.
 """
 
 from .database_link import (
-    OracleCreateDatabaseLinkExpression,
-    OracleDropDatabaseLinkExpression,
+    OracleCreateDatabaseLinkStatement,
+    OracleDropDatabaseLinkStatement,
 )
 from .routine import (
-    OracleCreateFunctionExpression,
-    OracleCreatePackageBodyExpression,
-    OracleCreatePackageExpression,
-    OracleCreateProcedureExpression,
-    OracleDropRoutineExpression,
+    OracleCreateFunctionStatement,
+    OracleCreatePackageBodyStatement,
+    OracleCreatePackageStatement,
+    OracleCreateProcedureStatement,
+    OracleDropRoutineStatement,
     OracleDropRoutineObjectType,
     OracleRoutineParameter,
     OracleRoutineParameterMode,
 )
 from .synonym import (
-    OracleCreateSynonymExpression,
-    OracleDropSynonymExpression,
+    OracleCreateSynonymStatement,
+    OracleDropSynonymStatement,
 )
 from .type import (
-    DropTypeBodyExpression,
+    DropTypeBodyStatement,
     OracleAlterTypeAddAttributeAction,
     OracleAlterTypeAddMethodAction,
     OracleAlterTypeCompileAction,
@@ -37,7 +37,7 @@ from .type import (
     OracleAlterTypeLimitAction,
     OracleAlterTypeModifyAttributeAction,
     OracleAlterTypeResetAction,
-    OracleCreateTypeBodyExpression,
+    OracleCreateTypeBodyStatement,
     OracleDropTypeBodyExpression,
     OracleDropTypeExpression,
     OracleIncompleteTypeDefinition,
@@ -51,18 +51,18 @@ from .type import (
 )
 
 __all__ = [
-    "OracleCreateSynonymExpression",
-    "OracleDropSynonymExpression",
-    "OracleCreateDatabaseLinkExpression",
-    "OracleDropDatabaseLinkExpression",
+    "OracleCreateSynonymStatement",
+    "OracleDropSynonymStatement",
+    "OracleCreateDatabaseLinkStatement",
+    "OracleDropDatabaseLinkStatement",
     "OracleRoutineParameterMode",
     "OracleRoutineParameter",
-    "OracleCreateProcedureExpression",
-    "OracleCreateFunctionExpression",
-    "OracleCreatePackageExpression",
-    "OracleCreatePackageBodyExpression",
+    "OracleCreateProcedureStatement",
+    "OracleCreateFunctionStatement",
+    "OracleCreatePackageStatement",
+    "OracleCreatePackageBodyStatement",
     "OracleDropRoutineObjectType",
-    "OracleDropRoutineExpression",
+    "OracleDropRoutineStatement",
     "OracleTypeAttribute",
     "OracleTypeMethod",
     "OracleObjectTypeDefinition",
@@ -83,8 +83,8 @@ __all__ = [
     "OracleAlterTypeFinalAction",
     "OracleAlterTypeInstantiableAction",
     "OracleAlterTypeResetAction",
-    "OracleCreateTypeBodyExpression",
+    "OracleCreateTypeBodyStatement",
     "OracleDropTypeExpression",
-    "DropTypeBodyExpression",
+    "DropTypeBodyStatement",
     "OracleDropTypeBodyExpression",
 ]
