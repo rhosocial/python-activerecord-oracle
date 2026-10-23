@@ -132,7 +132,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         self._ru_version = (
             ru_version if ru_version is not None else ru_from_version_full(self._version_full)
         )
-        # Cached column type info from cursor.description for _adapt_row_types
+        # Cached column type info from cursor.description for adapt_row_types
         self._current_column_types = None
         # Initialize Oracle-specific components (lazy load dialect)
         self._dialect = None
@@ -485,7 +485,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         finally:
             pass
 
-    def _adapt_row_types(self, row_dict, column_adapters):
+    def adapt_row_types(self, row_dict, column_adapters):
         row_dict = {
             col_name: value.read() if hasattr(value, 'read') else value
             for col_name, value in row_dict.items()
@@ -498,7 +498,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
                     db_type = col_types.get(col_name)
                     if db_type in (oracledb.DB_TYPE_CHAR, oracledb.DB_TYPE_NCHAR):
                         row_dict[col_name] = value.rstrip()
-        return super()._adapt_row_types(row_dict, column_adapters)
+        return super().adapt_row_types(row_dict, column_adapters)
 
     def _set_input_sizes_for_params(self, cursor, params) -> None:
         if not params:
@@ -599,7 +599,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
                     # If no column_mapping provided, create a default one that maps uppercase to lowercase
                     column_mapping = {col: col.lower() for col in oracle_columns}
 
-            # Store column type info for _adapt_row_types to handle Oracle-specific behaviors
+            # Store column type info for adapt_row_types to handle Oracle-specific behaviors
             # (empty string → NULL, CHAR padding)
             self._current_column_types = {
                 desc[0].strip('"'): desc[1] for desc in cursor.description
@@ -986,7 +986,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
 
     def bulk_insert(self, options) -> 'QueryResult':
         """Insert multiple rows using Oracle-compatible single-row statements."""
-        from rhosocial.activerecord.backend.base.operations import _is_sql_expression
+        from rhosocial.activerecord.backend.base.operations import is_sql_expression
 
         if not options.rows:
             return QueryResult(affected_rows=0, data=[], duration=0.0, last_insert_id=None)
@@ -1012,7 +1012,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
             cursor = self._get_cursor()
 
             for row in options.rows:
-                if any(_is_sql_expression(value) for value in row):
+                if any(is_sql_expression(value) for value in row):
                     raise QueryError("Oracle bulk_insert does not support SQL expressions in row values")
 
                 converted_params = self._convert_datetime_params(tuple(row))
@@ -1091,7 +1091,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         Oracle requires RETURNING ... INTO syntax with output bind variables.
         This method uses the Expression-Dialect pattern to generate proper Oracle SQL.
         """
-        from rhosocial.activerecord.backend.base.operations import _is_sql_expression
+        from rhosocial.activerecord.backend.base.operations import is_sql_expression
         from rhosocial.activerecord.backend.expression import InsertStatement, Literal
         from rhosocial.activerecord.backend.expression.objects import Table
         from rhosocial.activerecord.backend.expression.statements import ValuesSource, ReturningClause
@@ -1101,7 +1101,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         # Process values - wrap in Literal if not already an expression
         processed_values = []
         for v in options.data.values():
-            if _is_sql_expression(v):
+            if is_sql_expression(v):
                 processed_values.append(v)
             else:
                 processed_values.append(Literal(self.dialect, v))
@@ -1180,7 +1180,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         Oracle requires RETURNING ... INTO syntax with output bind variables.
         This method uses the Expression-Dialect pattern to generate proper Oracle SQL.
         """
-        from rhosocial.activerecord.backend.base.operations import _is_sql_expression
+        from rhosocial.activerecord.backend.base.operations import is_sql_expression
         from rhosocial.activerecord.backend.expression import UpdateStatement, Literal
         from rhosocial.activerecord.backend.expression.objects import Table
         from rhosocial.activerecord.backend.expression.statements import ReturningClause
@@ -1190,7 +1190,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         # Process assignments
         assignments = {}
         for k, v in options.data.items():
-            if _is_sql_expression(v):
+            if is_sql_expression(v):
                 assignments[k] = v
             else:
                 assignments[k] = Literal(self.dialect, v)

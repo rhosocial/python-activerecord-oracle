@@ -376,7 +376,7 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
         the refusal is written down. For why the width is ten digits — and why
         it is not the ``NUMBER(38)`` Oracle's ANSI table gives the word
         ``INTEGER`` — see this class's docstring."""
-        self._check_spelling(data_type, IntegerType)
+        self.check_spelling(data_type, IntegerType)
         self._refuse_unsigned_integer(data_type, "INTEGER", "NUMBER(10)")
         return "NUMBER(10)", ()
 
@@ -396,7 +396,7 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
         ``unsigned`` is refused rather than ignored; see
         :meth:`_refuse_unsigned_integer`, and this class's docstring for the
         width."""
-        self._check_spelling(data_type, BigIntType)
+        self.check_spelling(data_type, BigIntType)
         self._refuse_unsigned_integer(data_type, "BIGINT", "NUMBER(19)")
         return "NUMBER(19)", ()
 
@@ -416,7 +416,7 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
 
         ``unsigned`` is refused rather than ignored; see
         :meth:`_refuse_unsigned_integer`."""
-        self._check_spelling(data_type, SmallIntType)
+        self.check_spelling(data_type, SmallIntType)
         self._refuse_unsigned_integer(data_type, "SMALLINT", "NUMBER(5)")
         return "NUMBER(5)", ()
 
@@ -573,7 +573,7 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
         exceptions do not share a base class.
 
         **Where this is called matters as much as what it raises.**  It runs
-        *before* ``_check_spelling`` and before every precision and scale check,
+        *before* ``check_spelling`` and before every precision and scale check,
         so a request that is wrong in two ways is told about this one first — the
         caller asked for something this grammar cannot express at all, which is
         a stronger and less recoverable statement than a misspelled word or an
@@ -719,7 +719,7 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
         ``unsigned`` is refused rather than ignored, **before** the spelling
         check; see :meth:`_refuse_unsigned_numeric`."""
         self._refuse_unsigned_numeric(data_type, "FLOAT")
-        self._check_spelling(data_type, DoubleType)
+        self.check_spelling(data_type, DoubleType)
         return f"FLOAT({self.type_parameter_defaults()['float']['precision']})", ()
 
     def supports_data_type_double(self) -> bool:
@@ -730,13 +730,13 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
         and Oracle calls it ``NUMBER``; all three are accepted and all three
         render as ``NUMBER``.
 
-        ``unsigned`` is refused rather than ignored, **before** ``_check_spelling``
+        ``unsigned`` is refused rather than ignored, **before** ``check_spelling``
         and before both ``ValueError`` range checks below; see
         :meth:`_refuse_unsigned_numeric`, which is where the reason and the
         measurements live.  Those two checks, and the ``-84..127`` scale bound,
         are untouched and still fire for a signed declaration."""
         self._refuse_unsigned_numeric(data_type, "NUMBER")
-        self._check_spelling(data_type, DecimalType)
+        self.check_spelling(data_type, DecimalType)
         if data_type.precision is not None:
             if not (1 <= data_type.precision <= 38):
                 raise ValueError(
@@ -830,7 +830,7 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
         ``tests/.../test_introspector_deep.py::TestDialectCarriesTheServersOwnVersion``
         pins the agreement per server so it cannot go back to being inert.
         """
-        self._check_spelling(data_type, BooleanType)
+        self.check_spelling(data_type, BooleanType)
         version = getattr(self, "_version", None)
         if version is not None and version >= _ORACLE_BOOLEAN_TYPE_MIN_VERSION:
             return "BOOLEAN", ()
@@ -869,7 +869,7 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
         ``nvarchar2`` (2000).
         https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/Data-Types.html
         """
-        self._check_spelling(data_type, VarCharType)
+        self.check_spelling(data_type, VarCharType)
         return (f"VARCHAR2({data_type.length})" if data_type.length is not None else "VARCHAR2(4000)"), ()
 
     def supports_data_type_varchar(self) -> bool:
@@ -908,7 +908,7 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
         the identity closed: add ``"char": {"length": 1}`` to
         :meth:`type_parameter_defaults` and drop the bare-word branch below.
         """
-        self._check_spelling(data_type, CharType)
+        self.check_spelling(data_type, CharType)
         return (f"CHAR({data_type.length})" if data_type.length is not None else "CHAR"), ()
 
     def supports_data_type_char(self) -> bool:
@@ -921,7 +921,7 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
         which is what every plain ``TextType(d)`` carries; and refusing
         ``clob`` would refuse the one word Oracle does write. The two arms
         collapse, so there is nothing left to distinguish between them."""
-        self._check_spelling(data_type, TextType)
+        self.check_spelling(data_type, TextType)
         return "CLOB", ()
 
     def supports_data_type_text(self) -> bool:
@@ -932,7 +932,7 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
         calls it ``BLOB``. ``BYTEA`` is not an Oracle word at all, but it is
         a spelling of the concept and the column Oracle produces is a
         ``BLOB``, so it is accepted and normalised rather than refused."""
-        self._check_spelling(data_type, BlobType)
+        self.check_spelling(data_type, BlobType)
         return "BLOB", ()
 
     def supports_data_type_blob(self) -> bool:
@@ -1238,7 +1238,7 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
         The same reasoning picks the other widths; see this class's docstring.
         Widening the column does not make it unsigned, so ``unsigned`` is still
         refused rather than ignored; see :meth:`_refuse_unsigned_integer`."""
-        self._check_spelling(data_type, TinyIntType)
+        self.check_spelling(data_type, TinyIntType)
         self._refuse_unsigned_integer(data_type, "TINYINT", "NUMBER(3)")
         return "NUMBER(3)", ()
 

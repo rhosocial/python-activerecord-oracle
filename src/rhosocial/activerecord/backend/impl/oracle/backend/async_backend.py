@@ -440,8 +440,8 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
                         db_type = col_types.get(col_name)
                         if db_type in (oracledb.DB_TYPE_CHAR, oracledb.DB_TYPE_NCHAR):
                             row_dict[col_name] = value.rstrip()
-            adapted_row = self._adapt_row_types(row_dict, adapters)
-            final_row = self._remap_row_columns(adapted_row, mapping)
+            adapted_row = self.adapt_row_types(row_dict, adapters)
+            final_row = self.remap_row_columns(adapted_row, mapping)
             final_results.append(final_row)
         return final_results
 
@@ -770,7 +770,7 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
 
     async def bulk_insert(self, options) -> 'QueryResult':
         """Insert multiple rows using Oracle-compatible single-row statements."""
-        from rhosocial.activerecord.backend.base.operations import _is_sql_expression
+        from rhosocial.activerecord.backend.base.operations import is_sql_expression
 
         if not options.rows:
             return QueryResult(affected_rows=0, data=[], duration=0.0, last_insert_id=None)
@@ -796,7 +796,7 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             cursor = await self._get_cursor()
 
             for row in options.rows:
-                if any(_is_sql_expression(value) for value in row):
+                if any(is_sql_expression(value) for value in row):
                     raise QueryError("Oracle bulk_insert does not support SQL expressions in row values")
 
                 converted_params = self._convert_datetime_params(tuple(row))
@@ -908,7 +908,7 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         Oracle requires RETURNING ... INTO syntax with output bind variables.
         This method uses the Expression-Dialect pattern to generate proper Oracle SQL.
         """
-        from rhosocial.activerecord.backend.base.operations import _is_sql_expression
+        from rhosocial.activerecord.backend.base.operations import is_sql_expression
         from rhosocial.activerecord.backend.expression import InsertStatement, Literal
         from rhosocial.activerecord.backend.expression.objects import Table
         from rhosocial.activerecord.backend.expression.statements import ValuesSource, ReturningClause
@@ -918,7 +918,7 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         # Process values - wrap in Literal if not already an expression
         processed_values = []
         for v in options.data.values():
-            if _is_sql_expression(v):
+            if is_sql_expression(v):
                 processed_values.append(v)
             else:
                 processed_values.append(Literal(self.dialect, v))
@@ -1003,7 +1003,7 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         Oracle requires RETURNING ... INTO syntax with output bind variables.
         This method uses the Expression-Dialect pattern to generate proper Oracle SQL.
         """
-        from rhosocial.activerecord.backend.base.operations import _is_sql_expression
+        from rhosocial.activerecord.backend.base.operations import is_sql_expression
         from rhosocial.activerecord.backend.expression import UpdateStatement, Literal
         from rhosocial.activerecord.backend.expression.objects import Table
         from rhosocial.activerecord.backend.expression.statements import ReturningClause
@@ -1013,7 +1013,7 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         # Process assignments
         assignments = {}
         for k, v in options.data.items():
-            if _is_sql_expression(v):
+            if is_sql_expression(v):
                 assignments[k] = v
             else:
                 assignments[k] = Literal(self.dialect, v)
