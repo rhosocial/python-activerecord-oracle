@@ -26,6 +26,13 @@ class OracleRoutineMixin:
     through verbatim as raw PL/SQL strings.
     """
 
+    def supports_package_introspection(self) -> bool:
+        """Oracle answers for its PL/SQL packages from ``ALL_OBJECTS``.
+
+        The capability for the ``introspect packages`` family: specifications
+        only, so a package and its body are not counted twice."""
+        return True
+
     def supports_create_procedure(self) -> bool:
         return True
 

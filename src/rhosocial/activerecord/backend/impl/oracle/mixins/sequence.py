@@ -38,6 +38,13 @@ class OracleSequenceMixin:
     :meth:`format_alter_sequence_statement` is where that spelling lives.
     """
 
+    def supports_sequence_introspection(self) -> bool:
+        """Oracle answers for its sequences from ``ALL_SEQUENCES``.
+
+        The capability for the ``introspect sequences`` family, under the same
+        name Postgres's and MariaDB's switches use."""
+        return True
+
     def supports_sequence(self) -> bool:
         """Oracle supports sequence objects from 9i onward."""
         return self.version >= (9, 0, 0)

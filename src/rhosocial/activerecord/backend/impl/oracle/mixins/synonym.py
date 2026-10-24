@@ -25,6 +25,13 @@ class OracleSynonymMixin:
     quoting rules.
     """
 
+    def supports_synonym_introspection(self) -> bool:
+        """Oracle answers for its synonyms from ``ALL_SYNONYMS``.
+
+        The capability for the ``introspect synonyms`` family. Public synonyms
+        are rows of the same view, not a second capability."""
+        return True
+
     def supports_create_synonym(self) -> bool:
         return True
 
