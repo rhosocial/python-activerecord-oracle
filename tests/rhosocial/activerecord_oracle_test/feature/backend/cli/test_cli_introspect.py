@@ -169,21 +169,34 @@ class TestIntrospectParserContract:
         args = build_parser().parse_args(["introspect", "tables"])
         assert args.type == "tables"
         assert args.name is None
-        assert args.owner is None
         assert args.include_system is False
         assert args.output == "table"
         assert args.is_async is False
 
-    def test_name_owner_and_flags(self):
+    def test_name_and_flags(self):
         args = build_parser().parse_args([
             "introspect", "table", "customers",
-            "--owner", "AR_CRM", "--include-system", "-o", "json",
+            "--include-system", "-o", "json",
         ])
         assert args.type == "table"
         assert args.name == "customers"
-        assert args.owner == "AR_CRM"
         assert args.include_system is True
         assert args.output == "json"
+
+    def test_owner_flag_is_refused(self):
+        """The connection fixes the owner, so a second owner argument is gone."""
+        with pytest.raises(SystemExit):
+            build_parser().parse_args(
+                ["introspect", "tables", "--owner", "AR_CRM"]
+            )
+
+    def test_help_lists_every_type_and_no_owner_option(self, capsys):
+        with pytest.raises(SystemExit):
+            build_parser().parse_args(["introspect", "--help"])
+        out = capsys.readouterr().out
+        for itype in cli_introspect.INTROSPECT_TYPES:
+            assert itype in out
+        assert "--owner" not in out
 
     def test_all_introspect_types_accepted(self):
         for itype in cli_introspect.INTROSPECT_TYPES:
@@ -229,32 +242,32 @@ class TestHandleSyncBranches:
         assert [t for t, _ in provider.results] == [title]
         assert value in str(provider.results[0][1])
 
-    def test_tables_passes_schema_and_include_system(self, provider, monkeypatch):
+    def test_tables_passes_owner_none_and_include_system(self, provider, monkeypatch):
         insp = FakeIntrospector()
         patch_sync_backend(monkeypatch, insp)
         cli_introspect.handle(build_parser().parse_args(
-            ["introspect", "tables", "--owner", "AR_SHOP", "--include-system"]
+            ["introspect", "tables", "--include-system"]
         ))
-        assert insp.calls[-1] == ("tables", "AR_SHOP", True)
+        assert insp.calls[-1] == ("tables", None, True)
 
-    def test_schema_object_branches_pass_owner(self, provider, monkeypatch):
+    def test_schema_object_branches_pass_owner_none(self, provider, monkeypatch):
         insp = FakeIntrospector()
         patch_sync_backend(monkeypatch, insp)
         for itype in ("sequences", "synonyms", "packages"):
             cli_introspect.handle(build_parser().parse_args(
-                ["introspect", itype, "--owner", "AR_CRM"]
+                ["introspect", itype]
             ))
         assert insp.calls == [
-            ("sequences", "AR_CRM"),
-            ("synonyms", "AR_CRM"),
-            ("packages", "AR_CRM"),
+            ("sequences", None),
+            ("synonyms", None),
+            ("packages", None),
         ]
 
     def test_table_detail_renders_columns_indexes_fks(self, provider, monkeypatch):
         insp = FakeIntrospector()
         backend_instances = patch_sync_backend(monkeypatch, insp)
         cli_introspect.handle(build_parser().parse_args(
-            ["introspect", "table", "customers", "--owner", "ar_crm"]
+            ["introspect", "table", "customers"]
         ))
         titles = [t for t, _ in provider.results]
         assert titles == [
@@ -262,7 +275,7 @@ class TestHandleSyncBranches:
             "Indexes of customers",
             "Foreign Keys of customers",
         ]
-        assert insp.calls[-1] == ("table_info", "customers", "ar_crm")
+        assert insp.calls[-1] == ("table_info", "customers", None)
         assert backend_instances[-1].disconnected
 
     def test_table_without_fks_skips_fk_section(self, provider, monkeypatch):
@@ -298,13 +311,13 @@ class TestHandleSyncBranches:
         assert excinfo.value.code == 1
         assert "Table name is required" in capsys.readouterr().err
 
-    def test_columns_branch_uses_schema(self, provider, monkeypatch):
+    def test_columns_branch_uses_default_schema(self, provider, monkeypatch):
         insp = FakeIntrospector()
         patch_sync_backend(monkeypatch, insp)
         cli_introspect.handle(build_parser().parse_args(
-            ["introspect", "columns", "customers", "--owner", "AR_CRM"]
+            ["introspect", "columns", "customers"]
         ))
-        assert insp.calls[-1] == ("columns", "customers", "AR_CRM")
+        assert insp.calls[-1] == ("columns", "customers", None)
         assert provider.results[0][0] == "Columns of customers"
 
     def test_indexes_branch(self, provider, monkeypatch):

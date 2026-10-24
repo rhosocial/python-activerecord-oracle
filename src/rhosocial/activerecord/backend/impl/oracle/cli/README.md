@@ -20,7 +20,7 @@ python -m rhosocial.activerecord.backend.impl.oracle introspect <TYPE> [NAME] [O
 | `indexes` | `all_ind_columns`, `all_indexes` | One table's indexes, including the primary key. |
 | `foreign-keys` | `all_constraints`, `all_cons_columns` | One table's constraints and the columns each side names. |
 | `sequences` | `all_sequences` | One owner's sequences. `last_number` is the **next cached value**, not the last one handed out — the dictionary does not record the latter. |
-| `synonyms` | `all_synonyms` | Private synonyms, or `--owner PUBLIC` for the global ones. They are never mixed into a schema's list. |
+| `synonyms` | `all_synonyms` | The connecting user's private synonyms. The global ones live under the owner `PUBLIC` and are never mixed into a schema's list. |
 | `packages` | `all_objects` | PL/SQL package specifications, so a specification and its body are not counted twice. |
 | `database` | `v$nls_parameters`, `v$version` | Server version and the NLS settings this session uses. |
 
@@ -32,7 +32,6 @@ selects one object for `sequences`, `synonyms` and `packages`.
 | Option | Default | Description |
 | :--- | :--- | :--- |
 | `-o, --output` | `table` | `table` (rich), `json`, `csv`, `tsv`. |
-| `--owner` | the connected user | The schema whose objects are listed. |
 | `--mode` | _None_ | Connection mode. |
 | `--host`, `--port`, `--database` / `--service`, `--user`, `--password` | env or defaults | Connection. `ORACLE_*` env vars are honoured, and arguments override them. |
 | `--ssl` | off | Use SSL for the connection. |
@@ -50,9 +49,13 @@ selects one object for `sequences`, `synonyms` and `packages`.
     upper case, so a sequence created as `order_id_seq` is reported as
     `ORDER_ID_SEQ` and asked about by that spelling unless it was created with
     a quoted name.
-*   **The owner is explicit.** `--owner` defaults to the connecting user rather
-    than to what the session's `CURRENT_SCHEMA` happens to be, so the same
-    command gives the same answer from any role that can see the schema.
+*   **The owner is the connection's user.** The schema asked about is the one
+    the connection authenticates as (`--user`), not what the session's
+    `CURRENT_SCHEMA` happens to be and not a second argument on the command
+    line, so the same command gives the same answer from any role that can see
+    the schema. PUBLIC synonyms are not listed: Oracle records them under the
+    owner `PUBLIC`, which is a name in `all_synonyms` rather than a schema a
+    run connects as.
 *   **One question per invocation.** A CLI process is one connection that
     opens, answers, and closes — there is no cache carried between runs, so
     the answer reflects the server as it is *now*.
@@ -61,13 +64,10 @@ selects one object for `sequences`, `synonyms` and `packages`.
 
 ```bash
 # The three schema-object families Oracle has that the core catalogue does not
-python -m rhosocial.activerecord.backend.impl.oracle introspect sequences --owner HR
-python -m rhosocial.activerecord.backend.impl.oracle introspect synonyms --owner HR
-python -m rhosocial.activerecord.backend.impl.oracle introspect packages --owner HR
-
-# Public synonyms live under their own owner
-python -m rhosocial.activerecord.backend.impl.oracle introspect synonyms --owner PUBLIC
+python -m rhosocial.activerecord.backend.impl.oracle introspect sequences
+python -m rhosocial.activerecord.backend.impl.oracle introspect synonyms
+python -m rhosocial.activerecord.backend.impl.oracle introspect packages
 
 # One table in full
-python -m rhosocial.activerecord.backend.impl.oracle introspect table orders --owner HR -o json
+python -m rhosocial.activerecord.backend.impl.oracle introspect table orders -o json
 ```

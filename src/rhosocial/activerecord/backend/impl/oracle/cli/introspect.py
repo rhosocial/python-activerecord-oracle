@@ -49,18 +49,19 @@ def create_parser(subparsers):
   # List sequences (Oracle specific)
   %(prog)s sequences
 
-  # List private synonyms of a schema, or the public ones
-  %(prog)s synonyms --owner AR_CRM
-  %(prog)s synonyms --owner PUBLIC
+  # List the private synonyms of the connecting user
+  %(prog)s synonyms
 
   # List PL/SQL packages with their compile status
-  %(prog)s packages --owner AR_CRM
+  %(prog)s packages
 
   # Output as JSON
   %(prog)s tables -o json
 
-  # Specify owner/schema
-  %(prog)s tables --owner SYSTEM
+Owners: the schema is the user the connection authenticates as (--user), so
+there is no separate owner option. PUBLIC synonyms are not listed: Oracle
+records them under the owner PUBLIC, which is a name in ALL_SYNONYMS rather
+than a schema this run connects as.
 """,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -80,6 +81,9 @@ def create_parser(subparsers):
         help='Use ASCII characters for rich table borders.',
     )
 
+    # The candidate list is hand-written here, one family at a time: only this
+    # backend knows whether Oracle has packages. There is no core-side mapping
+    # to derive it from, and the parser answers before any connection exists.
     parser.add_argument(
         "type",
         choices=INTROSPECT_TYPES,
@@ -90,11 +94,6 @@ def create_parser(subparsers):
         nargs="?",
         default=None,
         help="Table/view name (required for some types)",
-    )
-    parser.add_argument(
-        "--owner",
-        default=None,
-        help="Owner/schema name",
     )
     parser.add_argument(
         "--include-system",
@@ -151,14 +150,14 @@ def _handle_introspect_sync(args, backend: OracleBackend, provider):
 
         if args.type == "tables":
             tables = introspector.list_tables(
-                schema=args.owner,
+                schema=None,
                 include_system=args.include_system
             )
             data = _serialize_for_output(tables)
             provider.display_results(data, title="Tables")
 
         elif args.type == "views":
-            views = introspector.list_views(schema=args.owner)
+            views = introspector.list_views(schema=None)
             data = _serialize_for_output(views)
             provider.display_results(data, title="Views")
 
@@ -166,7 +165,7 @@ def _handle_introspect_sync(args, backend: OracleBackend, provider):
             if not args.name:
                 print("Error: Table name is required for 'table' introspection", file=sys.stderr)
                 sys.exit(1)
-            info = introspector.get_table_info(args.name, schema=args.owner)
+            info = introspector.get_table_info(args.name, schema=None)
             if info:
                 provider.display_results(_serialize_for_output(info.columns), title=f"Columns of {args.name}")
                 if info.indexes:
@@ -181,7 +180,7 @@ def _handle_introspect_sync(args, backend: OracleBackend, provider):
             if not args.name:
                 print("Error: Table name is required for 'columns' introspection", file=sys.stderr)
                 sys.exit(1)
-            columns = introspector.list_columns(args.name, schema=args.owner)
+            columns = introspector.list_columns(args.name, schema=None)
             data = _serialize_for_output(columns)
             provider.display_results(data, title=f"Columns of {args.name}")
 
@@ -189,7 +188,7 @@ def _handle_introspect_sync(args, backend: OracleBackend, provider):
             if not args.name:
                 print("Error: Table name is required for 'indexes' introspection", file=sys.stderr)
                 sys.exit(1)
-            indexes = introspector.list_indexes(args.name, schema=args.owner)
+            indexes = introspector.list_indexes(args.name, schema=None)
             data = _serialize_for_output(indexes)
             provider.display_results(data, title=f"Indexes of {args.name}")
 
@@ -197,22 +196,22 @@ def _handle_introspect_sync(args, backend: OracleBackend, provider):
             if not args.name:
                 print("Error: Table name is required for 'foreign-keys' introspection", file=sys.stderr)
                 sys.exit(1)
-            fks = introspector.list_foreign_keys(args.name, schema=args.owner)
+            fks = introspector.list_foreign_keys(args.name, schema=None)
             data = _serialize_for_output(fks)
             provider.display_results(data, title=f"Foreign Keys of {args.name}")
 
         elif args.type == "sequences":
-            sequences = introspector.list_sequences(owner=args.owner)
+            sequences = introspector.list_sequences(owner=None)
             data = _serialize_for_output(sequences)
             provider.display_results(data, title="Sequences")
 
         elif args.type == "synonyms":
-            synonyms = introspector.list_synonyms(owner=args.owner)
+            synonyms = introspector.list_synonyms(owner=None)
             data = _serialize_for_output(synonyms)
             provider.display_results(data, title="Synonyms")
 
         elif args.type == "packages":
-            packages = introspector.list_packages(owner=args.owner)
+            packages = introspector.list_packages(owner=None)
             data = _serialize_for_output(packages)
             provider.display_results(data, title="Packages")
 
@@ -243,14 +242,14 @@ async def _handle_introspect_async(args, backend: AsyncOracleBackend, provider):
 
         if args.type == "tables":
             tables = await introspector.list_tables(
-                schema=args.owner,
+                schema=None,
                 include_system=args.include_system
             )
             data = _serialize_for_output(tables)
             provider.display_results(data, title="Tables")
 
         elif args.type == "views":
-            views = await introspector.list_views(schema=args.owner)
+            views = await introspector.list_views(schema=None)
             data = _serialize_for_output(views)
             provider.display_results(data, title="Views")
 
@@ -258,7 +257,7 @@ async def _handle_introspect_async(args, backend: AsyncOracleBackend, provider):
             if not args.name:
                 print("Error: Table name is required for 'table' introspection", file=sys.stderr)
                 sys.exit(1)
-            info = await introspector.get_table_info(args.name, schema=args.owner)
+            info = await introspector.get_table_info(args.name, schema=None)
             if info:
                 provider.display_results(_serialize_for_output(info.columns), title=f"Columns of {args.name}")
                 if info.indexes:
@@ -273,7 +272,7 @@ async def _handle_introspect_async(args, backend: AsyncOracleBackend, provider):
             if not args.name:
                 print("Error: Table name is required for 'columns' introspection", file=sys.stderr)
                 sys.exit(1)
-            columns = await introspector.list_columns(args.name, schema=args.owner)
+            columns = await introspector.list_columns(args.name, schema=None)
             data = _serialize_for_output(columns)
             provider.display_results(data, title=f"Columns of {args.name}")
 
@@ -281,7 +280,7 @@ async def _handle_introspect_async(args, backend: AsyncOracleBackend, provider):
             if not args.name:
                 print("Error: Table name is required for 'indexes' introspection", file=sys.stderr)
                 sys.exit(1)
-            indexes = await introspector.list_indexes(args.name, schema=args.owner)
+            indexes = await introspector.list_indexes(args.name, schema=None)
             data = _serialize_for_output(indexes)
             provider.display_results(data, title=f"Indexes of {args.name}")
 
@@ -289,22 +288,22 @@ async def _handle_introspect_async(args, backend: AsyncOracleBackend, provider):
             if not args.name:
                 print("Error: Table name is required for 'foreign-keys' introspection", file=sys.stderr)
                 sys.exit(1)
-            fks = await introspector.list_foreign_keys(args.name, schema=args.owner)
+            fks = await introspector.list_foreign_keys(args.name, schema=None)
             data = _serialize_for_output(fks)
             provider.display_results(data, title=f"Foreign Keys of {args.name}")
 
         elif args.type == "sequences":
-            sequences = await introspector.list_sequences(owner=args.owner)
+            sequences = await introspector.list_sequences(owner=None)
             data = _serialize_for_output(sequences)
             provider.display_results(data, title="Sequences")
 
         elif args.type == "synonyms":
-            synonyms = await introspector.list_synonyms(owner=args.owner)
+            synonyms = await introspector.list_synonyms(owner=None)
             data = _serialize_for_output(synonyms)
             provider.display_results(data, title="Synonyms")
 
         elif args.type == "packages":
-            packages = await introspector.list_packages(owner=args.owner)
+            packages = await introspector.list_packages(owner=None)
             data = _serialize_for_output(packages)
             provider.display_results(data, title="Packages")
 

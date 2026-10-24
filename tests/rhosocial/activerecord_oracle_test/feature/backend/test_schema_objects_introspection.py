@@ -487,13 +487,14 @@ class TestCli:
 
         insp = FakeIntrospector()
         fake_sync_backend(monkeypatch, insp)
-        main(["introspect", itype, "--owner", "AR_CRM", "-o", "json"])
+        main(["introspect", itype, "-o", "json"])
 
         payload = json.loads(capsys.readouterr().out)
+        # owner=None lets the introspector resolve the connecting user.
         assert payload[0]["owner"] == "AR_CRM"
         assert key in payload[0]
         assert value in str(payload[0])
-        assert insp.calls[-1] == (itype, "AR_CRM")
+        assert insp.calls[-1] == (itype, None)
 
     def test_main_without_owner_asks_the_default_schema(self, monkeypatch, capsys):
         from rhosocial.activerecord.backend.impl.oracle.__main__ import main
