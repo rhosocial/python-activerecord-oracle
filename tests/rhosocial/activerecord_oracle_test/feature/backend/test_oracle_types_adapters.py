@@ -338,7 +338,7 @@ class TestRawWidthIsReadNotGuessed:
     different columns — and ``parse_type`` used to invent one.
 
     The gap it invented it for is closed: the introspector now spells the size
-    out for ``RAW`` (``_parse_columns`` reads ``DATA_LENGTH``, which holds the
+    out for ``RAW`` (``parse_columns`` reads ``DATA_LENGTH``, which holds the
     declared width exactly — 16 for a ``RAW(16)``, 64 for a ``RAW(64)``, with
     ``DATA_PRECISION`` and ``DATA_SCALE`` both NULL; see
     ``test_introspector_deep.py`` for the live round trip). So the un-sized case
@@ -615,7 +615,7 @@ class TestUnSizedCharacterWidthsAreRefusedNotGuessed:
     **ceilings**, handed back as if they were declared widths — the same defect
     ``RAW``'s 2000 was, and now refused rather than merely unreachable. The
     introspector spells the size out for every character type
-    (``_parse_columns`` reads ``CHAR_LENGTH`` or ``DATA_LENGTH``), so an
+    (``parse_columns`` reads ``CHAR_LENGTH`` or ``DATA_LENGTH``), so an
     un-sized string cannot arrive from introspection in the first place.
 
     https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/Data-Types.html

@@ -3,7 +3,7 @@
 
 Two halves, same as the rest of this directory:
 
-Offline -- the SQL builders, the ``_parse_*`` helpers, the cache contract
+Offline -- the SQL builders, the ``parse_*`` helpers, the cache contract
 and the sync/async signature parity are driven with synthetic
 dictionary rows and a recording executor. No connection is opened.
 
@@ -199,7 +199,7 @@ class TestSqlBuilders:
         assert params == ("AR_OBJ",)
 
     def test_the_package_projection_carries_what_the_parser_reads(self):
-        """``created`` is projected because ``_parse_packages`` reads it.
+        """``created`` is projected because ``parse_packages`` reads it.
 
         Dropping it would not fail: the parser would report ``None`` for a
         column the server was never asked for, which is a silent wrong answer.
@@ -225,7 +225,7 @@ class TestSqlBuilders:
 class TestParsers:
     def test_sequences_map_every_documented_field(self):
         insp, _ = make_sync()
-        (seq,) = insp._parse_sequences([SEQUENCE_ROW])
+        (seq,) = insp.parse_sequences([SEQUENCE_ROW])
         assert isinstance(seq, OracleSequenceInfo)
         assert (seq.name, seq.owner) == ("SEQ_GATE", "AR_OBJ")
         assert (seq.min_value, seq.max_value) == (10, 100000)
@@ -237,16 +237,16 @@ class TestParsers:
     def test_flags_default_to_false_when_the_view_says_no(self):
         insp, _ = make_sync()
         row = dict(SEQUENCE_ROW, CYCLE_FLAG="N", ORDER_FLAG="N")
-        (seq,) = insp._parse_sequences([row])
+        (seq,) = insp.parse_sequences([row])
         assert seq.cycle is False and seq.order is False
 
     def test_sequence_info_is_none_for_an_empty_result(self):
         insp, _ = make_sync()
-        assert insp._parse_sequence_info([], "SEQ_GATE", "AR_OBJ") is None
+        assert insp.parse_sequence_info([], "SEQ_GATE", "AR_OBJ") is None
 
     def test_synonyms_carry_the_target_and_public_flag(self):
         insp, _ = make_sync()
-        private, public = insp._parse_synonyms([SYNONYM_ROW, PUBLIC_SYNONYM_ROW])
+        private, public = insp.parse_synonyms([SYNONYM_ROW, PUBLIC_SYNONYM_ROW])
         assert (private.table_owner, private.table_name) == ("AR_OBJ", "SEQ_GATE")
         assert private.db_link is None and private.is_public is False
         assert public.is_public is True
@@ -254,11 +254,11 @@ class TestParsers:
 
     def test_synonym_info_is_none_for_an_empty_result(self):
         insp, _ = make_sync()
-        assert insp._parse_synonym_info([], "SYN_GATE", "AR_OBJ") is None
+        assert insp.parse_synonym_info([], "SYN_GATE", "AR_OBJ") is None
 
     def test_packages_carry_status_and_timestamps(self):
         insp, _ = make_sync()
-        (package,) = insp._parse_packages([PACKAGE_ROW])
+        (package,) = insp.parse_packages([PACKAGE_ROW])
         assert isinstance(package, OraclePackageInfo)
         assert (package.name, package.owner, package.status) == (
             "PKG_GATE",
@@ -271,7 +271,7 @@ class TestParsers:
     def test_missing_timestamps_stay_none(self):
         insp, _ = make_sync()
         row = dict(PACKAGE_ROW, CREATED=None, LAST_DDL_TIME=None)
-        (package,) = insp._parse_packages([row])
+        (package,) = insp.parse_packages([row])
         assert package.created_time is None and package.last_ddl_time is None
 
 

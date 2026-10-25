@@ -10,14 +10,14 @@ The introspectors are exposed via ``backend.introspector``.
 Architecture:
   - SQL generation: Direct SQL queries to Oracle data dictionary views
   - Query execution: Handled by IntrospectorExecutor
-  - Result parsing: _parse_* methods in this module (pure Python, no I/O)
+  - Result parsing: parse_* methods in this module (pure Python, no I/O)
 
 Key behaviours:
   - Queries USER_TABLES, USER_TAB_COLUMNS, USER_INDEXES,
     USER_CONSTRAINTS, USER_VIEWS, USER_TRIGGERS
   - Queries ALL_SEQUENCES, ALL_SYNONYMS and ALL_OBJECTS for the
     backend-specific sequence/synonym/package families
-  - _parse_* methods are pure Python — shared by sync and async introspectors
+  - parse_* methods are pure Python — shared by sync and async introspectors
 
 Design principle: Sync and Async are separate and cannot coexist.
 - SyncOracleIntrospector: for synchronous backends
@@ -79,10 +79,11 @@ class OracleIntrospectorMixin(IntrospectorMixin):
     from this mixin to share:
     - Default schema handling
     - Oracle version detection
-    - _parse_* implementations
+    - parse_* implementations
     """
 
-    def _get_default_schema(self) -> str:
+    @property
+    def default_schema(self) -> str:
         """Return the Oracle schema (owner) from the backend config."""
         if hasattr(self._backend, 'config') and hasattr(self._backend.config, 'username'):
             return self._backend.config.username.upper() if self._backend.config.username else ""
@@ -99,7 +100,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
         default the table and view methods take.
         """
         if owner is None:
-            return self._get_default_schema()
+            return self.default_schema
         return owner.upper()
 
     def _get_version(self) -> Optional[Tuple[int, ...]]:
@@ -261,7 +262,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
     # Parse methods — pure Python, no I/O
     # ------------------------------------------------------------------ #
 
-    def _parse_database_info(self, rows: List[Dict[str, Any]]) -> IntrospectionDatabaseInfo:
+    def parse_database_info(self, rows: List[Dict[str, Any]]) -> IntrospectionDatabaseInfo:
         version = self._get_version()
         # Reported as the string "unknown" rather than a fabricated number: this
         # is a status surface, and a status surface that invents a version is the
@@ -269,7 +270,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
         version_str = (
             ".".join(str(v) for v in version) if version else "unknown"
         )
-        schema = self._get_default_schema()
+        schema = self.default_schema
 
         db_row = rows[0] if rows else {}
 
@@ -282,10 +283,10 @@ class OracleIntrospectorMixin(IntrospectorMixin):
             collation=db_row.get("LANGUAGE"),
         )
 
-    def _parse_tables(
+    def parse_tables(
         self, rows: List[Dict[str, Any]], schema: Optional[str]
     ) -> List[IntrospectionTableInfo]:
-        target_schema = schema if schema is not None else self._get_default_schema()
+        target_schema = schema if schema is not None else self.default_schema
         tables = []
         for row in rows:
             tables.append(
@@ -302,7 +303,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
             )
         return tables
 
-    def _parse_columns(
+    def parse_columns(
         self,
         rows: List[Dict[str, Any]],
         table_name: str,
@@ -381,7 +382,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
             )
         return columns
 
-    def _parse_indexes(
+    def parse_indexes(
         self,
         rows: List[Dict[str, Any]],
         table_name: str,
@@ -421,7 +422,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
             )
         return list(index_map.values())
 
-    def _parse_foreign_keys(
+    def parse_foreign_keys(
         self,
         rows: List[Dict[str, Any]],
         table_name: str,
@@ -452,7 +453,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
             fk_map[fk_name].referenced_columns.append(row.get("REFERENCED_COLUMN_NAME", ""))
         return list(fk_map.values())
 
-    def _parse_views(
+    def parse_views(
         self, rows: List[Dict[str, Any]], schema: str
     ) -> List[IntrospectionViewInfo]:
         return [
@@ -466,7 +467,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
             for row in rows
         ]
 
-    def _parse_view_info(
+    def parse_view_info(
         self,
         rows: List[Dict[str, Any]],
         view_name: str,
@@ -483,7 +484,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
             is_updatable=row.get("READ_ONLY") != "Y",
         )
 
-    def _parse_triggers(
+    def parse_triggers(
         self, rows: List[Dict[str, Any]], schema: str
     ) -> List[IntrospectionTriggerInfo]:
         triggers = []
@@ -509,7 +510,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
     # Parse methods — the schema-object families
     # ------------------------------------------------------------------ #
 
-    def _parse_sequences(self, rows: List[Dict[str, Any]]) -> List[OracleSequenceInfo]:
+    def parse_sequences(self, rows: List[Dict[str, Any]]) -> List[OracleSequenceInfo]:
         """Turn ``ALL_SEQUENCES`` rows into sequence value objects."""
         return [
             OracleSequenceInfo(
@@ -526,7 +527,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
             for row in rows
         ]
 
-    def _parse_sequence_info(
+    def parse_sequence_info(
         self, rows: List[Dict[str, Any]], name: str, owner: str
     ) -> Optional[OracleSequenceInfo]:
         """Turn one ``ALL_SEQUENCES`` row into a sequence value object.
@@ -550,7 +551,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
             last_number=row.get("LAST_NUMBER"),
         )
 
-    def _parse_synonyms(self, rows: List[Dict[str, Any]]) -> List[OracleSynonymInfo]:
+    def parse_synonyms(self, rows: List[Dict[str, Any]]) -> List[OracleSynonymInfo]:
         """Turn ``ALL_SYNONYMS`` rows into synonym value objects.
 
         ``is_public`` is derived from the owner rather than from a flag:
@@ -569,7 +570,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
             for row in rows
         ]
 
-    def _parse_synonym_info(
+    def parse_synonym_info(
         self, rows: List[Dict[str, Any]], name: str, owner: str
     ) -> Optional[OracleSynonymInfo]:
         """Turn one ``ALL_SYNONYMS`` row into a synonym value object."""
@@ -585,7 +586,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
             is_public=row.get("OWNER") == "PUBLIC",
         )
 
-    def _parse_packages(self, rows: List[Dict[str, Any]]) -> List[OraclePackageInfo]:
+    def parse_packages(self, rows: List[Dict[str, Any]]) -> List[OraclePackageInfo]:
         """Turn ``ALL_OBJECTS`` package-specification rows into value objects."""
         packages = []
         for row in rows:
@@ -661,7 +662,7 @@ class SyncOracleIntrospector(OracleIntrospectorMixin, SyncAbstractIntrospector):
     def list_columns(
         self, table_name: str, schema: Optional[str] = None
     ) -> List[IntrospectionColumnInfo]:
-        target_schema = schema if schema is not None else self._get_default_schema()
+        target_schema = schema if schema is not None else self.default_schema
         key = self._cache.key(IntrospectionScope.COLUMN, table_name, schema=target_schema)
         cached = self._cache.get(key)
         if cached is not None:
@@ -676,7 +677,7 @@ class SyncOracleIntrospector(OracleIntrospectorMixin, SyncAbstractIntrospector):
         # Get columns
         sql, params = self._build_columns_sql(table_name, target_schema)
         rows = self._executor.execute(sql, params)
-        columns = self._parse_columns(rows, table_name, target_schema, primary_keys)
+        columns = self.parse_columns(rows, table_name, target_schema, primary_keys)
 
         self._cache.set(key, columns)
         return columns
@@ -710,7 +711,7 @@ class SyncOracleIntrospector(OracleIntrospectorMixin, SyncAbstractIntrospector):
             return cached
 
         sql, params = self._build_sequence_list_sql(target_owner)
-        sequences = self._parse_sequences(self._executor.execute(sql, params))
+        sequences = self.parse_sequences(self._executor.execute(sql, params))
 
         self._cache.set(key, sequences)
         return sequences
@@ -740,7 +741,7 @@ class SyncOracleIntrospector(OracleIntrospectorMixin, SyncAbstractIntrospector):
             return cached
 
         sql, params = self._build_sequence_info_sql(name, target_owner)
-        sequence = self._parse_sequence_info(
+        sequence = self.parse_sequence_info(
             self._executor.execute(sql, params), name.upper(), target_owner
         )
         if sequence is None:
@@ -777,7 +778,7 @@ class SyncOracleIntrospector(OracleIntrospectorMixin, SyncAbstractIntrospector):
             return cached
 
         sql, params = self._build_synonym_list_sql(target_owner)
-        synonyms = self._parse_synonyms(self._executor.execute(sql, params))
+        synonyms = self.parse_synonyms(self._executor.execute(sql, params))
 
         self._cache.set(key, synonyms)
         return synonyms
@@ -807,7 +808,7 @@ class SyncOracleIntrospector(OracleIntrospectorMixin, SyncAbstractIntrospector):
             return cached
 
         sql, params = self._build_synonym_info_sql(name, target_owner)
-        synonym = self._parse_synonym_info(
+        synonym = self.parse_synonym_info(
             self._executor.execute(sql, params), name.upper(), target_owner
         )
         if synonym is None:
@@ -840,7 +841,7 @@ class SyncOracleIntrospector(OracleIntrospectorMixin, SyncAbstractIntrospector):
             return cached
 
         sql, params = self._build_package_list_sql(target_owner)
-        packages = self._parse_packages(self._executor.execute(sql, params))
+        packages = self.parse_packages(self._executor.execute(sql, params))
 
         self._cache.set(key, packages)
         return packages
@@ -904,7 +905,7 @@ class AsyncOracleIntrospector(OracleIntrospectorMixin, AsyncAbstractIntrospector
     async def list_columns(
         self, table_name: str, schema: Optional[str] = None
     ) -> List[IntrospectionColumnInfo]:
-        target_schema = schema if schema is not None else self._get_default_schema()
+        target_schema = schema if schema is not None else self.default_schema
         key = self._cache.key(IntrospectionScope.COLUMN, table_name, schema=target_schema)
         cached = self._cache.get(key)
         if cached is not None:
@@ -920,7 +921,7 @@ class AsyncOracleIntrospector(OracleIntrospectorMixin, AsyncAbstractIntrospector
         # Get columns
         sql, params = self._build_columns_sql(table_name, target_schema)
         rows = await self._executor.execute(sql, params)
-        columns = self._parse_columns(rows, table_name, target_schema, primary_keys)
+        columns = self.parse_columns(rows, table_name, target_schema, primary_keys)
 
         self._cache.set(key, columns)
         return columns
@@ -941,7 +942,7 @@ class AsyncOracleIntrospector(OracleIntrospectorMixin, AsyncAbstractIntrospector
             return cached
 
         sql, params = self._build_sequence_list_sql(target_owner)
-        sequences = self._parse_sequences(await self._executor.execute(sql, params))
+        sequences = self.parse_sequences(await self._executor.execute(sql, params))
 
         self._cache.set(key, sequences)
         return sequences
@@ -959,7 +960,7 @@ class AsyncOracleIntrospector(OracleIntrospectorMixin, AsyncAbstractIntrospector
             return cached
 
         sql, params = self._build_sequence_info_sql(name, target_owner)
-        sequence = self._parse_sequence_info(
+        sequence = self.parse_sequence_info(
             await self._executor.execute(sql, params), name.upper(), target_owner
         )
         if sequence is None:
@@ -983,7 +984,7 @@ class AsyncOracleIntrospector(OracleIntrospectorMixin, AsyncAbstractIntrospector
             return cached
 
         sql, params = self._build_synonym_list_sql(target_owner)
-        synonyms = self._parse_synonyms(await self._executor.execute(sql, params))
+        synonyms = self.parse_synonyms(await self._executor.execute(sql, params))
 
         self._cache.set(key, synonyms)
         return synonyms
@@ -1004,7 +1005,7 @@ class AsyncOracleIntrospector(OracleIntrospectorMixin, AsyncAbstractIntrospector
             return cached
 
         sql, params = self._build_synonym_info_sql(name, target_owner)
-        synonym = self._parse_synonym_info(
+        synonym = self.parse_synonym_info(
             await self._executor.execute(sql, params), name.upper(), target_owner
         )
         if synonym is None:
@@ -1024,7 +1025,7 @@ class AsyncOracleIntrospector(OracleIntrospectorMixin, AsyncAbstractIntrospector
             return cached
 
         sql, params = self._build_package_list_sql(target_owner)
-        packages = self._parse_packages(await self._executor.execute(sql, params))
+        packages = self.parse_packages(await self._executor.execute(sql, params))
 
         self._cache.set(key, packages)
         return packages

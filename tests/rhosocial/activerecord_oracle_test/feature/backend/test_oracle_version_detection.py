@@ -553,7 +553,7 @@ class TestConstructorDoesNotAssumeAVersion:
 
 class TestIntrospectorReportsUnknownAsUnknown:
     """A status surface that invents a version is the same defect as a dialect
-    that does, so ``_parse_database_info`` says "unknown"."""
+    that does, so ``parse_database_info`` says "unknown"."""
 
     def _introspector(self, version):
         from rhosocial.activerecord.backend.impl.oracle.introspection.introspector import (
@@ -566,12 +566,12 @@ class TestIntrospectorReportsUnknownAsUnknown:
         return SyncOracleIntrospector(backend, SimpleNamespace(execute=None))
 
     def test_unknown_version_reports_unknown(self):
-        info = self._introspector(None)._parse_database_info([])
+        info = self._introspector(None).parse_database_info([])
         assert info.version == "unknown"
         assert info.version_tuple is None
 
     def test_measured_version_reports_the_number(self):
-        info = self._introspector((23, 0, 0))._parse_database_info([])
+        info = self._introspector((23, 0, 0)).parse_database_info([])
         assert info.version == "23.0.0"
         assert info.version_tuple == (23, 0, 0)
 
@@ -584,7 +584,7 @@ class TestIntrospectorReportsUnknownAsUnknown:
         backend = SimpleNamespace(config=SimpleNamespace(username="ar_shop"))
         insp = SyncOracleIntrospector(backend, SimpleNamespace(execute=None))
         assert insp._get_version() is None
-        assert insp._parse_database_info([]).version == "unknown"
+        assert insp.parse_database_info([]).version == "unknown"
 
 
 class TestParseHelpersOnTheRecordedRows:

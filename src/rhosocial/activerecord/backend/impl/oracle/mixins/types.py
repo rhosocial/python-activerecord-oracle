@@ -1543,7 +1543,7 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
         above used to have, where Oracle's 2000-byte
         ``MAX_STRING_SIZE = STANDARD`` *ceiling* was handed back as if it were a
         declared ``RAW(16)``'s width. The fallback is gone rather than merely
-        unreachable: ``_parse_columns`` spells the size out for every character
+        unreachable: ``parse_columns`` spells the size out for every character
         type (``introspection/introspector.py`` reads ``CHAR_LENGTH`` or
         ``DATA_LENGTH``), so an un-sized string cannot arrive from
         introspection, and a caller who writes one by hand has typed a column
@@ -1680,7 +1680,7 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
                 # unsized; the guess was Oracle's 2000-byte
                 # ``MAX_STRING_SIZE = STANDARD`` ceiling, which made an
                 # introspected ``RAW(16)`` report 2000 bytes. ``DATA_LENGTH`` is
-                # now read for RAW (``_parse_columns`` in
+                # now read for RAW (``parse_columns`` in
                 # ``introspection/introspector.py``; it holds the declared width
                 # exactly — 16 for a ``RAW(16)``, 64 for a ``RAW(64)``), so the
                 # guess is gone rather than merely unreachable, and what is left

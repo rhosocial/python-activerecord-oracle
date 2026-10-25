@@ -1,7 +1,7 @@
 # tests/rhosocial/activerecord_oracle_test/feature/backend/test_introspector_deep.py
 """Deep coverage for introspection/introspector.py.
 
-Offline half: the SQL builders and pure-Python ``_parse_*`` helpers are
+Offline half: the SQL builders and pure-Python ``parse_*`` helpers are
 driven with synthetic data-dictionary rows through stub collaborators.
 Live half (pinned to the ``oracle_schema_dml`` xdist group): AR_CRM/AR_SHOP
 are provisioned like test_schema_qualified_dml and probed through the
@@ -81,7 +81,7 @@ def make_sync_introspector(username: str = "ar_crm",
 class TestSchemaResolution:
     def test_default_schema_from_config_username(self):
         insp, _, _ = make_sync_introspector("ar_shop")
-        assert insp._get_default_schema() == "AR_SHOP"
+        assert insp.default_schema == "AR_SHOP"
 
     def test_version_from_backend(self):
         insp, _, _ = make_sync_introspector(version=(19, 8, 0))
@@ -195,7 +195,7 @@ def _raw_row(name: str, data_length: int, column_id: int) -> Dict[str, Any]:
 class TestParseHelpers:
     def test_parse_tables_maps_metadata(self):
         insp, _, _ = make_sync_introspector()
-        tables = insp._parse_tables(
+        tables = insp.parse_tables(
             [{"TABLE_NAME": "CUSTOMERS", "COMMENTS": "people", "NUM_ROWS": 5,
               "DATA_LENGTH": 8192, "LAST_ANALYZED": None}],
             "AR_CRM",
@@ -208,7 +208,7 @@ class TestParseHelpers:
 
     def test_parse_columns_marks_primary_key_and_identity(self):
         insp, _, _ = make_sync_introspector()
-        columns = insp._parse_columns(COLUMN_ROWS, "CUSTOMERS", "AR_CRM", ["ID"])
+        columns = insp.parse_columns(COLUMN_ROWS, "CUSTOMERS", "AR_CRM", ["ID"])
         id_col, name_col = columns
         assert id_col.is_primary_key and not name_col.is_primary_key
         assert id_col.is_auto_increment
@@ -227,7 +227,7 @@ class TestParseHelpers:
 
 class TestRawWidthSurvivesIntrospection:
     """``RAW``'s width used to be dropped here, which is a false identity claim
-    produced by introspection rather than by a declaration: ``_parse_columns``
+    produced by introspection rather than by a declaration: ``parse_columns``
     spelled out the size for ``NUMBER``/``FLOAT`` and the character types and
     not for ``RAW``, so every ``RAW`` column reached ``parse_type`` as a bare
     ``"RAW"`` and came back as ``OracleRawType(length=2000)`` — Oracle's
@@ -245,14 +245,14 @@ class TestRawWidthSurvivesIntrospection:
 
     def test_the_declared_width_is_spelled_out(self):
         insp, _, _ = make_sync_introspector()
-        columns = insp._parse_columns(
+        columns = insp.parse_columns(
             [_raw_row("A", 16, 1), _raw_row("B", 64, 2)], "T", "AR_CRM"
         )
         assert [c.data_type_full for c in columns] == ["RAW(16)", "RAW(64)"]
 
     def test_the_two_widths_parse_to_two_different_types(self):
         insp, backend, _ = make_sync_introspector()
-        columns = insp._parse_columns(
+        columns = insp.parse_columns(
             [_raw_row("A", 16, 1), _raw_row("B", 64, 2)], "T", "AR_CRM"
         )
         a, b = (c.parsed_data_type for c in columns)
@@ -267,7 +267,7 @@ class TestRawWidthSurvivesIntrospection:
         render alike."""
         insp, backend, _ = make_sync_introspector()
         dialect = backend.dialect
-        columns = insp._parse_columns(
+        columns = insp.parse_columns(
             [_raw_row("A", 16, 1), _raw_row("B", 64, 2)], "T", "AR_CRM"
         )
         assert columns[0].parsed_data_type == OracleRawType(dialect, length=16)
@@ -293,7 +293,7 @@ class TestRawWidthSurvivesIntrospection:
              "REFERENCED_TABLE_NAME": "CUSTOMERS", "COLUMN_NAME": "TENANT",
              "REFERENCED_COLUMN_NAME": "TENANT"},
         ]
-        fks = insp._parse_foreign_keys(rows, "ORDERS", "AR_SHOP")
+        fks = insp.parse_foreign_keys(rows, "ORDERS", "AR_SHOP")
         assert len(fks) == 1
         fk = fks[0]
         assert fk.columns == ["CID", "TENANT"]
@@ -302,7 +302,7 @@ class TestRawWidthSurvivesIntrospection:
 
     def test_parse_views_updatable_flag(self):
         insp, _, _ = make_sync_introspector()
-        views = insp._parse_views(
+        views = insp.parse_views(
             [{"VIEW_NAME": "V1", "TEXT_VC": "SELECT 1 FROM DUAL",
               "READ_ONLY": "N"}],
             "AR_CRM",
@@ -312,7 +312,7 @@ class TestRawWidthSurvivesIntrospection:
 
     def test_parse_triggers_splits_events(self):
         insp, _, _ = make_sync_introspector()
-        triggers = insp._parse_triggers(
+        triggers = insp.parse_triggers(
             [{"TRIGGER_NAME": "T1", "TRIGGER_TYPE": "BEFORE STATEMENT",
               "TRIGGERING_EVENT": "INSERT OR UPDATE", "TABLE_NAME": "C",
               "TRIGGER_BODY": "BEGIN NULL; END;"}],
@@ -324,7 +324,7 @@ class TestRawWidthSurvivesIntrospection:
 
     def test_parse_database_info_uses_backend_version(self):
         insp, backend, _ = make_sync_introspector(version=(23, 5, 0))
-        info = insp._parse_database_info([{"CHARSET": "AL32UTF8",
+        info = insp.parse_database_info([{"CHARSET": "AL32UTF8",
                                            "LANGUAGE": "AMERICAN"}])
         assert info.version_tuple == (23, 5, 0)
         assert info.vendor == "Oracle"
