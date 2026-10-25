@@ -2,9 +2,12 @@
 """Oracle schema-object queries the core catalog does not model.
 
 Tables, columns, indexes, foreign keys, views and triggers are shared by every
-engine, so core states their questions. Three families are Oracle's own and
+engine, so core states their questions. Four families are Oracle's own and
 have no core object:
 
+* **primary keys** -- the key is a constraint, so the columns come from
+  ``ALL_CONSTRAINTS`` joined to ``ALL_CONS_COLUMNS`` rather than from the
+  index listing core reads;
 * **sequences** -- ``ALL_SEQUENCES``, whose owner column is
   ``SEQUENCE_OWNER`` rather than the ``OWNER`` the synonym view uses;
 * **synonyms** -- ``ALL_SYNONYMS``, which mixes private and ``PUBLIC`` rows in
@@ -36,12 +39,45 @@ if TYPE_CHECKING:
     from rhosocial.activerecord.backend.dialect.base import SQLDialectBase
 
 __all__ = [
-    "OracleSequenceListQueryStatement",
-    "OracleSequenceInfoQueryStatement",
-    "OracleSynonymListQueryStatement",
-    "OracleSynonymInfoQueryStatement",
     "OraclePackageListQueryStatement",
+    "OraclePrimaryKeyQueryStatement",
+    "OracleSequenceInfoQueryStatement",
+    "OracleSequenceListQueryStatement",
+    "OracleSynonymInfoQueryStatement",
+    "OracleSynonymListQueryStatement",
 ]
+
+
+class OraclePrimaryKeyQueryStatement(IntrospectionExpression):
+    """The columns of one table's primary key, in key order.
+
+    The key is a constraint, not an index, so the question reads
+    ``ALL_CONSTRAINTS`` (the constraint of type ``P``) and joins
+    ``ALL_CONS_COLUMNS`` for its columns. Both halves are joined on the
+    constraint name *and* the owner, because a same-named constraint in
+    another schema must not contribute a column.
+    """
+
+    def __init__(
+        self,
+        dialect: "SQLDialectBase",
+        *,
+        table_name: str,
+        schema: str,
+    ):
+        """
+        Args:
+            dialect: The SQL dialect to use for formatting.
+            table_name: The table whose key columns are wanted.
+            schema: The owner (Oracle's schema) of that table.
+        """
+        super().__init__(dialect, schema=schema)
+        self.table_name: str = table_name
+
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_primary_key_query_statement"
 
 
 class OracleSequenceListQueryStatement(IntrospectionExpression):

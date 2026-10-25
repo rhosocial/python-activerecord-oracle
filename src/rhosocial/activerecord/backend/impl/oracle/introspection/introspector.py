@@ -25,7 +25,17 @@ Design principle: Sync and Async are separate and cannot coexist.
 """
 
 import copy
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+
+if TYPE_CHECKING:  # pragma: no cover
+    from ..expression.introspection import (
+        OraclePackageListQueryStatement,
+        OraclePrimaryKeyQueryStatement,
+        OracleSequenceInfoQueryStatement,
+        OracleSequenceListQueryStatement,
+        OracleSynonymInfoQueryStatement,
+        OracleSynonymListQueryStatement,
+    )
 
 from rhosocial.activerecord.backend.introspection.base import (
     IntrospectorMixin,
@@ -115,147 +125,63 @@ class OracleIntrospectorMixin(IntrospectorMixin):
         return getattr(self._backend, '_version', None)
 
     # ------------------------------------------------------------------ #
-    # SQL builders — Oracle data dictionary queries
-    # ------------------------------------------------------------------ #
-
-    def _build_database_info_sql(self) -> tuple:
-        """Build SQL to get database information."""
-        return (
-            """
-            SELECT
-                (SELECT value FROM v$nls_parameters WHERE parameter = 'NLS_CHARACTERSET') AS charset,
-                (SELECT value FROM v$nls_parameters WHERE parameter = 'NLS_NCHAR_CHARACTERSET') AS nchar_charset,
-                (SELECT value FROM v$nls_parameters WHERE parameter = 'NLS_LANGUAGE') AS language,
-                (SELECT value FROM v$nls_parameters WHERE parameter = 'NLS_TERRITORY') AS territory
-            FROM dual
-        """,
-            (),
-        )
-
-    def _build_columns_sql(self, table_name: str, schema: str) -> tuple:
-        """Build SQL to get columns for a table.
-
-        Args:
-            table_name: Table to describe.
-            schema: Owner (Oracle's schema) of that table.
-
-        Returns:
-            Tuple of (SQL, params). The names travel as bind values rather
-            than as interpolated string literals: the data dictionary stores
-            them in upper case, so the caller still folds them, but a table
-            name is caller-supplied data and must never be concatenated into
-            SQL text.
-        """
-        return (
-            """
-            SELECT
-                column_name,
-                data_type,
-                data_type_mod,
-                data_type_owner,
-                data_length,
-                data_precision,
-                data_scale,
-                nullable,
-                column_id,
-                default_length,
-                data_default,
-                num_distinct,
-                low_value,
-                high_value,
-                density,
-                num_nulls,
-                num_buckets,
-                last_analyzed,
-                sample_size,
-                character_set_name,
-                char_col_decl_length,
-                global_stats,
-                user_stats,
-                data_upgraded,
-                avg_col_len,
-                char_length,
-                char_used,
-                v80_fmt_image,
-                histogram,
-                default_on_null,
-                identity_column,
-                evaluation_edition,
-                unusable_before,
-                unusable_beginning,
-                collation
-            FROM all_tab_columns
-            WHERE table_name = ?
-              AND owner = ?
-            ORDER BY column_id
-        """,
-            (table_name.upper(), schema.upper()),
-        )
-
-    def _build_primary_key_sql(self, table_name: str, schema: str) -> tuple:
-        """Build SQL to get primary key columns.
-
-        Returns:
-            Tuple of (SQL, params). See :meth:`_build_columns_sql` for why the
-            names are bound rather than interpolated.
-        """
-        return (
-            """
-            SELECT cols.column_name
-            FROM all_constraints cons
-            JOIN all_cons_columns cols ON cons.constraint_name = cols.constraint_name
-                AND cons.owner = cols.owner
-            WHERE cons.table_name = ?
-              AND cons.owner = ?
-              AND cons.constraint_type = 'P'
-            ORDER BY cols.position
-        """,
-            (table_name.upper(), schema.upper()),
-        )
-
-    # ------------------------------------------------------------------ #
-    # Schema objects — the questions, as trees the dialect spells
+    # Statement factories — the questions, as trees the dialect spells
     #
-    # Sequences, synonyms and packages are Oracle's own, so their shapes live
-    # in ``expression/introspection.py`` and are rendered by the dialect's
-    # ``format_*_query_statement``: the projection, the filter and the ordering
-    # are structure, and a caller's owner travels as a bind parameter rather
-    # than part of the text (org rules §16.2).
+    # Nothing here renders: each factory returns a statement object, and the
+    # dialect's ``format_*_query_statement`` writes the SQL. A caller renders
+    # with ``.to_sql()``. The primary key is a constraint (not the index
+    # listing core reads), so it has a question of its own; sequences,
+    # synonyms and packages are Oracle's own families. All four live in
+    # ``expression/introspection.py``.
     # ------------------------------------------------------------------ #
 
-    def _build_sequence_list_sql(self, owner: str) -> tuple:
-        """The sequences one schema owns, as a rendered statement."""
+    def primary_key_statement(
+        self, *, table_name: str, schema: str
+    ) -> "OraclePrimaryKeyQueryStatement":
+        """Return the statement that lists one table's primary-key columns."""
+        from ..expression.introspection import OraclePrimaryKeyQueryStatement
+
+        return OraclePrimaryKeyQueryStatement(
+            self.dialect, table_name=table_name, schema=schema
+        )
+
+    def sequence_list_statement(self, *, owner: str) -> "OracleSequenceListQueryStatement":
+        """Return the statement that lists the sequences one owner has."""
         from ..expression.introspection import OracleSequenceListQueryStatement
 
-        return OracleSequenceListQueryStatement(self.dialect, owner=owner.upper()).to_sql()
+        return OracleSequenceListQueryStatement(self.dialect, owner=owner.upper())
 
-    def _build_sequence_info_sql(self, name: str, owner: str) -> tuple:
-        """One sequence, as a rendered statement."""
+    def sequence_info_statement(
+        self, *, sequence_name: str, owner: str
+    ) -> "OracleSequenceInfoQueryStatement":
+        """Return the statement that asks for one sequence by name."""
         from ..expression.introspection import OracleSequenceInfoQueryStatement
 
         return OracleSequenceInfoQueryStatement(
-            self.dialect, sequence_name=name.upper(), owner=owner.upper()
-        ).to_sql()
+            self.dialect, sequence_name=sequence_name.upper(), owner=owner.upper()
+        )
 
-    def _build_synonym_list_sql(self, owner: str) -> tuple:
-        """The synonyms one owner has, ``PUBLIC`` included when asked for."""
+    def synonym_list_statement(self, *, owner: str) -> "OracleSynonymListQueryStatement":
+        """Return the statement that lists the synonyms one owner has."""
         from ..expression.introspection import OracleSynonymListQueryStatement
 
-        return OracleSynonymListQueryStatement(self.dialect, owner=owner.upper()).to_sql()
+        return OracleSynonymListQueryStatement(self.dialect, owner=owner.upper())
 
-    def _build_synonym_info_sql(self, name: str, owner: str) -> tuple:
-        """One synonym, as a rendered statement."""
+    def synonym_info_statement(
+        self, *, synonym_name: str, owner: str
+    ) -> "OracleSynonymInfoQueryStatement":
+        """Return the statement that asks for one synonym by name."""
         from ..expression.introspection import OracleSynonymInfoQueryStatement
 
         return OracleSynonymInfoQueryStatement(
-            self.dialect, synonym_name=name.upper(), owner=owner.upper()
-        ).to_sql()
+            self.dialect, synonym_name=synonym_name.upper(), owner=owner.upper()
+        )
 
-    def _build_package_list_sql(self, owner: str) -> tuple:
-        """The PL/SQL package specifications one schema owns."""
+    def package_list_statement(self, *, owner: str) -> "OraclePackageListQueryStatement":
+        """Return the statement that lists one schema's package specifications."""
         from ..expression.introspection import OraclePackageListQueryStatement
 
-        return OraclePackageListQueryStatement(self.dialect, owner=owner.upper()).to_sql()
+        return OraclePackageListQueryStatement(self.dialect, owner=owner.upper())
 
 
     # ------------------------------------------------------------------ #
@@ -669,13 +595,13 @@ class SyncOracleIntrospector(OracleIntrospectorMixin, SyncAbstractIntrospector):
             return cached
 
         # Get primary key columns first
-        pk_sql, pk_params = self._build_primary_key_sql(table_name, target_schema)
+        pk_sql, pk_params = self.primary_key_statement(table_name=table_name, schema=target_schema).to_sql()
         primary_keys = [
             row.get("COLUMN_NAME") for row in self._executor.execute(pk_sql, pk_params)
         ]
 
         # Get columns
-        sql, params = self._build_columns_sql(table_name, target_schema)
+        sql, params = self.column_info_statement(table_name=table_name, schema=target_schema).to_sql()
         rows = self._executor.execute(sql, params)
         columns = self.parse_columns(rows, table_name, target_schema, primary_keys)
 
@@ -710,7 +636,7 @@ class SyncOracleIntrospector(OracleIntrospectorMixin, SyncAbstractIntrospector):
         if cached is not None:
             return cached
 
-        sql, params = self._build_sequence_list_sql(target_owner)
+        sql, params = self.sequence_list_statement(owner=target_owner).to_sql()
         sequences = self.parse_sequences(self._executor.execute(sql, params))
 
         self._cache.set(key, sequences)
@@ -740,7 +666,7 @@ class SyncOracleIntrospector(OracleIntrospectorMixin, SyncAbstractIntrospector):
         if cached is not None:
             return cached
 
-        sql, params = self._build_sequence_info_sql(name, target_owner)
+        sql, params = self.sequence_info_statement(sequence_name=name, owner=target_owner).to_sql()
         sequence = self.parse_sequence_info(
             self._executor.execute(sql, params), name.upper(), target_owner
         )
@@ -777,7 +703,7 @@ class SyncOracleIntrospector(OracleIntrospectorMixin, SyncAbstractIntrospector):
         if cached is not None:
             return cached
 
-        sql, params = self._build_synonym_list_sql(target_owner)
+        sql, params = self.synonym_list_statement(owner=target_owner).to_sql()
         synonyms = self.parse_synonyms(self._executor.execute(sql, params))
 
         self._cache.set(key, synonyms)
@@ -807,7 +733,7 @@ class SyncOracleIntrospector(OracleIntrospectorMixin, SyncAbstractIntrospector):
         if cached is not None:
             return cached
 
-        sql, params = self._build_synonym_info_sql(name, target_owner)
+        sql, params = self.synonym_info_statement(synonym_name=name, owner=target_owner).to_sql()
         synonym = self.parse_synonym_info(
             self._executor.execute(sql, params), name.upper(), target_owner
         )
@@ -840,7 +766,7 @@ class SyncOracleIntrospector(OracleIntrospectorMixin, SyncAbstractIntrospector):
         if cached is not None:
             return cached
 
-        sql, params = self._build_package_list_sql(target_owner)
+        sql, params = self.package_list_statement(owner=target_owner).to_sql()
         packages = self.parse_packages(self._executor.execute(sql, params))
 
         self._cache.set(key, packages)
@@ -912,14 +838,14 @@ class AsyncOracleIntrospector(OracleIntrospectorMixin, AsyncAbstractIntrospector
             return cached
 
         # Get primary key columns first
-        pk_sql, pk_params = self._build_primary_key_sql(table_name, target_schema)
+        pk_sql, pk_params = self.primary_key_statement(table_name=table_name, schema=target_schema).to_sql()
         primary_keys = [
             row.get("COLUMN_NAME")
             for row in await self._executor.execute(pk_sql, pk_params)
         ]
 
         # Get columns
-        sql, params = self._build_columns_sql(table_name, target_schema)
+        sql, params = self.column_info_statement(table_name=table_name, schema=target_schema).to_sql()
         rows = await self._executor.execute(sql, params)
         columns = self.parse_columns(rows, table_name, target_schema, primary_keys)
 
@@ -941,7 +867,7 @@ class AsyncOracleIntrospector(OracleIntrospectorMixin, AsyncAbstractIntrospector
         if cached is not None:
             return cached
 
-        sql, params = self._build_sequence_list_sql(target_owner)
+        sql, params = self.sequence_list_statement(owner=target_owner).to_sql()
         sequences = self.parse_sequences(await self._executor.execute(sql, params))
 
         self._cache.set(key, sequences)
@@ -959,7 +885,7 @@ class AsyncOracleIntrospector(OracleIntrospectorMixin, AsyncAbstractIntrospector
         if cached is not None:
             return cached
 
-        sql, params = self._build_sequence_info_sql(name, target_owner)
+        sql, params = self.sequence_info_statement(sequence_name=name, owner=target_owner).to_sql()
         sequence = self.parse_sequence_info(
             await self._executor.execute(sql, params), name.upper(), target_owner
         )
@@ -983,7 +909,7 @@ class AsyncOracleIntrospector(OracleIntrospectorMixin, AsyncAbstractIntrospector
         if cached is not None:
             return cached
 
-        sql, params = self._build_synonym_list_sql(target_owner)
+        sql, params = self.synonym_list_statement(owner=target_owner).to_sql()
         synonyms = self.parse_synonyms(await self._executor.execute(sql, params))
 
         self._cache.set(key, synonyms)
@@ -1004,7 +930,7 @@ class AsyncOracleIntrospector(OracleIntrospectorMixin, AsyncAbstractIntrospector
         if cached is not None:
             return cached
 
-        sql, params = self._build_synonym_info_sql(name, target_owner)
+        sql, params = self.synonym_info_statement(synonym_name=name, owner=target_owner).to_sql()
         synonym = self.parse_synonym_info(
             await self._executor.execute(sql, params), name.upper(), target_owner
         )
@@ -1024,7 +950,7 @@ class AsyncOracleIntrospector(OracleIntrospectorMixin, AsyncAbstractIntrospector
         if cached is not None:
             return cached
 
-        sql, params = self._build_package_list_sql(target_owner)
+        sql, params = self.package_list_statement(owner=target_owner).to_sql()
         packages = self.parse_packages(await self._executor.execute(sql, params))
 
         self._cache.set(key, packages)

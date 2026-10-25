@@ -98,7 +98,7 @@ class TestSqlBuilders:
     def test_columns_sql_binds_uppercase_owner_and_table(self):
         """Table and owner are bind values, never interpolated literals."""
         insp, _, _ = make_sync_introspector("ar_crm")
-        sql, params = insp._build_columns_sql("customers", "ar_crm")
+        sql, params = insp.column_info_statement(table_name="customers", schema="ar_crm").to_sql()
         assert "ALL_TAB_COLUMNS" in sql.upper()
         assert "CUSTOMERS" not in sql.upper()
         assert "AR_CRM" not in sql.upper()
@@ -106,7 +106,7 @@ class TestSqlBuilders:
 
     def test_primary_key_sql_binds_uppercase_owner_and_table(self):
         insp, _, _ = make_sync_introspector()
-        sql, params = insp._build_primary_key_sql("orders", "ar_shop")
+        sql, params = insp.primary_key_statement(table_name="orders", schema="ar_shop").to_sql()
         assert "ALL_CONSTRAINTS" in sql.upper()
         assert "'P'" in sql
         assert "ORDERS" not in sql.upper()
@@ -116,7 +116,7 @@ class TestSqlBuilders:
     def test_quoting_attempt_in_table_name_is_not_executed(self):
         """A name carrying SQL is bound as data and cannot alter the query."""
         insp, _, _ = make_sync_introspector()
-        _, params = insp._build_columns_sql("t' OR '1'='1", "scott")
+        _, params = insp.column_info_statement(table_name="t' OR '1'='1", schema="scott").to_sql()
         assert params == ("T' OR '1'='1", "SCOTT")
 
     def test_dialect_table_list_query_scopes_owner(self):
@@ -164,7 +164,7 @@ class TestSqlBuilders:
 
     def test_database_info_sql_reads_nls_parameters(self):
         insp, _, _ = make_sync_introspector()
-        sql, params = insp._build_database_info_sql()
+        sql, params = insp.database_info_statement().to_sql()
         assert "NLS_CHARACTERSET" in sql.upper()
         assert "DUAL" in sql.upper()
         assert params == ()

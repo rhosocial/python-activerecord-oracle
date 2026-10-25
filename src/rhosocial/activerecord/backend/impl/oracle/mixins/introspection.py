@@ -34,11 +34,12 @@ if TYPE_CHECKING:
         TriggerListQueryStatement,
     )
     from ...expression.introspection import (
-        OracleSequenceListQueryStatement,
-        OracleSequenceInfoQueryStatement,
-        OracleSynonymListQueryStatement,
-        OracleSynonymInfoQueryStatement,
         OraclePackageListQueryStatement,
+        OraclePrimaryKeyQueryStatement,
+        OracleSequenceInfoQueryStatement,
+        OracleSequenceListQueryStatement,
+        OracleSynonymInfoQueryStatement,
+        OracleSynonymListQueryStatement,
     )
 
 _SYSTEM_OWNERS = (
@@ -360,9 +361,16 @@ class OracleIntrospectionMixin:
         projection = [
             self._column(name, alias=name)
             for name in (
-                "column_name", "data_type", "data_precision", "data_scale",
-                "nullable", "column_id", "data_default", "identity_column",
-                "char_length", "data_length", "character_set_name",
+                "column_name", "data_type", "data_type_mod", "data_type_owner",
+                "data_length", "data_precision", "data_scale", "nullable",
+                "column_id", "default_length", "data_default", "num_distinct",
+                "low_value", "high_value", "density", "num_nulls", "num_buckets",
+                "last_analyzed", "sample_size", "character_set_name",
+                "char_col_decl_length", "global_stats", "user_stats",
+                "data_upgraded", "avg_col_len", "char_length", "char_used",
+                "v80_fmt_image", "histogram", "default_on_null",
+                "identity_column", "evaluation_edition", "unusable_before",
+                "unusable_beginning", "collation",
             )
         ]
         return QueryStatement(
@@ -371,13 +379,65 @@ class OracleIntrospectionMixin:
             from_=self._relation("all_tab_columns"),
             where=self._where(
                 self._equals(
-                    self._column("owner"), Literal(self, str(schema).upper())
+                    self._column("table_name"), Literal(self, str(table_name).upper())
                 ),
                 self._equals(
-                    self._column("table_name"), Literal(self, str(table_name).upper())
+                    self._column("owner"), Literal(self, str(schema).upper())
                 ),
             ),
             order_by=OrderByClause(self, [self._column("column_id")]),
+        ).to_sql()
+
+    def format_primary_key_query_statement(
+        self, expr: "OraclePrimaryKeyQueryStatement"
+    ) -> Tuple[str, tuple]:
+        """The columns of one table's primary key, in key order.
+
+        The key is a constraint, so the two dictionary views are joined on the
+        constraint name *and* the owner: a same-named constraint in another
+        schema must not contribute a column to this table's key.
+        """
+        from rhosocial.activerecord.backend.expression import (
+            JoinClause, JoinType, Literal, OrderByClause, QueryStatement,
+        )
+
+        params = expr.get_params()
+        table_name = params.get("table_name", "")
+        schema = params.get("schema", "")
+
+        key_join = JoinClause(
+            self,
+            left_table=self._relation("all_constraints", "cons"),
+            right_table=self._relation("all_cons_columns", "cols"),
+            join_type=JoinType.JOIN,
+            condition=self._all_of(
+                self._equals(
+                    self._column("constraint_name", "cons"),
+                    self._column("constraint_name", "cols"),
+                ),
+                self._equals(
+                    self._column("owner", "cons"), self._column("owner", "cols")
+                ),
+            ),
+        )
+        return QueryStatement(
+            self,
+            select=[self._column("column_name", "cols")],
+            from_=key_join,
+            where=self._where(
+                self._equals(
+                    self._column("table_name", "cons"),
+                    Literal(self, str(table_name).upper()),
+                ),
+                self._equals(
+                    self._column("owner", "cons"), Literal(self, str(schema).upper())
+                ),
+                self._equals(
+                    self._column("constraint_type", "cons"),
+                    Literal(self, "P", inline=True),
+                ),
+            ),
+            order_by=OrderByClause(self, [self._column("position", "cols")]),
         ).to_sql()
 
     def format_index_info_query_statement(self, expr: "IndexInfoQueryStatement") -> Tuple[str, tuple]:

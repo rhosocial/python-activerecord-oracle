@@ -158,7 +158,7 @@ class TestSqlBuilders:
 
     def test_sequence_list_reads_all_sequences_and_binds_owner(self):
         insp, _ = make_sync()
-        sql, params = insp._build_sequence_list_sql("ar_obj")
+        sql, params = insp.sequence_list_statement(owner="ar_obj").to_sql()
         assert "all_sequences" in self._squash(sql)
         assert "sequence_owner=?" in self._squash(sql)
         assert "ar_obj" not in sql.lower()
@@ -166,7 +166,7 @@ class TestSqlBuilders:
 
     def test_sequence_info_binds_name_and_owner(self):
         insp, _ = make_sync()
-        sql, params = insp._build_sequence_info_sql("seq_gate", "ar_obj")
+        sql, params = insp.sequence_info_statement(sequence_name="seq_gate", owner="ar_obj").to_sql()
         assert "sequence_name=?" in self._squash(sql)
         assert "sequence_owner=?" in self._squash(sql)
         assert "seq_gate" not in sql.lower()
@@ -176,20 +176,20 @@ class TestSqlBuilders:
     def test_synonym_queries_read_all_synonyms(self):
         insp, _ = make_sync()
 
-        list_sql, list_params = insp._build_synonym_list_sql("public")
+        list_sql, list_params = insp.synonym_list_statement(owner="public").to_sql()
         assert "all_synonyms" in self._squash(list_sql)
         assert "owner=?" in self._squash(list_sql)
         assert "public" not in list_sql.lower()
         assert list_params == ("PUBLIC",)
 
-        info_sql, info_params = insp._build_synonym_info_sql("syn_gate", "ar_obj")
+        info_sql, info_params = insp.synonym_info_statement(synonym_name="syn_gate", owner="ar_obj").to_sql()
         assert "synonym_name=?" in self._squash(info_sql)
         assert "owner=?" in self._squash(info_sql)
         assert info_params == ("SYN_GATE", "AR_OBJ")
 
     def test_package_query_reads_specifications_only(self):
         insp, _ = make_sync()
-        sql, params = insp._build_package_list_sql("ar_obj")
+        sql, params = insp.package_list_statement(owner="ar_obj").to_sql()
         squashed = self._squash(sql)
         assert "all_objects" in squashed
         assert "object_type='package'" in squashed
@@ -205,14 +205,14 @@ class TestSqlBuilders:
         column the server was never asked for, which is a silent wrong answer.
         """
         insp, _ = make_sync()
-        sql, _ = insp._build_package_list_sql("ar_obj")
+        sql, _ = insp.package_list_statement(owner="ar_obj").to_sql()
         squashed = self._squash(sql)
         assert "created," in squashed
         assert "last_ddl_time" in squashed
 
     def test_a_name_carrying_sql_is_bound_as_data(self):
         insp, _ = make_sync()
-        sql, params = insp._build_synonym_info_sql("s' OR '1'='1", "ar_obj")
+        sql, params = insp.synonym_info_statement(synonym_name="s' OR '1'='1", owner="ar_obj").to_sql()
         assert "1'='1" not in sql
         assert params == ("S' OR '1'='1", "AR_OBJ")
 
