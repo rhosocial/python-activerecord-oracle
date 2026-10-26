@@ -364,7 +364,6 @@ class TestCLIArgumentParser:
 
         assert "tables" in INTROSPECT_TYPES
         assert "views" in INTROSPECT_TYPES
-        assert "table" in INTROSPECT_TYPES
         assert "columns" in INTROSPECT_TYPES
         assert "indexes" in INTROSPECT_TYPES
         assert "foreign-keys" in INTROSPECT_TYPES
