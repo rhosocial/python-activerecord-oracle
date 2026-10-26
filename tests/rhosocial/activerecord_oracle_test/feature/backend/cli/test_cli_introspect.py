@@ -175,10 +175,10 @@ class TestIntrospectParserContract:
 
     def test_name_and_flags(self):
         args = build_parser().parse_args([
-            "introspect", "table", "customers",
+            "introspect", "columns", "customers",
             "--include-system", "-o", "json",
         ])
-        assert args.type == "table"
+        assert args.type == "columns"
         assert args.name == "customers"
         assert args.include_system is True
         assert args.output == "json"
@@ -263,45 +263,7 @@ class TestHandleSyncBranches:
             ("packages", None),
         ]
 
-    def test_table_detail_renders_columns_indexes_fks(self, provider, monkeypatch):
-        insp = FakeIntrospector()
-        backend_instances = patch_sync_backend(monkeypatch, insp)
-        cli_introspect.handle(build_parser().parse_args(
-            ["introspect", "table", "customers"]
-        ))
-        titles = [t for t, _ in provider.results]
-        assert titles == [
-            "Columns of customers",
-            "Indexes of customers",
-            "Foreign Keys of customers",
-        ]
-        assert insp.calls[-1] == ("table_info", "customers", None)
-        assert backend_instances[-1].disconnected
-
-    def test_table_without_fks_skips_fk_section(self, provider, monkeypatch):
-        insp = FakeIntrospector()
-        patch_sync_backend(monkeypatch, insp)
-        TABLE_INFO.foreign_keys = []
-        try:
-            cli_introspect.handle(build_parser().parse_args(
-                ["introspect", "table", "customers"]
-            ))
-            titles = [t for t, _ in provider.results]
-            assert "Foreign Keys of customers" not in titles
-            assert len(titles) == 2
-        finally:
-            TABLE_INFO.foreign_keys = [{"CONSTRAINT_NAME": "FK_ORD"}]
-
-    def test_table_not_found_exits_nonzero(self, provider, capsys, monkeypatch):
-        patch_sync_backend(monkeypatch, FakeIntrospector(table_exists=False))
-        with pytest.raises(SystemExit) as excinfo:
-            cli_introspect.handle(build_parser().parse_args(
-                ["introspect", "table", "ghost"]
-            ))
-        assert excinfo.value.code == 1
-        assert "not found" in capsys.readouterr().err
-
-    @pytest.mark.parametrize("itype", ["table", "columns", "indexes",
+    @pytest.mark.parametrize("itype", ["columns", "indexes",
                                        "foreign-keys"])
     def test_missing_name_guards_exit_nonzero(self, provider, capsys, monkeypatch,
                                               itype):
@@ -392,7 +354,6 @@ class TestHandleAsyncBranches:
     @pytest.mark.parametrize("itype,name,title", [
         ("tables", None, "Tables"),
         ("views", None, "Views"),
-        ("table", "customers", "Columns of customers"),
         ("columns", "customers", "Columns of customers"),
         ("indexes", "customers", "Indexes of customers"),
         ("foreign-keys", "orders", "Foreign Keys of orders"),
@@ -408,15 +369,6 @@ class TestHandleAsyncBranches:
             argv.insert(2, name)
         cli_introspect.handle(build_parser().parse_args(argv))
         assert [t for t, _ in provider.results][0] == title
-
-    def test_async_table_not_found_exits(self, provider, capsys, monkeypatch):
-        patch_async_backend(monkeypatch, FakeIntrospector(table_exists=False))
-        with pytest.raises(SystemExit) as excinfo:
-            cli_introspect.handle(build_parser().parse_args(
-                ["introspect", "table", "ghost", "--async"]
-            ))
-        assert excinfo.value.code == 1
-        assert "not found" in capsys.readouterr().err
 
     def test_async_database_branch(self, provider, monkeypatch):
         patch_async_backend(monkeypatch, FakeIntrospector())
