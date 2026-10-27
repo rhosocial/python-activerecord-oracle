@@ -461,9 +461,15 @@ def fake_sync_backend(monkeypatch, introspector: Any) -> None:
         def __init__(self, connection_config: Any = None) -> None:
             self.introspector = introspector
             self._connection: Optional[object] = object()
+            self.adapted = False
 
         def connect(self) -> None:
             pass
+
+        def introspect_and_adapt(self) -> None:
+            # The introspect command adapts the dialect before its first
+            # question; a fake backend has to accept that call.
+            self.adapted = True
 
         def disconnect(self) -> None:
             pass
@@ -525,9 +531,14 @@ class TestCli:
             def __init__(self, connection_config: Any = None) -> None:
                 self.introspector = AsyncFacade(insp)
                 self._connection: Optional[object] = object()
+                self.adapted = False
 
             async def connect(self) -> None:
                 pass
+
+            async def introspect_and_adapt(self) -> None:
+                # The async path adapts too, awaited before the first question.
+                self.adapted = True
 
             async def disconnect(self) -> None:
                 pass
