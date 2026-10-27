@@ -49,54 +49,54 @@ class OracleFeaturesMixin:
         function itself, including Oracle's ``WELLFORMED`` extension, is
         supported.
         """
-        return self.version >= (10, 2, 0)
+        return self.version_at_least((10, 2, 0))
 
     def supports_xmlserialize(self) -> bool:
-        return self.version >= (9, 0, 0)
+        return self.version_at_least((9, 0, 0))
 
     def supports_xmlelement(self) -> bool:
-        return self.version >= (9, 0, 0)
+        return self.version_at_least((9, 0, 0))
 
     def supports_xmlattributes(self) -> bool:
-        return self.version >= (9, 0, 0)
+        return self.version_at_least((9, 0, 0))
 
     def supports_xmlforest(self) -> bool:
-        return self.version >= (9, 0, 0)
+        return self.version_at_least((9, 0, 0))
 
     def supports_xmlconcat(self) -> bool:
-        return self.version >= (9, 0, 0)
+        return self.version_at_least((9, 0, 0))
 
     def supports_xmlcomment(self) -> bool:
-        return self.version >= (9, 0, 0)
+        return self.version_at_least((9, 0, 0))
 
     def supports_xmlpi(self) -> bool:
-        return self.version >= (9, 0, 0)
+        return self.version_at_least((9, 0, 0))
 
     def supports_xmlroot(self) -> bool:
-        return self.version >= (9, 0, 0)
+        return self.version_at_least((9, 0, 0))
 
     def supports_xmlagg(self) -> bool:
-        return self.version >= (9, 0, 0)
+        return self.version_at_least((9, 0, 0))
 
     def supports_xmlquery(self) -> bool:
-        return self.version >= (9, 2, 0)
+        return self.version_at_least((9, 2, 0))
 
     def supports_xmlexists(self) -> bool:
-        return self.version >= (9, 2, 0)
+        return self.version_at_least((9, 2, 0))
 
     def supports_xmltable(self) -> bool:
-        return self.version >= (9, 2, 0)
+        return self.version_at_least((9, 2, 0))
 
     # --- Collation ----------------------------------------------------
     def supports_collate_expression(self) -> bool:
-        return self.version >= (12, 2, 0)
+        return self.version_at_least((12, 2, 0))
 
     # --- CTE ----------------------------------------------------------
     def supports_basic_cte(self) -> bool:
-        return self.version >= (9, 0, 0)
+        return self.version_at_least((9, 0, 0))
 
     def supports_recursive_cte(self) -> bool:
-        return self.version >= (11, 2, 0)
+        return self.version_at_least((11, 2, 0))
 
     def supports_materialized_cte(self) -> bool:
         """Oracle spells CTE materialization as the ``/*+ MATERIALIZE */`` hint.
@@ -129,7 +129,7 @@ class OracleFeaturesMixin:
 
     # --- Window functions ---------------------------------------------
     def supports_window_functions(self) -> bool:
-        return self.version >= (8, 0, 0)
+        return self.version_at_least((8, 0, 0))
 
     def supports_window_frame_clause(self) -> bool:
         return True
@@ -140,16 +140,16 @@ class OracleFeaturesMixin:
 
     # --- JSON ---------------------------------------------------------
     def supports_json_type(self) -> bool:
-        return self.version >= (21, 0, 0)
+        return self.version_at_least((21, 0, 0))
 
     def get_json_access_operator(self) -> str:
         return "."
 
     def supports_json_table(self) -> bool:
-        return self.version >= (12, 0, 0)
+        return self.version_at_least((12, 0, 0))
 
     def supports_native_json(self) -> bool:
-        return self.version >= (21, 0, 0)
+        return self.version_at_least((21, 0, 0))
 
     # --- Advanced grouping --------------------------------------------
     def supports_rollup(self) -> bool:
@@ -195,12 +195,12 @@ class OracleFeaturesMixin:
 
     def supports_fetch_with_ties(self) -> bool:
         """Oracle supports FETCH FIRST ... WITH TIES since 12c."""
-        return self.version >= (12, 0, 0)
+        return self.version_at_least((12, 0, 0))
 
     # --- Identity / Auto-increment columns ----------------------------
     def supports_identity_column(self) -> bool:
         """Oracle accepts ``GENERATED ... AS IDENTITY`` from 12c onward."""
-        return self.version >= (12, 0, 0)
+        return self.version_at_least((12, 0, 0))
 
     def supports_identity_generation_always(self) -> bool:
         """Oracle can express ``GENERATED ALWAYS AS IDENTITY``."""
@@ -302,10 +302,10 @@ class OracleFeaturesMixin:
 
     def supports_column_collation(self) -> bool:
         """Oracle supports column-level COLLATE since 12.2."""
-        return self.version >= (12, 2, 0)
+        return self.version_at_least((12, 2, 0))
 
     def supports_generated_columns(self) -> bool:
-        return self.version >= (11, 0, 0)
+        return self.version_at_least((11, 0, 0))
 
     def supports_stored_generated_columns(self) -> bool:
         return self.supports_generated_columns()
@@ -315,14 +315,14 @@ class OracleFeaturesMixin:
 
     # --- Graph --------------------------------------------------------
     def supports_graph_match(self) -> bool:
-        return self.version >= (12, 0, 0)
+        return self.version_at_least((12, 0, 0))
 
     def supports_graph_table(self) -> bool:
-        return self.version >= (23, 0, 0)
+        return self.version_at_least((23, 0, 0))
 
     # --- MERGE --------------------------------------------------------
     def supports_merge_statement(self) -> bool:
-        return self.version >= (9, 0, 0)
+        return self.version_at_least((9, 0, 0))
 
     # --- Temporal tables ----------------------------------------------
     def supports_temporal_tables(self) -> bool:
@@ -349,7 +349,7 @@ class OracleFeaturesMixin:
 
     # --- LATERAL ------------------------------------------------------
     def supports_lateral_join(self) -> bool:
-        return self.version >= (12, 0, 0)
+        return self.version_at_least((12, 0, 0))
 
     # --- Ordered-set aggregation --------------------------------------
     def supports_ordered_set_aggregation(self) -> bool:
@@ -960,13 +960,13 @@ class OracleFeaturesMixin:
 
     # --- Boolean / Vector / JSON-relational ---------------------------
     def supports_boolean_type(self) -> bool:
-        return self.version >= (23, 0, 0)
+        return self.version_at_least((23, 0, 0))
 
     def supports_vector_type(self) -> bool:
-        return self.version >= (23, 0, 0)
+        return self.version_at_least((23, 0, 0))
 
     def supports_json_duality(self) -> bool:
-        return self.version >= (23, 0, 0)
+        return self.version_at_least((23, 0, 0))
 
     # --- Truncate -----------------------------------------------------
     def supports_truncate_cascade(self) -> bool:
@@ -993,11 +993,18 @@ class OracleFeaturesMixin:
             "xmltable",
         }
         result: Dict[str, bool] = {}
+        # One read of the version for the whole table. A range is not a
+        # "reaches this floor" question, so it is answered against
+        # ``version_or_none`` directly; an unmeasured version fails both
+        # branches, which is the same answer ``version_at_least`` gives.
+        known_version = self.version_or_none
         for func_name, (min_ver, max_ver) in ORACLE_FUNCTION_VERSIONS.items():
             if func_name in expression_constructors:
                 continue
             if max_ver is None:
-                result[func_name] = self.version >= min_ver
+                result[func_name] = self.version_at_least(min_ver)
             else:
-                result[func_name] = min_ver <= self.version <= max_ver
+                result[func_name] = (
+                    known_version is not None and min_ver <= known_version <= max_ver
+                )
         return result

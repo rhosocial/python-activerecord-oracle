@@ -81,6 +81,32 @@ from .types import (
 _SYNONYM_FAMILY = "oracle:synonyms"
 _PACKAGE_FAMILY = "oracle:packages"
 
+#: The object kinds the table listing can report, in core's vocabulary.
+#: The dictionary spells them for what they are -- ``ALL_TABLES`` answers
+#: ``TABLE``, ``ALL_VIEWS`` ``VIEW`` and ``ALL_MVIEWS`` ``MATERIALIZED VIEW``
+#: -- and each maps to the member that says the same. ``BASE TABLE`` is kept
+#: for a caller replaying rows recorded before the listing named the kind;
+#: every statement this backend builds now answers ``TABLE``.
+_TABLE_TYPE_BY_KIND = {
+    "TABLE": TableType.BASE_TABLE,
+    "BASE TABLE": TableType.BASE_TABLE,
+    "VIEW": TableType.VIEW,
+    "MATERIALIZED VIEW": TableType.MATERIALIZED_VIEW,
+}
+
+#: The dictionary types whose *declared* size is a number of characters.
+#: ``CHAR_LENGTH`` answers it for these, and ``DATA_LENGTH`` is the byte
+#: count -- the same number only for a single-byte character set.
+_CHARACTER_TYPES = frozenset(
+    {"CHAR", "VARCHAR", "VARCHAR2", "NCHAR", "NVARCHAR2"}
+)
+
+#: The dictionary types whose precision and scale are numbers of decimal
+#: digits. ``DATA_PRECISION``/``DATA_SCALE`` answer for these and nothing
+#: else: on a ``TIMESTAMP`` column ``DATA_SCALE`` is the fractional-seconds
+#: precision, which is a different dimension.
+_NUMERIC_TYPES = frozenset({"NUMBER", "FLOAT"})
+
 
 class OracleIntrospectorMixin(IntrospectorMixin):
     """Mixin providing shared Oracle-specific introspection logic.
@@ -189,13 +215,21 @@ class OracleIntrospectorMixin(IntrospectorMixin):
     # ------------------------------------------------------------------ #
 
     def parse_database_info(self, rows: List[Dict[str, Any]]) -> IntrospectionDatabaseInfo:
-        version = self._get_version()
+        # ``self.server_version`` is the contract's I/O-free answer: the adapted
+        # dialect, then what the backend last learned from its server. It never
+        # raises, unlike the strict ``dialect.version``, which is why a parser
+        # reads it: a status surface must be able to say "unknown" rather than
+        # refuse to report the database at all.
+        version = self.server_version
         # Reported as the string "unknown" rather than a fabricated number: this
         # is a status surface, and a status surface that invents a version is the
-        # same defect as a dialect that invents one.
+        # same defect as a dialect that invents one. ``(0, 0, 0)`` is the matching
+        # tuple convention, so a caller can read ``version_tuple`` without a
+        # None check and still see that nothing was measured.
         version_str = (
             ".".join(str(v) for v in version) if version else "unknown"
         )
+        version_tuple = tuple(version[:3]) if version else (0, 0, 0)
         schema = self.default_schema
 
         db_row = rows[0] if rows else {}
@@ -203,7 +237,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
         return IntrospectionDatabaseInfo(
             name=schema,
             version=version_str,
-            version_tuple=version,
+            version_tuple=version_tuple,
             vendor="Oracle",
             encoding=db_row.get("CHARSET"),
             collation=db_row.get("LANGUAGE"),
@@ -215,11 +249,17 @@ class OracleIntrospectorMixin(IntrospectorMixin):
         target_schema = schema if schema is not None else self.default_schema
         tables = []
         for row in rows:
+            # The kind is what the statement asked for and the catalogue
+            # answered: a view is not a table because it was listed beside one.
+            # A row carrying no kind at all is a table row from a caller that
+            # did not project it, which is what the listing used to assume for
+            # every row; the statement below always names it.
+            kind = str(row.get("TABLE_TYPE") or "TABLE").upper()
             tables.append(
                 IntrospectionTableInfo(
                     name=row["TABLE_NAME"],
                     schema=target_schema,
-                    table_type=TableType.BASE_TABLE,
+                    table_type=_TABLE_TYPE_BY_KIND.get(kind, TableType.BASE_TABLE),
                     comment=row.get("COMMENTS"),
                     row_count=row.get("NUM_ROWS"),
                     size_bytes=row.get("DATA_LENGTH"),
@@ -245,6 +285,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
                 else ColumnNullable.NOT_NULL
             )
             data_type = row.get("DATA_TYPE", "VARCHAR2")
+            declared_type = str(data_type).upper()
             # Build full data type string
             if data_type in ("NUMBER", "FLOAT"):
                 precision = row.get("DATA_PRECISION")
@@ -270,6 +311,34 @@ class OracleIntrospectorMixin(IntrospectorMixin):
                 data_type_full = f"RAW({row.get('DATA_LENGTH')})"
             else:
                 data_type_full = data_type
+
+            # Each dimension of a column has its own dictionary column, and
+            # they are not interchangeable. A NUMBER(12,2) column has
+            # DATA_LENGTH 22 -- bytes of storage, not a character length --
+            # while its width is DATA_PRECISION 12 and DATA_SCALE 2. A
+            # VARCHAR2(n CHAR) column has CHAR_LENGTH n and DATA_LENGTH up to
+            # 4n bytes. A TIMESTAMP(6) column carries 6 in DATA_SCALE, which is
+            # the fractional-seconds precision rather than a decimal scale. So
+            # each field is filled from the column that means it, and stays
+            # None where no column means it.
+            character_maximum_length = None
+            numeric_precision = None
+            numeric_scale = None
+            datetime_precision = None
+            if declared_type in _NUMERIC_TYPES:
+                numeric_precision = row.get("DATA_PRECISION")
+                numeric_scale = row.get("DATA_SCALE")
+            elif declared_type in _CHARACTER_TYPES:
+                character_maximum_length = row.get("CHAR_LENGTH")
+                if character_maximum_length is None:
+                    # CHAR_LENGTH arrived in 9i; on an older server the byte
+                    # count is all there is, and it is the same number for a
+                    # single-byte character set. Only character types take this
+                    # fallback -- for any other type DATA_LENGTH means bytes of
+                    # storage and would be a length claim of the wrong kind.
+                    character_maximum_length = row.get("DATA_LENGTH")
+            elif declared_type.startswith("TIMESTAMP"):
+                datetime_precision = row.get("DATA_SCALE")
 
             col_name = row["COLUMN_NAME"]
             # Parse the full type string into a structured DataType so that
@@ -300,9 +369,10 @@ class OracleIntrospectorMixin(IntrospectorMixin):
                     is_unique=False,  # Determined separately
                     is_auto_increment=row.get("IDENTITY_COLUMN") == "YES",
                     comment=None,  # Oracle column comments require separate query
-                    character_maximum_length=row.get("CHAR_LENGTH") or row.get("DATA_LENGTH"),
-                    numeric_precision=row.get("DATA_PRECISION"),
-                    numeric_scale=row.get("DATA_SCALE"),
+                    character_maximum_length=character_maximum_length,
+                    numeric_precision=numeric_precision,
+                    numeric_scale=numeric_scale,
+                    datetime_precision=datetime_precision,
                     charset=row.get("CHARACTER_SET_NAME"),
                 )
             )
@@ -320,6 +390,11 @@ class OracleIntrospectorMixin(IntrospectorMixin):
         index_map: Dict[str, IndexInfo] = {}
         for row in rows:
             idx_name = row.get("INDEX_NAME", "")
+            # ``CONSTRAINT_TYPE`` is projected from the constraint that *owns*
+            # the index, and the join is narrowed to ``P``: a value here means
+            # this index is the primary key's own index, NULL means it is not.
+            constraint_type = str(row.get("CONSTRAINT_TYPE") or "").upper()
+            is_primary = constraint_type == "P"
             if idx_name not in index_map:
                 idx_type_str = (row.get("INDEX_TYPE") or "NORMAL").upper()
                 uniqueness = row.get("UNIQUENESS", "NONUNIQUE")
@@ -332,12 +407,20 @@ class OracleIntrospectorMixin(IntrospectorMixin):
                     name=idx_name,
                     table_name=table_name,
                     schema=schema,
-                    is_unique=uniqueness == "UNIQUE",
-                    is_primary=False,  # Primary keys have separate constraint
+                    # A primary key is unique whether or not the UNIQUENESS
+                    # column said so, so the two facts are reported together
+                    # rather than letting one contradict the other.
+                    is_unique=uniqueness == "UNIQUE" or is_primary,
+                    is_primary=is_primary,
                     index_type=index_type_map.get(idx_type_str, IndexType.UNKNOWN),
                     columns=[],
                     extra=extra,
                 )
+            elif is_primary:
+                # Rows for one index arrive one per column; the facts about the
+                # index itself are read from the column that brings them.
+                index_map[idx_name].is_primary = True
+                index_map[idx_name].is_unique = True
             descend = row.get("DESCEND", "ASC")
             index_map[idx_name].columns.append(
                 IndexColumnInfo(
@@ -582,6 +665,43 @@ class SyncOracleIntrospector(OracleIntrospectorMixin, SyncAbstractIntrospector):
         return table
 
     # ------------------------------------------------------------------ #
+    # get_view_info override: a view's columns are part of what it is
+    # ------------------------------------------------------------------ #
+
+    def get_view_info(
+        self, view_name: str, schema: Optional[str] = None
+    ) -> Optional[IntrospectionViewInfo]:
+        """Return one view, including the columns it exposes.
+
+        Oracle answers a view's columns from ``ALL_TAB_COLUMNS`` exactly as it
+        does a table's -- a view has rows in the same dictionary view, with the
+        same column metadata -- so the view is completed with the same
+        ``list_columns`` call a table gets. Without it every view reported an
+        empty column list, which is a claim about the view rather than a gap in
+        the answer: a caller could not tell "this view selects no columns" from
+        "nobody asked".
+
+        The completed value is what goes into the cache. Caching the bare row
+        first and then filling a copy would leave the next call with a view
+        whose columns had gone missing again.
+        """
+        target_schema = schema if schema is not None else self.default_schema
+        key = self._cache.key(IntrospectionScope.VIEW, view_name, schema=schema)
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        sql, params = self.view_info_statement(view_name=view_name, schema=schema).to_sql()
+        view = self.parse_view_info(self._executor.execute(sql, params), view_name, target_schema)
+        if view is None:
+            return None
+
+        view = copy.copy(view)
+        view.columns = self.list_columns(view_name, schema)
+        self._cache.set(key, view)
+        return view
+
+    # ------------------------------------------------------------------ #
     # list_columns override to handle primary keys
     # ------------------------------------------------------------------ #
 
@@ -823,6 +943,37 @@ class AsyncOracleIntrospector(OracleIntrospectorMixin, AsyncAbstractIntrospector
         table.foreign_keys = await self.list_foreign_keys(table_name, schema)
         self._cache.set(key, table)
         return table
+
+    # ------------------------------------------------------------------ #
+    # get_view_info override: a view's columns are part of what it is
+    # ------------------------------------------------------------------ #
+
+    async def get_view_info(
+        self, view_name: str, schema: Optional[str] = None
+    ) -> Optional[IntrospectionViewInfo]:
+        """Return one view, including the columns it exposes.
+
+        The same completion the sync introspector performs, awaited: see there
+        for why the columns are read from ``ALL_TAB_COLUMNS`` and why the
+        completed value is what is cached.
+        """
+        target_schema = schema if schema is not None else self.default_schema
+        key = self._cache.key(IntrospectionScope.VIEW, view_name, schema=schema)
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        sql, params = self.view_info_statement(view_name=view_name, schema=schema).to_sql()
+        view = self.parse_view_info(
+            await self._executor.execute(sql, params), view_name, target_schema
+        )
+        if view is None:
+            return None
+
+        view = copy.copy(view)
+        view.columns = await self.list_columns(view_name, schema)
+        self._cache.set(key, view)
+        return view
 
     # ------------------------------------------------------------------ #
     # list_columns override to handle primary keys

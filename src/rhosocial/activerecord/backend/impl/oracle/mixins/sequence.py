@@ -47,7 +47,7 @@ class OracleSequenceMixin:
 
     def supports_sequence(self) -> bool:
         """Oracle supports sequence objects from 9i onward."""
-        return self.version >= (9, 0, 0)
+        return self.version_at_least((9, 0, 0))
 
     def supports_create_sequence(self) -> bool:
         return self.supports_sequence()
@@ -60,11 +60,11 @@ class OracleSequenceMixin:
 
     def supports_sequence_if_not_exists(self) -> bool:
         """``CREATE SEQUENCE IF NOT EXISTS`` arrived in Oracle 23ai."""
-        return self.version >= (23, 0, 0)
+        return self.version_at_least((23, 0, 0))
 
     def supports_sequence_if_exists(self) -> bool:
         """``DROP SEQUENCE IF EXISTS`` arrived in Oracle 23ai."""
-        return self.version >= (23, 0, 0)
+        return self.version_at_least((23, 0, 0))
 
     def supports_sequence_start(self) -> bool:
         """``START WITH`` is a ``CREATE SEQUENCE`` clause in Oracle.

@@ -628,6 +628,16 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             if cursor:
                 cursor.close()
 
+    def get_cached_server_version(self) -> Optional[Tuple[int, int, int]]:
+        """The version this backend already knows, without a round trip.
+
+        The asynchronous twin of the sync method: ``_version`` is what the
+        constructor was told or what :meth:`get_server_version` measured, and
+        introspection's status surface reports it rather than opening a
+        connection just to learn a number it already holds.
+        """
+        return self._version
+
     async def get_server_version(self) -> Optional[Tuple[int, int, int]]:
         """Read the server's own release version, asynchronously.
 

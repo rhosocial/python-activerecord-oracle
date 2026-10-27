@@ -421,25 +421,30 @@ class TestTheFallbackIsNotAVersion:
         assert backend._version_full is None
         assert backend._ru_version is None
 
-    def test_an_unadapted_dialect_refuses_to_answer_a_gate(self):
-        """``None`` has to end somewhere loud.  It ends at the framework's own
-        "no version" state, where ``.version`` raises - so every ``self.version
-        >= ...`` in the backend raises too, rather than answering on a number
-        nobody measured.  No new sentinel, no flag, nothing to forget to honour.
+    def test_an_unadapted_dialect_answers_no_rather_than_raising(self):
+        """A capability probe on an unmeasured version answers ``False``.
+
+        The strict ``.version`` still raises -- a renderer gating SQL must know
+        what it is gating against -- but a ``supports_*`` predicate is the
+        caller *deciding whether* to use a feature, and it cannot be expected
+        to catch an exception just to learn "no". Core states the rule on
+        ``version_at_least``: an unconfirmed capability is not claimed, and
+        asking never throws. So every version-gated probe here answers
+        ``False``, which is the same answer it gives for a version below the
+        floor, and the one that refuses rather than guesses.
         """
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
         unadapted = OracleDialect()
         with pytest.raises(DialectNotAdaptedException):
             unadapted.version
-        with pytest.raises(DialectNotAdaptedException):
-            unadapted.supports_boolean_type()
-        with pytest.raises(DialectNotAdaptedException):
-            unadapted.supports_vector_type()
-        with pytest.raises(DialectNotAdaptedException):
-            unadapted.supports_native_json()
-        with pytest.raises(DialectNotAdaptedException):
-            unadapted.supports_json_duality()
+        assert unadapted.version_or_none is None
+        assert unadapted.supports_boolean_type() is False
+        assert unadapted.supports_vector_type() is False
+        assert unadapted.supports_native_json() is False
+        assert unadapted.supports_json_duality() is False
+        assert unadapted.supports_pivot() is False
+        assert unadapted.supports_sequence() is False
         # and the same for a backend whose version was cleared
         from rhosocial.activerecord.backend.impl.oracle.backend.backend import (
             OracleBackend,
@@ -452,6 +457,7 @@ class TestTheFallbackIsNotAVersion:
         backend._dialect = None
         with pytest.raises(DialectNotAdaptedException):
             backend.dialect.version
+        assert backend.get_cached_server_version() is None
 
     def test_the_one_deliberate_tolerance_still_holds(self):
         """``format_data_type_boolean`` is the exception, on purpose.
@@ -473,9 +479,8 @@ class TestTheFallbackIsNotAVersion:
         assert unadapted.format_data_type(
             BooleanType(dialect=unadapted)
         )[0] == "NUMBER(1)"
-        # while the capability question still refuses
-        with pytest.raises(DialectNotAdaptedException):
-            unadapted.supports_boolean_type()
+        # while the capability question answers "not confirmed"
+        assert unadapted.supports_boolean_type() is False
 
 
 class TestConstructorDoesNotAssumeAVersion:
@@ -556,19 +561,26 @@ class TestIntrospectorReportsUnknownAsUnknown:
     that does, so ``parse_database_info`` says "unknown"."""
 
     def _introspector(self, version):
+        from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
         from rhosocial.activerecord.backend.impl.oracle.introspection.introspector import (
             SyncOracleIntrospector,
         )
 
         backend = SimpleNamespace(
-            config=SimpleNamespace(username="ar_shop"), _version=version
+            config=SimpleNamespace(username="ar_shop"),
+            _version=version,
+            dialect=OracleDialect(version=version),
+            get_cached_server_version=lambda: version,
         )
         return SyncOracleIntrospector(backend, SimpleNamespace(execute=None))
 
     def test_unknown_version_reports_unknown(self):
         info = self._introspector(None).parse_database_info([])
         assert info.version == "unknown"
-        assert info.version_tuple is None
+        # The core convention for "nobody measured it": the string says so and
+        # the tuple is all zeroes, so a caller can read the tuple without a
+        # None check and still see that there is no number behind it.
+        assert info.version_tuple == (0, 0, 0)
 
     def test_measured_version_reports_the_number(self):
         info = self._introspector((23, 0, 0)).parse_database_info([])
@@ -576,15 +588,22 @@ class TestIntrospectorReportsUnknownAsUnknown:
         assert info.version_tuple == (23, 0, 0)
 
     def test_the_default_is_no_longer_a_fabricated_19(self):
+        from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
         from rhosocial.activerecord.backend.impl.oracle.introspection.introspector import (
             SyncOracleIntrospector,
         )
 
-        # a backend with no ``_version`` attribute at all must also read as None
-        backend = SimpleNamespace(config=SimpleNamespace(username="ar_shop"))
+        # a backend that knows no version at all must also read as unknown
+        backend = SimpleNamespace(
+            config=SimpleNamespace(username="ar_shop"),
+            dialect=OracleDialect(),
+            get_cached_server_version=lambda: None,
+        )
         insp = SyncOracleIntrospector(backend, SimpleNamespace(execute=None))
+        assert insp.server_version is None
         assert insp._get_version() is None
         assert insp.parse_database_info([]).version == "unknown"
+        assert insp.parse_database_info([]).version_tuple == (0, 0, 0)
 
 
 class TestParseHelpersOnTheRecordedRows:

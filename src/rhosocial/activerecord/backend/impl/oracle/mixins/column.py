@@ -184,7 +184,7 @@ class OracleModifyColumnMixin:
         return True
 
     def supports_read_only(self) -> bool:
-        return self.version >= (11, 0, 0)
+        return self.version_at_least((11, 0, 0))
 
     def supports_row_movement(self) -> bool:
         return True

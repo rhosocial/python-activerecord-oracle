@@ -8,13 +8,13 @@ class OraclePivotMixin:
     """Oracle PIVOT / UNPIVOT capability checks (11g+)."""
 
     def supports_pivot(self) -> bool:
-        return self.version >= (11, 0, 0)
+        return self.version_at_least((11, 0, 0))
 
     def supports_unpivot(self) -> bool:
-        return self.version >= (11, 0, 0)
+        return self.version_at_least((11, 0, 0))
 
     def supports_pivot_xml(self) -> bool:
-        return self.version >= (11, 0, 0)
+        return self.version_at_least((11, 0, 0))
 
     def format_oracle_pivot(self, expr) -> Tuple[str, tuple]:
         """Render an ``OraclePivot`` clause.

@@ -117,55 +117,55 @@ class OraclePartitionMixin:
     # ------------------------------------------------------------------
     def supports_table_partitioning(self) -> bool:
         """Oracle supports table partitioning since 8.0; backend tests 11g+."""
-        return self.version >= _ORACLE_PARTITION_MIN_VERSION
+        return self.version_at_least(_ORACLE_PARTITION_MIN_VERSION)
 
     def supports_partitioned_table_creation(self) -> bool:
         """CREATE TABLE ... PARTITION BY is supported for 11g+."""
-        return self.version >= _ORACLE_PARTITION_MIN_VERSION
+        return self.version_at_least(_ORACLE_PARTITION_MIN_VERSION)
 
     def supports_partition_metadata_introspection(self) -> bool:
         """Partition metadata is queryable through ALL_TAB_PARTITIONS."""
-        return self.version >= _ORACLE_PARTITION_MIN_VERSION
+        return self.version_at_least(_ORACLE_PARTITION_MIN_VERSION)
 
     def supports_range_table_partitioning(self) -> bool:
         """RANGE partitioning is supported for 11g+."""
-        return self.version >= _ORACLE_PARTITION_MIN_VERSION
+        return self.version_at_least(_ORACLE_PARTITION_MIN_VERSION)
 
     def supports_list_table_partitioning(self) -> bool:
         """LIST partitioning is supported for 11g+."""
-        return self.version >= _ORACLE_PARTITION_MIN_VERSION
+        return self.version_at_least(_ORACLE_PARTITION_MIN_VERSION)
 
     def supports_hash_table_partitioning(self) -> bool:
         """HASH partitioning is supported for 11g+."""
-        return self.version >= _ORACLE_PARTITION_MIN_VERSION
+        return self.version_at_least(_ORACLE_PARTITION_MIN_VERSION)
 
     def supports_subpartitioning(self) -> bool:
         """Oracle composite partitioning (subpartitioning) is supported for 11g+."""
-        return self.version >= _ORACLE_PARTITION_MIN_VERSION
+        return self.version_at_least(_ORACLE_PARTITION_MIN_VERSION)
 
     def supports_interval_partitioning(self) -> bool:
         """INTERVAL partitioning is supported for Oracle 11g+."""
-        return self.version >= _ORACLE_INTERVAL_MIN_VERSION
+        return self.version_at_least(_ORACLE_INTERVAL_MIN_VERSION)
 
     def supports_reference_partitioning(self) -> bool:
         """REFERENCE partitioning is supported for Oracle 11g+."""
-        return self.version >= _ORACLE_REFERENCE_MIN_VERSION
+        return self.version_at_least(_ORACLE_REFERENCE_MIN_VERSION)
 
     def supports_add_partition(self) -> bool:
         """ADD PARTITION maintenance statement is supported for 11g+."""
-        return self.version >= _ORACLE_PARTITION_MIN_VERSION
+        return self.version_at_least(_ORACLE_PARTITION_MIN_VERSION)
 
     def supports_drop_partition(self) -> bool:
         """DROP PARTITION maintenance statement is supported for 11g+."""
-        return self.version >= _ORACLE_PARTITION_MIN_VERSION
+        return self.version_at_least(_ORACLE_PARTITION_MIN_VERSION)
 
     def supports_truncate_partition(self) -> bool:
         """TRUNCATE PARTITION maintenance statement is supported for 11g+."""
-        return self.version >= _ORACLE_PARTITION_MIN_VERSION
+        return self.version_at_least(_ORACLE_PARTITION_MIN_VERSION)
 
     def supports_reorganize_partition(self) -> bool:
         """Partition reorganization (SPLIT/MERGE) is supported for 11g+."""
-        return self.version >= _ORACLE_PARTITION_MIN_VERSION
+        return self.version_at_least(_ORACLE_PARTITION_MIN_VERSION)
 
     def supports_attach_partition(self) -> bool:
         """ATTACH PARTITION is not applicable to Oracle (use EXCHANGE)."""
@@ -177,19 +177,19 @@ class OraclePartitionMixin:
 
     def supports_split_partition(self) -> bool:
         """SPLIT PARTITION maintenance statement is supported for 11g+."""
-        return self.version >= _ORACLE_PARTITION_MIN_VERSION
+        return self.version_at_least(_ORACLE_PARTITION_MIN_VERSION)
 
     def supports_merge_partition(self) -> bool:
         """MERGE PARTITIONS maintenance statement is supported for 11g+."""
-        return self.version >= _ORACLE_PARTITION_MIN_VERSION
+        return self.version_at_least(_ORACLE_PARTITION_MIN_VERSION)
 
     def supports_exchange_partition(self) -> bool:
         """EXCHANGE PARTITION maintenance statement is supported for 11g+."""
-        return self.version >= _ORACLE_PARTITION_MIN_VERSION
+        return self.version_at_least(_ORACLE_PARTITION_MIN_VERSION)
 
     def supports_move_partition(self) -> bool:
         """MOVE PARTITION maintenance statement is supported for 11g+."""
-        return self.version >= _ORACLE_PARTITION_MIN_VERSION
+        return self.version_at_least(_ORACLE_PARTITION_MIN_VERSION)
 
     # ------------------------------------------------------------------
     # Top-level dispatch formatter

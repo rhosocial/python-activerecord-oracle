@@ -112,11 +112,21 @@ def patch_sync_backend(monkeypatch, introspector: Any,
             self.introspector = introspector
             self._connection: Optional[object] = object()
             self.disconnected = False
+            #: Set when the CLI adapts the dialect to the server it reached.
+            #: The introspect command must do that before its first question,
+            #: because the version-gated answers depend on it.
+            self.adapted = False
+            self.calls: List[str] = []
             instances.append(self)
 
         def connect(self) -> None:
+            self.calls.append("connect")
             if connect_error is not None:
                 raise connect_error
+
+        def introspect_and_adapt(self) -> None:
+            self.calls.append("introspect_and_adapt")
+            self.adapted = True
 
         def disconnect(self) -> None:
             self.disconnected = True
@@ -152,10 +162,16 @@ def patch_async_backend(monkeypatch, introspector: Any) -> List[Any]:
             self.introspector = AsyncFacade(introspector)
             self._connection: Optional[object] = object()
             self.disconnected = False
+            self.adapted = False
+            self.calls: List[str] = []
             instances.append(self)
 
         async def connect(self) -> None:
-            pass
+            self.calls.append("connect")
+
+        async def introspect_and_adapt(self) -> None:
+            self.calls.append("introspect_and_adapt")
+            self.adapted = True
 
         async def disconnect(self) -> None:
             self.disconnected = True
@@ -249,6 +265,18 @@ class TestHandleSyncBranches:
             ["introspect", "tables", "--include-system"]
         ))
         assert insp.calls[-1] == ("tables", None, True)
+
+    def test_the_dialect_is_adapted_after_connecting(self, provider, monkeypatch):
+        """Adaptation comes right after the connection and before any question.
+
+        The dialect's version is what the version-gated answers and the
+        reported database version depend on, so the command may not ask the
+        dictionary anything until it has been adapted to the server it reached.
+        """
+        instances = patch_sync_backend(monkeypatch, FakeIntrospector())
+        cli_introspect.handle(build_parser().parse_args(["introspect", "tables"]))
+        assert instances[0].calls == ["connect", "introspect_and_adapt"]
+        assert instances[0].adapted is True
 
     def test_schema_object_branches_pass_owner_none(self, provider, monkeypatch):
         insp = FakeIntrospector()
@@ -376,6 +404,15 @@ class TestHandleAsyncBranches:
             ["introspect", "database", "--async"]
         ))
         assert provider.results[0][0] == "Database Info"
+
+    def test_async_dialect_is_adapted_after_connecting(self, provider, monkeypatch):
+        """The async path adapts too, awaited, before its first question."""
+        instances = patch_async_backend(monkeypatch, FakeIntrospector())
+        cli_introspect.handle(build_parser().parse_args(
+            ["introspect", "database", "--async"]
+        ))
+        assert instances[0].calls == ["connect", "introspect_and_adapt"]
+        assert instances[0].adapted is True
 
 
 def _real_provider(fmt: str) -> Any:

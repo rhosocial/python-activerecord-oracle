@@ -146,6 +146,11 @@ def _handle_introspect_sync(args, backend: OracleBackend, provider):
     """Handle introspect subcommand synchronously."""
     try:
         backend.connect()
+        # Adapt before asking anything: the dialect carries the version its
+        # version-gated answers depend on, and ``introspect database`` reports
+        # that same version. Without this the dialect is unadapted and every
+        # gate answers from no measured number.
+        backend.introspect_and_adapt()
         introspector = backend.introspector
 
         if args.type == "tables":
@@ -223,6 +228,9 @@ async def _handle_introspect_async(args, backend: AsyncOracleBackend, provider):
     """Handle introspect subcommand asynchronously."""
     try:
         await backend.connect()
+        # The same adaptation the sync path performs, awaited before the first
+        # question is asked.
+        await backend.introspect_and_adapt()
         introspector = backend.introspector
 
         if args.type == "tables":

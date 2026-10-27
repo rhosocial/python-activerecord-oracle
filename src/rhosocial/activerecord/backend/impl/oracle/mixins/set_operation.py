@@ -43,7 +43,7 @@ class OracleSetOperationMixin:
         return True
 
     def supports_set_operation_limit_offset(self) -> bool:
-        return self.version >= (12, 0, 0)
+        return self.version_at_least((12, 0, 0))
 
     def supports_set_operation_for_update(self) -> bool:
         return False

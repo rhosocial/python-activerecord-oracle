@@ -698,6 +698,19 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
             if cursor:
                 cursor.close()
 
+    def get_cached_server_version(self) -> Optional[Tuple[int, int, int]]:
+        """The version this backend already knows, without a round trip.
+
+        ``_version`` is the version the constructor was told or
+        :meth:`get_server_version` measured, so it is the cache the core's
+        default implementation would read from ``_server_version_cache`` --
+        which nothing in this backend writes. Introspection reads it indirectly
+        through ``introspector.server_version``: a status surface must be able
+        to report the version the backend has, and "unknown" only when it has
+        none.
+        """
+        return self._version
+
     def get_server_version(self) -> Optional[Tuple[int, int, int]]:
         """Read the server's own release version.
 

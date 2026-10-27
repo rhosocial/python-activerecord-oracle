@@ -183,6 +183,40 @@ class OracleIntrospectionMixin:
 
         return cast(self, Literal(self, value, inline=True), data_type).as_(alias)
 
+    def _not_a_materialized_view(self, schema: str, include_system: bool):
+        """The predicate that keeps materialized views off the table side.
+
+        ``ALL_TABLES`` describes a materialized view too: an MV has a table
+        segment, so it is listed with the ordinary tables under object type
+        ``TABLE``. The listing reads MVs from a side of their own, so the table
+        side subtracts them by name -- otherwise each MV would answer twice,
+        once as a table and once as itself. The names come from a subquery
+        filtered by the same owner predicate as every other dictionary read,
+        and travel as binds.
+        """
+        from rhosocial.activerecord.backend.expression import (
+            InPredicate, LogicalPredicate, QueryStatement, Subquery,
+        )
+
+        materialized_view_names = Subquery(
+            self,
+            QueryStatement(
+                self,
+                select=[self._column("mview_name", "mv")],
+                from_=self._relation("all_mviews", "mv"),
+                where=self._where(
+                    self._owner_predicate(
+                        schema, self._column("OWNER", "mv"), include_system
+                    )
+                ),
+            ),
+        )
+        return LogicalPredicate(
+            self,
+            "NOT",
+            InPredicate(self, self._column("table_name", "t"), materialized_view_names),
+        )
+
     # ========== Query Formatting ==========
 
     def format_database_info_query_statement(
@@ -229,12 +263,19 @@ class OracleIntrospectionMixin:
     def format_table_list_query_statement(self, expr: "TableListQueryStatement") -> Tuple[str, tuple]:
         """Format table (and optionally view) list query.
 
-        Base tables come from ``ALL_TABLES`` left-joined to ``ALL_TAB_COMMENTS``
-        for the comment; views come from ``ALL_VIEWS``, their inapplicable
-        positions projected as typed ``NULL``. Both sides name the same six
-        aliases in the same order. When both are wanted the sides are a
-        ``UNION ALL`` and the outer query sorts the result, because ordering a
-        compound query belongs to the statement around it.
+        Each side of the answer knows what it is reading, and says so in
+        ``TABLE_TYPE`` rather than leaving every row to be called a base table:
+        ordinary tables come from ``ALL_TABLES`` left-joined to
+        ``ALL_TAB_COMMENTS`` for the comment, views from ``ALL_VIEWS`` and
+        materialized views from ``ALL_MVIEWS``. ``ALL_TABLES`` also lists
+        materialized views -- an MV is stored as a table segment -- so they are
+        subtracted from the table side by name, or one MV would be reported
+        twice: once as a table and once as the MV it is.
+
+        All sides name the same six aliases in the same order. When more than
+        one is wanted they are a ``UNION ALL`` and the outer query sorts the
+        result, because ordering a compound query belongs to the statement
+        around it.
         """
         from rhosocial.activerecord.backend.expression import (
             ArithmeticOperation, JoinClause, JoinType, Literal, OrderByClause,
@@ -253,8 +294,11 @@ class OracleIntrospectionMixin:
         include_system = params.get("include_system", False)
         table_type = (params.get("table_type") or "").upper()
 
-        want_tables = table_type != "VIEW"
-        want_views = table_type == "VIEW" or include_views
+        want_tables = table_type not in ("VIEW", "MATERIALIZED VIEW")
+        want_views = (include_views or table_type == "VIEW") and table_type != "MATERIALIZED VIEW"
+        want_mviews = (
+            include_views or table_type == "MATERIALIZED VIEW"
+        ) and table_type != "VIEW"
 
         sides = []
         if want_tables:
@@ -274,7 +318,7 @@ class OracleIntrospectionMixin:
                 (
                     [
                         self._column("table_name", "t", "TABLE_NAME"),
-                        self._constant("BASE TABLE", "TABLE_TYPE", VarCharType(self, 20)),
+                        self._constant("TABLE", "TABLE_TYPE", VarCharType(self, 30)),
                         self._column("comments", "c", "COMMENTS"),
                         self._column("num_rows", "t", "NUM_ROWS"),
                         ArithmeticOperation(
@@ -289,7 +333,8 @@ class OracleIntrospectionMixin:
                     self._where(
                         self._owner_predicate(
                             schema, self._column("OWNER", "t"), include_system
-                        )
+                        ),
+                        self._not_a_materialized_view(schema, include_system),
                     ),
                 )
             )
@@ -298,7 +343,7 @@ class OracleIntrospectionMixin:
                 (
                     [
                         self._column("view_name", "v", "TABLE_NAME"),
-                        self._constant("VIEW", "TABLE_TYPE", VarCharType(self, 20)),
+                        self._constant("VIEW", "TABLE_TYPE", VarCharType(self, 30)),
                         self._constant(None, "COMMENTS", VarCharType(self, 4000)),
                         self._constant(None, "NUM_ROWS", DecimalType(self)),
                         self._constant(None, "DATA_LENGTH", DecimalType(self)),
@@ -312,35 +357,61 @@ class OracleIntrospectionMixin:
                     ),
                 )
             )
+        if want_mviews:
+            sides.append(
+                (
+                    [
+                        self._column("mview_name", "mv", "TABLE_NAME"),
+                        self._constant("MATERIALIZED VIEW", "TABLE_TYPE", VarCharType(self, 30)),
+                        self._constant(None, "COMMENTS", VarCharType(self, 4000)),
+                        self._constant(None, "NUM_ROWS", DecimalType(self)),
+                        self._constant(None, "DATA_LENGTH", DecimalType(self)),
+                        self._constant(None, "LAST_ANALYZED", DateType(self)),
+                    ],
+                    self._relation("all_mviews", "mv"),
+                    self._where(
+                        self._owner_predicate(
+                            schema, self._column("OWNER", "mv"), include_system
+                        )
+                    ),
+                )
+            )
 
-        projection, source, where = sides[0]
+        first = QueryStatement(
+            self, select=sides[0][0], from_=sides[0][1], where=sides[0][2]
+        )
         if len(sides) == 1:
             return QueryStatement(
                 self,
-                select=projection,
-                from_=source,
-                where=where,
+                select=sides[0][0],
+                from_=sides[0][1],
+                where=sides[0][2],
                 order_by=OrderByClause(self, [self._column("TABLE_NAME")]),
             ).to_sql()
 
-        # Two sides: each becomes a query over its own relation, their UNION ALL
-        # is the FROM of the statement that sorts the result. The compound query
-        # itself carries no ordering -- Oracle applies one ORDER BY to the whole
-        # compound, which is why it belongs here rather than to either side.
+        # More than one side: each becomes a query over its own relation, their
+        # UNION ALL is the FROM of the statement that sorts the result. The
+        # compound query itself carries no ordering -- Oracle applies one
+        # ORDER BY to the whole compound, which is why it belongs here rather
+        # than to any one side.
         #
         # The set operation is wrapped in a ``Subquery`` because Oracle requires
         # a derived table to carry an alias (``ORA-00907`` otherwise), and the
         # alias is also what the outer projection is allowed to name.
-        first = QueryStatement(self, select=sides[0][0], from_=sides[0][1], where=sides[0][2])
-        second = QueryStatement(self, select=sides[1][0], from_=sides[1][1], where=sides[1][2])
+        compound = first
+        for projection, source, where in sides[1:]:
+            compound = SetOperation(
+                self,
+                op=SetOperationKind.UNION_ALL,
+                left=compound,
+                right=QueryStatement(self, select=projection, from_=source, where=where),
+            )
         return QueryStatement(
             self,
             select=[self._column(alias) for alias in _TABLE_LIST_PROJECTION],
             from_=Subquery(
                 self,
-                SetOperation(
-                    self, op=SetOperationKind.UNION_ALL, left=first, right=second
-                ),
+                compound,
                 alias="TABLE_LIST",
             ),
             order_by=OrderByClause(self, [self._column("TABLE_NAME")]),
@@ -441,7 +512,17 @@ class OracleIntrospectionMixin:
         ).to_sql()
 
     def format_index_info_query_statement(self, expr: "IndexInfoQueryStatement") -> Tuple[str, tuple]:
-        """Format index information query."""
+        """Format index information query.
+
+        The primary key is a constraint, not an index, so whether an index is
+        *the* primary key is answered by ``ALL_CONSTRAINTS`` -- the constraint
+        of type ``P`` names the index that enforces it in ``INDEX_NAME``. It is
+        a left join, because an ordinary index has no such constraint row, and
+        it is narrowed to ``'P'`` so the join cannot multiply the rows of one
+        index that also backs a unique constraint. The joined
+        ``CONSTRAINT_TYPE`` is projected as ``CONSTRAINT_TYPE`` precisely so the
+        parser can tell the two apart.
+        """
         from rhosocial.activerecord.backend.expression import (
             JoinClause, JoinType, Literal, OrderByClause, QueryStatement,
         )
@@ -462,17 +543,34 @@ class OracleIntrospectionMixin:
                 self._equals(self._column("owner", "i"), self._column("index_owner", "ic")),
             ),
         )
+        with_primary_key = JoinClause(
+            self,
+            left_table=index_join,
+            right_table=self._relation("all_constraints", "cons"),
+            join_type=JoinType.LEFT,
+            condition=self._all_of(
+                self._equals(
+                    self._column("index_name", "cons"), self._column("index_name", "i")
+                ),
+                self._equals(self._column("owner", "cons"), self._column("owner", "i")),
+                self._equals(
+                    self._column("constraint_type", "cons"),
+                    Literal(self, "P", inline=True),
+                ),
+            ),
+        )
         return QueryStatement(
             self,
             select=[
                 self._column("index_name", "i", "INDEX_NAME"),
                 self._column("index_type", "i", "INDEX_TYPE"),
                 self._column("uniqueness", "i", "UNIQUENESS"),
+                self._column("constraint_type", "cons", "CONSTRAINT_TYPE"),
                 self._column("column_name", "ic", "COLUMN_NAME"),
                 self._column("column_position", "ic", "COLUMN_POSITION"),
                 self._column("descend", "ic", "DESCEND"),
             ],
-            from_=index_join,
+            from_=with_primary_key,
             where=self._where(
                 self._equals(
                     self._column("table_owner", "i"), Literal(self, str(schema).upper())
@@ -681,11 +779,13 @@ class OracleIntrospectionMixin:
         "owner", "synonym_name", "table_owner", "table_name", "db_link",
     )
 
-    #: The five positions every package read projects. ``created`` is here
+    #: The positions every package read projects. ``created`` is here
     #: because the parser reads it: dropping a projected column would quietly
-    #: turn ``created_time`` into ``None`` rather than fail.
+    #: turn ``created_time`` into ``None`` rather than fail. ``owner`` is here
+    #: for the same reason -- a package is an owned object, and a listing that
+    #: does not ask for the owner reports an empty one.
     _PACKAGE_PROJECTION = (
-        "object_name", "object_type", "status", "created", "last_ddl_time",
+        "owner", "object_name", "object_type", "status", "created", "last_ddl_time",
     )
 
     def format_sequence_list_query_statement(
