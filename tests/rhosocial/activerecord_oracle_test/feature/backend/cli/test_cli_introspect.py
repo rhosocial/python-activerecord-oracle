@@ -46,8 +46,9 @@ TRIGGERS = [
 
 
 class FakeIntrospector:
-    def __init__(self, table_exists: bool = True) -> None:
+    def __init__(self, table_exists: bool = True, object_exists: bool = True) -> None:
         self.table_exists = table_exists
+        self.object_exists = object_exists
         self.calls: List[tuple] = []
 
     def list_tables(self, schema=None, include_system=False):
@@ -57,6 +58,12 @@ class FakeIntrospector:
     def list_views(self, schema=None):
         self.calls.append(("views", schema))
         return [{"VIEW_NAME": "V_CUSTOMERS"}]
+
+    def get_view_info(self, view_name, schema=None):
+        self.calls.append(("view_info", view_name, schema))
+        if not self.object_exists:
+            return None
+        return {"VIEW_NAME": view_name, "DEFINITION": "SELECT 1 FROM dual"}
 
     def get_table_info(self, name, schema=None):
         self.calls.append(("table_info", name, schema))
@@ -84,9 +91,21 @@ class FakeIntrospector:
         self.calls.append(("sequences", owner))
         return [{"SEQUENCE_NAME": "CUSTOMERS_SEQ"}]
 
+    def get_sequence_info(self, name, owner=None):
+        self.calls.append(("sequence_info", name, owner))
+        if not self.object_exists:
+            return None
+        return {"SEQUENCE_NAME": name, "LAST_NUMBER": 42}
+
     def list_synonyms(self, owner=None):
         self.calls.append(("synonyms", owner))
         return [{"SYNONYM_NAME": "CUSTOMERS_SYN"}]
+
+    def get_synonym_info(self, name, owner=None):
+        self.calls.append(("synonym_info", name, owner))
+        if not self.object_exists:
+            return None
+        return {"SYNONYM_NAME": name, "TABLE_NAME": "CUSTOMERS"}
 
     def list_packages(self, owner=None):
         self.calls.append(("packages", owner))
@@ -158,8 +177,10 @@ def patch_async_backend(monkeypatch, introspector: Any) -> List[Any]:
         def __init__(self, sync: Any) -> None:
             for attr in ("list_tables", "list_views", "get_table_info",
                          "list_columns", "list_indexes", "list_foreign_keys",
-                         "list_triggers", "list_sequences", "list_synonyms",
-                         "list_packages", "get_database_info"):
+                         "list_triggers", "get_view_info", "list_sequences",
+                         "get_sequence_info", "list_synonyms",
+                         "get_synonym_info", "list_packages",
+                         "get_database_info"):
                 fn = getattr(sync, attr)
 
                 async def call(*a: Any, _fn: Any = fn, **k: Any) -> Any:
@@ -252,6 +273,36 @@ class TestIntrospectParserContract:
         ])
         assert (args.host, args.port, args.service) == ("h", 1234, "s")
         assert (args.user, args.password) == ("u", "p")
+
+
+class TestNameRules:
+    """NAME means a table for some types and an object for others."""
+
+    def test_every_declared_type_has_a_name_rule(self):
+        """A new type must say what it does with NAME, or it is not complete."""
+        assert set(cli_introspect._NAME_RULES) == set(cli_introspect.INTROSPECT_TYPES)
+
+    def test_help_states_what_name_means(self, capsys):
+        with pytest.raises(SystemExit):
+            build_parser().parse_args(["introspect", "--help"])
+        out = capsys.readouterr().out
+        # The trigger rule is the one that is easiest to misread: NAME is the
+        # table, not the trigger.
+        assert "NAME is the table whose triggers" in out
+        assert "take no NAME" in out
+
+    @pytest.mark.parametrize("itype", ["tables", "packages", "database"])
+    def test_a_name_the_type_cannot_use_is_refused(self, capsys, monkeypatch,
+                                                   itype):
+        """A dropped NAME looks like a filter; it is refused before connecting."""
+        instances = patch_sync_backend(monkeypatch, FakeIntrospector())
+        with pytest.raises(SystemExit) as excinfo:
+            cli_introspect.handle(build_parser().parse_args(
+                ["introspect", itype, "some_name"]
+            ))
+        assert excinfo.value.code == 2
+        assert "takes no name" in capsys.readouterr().err
+        assert instances == []
 
 
 class TestHandleSyncBranches:
@@ -365,6 +416,60 @@ class TestHandleSyncBranches:
         assert "TRG_CUSTOMERS_BI" in data
         assert "TRG_ORDERS_BI" not in data
 
+    def test_views_name_describes_one_view(self, provider, monkeypatch):
+        insp = FakeIntrospector()
+        patch_sync_backend(monkeypatch, insp)
+        cli_introspect.handle(build_parser().parse_args(
+            ["introspect", "views", "active_customers"]
+        ))
+        assert insp.calls[-1] == ("view_info", "active_customers", None)
+        assert provider.results[0][0] == "View active_customers"
+        assert "SELECT 1 FROM dual" in str(provider.results[0][1])
+
+    @pytest.mark.parametrize("itype,title", [
+        ("views", "View active_customers"),
+        ("sequences", "Sequence customers_seq"),
+        ("synonyms", "Synonym customers"),
+    ])
+    def test_catalogue_name_describes_one_object(self, provider, monkeypatch,
+                                                 itype, title):
+        names = {"views": "active_customers", "sequences": "customers_seq",
+                 "synonyms": "customers"}
+        insp = FakeIntrospector()
+        patch_sync_backend(monkeypatch, insp)
+        cli_introspect.handle(build_parser().parse_args(
+            ["introspect", itype, names[itype]]
+        ))
+        assert provider.results[0][0] == title
+
+    @pytest.mark.parametrize("itype", ["views", "sequences", "synonyms"])
+    def test_missing_catalogue_object_exits_one(self, capsys, provider,
+                                                monkeypatch, itype):
+        """A named object that is absent is a runtime answer, so exit 1."""
+        patch_sync_backend(monkeypatch, FakeIntrospector(object_exists=False))
+        with pytest.raises(SystemExit) as excinfo:
+            cli_introspect.handle(build_parser().parse_args(
+                ["introspect", itype, "nope"]
+            ))
+        assert excinfo.value.code == 1
+        assert "not found" in capsys.readouterr().err
+
+    def test_sequences_name_passes_the_owner_through(self, provider, monkeypatch):
+        insp = FakeIntrospector()
+        patch_sync_backend(monkeypatch, insp)
+        cli_introspect.handle(build_parser().parse_args(
+            ["introspect", "sequences", "customers_seq"]
+        ))
+        assert insp.calls[-1] == ("sequence_info", "customers_seq", None)
+
+    def test_synonyms_name_passes_the_owner_through(self, provider, monkeypatch):
+        insp = FakeIntrospector()
+        patch_sync_backend(monkeypatch, insp)
+        cli_introspect.handle(build_parser().parse_args(
+            ["introspect", "synonyms", "customers"]
+        ))
+        assert insp.calls[-1] == ("synonym_info", "customers", None)
+
     def test_database_branch_wraps_in_list(self, provider, monkeypatch):
         insp = FakeIntrospector()
         patch_sync_backend(monkeypatch, insp)
@@ -421,13 +526,16 @@ class TestHandleAsyncBranches:
     @pytest.mark.parametrize("itype,name,title", [
         ("tables", None, "Tables"),
         ("views", None, "Views"),
+        ("views", "active_customers", "View active_customers"),
         ("columns", "customers", "Columns of customers"),
         ("indexes", "customers", "Indexes of customers"),
         ("foreign-keys", "orders", "Foreign Keys of orders"),
         ("triggers", None, "Triggers"),
         ("triggers", "customers", "Triggers"),
         ("sequences", None, "Sequences"),
+        ("sequences", "customers_seq", "Sequence customers_seq"),
         ("synonyms", None, "Synonyms"),
+        ("synonyms", "customers", "Synonym customers"),
         ("packages", None, "Packages"),
     ])
     def test_async_branches(self, provider, monkeypatch, itype, name, title):

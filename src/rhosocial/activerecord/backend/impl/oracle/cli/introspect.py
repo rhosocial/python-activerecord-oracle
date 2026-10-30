@@ -5,6 +5,10 @@ Oracle introspect includes the schema-object types 'sequences', 'synonyms'
 and 'packages' in addition to the standard types, and 'triggers' from the
 standard set -- a family the dialect has always declared and the command
 line could not ask for.
+
+NAME means different things per type, and two of those meanings point in
+opposite directions: for 'triggers' it is a table, for 'views' it is the view
+itself. The rules live in ``_NAME_RULES`` and are printed by ``--help``.
 """
 
 import argparse
@@ -50,6 +54,43 @@ _TYPE_CAPABILITIES = {
 
 INTROSPECT_TYPES = list(_TYPE_CAPABILITIES)
 
+#: What NAME means for each type, and whether it is accepted at all.
+#:
+#: The table-backed families and the object-backed ones point in opposite
+#: directions -- ``triggers users`` asks for the triggers *on* users, while
+#: ``views users`` asks for the view *called* users -- so the meaning is
+#: written down once, here, and printed by ``--help`` rather than left to be
+#: reconstructed from the branches.
+#:
+#: ``packages`` has no single-object answer (``list_packages`` exists, there is
+#: no ``get_package_info``), and ``tables`` deliberately has no single-table
+#: type: ``get_table_info`` fills columns, indexes and foreign keys, which is
+#: the aggregate removed on 2026-10-27 coming back through another door. A name
+#: for either is refused, never dropped -- a dropped name looks like a filter
+#: that matched everything.
+_NAME_RULES = {
+    "columns": "required",
+    "indexes": "required",
+    "foreign-keys": "required",
+    "triggers": "optional",
+    "views": "optional",
+    "sequences": "optional",
+    "synonyms": "optional",
+    "tables": "forbidden",
+    "packages": "forbidden",
+    "database": "forbidden",
+}
+
+
+def _refuse_unusable_name(args) -> None:
+    """Refuse a NAME the type cannot use instead of ignoring it."""
+    if args.name is None:
+        return
+    if _NAME_RULES.get(args.type) != "forbidden":
+        return
+    print(f"Error: {args.type} introspection takes no name", file=sys.stderr)
+    sys.exit(2)
+
 
 def _require_capability(backend, args) -> None:
     """Refuse a type the connected server cannot answer.
@@ -85,8 +126,9 @@ def create_parser(subparsers):
   # List all tables
   %(prog)s tables
 
-  # List all views
+  # List all views, or describe one view
   %(prog)s views
+  %(prog)s views active_customers
 
   # Get column details
   %(prog)s columns users
@@ -95,17 +137,36 @@ def create_parser(subparsers):
   %(prog)s triggers users
   %(prog)s triggers
 
-  # List sequences (Oracle specific)
+  # List sequences (Oracle specific), or describe one
   %(prog)s sequences
+  %(prog)s sequences customers_seq
 
-  # List the private synonyms of the connecting user
+  # List the private synonyms of the connecting user, or describe one
   %(prog)s synonyms
+  %(prog)s synonyms customers
 
   # List PL/SQL packages with their compile status
   %(prog)s packages
 
   # Output as JSON
   %(prog)s tables -o json
+
+What NAME means depends on the type:
+
+  columns NAME, indexes NAME, foreign-keys NAME
+                        NAME is the table whose sub-objects to list
+                        (required)
+  triggers [NAME]       NAME is the table whose triggers to list (optional);
+                        it is the table, never the trigger
+  views [NAME]          NAME is the view to describe (optional)
+  sequences [NAME]      NAME is the sequence to describe (optional)
+  synonyms [NAME]       NAME is the synonym to describe (optional)
+  tables, packages, database
+                        take no NAME; passing one is refused (exit 2)
+
+Exit status: 1 for a runtime failure (connection, query, anything unexpected)
+and for an object that does not exist; 2 when the request cannot be served
+here (an unsupported type on this server, or a NAME the type cannot use).
 
 Owners: the schema is the user the connection authenticates as (--user), so
 there is no separate owner option. PUBLIC synonyms are not listed: Oracle
@@ -142,7 +203,7 @@ than a schema this run connects as.
         "name",
         nargs="?",
         default=None,
-        help="Table/view name (required for some types)",
+        help="Table or object name; what it means depends on the type",
     )
     parser.add_argument(
         "--include-system",
@@ -155,6 +216,10 @@ than a schema this run connects as.
 
 def handle(args):
     """Handle the introspect subcommand."""
+    # A NAME the type cannot use is refused before anything is opened: it is
+    # an argument error, and no server could change the answer to it.
+    _refuse_unusable_name(args)
+
     provider = create_provider(args.output, ascii_borders=args.rich_ascii)
 
     config = resolve_connection_config_from_args(args)
@@ -212,9 +277,16 @@ def _handle_introspect_sync(args, backend: OracleBackend, provider):
             provider.display_results(data, title="Tables")
 
         elif args.type == "views":
-            views = introspector.list_views(schema=None)
-            data = _serialize_for_output(views)
-            provider.display_results(data, title="Views")
+            if args.name:
+                view = introspector.get_view_info(args.name, schema=None)
+                if view is None:
+                    print(f"Error: View '{args.name}' not found", file=sys.stderr)
+                    sys.exit(1)
+                provider.display_results(_serialize_for_output([view]), title=f"View {args.name}")
+            else:
+                views = introspector.list_views(schema=None)
+                data = _serialize_for_output(views)
+                provider.display_results(data, title="Views")
 
         elif args.type == "columns":
             if not args.name:
@@ -250,14 +322,32 @@ def _handle_introspect_sync(args, backend: OracleBackend, provider):
             provider.display_results(data, title="Triggers")
 
         elif args.type == "sequences":
-            sequences = introspector.list_sequences(owner=None)
-            data = _serialize_for_output(sequences)
-            provider.display_results(data, title="Sequences")
+            if args.name:
+                sequence = introspector.get_sequence_info(args.name, owner=None)
+                if sequence is None:
+                    print(f"Error: Sequence '{args.name}' not found", file=sys.stderr)
+                    sys.exit(1)
+                provider.display_results(
+                    _serialize_for_output([sequence]), title=f"Sequence {args.name}"
+                )
+            else:
+                sequences = introspector.list_sequences(owner=None)
+                data = _serialize_for_output(sequences)
+                provider.display_results(data, title="Sequences")
 
         elif args.type == "synonyms":
-            synonyms = introspector.list_synonyms(owner=None)
-            data = _serialize_for_output(synonyms)
-            provider.display_results(data, title="Synonyms")
+            if args.name:
+                synonym = introspector.get_synonym_info(args.name, owner=None)
+                if synonym is None:
+                    print(f"Error: Synonym '{args.name}' not found", file=sys.stderr)
+                    sys.exit(1)
+                provider.display_results(
+                    _serialize_for_output([synonym]), title=f"Synonym {args.name}"
+                )
+            else:
+                synonyms = introspector.list_synonyms(owner=None)
+                data = _serialize_for_output(synonyms)
+                provider.display_results(data, title="Synonyms")
 
         elif args.type == "packages":
             packages = introspector.list_packages(owner=None)
@@ -302,9 +392,16 @@ async def _handle_introspect_async(args, backend: AsyncOracleBackend, provider):
             provider.display_results(data, title="Tables")
 
         elif args.type == "views":
-            views = await introspector.list_views(schema=None)
-            data = _serialize_for_output(views)
-            provider.display_results(data, title="Views")
+            if args.name:
+                view = await introspector.get_view_info(args.name, schema=None)
+                if view is None:
+                    print(f"Error: View '{args.name}' not found", file=sys.stderr)
+                    sys.exit(1)
+                provider.display_results(_serialize_for_output([view]), title=f"View {args.name}")
+            else:
+                views = await introspector.list_views(schema=None)
+                data = _serialize_for_output(views)
+                provider.display_results(data, title="Views")
 
         elif args.type == "columns":
             if not args.name:
@@ -337,14 +434,32 @@ async def _handle_introspect_async(args, backend: AsyncOracleBackend, provider):
             provider.display_results(data, title="Triggers")
 
         elif args.type == "sequences":
-            sequences = await introspector.list_sequences(owner=None)
-            data = _serialize_for_output(sequences)
-            provider.display_results(data, title="Sequences")
+            if args.name:
+                sequence = await introspector.get_sequence_info(args.name, owner=None)
+                if sequence is None:
+                    print(f"Error: Sequence '{args.name}' not found", file=sys.stderr)
+                    sys.exit(1)
+                provider.display_results(
+                    _serialize_for_output([sequence]), title=f"Sequence {args.name}"
+                )
+            else:
+                sequences = await introspector.list_sequences(owner=None)
+                data = _serialize_for_output(sequences)
+                provider.display_results(data, title="Sequences")
 
         elif args.type == "synonyms":
-            synonyms = await introspector.list_synonyms(owner=None)
-            data = _serialize_for_output(synonyms)
-            provider.display_results(data, title="Synonyms")
+            if args.name:
+                synonym = await introspector.get_synonym_info(args.name, owner=None)
+                if synonym is None:
+                    print(f"Error: Synonym '{args.name}' not found", file=sys.stderr)
+                    sys.exit(1)
+                provider.display_results(
+                    _serialize_for_output([synonym]), title=f"Synonym {args.name}"
+                )
+            else:
+                synonyms = await introspector.list_synonyms(owner=None)
+                data = _serialize_for_output(synonyms)
+                provider.display_results(data, title="Synonyms")
 
         elif args.type == "packages":
             packages = await introspector.list_packages(owner=None)
