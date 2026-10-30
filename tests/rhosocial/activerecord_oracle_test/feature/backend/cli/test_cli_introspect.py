@@ -133,13 +133,18 @@ def provider(monkeypatch) -> RecordingProvider:
 
 
 def patch_sync_backend(monkeypatch, introspector: Any,
-                       connect_error: Optional[Exception] = None) -> List[Any]:
+                       connect_error: Optional[Exception] = None,
+                       dialect: Any = None) -> List[Any]:
     instances: List[Any] = []
 
     class FakeSyncBackend:
         def __init__(self, connection_config: Any = None) -> None:
             self.connection_config = connection_config
             self.introspector = introspector
+            #: The capability switches are asked of this, once adapted. A stub
+            #: without one is the offline default (nothing to gate); a test
+            #: that passes one exercises the gate.
+            self.dialect = dialect
             self._connection: Optional[object] = object()
             self.disconnected = False
             #: Set when the CLI adapts the dialect to the server it reached.
@@ -165,7 +170,8 @@ def patch_sync_backend(monkeypatch, introspector: Any,
     return instances
 
 
-def patch_async_backend(monkeypatch, introspector: Any) -> List[Any]:
+def patch_async_backend(monkeypatch, introspector: Any,
+                        dialect: Any = None) -> List[Any]:
     """Async fake whose introspector mirrors the real async contract.
 
     The async introspector keeps the sync method names (no ``_async``
@@ -192,6 +198,7 @@ def patch_async_backend(monkeypatch, introspector: Any) -> List[Any]:
         def __init__(self, connection_config: Any = None) -> None:
             self.connection_config = connection_config
             self.introspector = AsyncFacade(introspector)
+            self.dialect = dialect
             self._connection: Optional[object] = object()
             self.disconnected = False
             self.adapted = False
@@ -562,6 +569,86 @@ class TestHandleAsyncBranches:
         ))
         assert instances[0].calls == ["connect", "introspect_and_adapt"]
         assert instances[0].adapted is True
+
+
+class TestIntrospectTypeGates:
+    """Every type the CLI advertises is a switch, a branch, and a help line.
+
+    The gates exist so the next family cannot be added in one place and
+    forgotten in another: the advertised list, the capability table, the
+    branches and the help text all have to agree.
+    """
+
+    #: One runnable argument list per declared type. The test is parametrised
+    #: over ``INTROSPECT_TYPES`` and looks the entry up here, so a type that is
+    #: declared without a branch entry fails as a KeyError instead of going
+    #: unnoticed.
+    TYPE_ARGS = {
+        "tables": [],
+        "views": [],
+        "columns": ["customers"],
+        "indexes": ["customers"],
+        "foreign-keys": ["orders"],
+        "triggers": ["customers"],
+        "sequences": [],
+        "synonyms": [],
+        "packages": [],
+        "database": [],
+    }
+
+    def test_the_advertised_list_is_the_capability_table(self):
+        assert list(cli_introspect._TYPE_CAPABILITIES) == cli_introspect.INTROSPECT_TYPES
+
+    def test_no_type_outlives_its_removal(self):
+        """``table`` was removed on 2026-10-27; a name here would revive it."""
+        assert "table" not in cli_introspect.INTROSPECT_TYPES
+
+    def test_every_switch_names_a_real_dialect_predicate(self):
+        from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
+
+        dialect = OracleDialect(version=(21, 0, 0))
+        for itype, switch in cli_introspect._TYPE_CAPABILITIES.items():
+            predicate = getattr(dialect, switch, None)
+            assert callable(predicate), f"{itype} -> {switch} is not a dialect method"
+
+    @pytest.mark.parametrize("itype", cli_introspect.INTROSPECT_TYPES)
+    def test_every_declared_type_lands_in_a_branch(self, provider, monkeypatch,
+                                                   itype):
+        insp = FakeIntrospector()
+        patch_sync_backend(monkeypatch, insp)
+        cli_introspect.handle(build_parser().parse_args(
+            ["introspect", itype] + self.TYPE_ARGS[itype]
+        ))
+        assert len(provider.results) == 1
+        assert insp.calls
+
+    def test_a_type_the_server_cannot_answer_is_refused(self, provider, capsys,
+                                                        monkeypatch):
+        """The claim is checked against the connected dialect, not assumed."""
+        dialect = SimpleNamespace(supports_trigger_introspection=lambda: False)
+        insp = FakeIntrospector()
+        patch_sync_backend(monkeypatch, insp, dialect=dialect)
+        with pytest.raises(SystemExit) as excinfo:
+            cli_introspect.handle(build_parser().parse_args(
+                ["introspect", "triggers"]
+            ))
+        assert excinfo.value.code == 2
+        assert capsys.readouterr().err.strip() == (
+            "Error: triggers introspection is not supported by this server"
+        )
+        assert insp.calls == []
+
+    def test_the_async_path_refuses_too(self, provider, capsys, monkeypatch):
+        dialect = SimpleNamespace(supports_trigger_introspection=lambda: False)
+        insp = FakeIntrospector()
+        patch_async_backend(monkeypatch, insp, dialect=dialect)
+        with pytest.raises(SystemExit) as excinfo:
+            cli_introspect.handle(build_parser().parse_args(
+                ["introspect", "triggers", "--async"]
+            ))
+        assert excinfo.value.code == 2
+        assert "not supported by this server" in capsys.readouterr().err
+        assert insp.calls == []
 
 
 def _real_provider(fmt: str) -> Any:

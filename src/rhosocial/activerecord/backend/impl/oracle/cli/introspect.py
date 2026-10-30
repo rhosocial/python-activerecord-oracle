@@ -82,7 +82,7 @@ _NAME_RULES = {
 }
 
 
-def _refuse_unusable_name(args) -> None:
+def _refuse_unusable_name(args: argparse.Namespace) -> None:
     """Refuse a NAME the type cannot use instead of ignoring it."""
     if args.name is None:
         return
@@ -92,7 +92,7 @@ def _refuse_unusable_name(args) -> None:
     sys.exit(2)
 
 
-def _require_capability(backend, args) -> None:
+def _require_capability(backend: Any, args: argparse.Namespace) -> None:
     """Refuse a type the connected server cannot answer.
 
     The dialect is adapted before this runs, so the switches answer for the
