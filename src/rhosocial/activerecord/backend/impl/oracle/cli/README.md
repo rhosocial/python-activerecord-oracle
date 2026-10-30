@@ -11,21 +11,40 @@ python -m rhosocial.activerecord.backend.impl.oracle introspect <TYPE> [NAME] [O
 
 ## What it can ask about
 
-| Type | Reads | Notes |
-| :--- | :--- | :--- |
-| `tables` | `all_tables`, `all_tab_comments` | Base tables in the schema asked about. |
-| `views` | `all_views`, `all_objects` | Views, with their definitions. |
-| `table` | several | One table by name, with its columns, indexes and foreign keys filled in. |
-| `columns` | `all_tab_columns` | One table's columns: name, type, nullability, default. |
-| `indexes` | `all_ind_columns`, `all_indexes` | One table's indexes, including the primary key. |
-| `foreign-keys` | `all_constraints`, `all_cons_columns` | One table's constraints and the columns each side names. |
-| `sequences` | `all_sequences` | One owner's sequences. `last_number` is the **next cached value**, not the last one handed out — the dictionary does not record the latter. |
-| `synonyms` | `all_synonyms` | The connecting user's private synonyms. The global ones live under the owner `PUBLIC` and are never mixed into a schema's list. |
-| `packages` | `all_objects` | PL/SQL package specifications, so a specification and its body are not counted twice. |
-| `database` | `v$nls_parameters`, `v$version` | Server version and the NLS settings this session uses. |
+| Type | `NAME` | Reads | Notes |
+| :--- | :--- | :--- | :--- |
+| `tables` | none | `all_tables`, `all_tab_comments` | Base tables in the schema asked about. |
+| `views` | view, optional | `all_views`, `all_objects` | Views, with their definitions. A named view is described on its own, columns included. |
+| `columns` | table, required | `all_tab_columns` | One table's columns: name, type, nullability, default. |
+| `indexes` | table, required | `all_ind_columns`, `all_indexes` | One table's indexes, including the primary key. |
+| `foreign-keys` | table, required | `all_constraints`, `all_cons_columns` | One table's constraints and the columns each side names. |
+| `triggers` | table, optional | `all_triggers` | The triggers on one table, or every trigger in the schema. |
+| `sequences` | sequence, optional | `all_sequences` | One owner's sequences. `last_number` is the **next cached value**, not the last one handed out — the dictionary does not record the latter. |
+| `synonyms` | synonym, optional | `all_synonyms` | The connecting user's private synonyms. The global ones live under the owner `PUBLIC` and are never mixed into a schema's list. |
+| `packages` | none | `all_objects` | PL/SQL package specifications, so a specification and its body are not counted twice. |
+| `database` | none | `v$nls_parameters`, `v$version` | Server version and the NLS settings this session uses. |
 
-`NAME` is required for `table`, `columns`, `indexes` and `foreign-keys`, and
-selects one object for `sequences`, `synonyms` and `packages`.
+`NAME` is a **table** for `columns`, `indexes`, `foreign-keys` and `triggers`,
+and an **object** for `views`, `sequences` and `synonyms`. The two readings
+point in opposite directions — `triggers users` asks for the triggers *on*
+users, while `views users` asks for the view *called* users — so:
+
+*   `columns`, `indexes` and `foreign-keys` require a table name;
+*   `triggers` takes an optional table name and lists that table's triggers
+    without one;
+*   `views`, `sequences` and `synonyms` take an optional object name and
+    answer with that one object, columns included for a view. A named object
+    that does not exist exits 1;
+*   `tables`, `packages` and `database` take no name. Passing one is refused
+    with exit 2 rather than ignored: a dropped name reads as a filter that
+    matched everything. `packages` has no single-object answer to give, and
+    `tables NAME` is deliberately absent — it would bring back the aggregate
+    (columns, indexes and foreign keys in one answer) that was removed.
+
+Exit status follows the same split: **1** for a runtime failure (connection,
+query, anything unexpected) or a missing object, **2** for a request this
+server cannot serve (a type its dialect does not support, or a `NAME` the type
+cannot use).
 
 ## Options
 
@@ -45,6 +64,11 @@ selects one object for `sequences`, `synonyms` and `packages`.
 *   **Read-only.** `introspect` never writes. It does not create, drop, or
     alter anything, so it is safe to run against a database whose schema
     matters.
+*   **`triggers` takes a table, not a trigger.** `triggers orders` lists the
+    triggers defined on `orders`, and `triggers` alone lists every trigger in
+    the schema. The table name is the only filter `all_triggers` is asked for
+    — an Oracle trigger belongs to one table — so there is no "describe one
+    trigger" form here, and the name is never mistaken for the trigger's own.
 *   **The dictionary is upper case.** Oracle folds unquoted identifiers to
     upper case, so a sequence created as `order_id_seq` is reported as
     `ORDER_ID_SEQ` and asked about by that spelling unless it was created with
@@ -68,6 +92,15 @@ python -m rhosocial.activerecord.backend.impl.oracle introspect sequences
 python -m rhosocial.activerecord.backend.impl.oracle introspect synonyms
 python -m rhosocial.activerecord.backend.impl.oracle introspect packages
 
-# One table in full
-python -m rhosocial.activerecord.backend.impl.oracle introspect table orders -o json
+# One sequence by name, and one view with its columns
+python -m rhosocial.activerecord.backend.impl.oracle introspect sequences orders_seq
+python -m rhosocial.activerecord.backend.impl.oracle introspect views active_users
+
+# The triggers on one table (NAME is the table), or every trigger in the schema
+python -m rhosocial.activerecord.backend.impl.oracle introspect triggers orders
+python -m rhosocial.activerecord.backend.impl.oracle introspect triggers
+
+# A table's columns, indexes and foreign keys, which need the table name
+python -m rhosocial.activerecord.backend.impl.oracle introspect columns orders -o json
+python -m rhosocial.activerecord.backend.impl.oracle introspect foreign-keys orders
 ```
