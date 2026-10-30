@@ -39,6 +39,11 @@ TABLE_INFO = SimpleNamespace(
     foreign_keys=[{"CONSTRAINT_NAME": "FK_ORD"}],
 )
 
+TRIGGERS = [
+    {"TRIGGER_NAME": "TRG_CUSTOMERS_BI", "TABLE_NAME": "CUSTOMERS"},
+    {"TRIGGER_NAME": "TRG_ORDERS_BI", "TABLE_NAME": "ORDERS"},
+]
+
 
 class FakeIntrospector:
     def __init__(self, table_exists: bool = True) -> None:
@@ -68,6 +73,12 @@ class FakeIntrospector:
     def list_foreign_keys(self, name, schema=None):
         self.calls.append(("foreign_keys", name, schema))
         return TABLE_INFO.foreign_keys
+
+    def list_triggers(self, table_name=None, schema=None):
+        self.calls.append(("triggers", table_name, schema))
+        if table_name is None:
+            return TRIGGERS
+        return [t for t in TRIGGERS if t["TABLE_NAME"] == table_name.upper()]
 
     def list_sequences(self, owner=None):
         self.calls.append(("sequences", owner))
@@ -147,8 +158,8 @@ def patch_async_backend(monkeypatch, introspector: Any) -> List[Any]:
         def __init__(self, sync: Any) -> None:
             for attr in ("list_tables", "list_views", "get_table_info",
                          "list_columns", "list_indexes", "list_foreign_keys",
-                         "list_sequences", "list_synonyms", "list_packages",
-                         "get_database_info"):
+                         "list_triggers", "list_sequences", "list_synonyms",
+                         "list_packages", "get_database_info"):
                 fn = getattr(sync, attr)
 
                 async def call(*a: Any, _fn: Any = fn, **k: Any) -> Any:
@@ -225,6 +236,10 @@ class TestIntrospectParserContract:
     def test_schema_object_types_are_oracle_specific(self):
         for itype in ("sequences", "synonyms", "packages"):
             assert itype in cli_introspect.INTROSPECT_TYPES
+
+    def test_triggers_is_a_declared_type(self):
+        """The dialect declared trigger introspection all along; the word is here."""
+        assert "triggers" in cli_introspect.INTROSPECT_TYPES
 
     def test_invalid_type_rejected(self):
         with pytest.raises(SystemExit):
@@ -326,6 +341,30 @@ class TestHandleSyncBranches:
         ))
         assert provider.results[0][0] == "Foreign Keys of orders"
 
+    def test_triggers_branch_lists_every_trigger(self, provider, monkeypatch):
+        insp = FakeIntrospector()
+        patch_sync_backend(monkeypatch, insp)
+        cli_introspect.handle(build_parser().parse_args(["introspect", "triggers"]))
+        assert insp.calls[-1] == ("triggers", None, None)
+        assert provider.results[0][0] == "Triggers"
+        assert "TRG_ORDERS_BI" in str(provider.results[0][1])
+
+    def test_triggers_name_is_the_table(self, provider, monkeypatch):
+        """``triggers NAME`` asks for the triggers *on* NAME, not a trigger NAME.
+
+        This is the opposite of ``views NAME``; the filter must reach
+        ``list_triggers(table_name=...)`` so the list narrows to that table.
+        """
+        insp = FakeIntrospector()
+        patch_sync_backend(monkeypatch, insp)
+        cli_introspect.handle(build_parser().parse_args(
+            ["introspect", "triggers", "customers"]
+        ))
+        assert insp.calls[-1] == ("triggers", "customers", None)
+        data = str(provider.results[0][1])
+        assert "TRG_CUSTOMERS_BI" in data
+        assert "TRG_ORDERS_BI" not in data
+
     def test_database_branch_wraps_in_list(self, provider, monkeypatch):
         insp = FakeIntrospector()
         patch_sync_backend(monkeypatch, insp)
@@ -385,6 +424,8 @@ class TestHandleAsyncBranches:
         ("columns", "customers", "Columns of customers"),
         ("indexes", "customers", "Indexes of customers"),
         ("foreign-keys", "orders", "Foreign Keys of orders"),
+        ("triggers", None, "Triggers"),
+        ("triggers", "customers", "Triggers"),
         ("sequences", None, "Sequences"),
         ("synonyms", None, "Synonyms"),
         ("packages", None, "Packages"),

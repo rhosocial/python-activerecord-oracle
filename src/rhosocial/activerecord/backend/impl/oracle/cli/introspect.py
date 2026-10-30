@@ -2,7 +2,9 @@
 """introspect subcommand - Database introspection.
 
 Oracle introspect includes the schema-object types 'sequences', 'synonyms'
-and 'packages' in addition to the standard types.
+and 'packages' in addition to the standard types, and 'triggers' from the
+standard set -- a family the dialect has always declared and the command
+line could not ask for.
 """
 
 import argparse
@@ -21,11 +23,57 @@ from .output import create_provider
 
 OUTPUT_CHOICES = ['table', 'json', 'csv', 'tsv']
 
-INTROSPECT_TYPES = [
-    "tables", "views", "columns",
-    "indexes", "foreign-keys", "sequences", "synonyms", "packages",
-    "database"
-]
+#: CLI type -> the dialect capability switch that answers for it.
+#:
+#: The advertised list is derived from this mapping, so a family cannot be
+#: added in one place and forgotten in the other. A type whose switch is False
+#: on the *connected* server is refused when handled rather than run and
+#: answered with an empty list: "this server cannot answer" and "this schema
+#: has none" are different answers.
+#:
+#: ``supports_trigger_introspection`` is the entry this backend declared while
+#: ``triggers`` was missing from the CLI: the dialect already answered for it,
+#: and the whole chain ``format_trigger_list_query_statement`` ->
+#: ``parse_triggers`` was wired, so only the word was absent.
+_TYPE_CAPABILITIES = {
+    "tables": "supports_table_introspection",
+    "views": "supports_view_introspection",
+    "columns": "supports_column_introspection",
+    "indexes": "supports_index_introspection",
+    "foreign-keys": "supports_foreign_key_introspection",
+    "triggers": "supports_trigger_introspection",
+    "sequences": "supports_sequence_introspection",
+    "synonyms": "supports_synonym_introspection",
+    "packages": "supports_package_introspection",
+    "database": "supports_database_info",
+}
+
+INTROSPECT_TYPES = list(_TYPE_CAPABILITIES)
+
+
+def _require_capability(backend, args) -> None:
+    """Refuse a type the connected server cannot answer.
+
+    The dialect is adapted before this runs, so the switches answer for the
+    server in front of us rather than for the newest release this backend
+    knows.
+    """
+    switch = _TYPE_CAPABILITIES.get(args.type)
+    if switch is None:
+        return
+    dialect = getattr(backend, "dialect", None)
+    if dialect is None:
+        # A stub standing in for the backend (the offline CLI tests) has no
+        # dialect to ask; a real one always does.
+        return
+    supported = getattr(dialect, switch, None)
+    if supported is None or supported():
+        return
+    print(
+        f"Error: {args.type} introspection is not supported by this server",
+        file=sys.stderr,
+    )
+    sys.exit(2)
 
 
 def create_parser(subparsers):
@@ -40,11 +88,12 @@ def create_parser(subparsers):
   # List all views
   %(prog)s views
 
-  # Get detailed table info
-  %(prog)s table users
-
   # Get column details
   %(prog)s columns users
+
+  # List the triggers on one table, or every trigger in the schema
+  %(prog)s triggers users
+  %(prog)s triggers
 
   # List sequences (Oracle specific)
   %(prog)s sequences
@@ -81,9 +130,9 @@ than a schema this run connects as.
         help='Use ASCII characters for rich table borders.',
     )
 
-    # The candidate list is hand-written here, one family at a time: only this
-    # backend knows whether Oracle has packages. There is no core-side mapping
-    # to derive it from, and the parser answers before any connection exists.
+    # The candidate list is the keys of _TYPE_CAPABILITIES: only this backend
+    # knows whether Oracle has packages, and the parser answers before any
+    # connection exists, so the list cannot come from a live dialect.
     parser.add_argument(
         "type",
         choices=INTROSPECT_TYPES,
@@ -151,6 +200,7 @@ def _handle_introspect_sync(args, backend: OracleBackend, provider):
         # that same version. Without this the dialect is unadapted and every
         # gate answers from no measured number.
         backend.introspect_and_adapt()
+        _require_capability(backend, args)
         introspector = backend.introspector
 
         if args.type == "tables":
@@ -189,6 +239,15 @@ def _handle_introspect_sync(args, backend: OracleBackend, provider):
             fks = introspector.list_foreign_keys(args.name, schema=None)
             data = _serialize_for_output(fks)
             provider.display_results(data, title=f"Foreign Keys of {args.name}")
+
+        elif args.type == "triggers":
+            # NAME is the table here, not the trigger: the same meaning it has
+            # for columns/indexes/foreign-keys. Omitting it lists every trigger
+            # in the schema. `triggers NAME` is therefore "the triggers on one
+            # table", never "the trigger called NAME".
+            triggers = introspector.list_triggers(table_name=args.name, schema=None)
+            data = _serialize_for_output(triggers)
+            provider.display_results(data, title="Triggers")
 
         elif args.type == "sequences":
             sequences = introspector.list_sequences(owner=None)
@@ -231,6 +290,7 @@ async def _handle_introspect_async(args, backend: AsyncOracleBackend, provider):
         # The same adaptation the sync path performs, awaited before the first
         # question is asked.
         await backend.introspect_and_adapt()
+        _require_capability(backend, args)
         introspector = backend.introspector
 
         if args.type == "tables":
@@ -269,6 +329,12 @@ async def _handle_introspect_async(args, backend: AsyncOracleBackend, provider):
             fks = await introspector.list_foreign_keys(args.name, schema=None)
             data = _serialize_for_output(fks)
             provider.display_results(data, title=f"Foreign Keys of {args.name}")
+
+        elif args.type == "triggers":
+            # Same meaning as in the sync path: NAME is the table.
+            triggers = await introspector.list_triggers(table_name=args.name, schema=None)
+            data = _serialize_for_output(triggers)
+            provider.display_results(data, title="Triggers")
 
         elif args.type == "sequences":
             sequences = await introspector.list_sequences(owner=None)
