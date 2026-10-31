@@ -52,7 +52,9 @@ class OraclePaginationMixin:
                     all_params.append(clause.offset)
 
             if clause.limit is not None:
-                suffix = "WITH TIES" if getattr(clause, "with_ties", False) else "ONLY"
+                # ``with_ties`` is a declared field of the core
+                # LimitOffsetClause, read directly rather than probed.
+                suffix = "WITH TIES" if clause.with_ties else "ONLY"
                 if suffix == "WITH TIES" and not self.supports_fetch_with_ties():
                     raise UnsupportedFeatureError(
                         self.name,
@@ -69,7 +71,7 @@ class OraclePaginationMixin:
                     )
                     all_params.append(clause.limit)
         else:
-            if getattr(clause, "with_ties", False):
+            if clause.with_ties:
                 raise UnsupportedFeatureError(
                     self.name,
                     "FETCH FIRST ... ROWS WITH TIES",

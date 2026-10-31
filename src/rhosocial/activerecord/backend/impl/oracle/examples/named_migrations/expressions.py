@@ -18,11 +18,11 @@ Type usage follows issue #108: each column is given a concrete
 
 from rhosocial.activerecord.backend.expression.objects import Table
 from rhosocial.activerecord.backend.expression.statements.ddl_table import (
-    CreateTableExpression,
+    CreateTableStatement,
     ColumnDefinition,
     ColumnConstraint,
-    ColumnConstraintType,
-    DropTableExpression,
+    ColumnPrimaryKeyConstraint,
+    DropTableStatement,
 )
 from rhosocial.activerecord.backend.expression.types import (
     IntegerType,
@@ -32,7 +32,7 @@ from rhosocial.activerecord.backend.expression.types import (
 
 def create_users_table(dialect):
     """CREATE TABLE users (id INTEGER PRIMARY KEY IDENTITY, name VARCHAR2(255), email VARCHAR2(255))."""
-    return CreateTableExpression(
+    return CreateTableStatement(
         dialect,
         table=Table(dialect, "users"),
         columns=[
@@ -43,8 +43,7 @@ def create_users_table(dialect):
                 constraints=[
                     ColumnConstraint(
                         dialect,
-                        ColumnConstraintType.PRIMARY_KEY,
-                        is_auto_increment=True,
+                        branch=ColumnPrimaryKeyConstraint(dialect, is_auto_increment=True),
                     ),
                 ],
             ),
@@ -56,12 +55,12 @@ def create_users_table(dialect):
 
 def drop_users_table(dialect):
     """DROP TABLE IF EXISTS users."""
-    return DropTableExpression(dialect, table=Table(dialect, "users"), if_exists=True)
+    return DropTableStatement(dialect, table=Table(dialect, "users"), if_exists=True)
 
 
 def create_posts_table(dialect):
     """CREATE TABLE posts (id INTEGER PRIMARY KEY IDENTITY, title VARCHAR2(255), user_id INTEGER)."""
-    return CreateTableExpression(
+    return CreateTableStatement(
         dialect,
         table=Table(dialect, "posts"),
         columns=[
@@ -72,8 +71,7 @@ def create_posts_table(dialect):
                 constraints=[
                     ColumnConstraint(
                         dialect,
-                        ColumnConstraintType.PRIMARY_KEY,
-                        is_auto_increment=True,
+                        branch=ColumnPrimaryKeyConstraint(dialect, is_auto_increment=True),
                     ),
                 ],
             ),
@@ -85,7 +83,7 @@ def create_posts_table(dialect):
 
 def drop_posts_table(dialect):
     """DROP TABLE IF EXISTS posts."""
-    return DropTableExpression(dialect, table=Table(dialect, "posts"), if_exists=True)
+    return DropTableStatement(dialect, table=Table(dialect, "posts"), if_exists=True)
 
 
 def create_custom_table(dialect, table_name: str = "custom_table"):
@@ -94,7 +92,7 @@ def create_custom_table(dialect, table_name: str = "custom_table"):
     This expression accepts an extra ``table_name`` parameter, allowing
     the migration to control the target table name at runtime.
     """
-    return CreateTableExpression(
+    return CreateTableStatement(
         dialect,
         table=Table(dialect, table_name),
         columns=[
@@ -105,8 +103,7 @@ def create_custom_table(dialect, table_name: str = "custom_table"):
                 constraints=[
                     ColumnConstraint(
                         dialect,
-                        ColumnConstraintType.PRIMARY_KEY,
-                        is_auto_increment=True,
+                        branch=ColumnPrimaryKeyConstraint(dialect, is_auto_increment=True),
                     ),
                 ],
             ),
@@ -117,4 +114,4 @@ def create_custom_table(dialect, table_name: str = "custom_table"):
 
 def drop_custom_table(dialect, table_name: str = "custom_table"):
     """DROP TABLE IF EXISTS <table_name>."""
-    return DropTableExpression(dialect, table=Table(dialect, table_name), if_exists=True)
+    return DropTableStatement(dialect, table=Table(dialect, table_name), if_exists=True)

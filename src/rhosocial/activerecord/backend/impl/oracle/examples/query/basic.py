@@ -4,7 +4,7 @@ Basic SELECT and Expression Queries.
 This example demonstrates:
 1. SELECT all
 2. SELECT specific columns with WHERE
-3. Expression-based SELECT (build QueryExpression, print SQL, then execute)
+3. Expression-based SELECT (build QueryStatement, print SQL, then execute)
 4. SELECT with aggregate
 
 Oracle Version Support: 12c+
@@ -13,7 +13,7 @@ Oracle Version Support: 12c+
 import os
 import re
 
-from rhosocial.activerecord.backend.expression import QueryExpression, WhereClause
+from rhosocial.activerecord.backend.expression import QueryStatement, WhereClause
 from rhosocial.activerecord.backend.expression.core import Column, Literal
 from rhosocial.activerecord.backend.expression.objects import Table
 from rhosocial.activerecord.backend.expression.predicates import ComparisonPredicate
@@ -88,7 +88,7 @@ for row in result.data:
 print("\n[3] Expression-based SELECT (build -> print -> execute)")
 src = Table(dialect, "eg_query_basic")
 pred = ComparisonPredicate(dialect, "=", Column(dialect, "category"), Literal(dialect, "gadgets"))
-qry = QueryExpression(
+qry = QueryStatement(
     dialect=dialect,
     from_=src,
     select=[Column(dialect, "product"), Column(dialect, "price")],

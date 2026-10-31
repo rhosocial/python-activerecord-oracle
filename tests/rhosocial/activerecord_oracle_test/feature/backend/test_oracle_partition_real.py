@@ -16,12 +16,12 @@ from rhosocial.activerecord.backend.expression import (
     Column,
     ColumnDefinition,
     ColumnConstraint,
-    ColumnConstraintType,
+    ColumnPrimaryKeyConstraint,
     ComparisonPredicate,
-    CreateTableExpression,
-    DropTableExpression,
+    CreateTableStatement,
+    DropTableStatement,
     Literal,
-    QueryExpression,
+    QueryStatement,
 )
 from rhosocial.activerecord.backend.errors import DatabaseError
 from rhosocial.activerecord.backend.expression.objects import Table
@@ -52,7 +52,7 @@ def _drop(backend, name: str):
     """Drop ``name`` if it exists. Oracle has no DROP TABLE IF EXISTS, so
     we attempt the drop and ignore the ORA-00942 'table or view does not
     exist' error."""
-    expr = DropTableExpression(backend.dialect, Table(backend.dialect, name))
+    expr = DropTableStatement(backend.dialect, Table(backend.dialect, name))
     sql, params = expr.to_sql()
     try:
         backend.execute(sql, params)
@@ -71,7 +71,7 @@ def _exec_query(backend, sql, params=()):
 def _count_partitions(backend, table_name: str) -> int:
     """Count partitions of ``table_name`` via ALL_TAB_PARTITIONS."""
     d = backend.dialect
-    query = QueryExpression(
+    query = QueryStatement(
         d,
         select=[Column(d, "PARTITION_NAME")],
         from_=Table(d, "ALL_TAB_PARTITIONS"),
@@ -85,7 +85,7 @@ def _count_partitions(backend, table_name: str) -> int:
 
 def _partition_names(backend, table_name: str):
     d = backend.dialect
-    query = QueryExpression(
+    query = QueryStatement(
         d,
         select=[Column(d, "PARTITION_NAME")],
         from_=Table(d, "ALL_TAB_PARTITIONS"),
@@ -122,12 +122,12 @@ def test_create_range_partitioned_table_real(oracle_backend_single):
                 OraclePartitionDefinition(name="p_senior", less_than=[OraclePartitionMaxValue(d)]),
             ],
         )
-        expr = CreateTableExpression(
+        expr = CreateTableStatement(
             dialect=d,
             table=Table(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
-                    ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
+                    ColumnConstraint(d, branch=ColumnPrimaryKeyConstraint(d)),
                 ]),
                 ColumnDefinition(d, "AGE", IntegerType(d)),
                 ColumnDefinition(d, "NAME", VarCharType(length=100, dialect=d)),
@@ -165,12 +165,12 @@ def test_create_list_partitioned_table_real(oracle_backend_single):
                 OraclePartitionDefinition(name="p_west", in_values=[OraclePartitionValue(d, "WEST")]),
             ],
         )
-        expr = CreateTableExpression(
+        expr = CreateTableStatement(
             dialect=d,
             table=Table(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
-                    ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
+                    ColumnConstraint(d, branch=ColumnPrimaryKeyConstraint(d)),
                 ]),
                 ColumnDefinition(d, "REGION", VarCharType(length=20, dialect=d)),
             ],
@@ -201,12 +201,12 @@ def test_create_hash_partitioned_table_real(oracle_backend_single):
     try:
         d = backend.dialect
         partition = OraclePartitionByHash(d, [Column(d, "ID")], partitions_count=4)
-        expr = CreateTableExpression(
+        expr = CreateTableStatement(
             dialect=d,
             table=Table(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
-                    ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
+                    ColumnConstraint(d, branch=ColumnPrimaryKeyConstraint(d)),
                 ]),
                 ColumnDefinition(d, "NAME", VarCharType(length=100, dialect=d)),
             ],
@@ -243,12 +243,12 @@ def test_explain_range_partitioned_table_real(oracle_backend_single):
                 OraclePartitionDefinition(name="p2", less_than=[OraclePartitionMaxValue(d)]),
             ],
         )
-        expr = CreateTableExpression(
+        expr = CreateTableStatement(
             dialect=d,
             table=Table(d, table_name),
             columns=[
                 ColumnDefinition(d, "ID", IntegerType(d), constraints=[
-                    ColumnConstraint(d, constraint_type=ColumnConstraintType.PRIMARY_KEY),
+                    ColumnConstraint(d, branch=ColumnPrimaryKeyConstraint(d)),
                 ]),
                 ColumnDefinition(d, "AGE", IntegerType(d)),
             ],
@@ -258,9 +258,9 @@ def test_explain_range_partitioned_table_real(oracle_backend_single):
         backend.execute(sql, params)
 
         # Insert one row to make EXPLAIN meaningful.
-        from rhosocial.activerecord.backend.expression import InsertExpression
+        from rhosocial.activerecord.backend.expression import InsertStatement
         from rhosocial.activerecord.backend.expression.statements import ValuesSource
-        insert = InsertExpression(
+        insert = InsertStatement(
             d,
             into=Table(d, table_name),
             source=ValuesSource(d, [[Literal(d, 1), Literal(d, 25)]]),
@@ -275,7 +275,7 @@ def test_explain_range_partitioned_table_real(oracle_backend_single):
 
         # Verify a plan row exists for this statement.
         d2 = backend.dialect
-        verify = QueryExpression(
+        verify = QueryStatement(
             d2,
             select=[Column(d2, "OPERATION")],
             from_=Table(d2, "PLAN_TABLE"),

@@ -188,10 +188,10 @@ class TestDialectExpressionFormatting:
     def test_format_pivot(self):
         """Test PIVOT formatting."""
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
-        from rhosocial.activerecord.backend.impl.oracle.expression import PivotExpression
+        from rhosocial.activerecord.backend.impl.oracle.expression import OraclePivot
 
         dialect = OracleDialect(version=(19, 0, 0))
-        pivot = PivotExpression(
+        pivot = OraclePivot(
             dialect,
             aggregate_function="SUM",
             value_column="amount",
@@ -410,27 +410,27 @@ class TestTransactionControl:
     def test_format_commit(self):
         """Test COMMIT formatting."""
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
-        from rhosocial.activerecord.backend.expression.transaction import CommitTransactionExpression
+        from rhosocial.activerecord.backend.expression.transaction import CommitStatement
         dialect = OracleDialect(version=(19, 0, 0))
-        expr = CommitTransactionExpression(dialect)
+        expr = CommitStatement(dialect)
         sql, params = expr.to_sql()
         assert sql == "COMMIT"
 
     def test_format_rollback(self):
         """Test ROLLBACK formatting."""
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
-        from rhosocial.activerecord.backend.expression.transaction import RollbackTransactionExpression
+        from rhosocial.activerecord.backend.expression.transaction import RollbackStatement
         dialect = OracleDialect(version=(19, 0, 0))
-        expr = RollbackTransactionExpression(dialect)
+        expr = RollbackStatement(dialect)
         sql, params = expr.to_sql()
         assert sql == "ROLLBACK"
 
     def test_format_savepoint(self):
         """Test SAVEPOINT formatting."""
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
-        from rhosocial.activerecord.backend.expression.transaction import SavepointExpression
+        from rhosocial.activerecord.backend.expression.transaction import SavepointStatement
         dialect = OracleDialect(version=(19, 0, 0))
-        expr = SavepointExpression(dialect, "sp1")
+        expr = SavepointStatement(dialect, "sp1")
         sql, params = expr.to_sql()
         assert "SAVEPOINT" in sql
         assert "SP1" in sql

@@ -8,7 +8,7 @@ from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeature
 from ..expression.analyze import OracleAnalyzeMode
 
 if TYPE_CHECKING:  # pragma: no cover
-    from ..expression.analyze import OracleAnalyzeExpression
+    from ..expression.analyze import OracleAnalyzeStatement
 
 
 class OracleAnalyzeMixin:
@@ -23,7 +23,7 @@ class OracleAnalyzeMixin:
         return True
 
     def format_analyze_statement(
-        self, expr: "OracleAnalyzeExpression"
+        self, expr: "OracleAnalyzeStatement"
     ) -> Tuple[str, tuple]:
         """Format ``ANALYZE TABLE`` for Oracle.
 
@@ -38,7 +38,7 @@ class OracleAnalyzeMixin:
 
         if not isinstance(expr.table, Table):
             raise TypeError(
-                f"OracleAnalyzeExpression.table must be a Table, "
+                f"OracleAnalyzeStatement.table must be a Table, "
                 f"got {type(expr.table).__name__}"
             )
 

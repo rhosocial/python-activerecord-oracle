@@ -51,7 +51,17 @@ if TYPE_CHECKING:  # pragma: no cover
 # ---------------------------------------------------------------------------
 
 
-class OraclePartitionStrategy(Enum):
+class OraclePartitionStrategy(str, Enum):
+    """A word, carried by the artifact as the str it is.
+
+    ``(str, Enum)`` alone is not enough: ``Enum.__str__`` wins over the
+    mixin and writes ``OraclePartitionStrategy.MEMBER``, which is a name nothing on the wire
+    can read. Setting ``__str__`` to ``str.__str__`` makes the member *be*
+    the word it carries, which is what a plain-JSON artifact can encode and
+    a formatter can spell.
+    """
+
+    __str__ = str.__str__
     """Oracle top-level partitioning strategies.
 
     Oracle supports RANGE, LIST, HASH, INTERVAL, REFERENCE and SYSTEM
@@ -66,17 +76,33 @@ class OraclePartitionStrategy(Enum):
     REFERENCE = "REFERENCE"
 
 
-class OracleSubpartitionStrategy(Enum):
-    """Oracle composite subpartitioning strategies.
+class OracleSubpartitionStrategy(str, Enum):
+    """Oracle subpartitioning strategies."""
 
-    Oracle allows the subpartition method to be RANGE, LIST or HASH (and
-    the parent can be RANGE / LIST / HASH). INTERVAL / REFERENCE cannot be
-    used as a subpartition method.
-    """
+    __str__ = str.__str__
 
     RANGE = "RANGE"
     LIST = "LIST"
     HASH = "HASH"
+
+
+def normalize_subpartition_strategy(
+    strategy: Union[str, OracleSubpartitionStrategy],
+) -> OracleSubpartitionStrategy:
+    """A member passes through; the word it carries becomes that member.
+
+    The artifact carries the word, so a constructor reading one back gets a
+    str and must be able to spell the member from it.
+    """
+    if isinstance(strategy, OracleSubpartitionStrategy):
+        return strategy
+    normalized = str(strategy).strip().upper()
+    if normalized in OracleSubpartitionStrategy._value2member_map_:
+        return OracleSubpartitionStrategy(normalized)
+    raise ValueError(
+        f"unsupported subpartition strategy: {strategy!r}; expected one of "
+        f"{[member.value for member in OracleSubpartitionStrategy]}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -204,18 +230,14 @@ class OracleSubpartitionClause(BaseExpression):
     def __init__(
         self,
         dialect: "OracleDialect",
-        strategy: OracleSubpartitionStrategy,
+        strategy: Union[str, OracleSubpartitionStrategy],
         *,
         keys: Optional[Sequence[BaseExpression]] = None,
         count: Optional[int] = None,
         templates: Optional[Sequence[OracleSubpartitionDefinition]] = None,
     ):
         super().__init__(dialect)
-        if not isinstance(strategy, OracleSubpartitionStrategy):
-            raise TypeError(
-                "strategy must be an OracleSubpartitionStrategy value, "
-                f"got {type(strategy).__name__}"
-            )
+        strategy = normalize_subpartition_strategy(strategy)
         if count is not None:
             if not isinstance(count, int) or isinstance(count, bool):
                 raise TypeError(

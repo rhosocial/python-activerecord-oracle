@@ -54,15 +54,22 @@ def coalesce_oracle(
 ) -> "bases.BaseExpression":
     """Oracle COALESCE: return the first non-NULL expression.
 
+    COALESCE is a classed core node (``CoalesceFunction``), so the factory
+    builds that class -- the generic :class:`FunctionCall` is reserved for
+    user-defined functions and the natives core has not classed yet.
+
     Args:
         dialect: The Oracle dialect instance
         *expressions: The candidate expressions, most preferred first
 
     Returns:
-        A FunctionCall instance representing COALESCE
+        A CoalesceFunction representing COALESCE
     """
-    from rhosocial.activerecord.backend.expression import core
-    return core.FunctionCall(dialect, "COALESCE", *expressions)
+    from rhosocial.activerecord.backend.expression.functions.string import (
+        CoalesceFunction,
+    )
+
+    return CoalesceFunction(dialect, *expressions)
 
 
 def nullif(

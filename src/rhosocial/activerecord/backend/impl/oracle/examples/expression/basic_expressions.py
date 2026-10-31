@@ -63,11 +63,11 @@ print("2. PIVOT/UNPIVOT Expressions")
 print("-" * 40)
 
 from rhosocial.activerecord.backend.impl.oracle.expression import (
-    PivotExpression,
-    UnpivotExpression,
+    Pivot,
+    Unpivot,
 )
 
-pivot = PivotExpression(
+pivot = Pivot(
     dialect,
     aggregate_function="SUM",
     value_column="sales",
@@ -79,7 +79,7 @@ print("PIVOT expression:")
 print(f"  SQL: {sql}")
 print(f"  Params: {params}")
 
-unpivot = UnpivotExpression(
+unpivot = Unpivot(
     dialect,
     value_column="sales",
     pivot_column="month",
@@ -163,16 +163,16 @@ print("5. LOCK TABLE Statement")
 print("-" * 40)
 
 from rhosocial.activerecord.backend.impl.oracle.expression import (
-    OracleLockTableExpression,
+    OracleLockTableStatement,
     for_update, for_update_nowait, for_update_wait, for_update_skip_locked,
 )
 
-lock_table = OracleLockTableExpression(dialect, table="users", mode="EXCLUSIVE")
+lock_table = OracleLockTableStatement(dialect, table="users", mode="EXCLUSIVE")
 sql, params = lock_table.to_sql()
 print("LOCK TABLE exclusive:")
 print(f"  SQL: {sql}")
 
-lock_table_share = OracleLockTableExpression(
+lock_table_share = OracleLockTableStatement(
     dialect,
     table="accounts", mode="SHARE", nowait=True
 )

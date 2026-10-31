@@ -51,7 +51,7 @@ def sdo_within_distance(
     """Oracle SDO_WITHIN_DISTANCE: True if two geometries are within distance.
 
     Returns a predicate (``FunctionCall == Literal('TRUE')``), consistent with
-    other backends' use of ``ComparisonExpression`` instead of ``RawSQLExpression``.
+    other backends' use of ``ComparisonExpression`` instead of ``RawSQL``.
 
     Args:
         dialect: The Oracle dialect instance

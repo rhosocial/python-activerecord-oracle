@@ -364,12 +364,22 @@ class TestCLIArgumentParser:
 
         assert "tables" in INTROSPECT_TYPES
         assert "views" in INTROSPECT_TYPES
-        assert "table" in INTROSPECT_TYPES
         assert "columns" in INTROSPECT_TYPES
         assert "indexes" in INTROSPECT_TYPES
         assert "foreign-keys" in INTROSPECT_TYPES
         assert "database" in INTROSPECT_TYPES
         assert "sequences" in INTROSPECT_TYPES
+        assert "triggers" in INTROSPECT_TYPES
+
+    def test_introspect_types_are_the_capability_table(self):
+        """One list, not two: the advertised types are the switches' keys."""
+        from rhosocial.activerecord.backend.impl.oracle.__main__ import INTROSPECT_TYPES
+        from rhosocial.activerecord.backend.impl.oracle.cli.introspect import (
+            _TYPE_CAPABILITIES,
+        )
+
+        assert list(_TYPE_CAPABILITIES) == INTROSPECT_TYPES
+        assert "table" not in INTROSPECT_TYPES
 
     def test_status_types_defined(self):
         """Test status types are defined."""

@@ -22,11 +22,11 @@ class OracleRoutineSupport(Protocol):
         ...  # pragma: no cover
     def format_parameters(self, parameters: list) -> Tuple[str, tuple]:
         ...  # pragma: no cover
-    def format_create_procedure_statement(self, expr: 'OracleCreateProcedureExpression') -> Tuple[str, tuple]:
+    def format_create_procedure_statement(self, expr: 'OracleCreateProcedureStatement') -> Tuple[str, tuple]:
         ...  # pragma: no cover
-    def format_create_package_statement(self, expr: 'OracleCreatePackageExpression') -> Tuple[str, tuple]:
+    def format_create_package_statement(self, expr: 'OracleCreatePackageStatement') -> Tuple[str, tuple]:
         ...  # pragma: no cover
-    def format_create_package_body_statement(self, expr: 'OracleCreatePackageBodyExpression') -> Tuple[str, tuple]:
+    def format_create_package_body_statement(self, expr: 'OracleCreatePackageBodyStatement') -> Tuple[str, tuple]:
         ...  # pragma: no cover
-    def format_drop_routine_statement(self, expr: 'OracleDropRoutineExpression') -> Tuple[str, tuple]:
+    def format_drop_routine_statement(self, expr: 'OracleDropRoutineStatement') -> Tuple[str, tuple]:
         ...  # pragma: no cover

@@ -53,7 +53,7 @@ jobs:
       - name: Install activerecord and testsuite from git
         run: |
           pip install "rhosocial-activerecord @ git+https://github.com/rhosocial/python-activerecord.git@release/v1.0.0.dev30"
-          pip install "rhosocial-activerecord-testsuite @ git+https://github.com/rhosocial/python-activerecord-testsuite.git@release/v1.0.0.dev17"
+          pip install "rhosocial-activerecord-testsuite @ git+https://github.com/rhosocial/python-activerecord-testsuite.git@fix/column-constraint-gates"
 
       - name: Wait for Oracle and test connectivity
         run: |
@@ -181,7 +181,7 @@ jobs:
       - name: Install activerecord and testsuite from git
         run: |
           pip install "rhosocial-activerecord @ git+https://github.com/rhosocial/python-activerecord.git@release/v1.0.0.dev30"
-          pip install "rhosocial-activerecord-testsuite @ git+https://github.com/rhosocial/python-activerecord-testsuite.git@release/v1.0.0.dev17"
+          pip install "rhosocial-activerecord-testsuite @ git+https://github.com/rhosocial/python-activerecord-testsuite.git@fix/column-constraint-gates"
 
       - name: Wait for Oracle and test connectivity
         run: |
@@ -274,8 +274,8 @@ jobs:
           name: codecov-oracle-3.14-21c
           fail_ci_if_error: true
 
-  test-oracle-23c:
-    name: Python 3.14 / Oracle 23c
+  test-oracle-26ai:
+    name: Python 3.14 / Oracle 26ai
     runs-on: ubuntu-latest
 
     services:
@@ -309,7 +309,7 @@ jobs:
       - name: Install activerecord and testsuite from git
         run: |
           pip install "rhosocial-activerecord @ git+https://github.com/rhosocial/python-activerecord.git@release/v1.0.0.dev30"
-          pip install "rhosocial-activerecord-testsuite @ git+https://github.com/rhosocial/python-activerecord-testsuite.git@release/v1.0.0.dev17"
+          pip install "rhosocial-activerecord-testsuite @ git+https://github.com/rhosocial/python-activerecord-testsuite.git@fix/column-constraint-gates"
 
       - name: Wait for Oracle and test connectivity
         run: |
@@ -322,7 +322,7 @@ jobs:
                       user='system', password='password',
                       dsn='localhost:1521/FREEPDB1')
                   conn.close()
-                  print('Oracle 23c connectivity OK')
+                  print('Oracle 26ai connectivity OK')
                   break
               except Exception as e:
                   if attempt < max_retries - 1:
@@ -372,7 +372,7 @@ jobs:
         run: |
           cat > oracle_scenarios.yaml << EOF
           scenarios:
-            oracle_23c:
+            oracle_26ai:
               host: localhost
               port: 1521
               username: system
@@ -397,12 +397,12 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage.xml
-          flags: unittests,python-3.14,oracle-23c
-          name: codecov-oracle-3.14-23c
+          flags: unittests,python-3.14,oracle-26ai
+          name: codecov-oracle-3.14-26ai
           fail_ci_if_error: true
 
-  # Python 3.15 leg, pinned to the newest supported server (23c) and mirroring
-  # the 3.14 / Oracle 23c block above step for step. It is a required leg: no
+  # Python 3.15 leg, pinned to the newest supported server (26ai) and mirroring
+  # the 3.14 / Oracle 26ai block above step for step. It is a required leg: no
   # continue-on-error, no `if:` gate, no "(experimental)" in the name.
   #
   # GIL only, by necessity: `oracledb` 26.0.1 publishes a cp315 wheel and a
@@ -411,7 +411,7 @@ jobs:
   # that can import the driver. A 3.15t leg therefore has nothing to run
   # against and is deliberately not declared here.
   test-python-315:
-    name: Python 3.15 / Oracle 23c
+    name: Python 3.15 / Oracle 26ai
     runs-on: ubuntu-latest
 
     services:
@@ -445,7 +445,7 @@ jobs:
       - name: Install activerecord and testsuite from git
         run: |
           pip install "rhosocial-activerecord @ git+https://github.com/rhosocial/python-activerecord.git@release/v1.0.0.dev30"
-          pip install "rhosocial-activerecord-testsuite @ git+https://github.com/rhosocial/python-activerecord-testsuite.git@release/v1.0.0.dev17"
+          pip install "rhosocial-activerecord-testsuite @ git+https://github.com/rhosocial/python-activerecord-testsuite.git@fix/column-constraint-gates"
 
       - name: Wait for Oracle and test connectivity
         run: |
@@ -458,7 +458,7 @@ jobs:
                       user='system', password='password',
                       dsn='localhost:1521/FREEPDB1')
                   conn.close()
-                  print('Oracle 23c connectivity OK')
+                  print('Oracle 26ai connectivity OK')
                   break
               except Exception as e:
                   if attempt < max_retries - 1:
@@ -508,7 +508,7 @@ jobs:
         run: |
           cat > oracle_scenarios.yaml << EOF
           scenarios:
-            oracle_23c:
+            oracle_26ai:
               host: localhost
               port: 1521
               username: system
@@ -533,6 +533,6 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage.xml
-          flags: unittests,python-3.15,oracle-23c
-          name: codecov-oracle-3.15-23c
+          flags: unittests,python-3.15,oracle-26ai
+          name: codecov-oracle-3.15-26ai
           fail_ci_if_error: true

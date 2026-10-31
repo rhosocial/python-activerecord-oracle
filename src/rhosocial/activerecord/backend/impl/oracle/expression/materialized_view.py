@@ -4,14 +4,14 @@
 This module defines backend-specific expressions for Oracle materialized
 views and materialized view logs:
 
-* ``OracleCreateMaterializedViewExpression`` — ``CREATE MATERIALIZED VIEW``
+* ``OracleCreateMaterializedViewStatement`` — ``CREATE MATERIALIZED VIEW``
   with the Oracle-specific ``REFRESH`` / ``QUERY REWRITE`` / ``BUILD``
   option set.
-* ``OracleCreateMaterializedViewLogExpression`` — ``CREATE MATERIALIZED VIEW
+* ``OracleCreateMaterializedViewLogStatement`` — ``CREATE MATERIALIZED VIEW
   LOG ON t WITH { ROWID | PRIMARY KEY }``.
-* ``OracleDropMaterializedViewExpression`` — ``DROP MATERIALIZED VIEW`` with
+* ``OracleDropMaterializedViewStatement`` — ``DROP MATERIALIZED VIEW`` with
   the optional ``PRESERVE TABLE`` clause.
-* ``OracleRefreshMaterializedViewExpression`` — ``DBMS_MVIEW.REFRESH`` inside a
+* ``OracleRefreshMaterializedViewStatement`` — ``DBMS_MVIEW.REFRESH`` inside a
   PL/SQL block. Oracle has **no** standalone ``REFRESH MATERIALIZED VIEW``
   statement, so refreshing is a stored-procedure call.
 
@@ -37,29 +37,32 @@ if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
 
 
-class MaterializedViewRefreshMethod(Enum):
+class MaterializedViewRefreshMethod(str, Enum):
     """Oracle materialized view refresh methods."""
 
+    __str__ = str.__str__
     FAST = "FAST"
     COMPLETE = "COMPLETE"
     FORCE = "FORCE"
 
 
-class MaterializedViewRefreshTrigger(Enum):
+class MaterializedViewRefreshTrigger(str, Enum):
     """Oracle materialized view refresh trigger modes."""
 
+    __str__ = str.__str__
     ON_COMMIT = "ON COMMIT"
     ON_DEMAND = "ON DEMAND"
 
 
-class MaterializedViewBuildMode(Enum):
+class MaterializedViewBuildMode(str, Enum):
     """Oracle materialized view build (initial population) modes."""
 
+    __str__ = str.__str__
     IMMEDIATE = "IMMEDIATE"
     DEFERRED = "DEFERRED"
 
 
-class OracleCreateMaterializedViewExpression(BaseExpression):
+class OracleCreateMaterializedViewStatement(BaseExpression):
     """Oracle ``CREATE MATERIALIZED VIEW ... AS SELECT ...`` expression.
 
     Args:
@@ -67,7 +70,7 @@ class OracleCreateMaterializedViewExpression(BaseExpression):
         view: the materialized view to create. The object carries its owner,
             so the name is rendered by the dialect rather than concatenated
             here.
-        query: a ``BaseExpression`` (typically a ``QueryExpression``) whose
+        query: a ``BaseExpression`` (typically a ``QueryStatement``) whose
             SQL becomes the ``AS subquery`` clause.
         if_not_exists: if True, emit ``IF NOT EXISTS`` (Oracle 23ai+).
         column_aliases: optional column alias list rendered in parentheses
@@ -133,7 +136,7 @@ class OracleCreateMaterializedViewExpression(BaseExpression):
         return "format_create_materialized_view_statement"
 
 
-class OracleCreateMaterializedViewLogExpression(BaseExpression):
+class OracleCreateMaterializedViewLogStatement(BaseExpression):
     """Oracle ``CREATE MATERIALIZED VIEW LOG ON t WITH ...`` expression.
 
     Args:
@@ -176,7 +179,7 @@ class OracleCreateMaterializedViewLogExpression(BaseExpression):
         return "format_create_materialized_view_log_statement"
 
 
-class OracleDropMaterializedViewExpression(BaseExpression):
+class OracleDropMaterializedViewStatement(BaseExpression):
     """Oracle ``DROP MATERIALIZED VIEW ...`` expression.
 
     Args:
@@ -214,14 +217,14 @@ class OracleDropMaterializedViewExpression(BaseExpression):
         return "format_drop_materialized_view_statement"
 
 
-class OracleRefreshMethod(Enum):
+class OracleRefreshMethod(str, Enum):
     """``DBMS_MVIEW.REFRESH`` method codes.
 
     These are the *procedure* codes, which differ from the ``REFRESH ON DEMAND``
     / ``REFRESH FAST`` DDL keywords: ``f`` fast, ``C`` complete, ``?`` force,
-    ``P`` partition change tracking, ``A`` always (equivalent to complete).
-    """
+    ``P`` partition change tracking, ``A`` always (equivalent to complete)."""
 
+    __str__ = str.__str__
     FAST = "F"
     COMPLETE = "C"
     FORCE = "?"
@@ -229,7 +232,7 @@ class OracleRefreshMethod(Enum):
     ALWAYS = "A"
 
 
-class OracleRefreshMaterializedViewExpression(BaseExpression):
+class OracleRefreshMaterializedViewStatement(BaseExpression):
     """Oracle ``DBMS_MVIEW.REFRESH('mv', ...)`` expression.
 
     Oracle exposes materialized view refresh only through the

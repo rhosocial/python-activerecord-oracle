@@ -6,10 +6,10 @@ This module defines backend-specific expressions for Oracle sequences:
 * ``OracleSequenceValueExpression`` — the ``seq.NEXTVAL`` / ``seq.CURRVAL``
   pseudo-column value expression (Oracle's substitute for the SQL-standard
   ``NEXT VALUE FOR``).
-* ``OracleCreateSequenceExpression`` — ``CREATE SEQUENCE ...`` with the
+* ``OracleCreateSequenceStatement`` — ``CREATE SEQUENCE ...`` with the
   Oracle option set (START WITH / INCREMENT BY / MINVALUE / MAXVALUE /
   CYCLE | NOCYCLE / CACHE | NOCACHE / ORDER | NOORDER).
-* ``OracleDropSequenceExpression`` — ``DROP SEQUENCE ...``.
+* ``OracleDropSequenceStatement`` — ``DROP SEQUENCE ...``.
 
 All expressions delegate SQL generation to the dialect through the public
 ``format_*`` formatters implemented by ``OracleSequenceMixin``.
@@ -17,7 +17,7 @@ All expressions delegate SQL generation to the dialect through the public
 from __future__ import annotations
 
 from enum import Enum
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING, Union
 
 from rhosocial.activerecord.backend.expression.bases import BaseExpression, SQLQueryAndParams
 from rhosocial.activerecord.backend.expression.objects import Sequence
@@ -26,11 +26,32 @@ if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
 
 
-class OracleSequenceValueMode(Enum):
+class OracleSequenceValueMode(str, Enum):
     """Oracle sequence pseudo-column access modes."""
+
+    __str__ = str.__str__
 
     NEXTVAL = "NEXTVAL"
     CURRVAL = "CURRVAL"
+
+
+def normalize_sequence_value_mode(
+    mode: Union[str, OracleSequenceValueMode],
+) -> OracleSequenceValueMode:
+    """A member passes through; the word it carries becomes that member.
+
+    The artifact carries the word, so a constructor reading one back gets a
+    str and must be able to spell the member from it.
+    """
+    if isinstance(mode, OracleSequenceValueMode):
+        return mode
+    normalized = str(mode).strip().upper()
+    if normalized in OracleSequenceValueMode._value2member_map_:
+        return OracleSequenceValueMode(normalized)
+    raise ValueError(
+        f"unsupported sequence access mode: {mode!r}; expected one of "
+        f"{[member.value for member in OracleSequenceValueMode]}"
+    )
 
 
 class OracleSequenceValueExpression(BaseExpression):
@@ -46,26 +67,20 @@ class OracleSequenceValueExpression(BaseExpression):
         mode: access mode; ``NEXTVAL`` (default) or ``CURRVAL``.
 
     Raises:
-        ValueError: if ``sequence`` is empty.
-        TypeError: if ``mode`` is not an :class:`OracleSequenceValueMode`.
+        ValueError: if ``sequence`` is empty, or ``mode`` names no member.
     """
 
     def __init__(
         self,
         dialect: "OracleDialect",
         sequence: str,
-        mode: OracleSequenceValueMode = OracleSequenceValueMode.NEXTVAL,
+        mode: Union[str, OracleSequenceValueMode] = OracleSequenceValueMode.NEXTVAL,
     ):
         super().__init__(dialect)
         if not isinstance(sequence, str) or not sequence.strip():
             raise ValueError("sequence must be a non-empty string")
-        if not isinstance(mode, OracleSequenceValueMode):
-            raise TypeError(
-                "mode must be an OracleSequenceValueMode value, "
-                f"got {type(mode).__name__}"
-            )
         self.sequence = sequence
-        self.mode = mode
+        self.mode = normalize_sequence_value_mode(mode)
 
     def to_sql(self) -> SQLQueryAndParams:
         if self.mode is OracleSequenceValueMode.NEXTVAL:
@@ -73,12 +88,12 @@ class OracleSequenceValueExpression(BaseExpression):
         return self.dialect.format_currval(self)
 
 
-class OracleCreateSequenceExpression(BaseExpression):
+class OracleCreateSequenceStatement(BaseExpression):
     """Oracle ``CREATE SEQUENCE ...`` DDL expression.
 
     Oracle renders sequences with the ``START WITH``/``INCREMENT BY`` option
     set.  Each spellable alternative has its own parameter, matching core's
-    ``CreateSequenceExpression``: ``cycle`` / ``no_cycle``, ``cache`` /
+    ``CreateSequenceStatement``: ``cycle`` / ``no_cycle``, ``cache`` /
     ``no_cache``, ``order`` / ``no_order``.  Setting both of a pair raises
     ``ValueError``; ``cache`` is a positive count and ``no_cache=True`` spells
     ``NOCACHE`` (``cache=0`` is refused, not a spelling).
@@ -163,7 +178,7 @@ class OracleCreateSequenceExpression(BaseExpression):
         return "format_create_sequence_statement"
 
 
-class OracleDropSequenceExpression(BaseExpression):
+class OracleDropSequenceStatement(BaseExpression):
     """Oracle ``DROP SEQUENCE ...`` DDL expression.
 
     Args:

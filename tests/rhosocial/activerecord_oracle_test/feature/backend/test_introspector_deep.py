@@ -1,7 +1,7 @@
 # tests/rhosocial/activerecord_oracle_test/feature/backend/test_introspector_deep.py
 """Deep coverage for introspection/introspector.py.
 
-Offline half: the SQL builders and pure-Python ``_parse_*`` helpers are
+Offline half: the SQL builders and pure-Python ``parse_*`` helpers are
 driven with synthetic data-dictionary rows through stub collaborators.
 Live half (pinned to the ``oracle_schema_dml`` xdist group): AR_CRM/AR_SHOP
 are provisioned like test_schema_qualified_dml and probed through the
@@ -31,8 +31,8 @@ from rhosocial.activerecord.backend.expression.types import (
     BlobType, BooleanType, IntegerType, VarCharType,
 )
 from rhosocial.activerecord.backend.expression.introspection import (
-    ForeignKeyExpression, IndexInfoExpression, TableListExpression,
-    TriggerListExpression, ViewListExpression,
+    ForeignKeyQueryStatement, IndexInfoQueryStatement, TableListQueryStatement,
+    TriggerListQueryStatement, ViewListQueryStatement,
 )
 from rhosocial.activerecord.backend.introspection.types import ColumnNullable
 from rhosocial.activerecord.model import ActiveRecord
@@ -81,7 +81,7 @@ def make_sync_introspector(username: str = "ar_crm",
 class TestSchemaResolution:
     def test_default_schema_from_config_username(self):
         insp, _, _ = make_sync_introspector("ar_shop")
-        assert insp._get_default_schema() == "AR_SHOP"
+        assert insp.default_schema == "AR_SHOP"
 
     def test_version_from_backend(self):
         insp, _, _ = make_sync_introspector(version=(19, 8, 0))
@@ -98,7 +98,7 @@ class TestSqlBuilders:
     def test_columns_sql_binds_uppercase_owner_and_table(self):
         """Table and owner are bind values, never interpolated literals."""
         insp, _, _ = make_sync_introspector("ar_crm")
-        sql, params = insp._build_columns_sql("customers", "ar_crm")
+        sql, params = insp.column_info_statement(table_name="customers", schema="ar_crm").to_sql()
         assert "ALL_TAB_COLUMNS" in sql.upper()
         assert "CUSTOMERS" not in sql.upper()
         assert "AR_CRM" not in sql.upper()
@@ -106,7 +106,7 @@ class TestSqlBuilders:
 
     def test_primary_key_sql_binds_uppercase_owner_and_table(self):
         insp, _, _ = make_sync_introspector()
-        sql, params = insp._build_primary_key_sql("orders", "ar_shop")
+        sql, params = insp.primary_key_statement(table_name="orders", schema="ar_shop").to_sql()
         assert "ALL_CONSTRAINTS" in sql.upper()
         assert "'P'" in sql
         assert "ORDERS" not in sql.upper()
@@ -116,55 +116,55 @@ class TestSqlBuilders:
     def test_quoting_attempt_in_table_name_is_not_executed(self):
         """A name carrying SQL is bound as data and cannot alter the query."""
         insp, _, _ = make_sync_introspector()
-        _, params = insp._build_columns_sql("t' OR '1'='1", "scott")
+        _, params = insp.column_info_statement(table_name="t' OR '1'='1", schema="scott").to_sql()
         assert params == ("T' OR '1'='1", "SCOTT")
 
     def test_dialect_table_list_query_scopes_owner(self):
         dialect = OracleDialect(version=(23, 0, 0))
-        sql, params = dialect.format_table_list_query(
-            TableListExpression(dialect, schema="ar_shop",
+        sql, params = dialect.format_table_list_query_statement(
+            TableListQueryStatement(dialect, schema="ar_shop",
                                 include_views=False)
         )
         assert "ALL_TABLES" in sql.upper() and "ALL_VIEWS" not in sql.upper()
         assert "AR_SHOP" in [str(p) for p in params]
 
-        sql_all, _ = dialect.format_table_list_query(
-            TableListExpression(dialect)
+        sql_all, _ = dialect.format_table_list_query_statement(
+            TableListQueryStatement(dialect)
         )
         assert "UNION ALL" in sql_all and "ALL_VIEWS" in sql_all.upper()
 
     def test_dialect_index_and_fk_queries_join_constraints(self):
         dialect = OracleDialect(version=(23, 0, 0))
-        idx_sql, idx_params = dialect.format_index_info_query(
-            IndexInfoExpression(dialect, "orders").schema("ar_shop")
+        idx_sql, idx_params = dialect.format_index_info_query_statement(
+            IndexInfoQueryStatement(dialect, "orders", schema="ar_shop")
         )
         assert "ALL_INDEXES" in idx_sql.upper()
         assert "ALL_IND_COLUMNS" in idx_sql.upper()
         assert [str(p) for p in idx_params] == ["AR_SHOP", "ORDERS"]
 
-        fk_sql, fk_params = dialect.format_foreign_key_query(
-            ForeignKeyExpression(dialect, "orders").schema("ar_shop")
+        fk_sql, fk_params = dialect.format_foreign_key_query_statement(
+            ForeignKeyQueryStatement(dialect, "orders", schema="ar_shop")
         )
         assert "'R'" in fk_sql
         assert [str(p) for p in fk_params] == ["AR_SHOP", "ORDERS"]
 
     def test_dialect_view_and_trigger_queries_target_dictionary(self):
         dialect = OracleDialect(version=(23, 0, 0))
-        view_sql, view_params = dialect.format_view_list_query(
-            ViewListExpression(dialect, schema="ar_crm")
+        view_sql, view_params = dialect.format_view_list_query_statement(
+            ViewListQueryStatement(dialect, schema="ar_crm")
         )
         assert "ALL_VIEWS" in view_sql.upper()
         assert [str(p) for p in view_params] == ["AR_CRM"]
 
-        trig_sql, trig_params = dialect.format_trigger_list_query(
-            TriggerListExpression(dialect, schema="ar_crm", table_name="customers")
+        trig_sql, trig_params = dialect.format_trigger_list_query_statement(
+            TriggerListQueryStatement(dialect, schema="ar_crm", table_name="customers")
         )
         assert "ALL_TRIGGERS" in trig_sql.upper()
         assert [str(p) for p in trig_params] == ["AR_CRM", "CUSTOMERS"]
 
     def test_database_info_sql_reads_nls_parameters(self):
         insp, _, _ = make_sync_introspector()
-        sql, params = insp._build_database_info_sql()
+        sql, params = insp.database_info_statement().to_sql()
         assert "NLS_CHARACTERSET" in sql.upper()
         assert "DUAL" in sql.upper()
         assert params == ()
@@ -195,7 +195,7 @@ def _raw_row(name: str, data_length: int, column_id: int) -> Dict[str, Any]:
 class TestParseHelpers:
     def test_parse_tables_maps_metadata(self):
         insp, _, _ = make_sync_introspector()
-        tables = insp._parse_tables(
+        tables = insp.parse_tables(
             [{"TABLE_NAME": "CUSTOMERS", "COMMENTS": "people", "NUM_ROWS": 5,
               "DATA_LENGTH": 8192, "LAST_ANALYZED": None}],
             "AR_CRM",
@@ -208,7 +208,7 @@ class TestParseHelpers:
 
     def test_parse_columns_marks_primary_key_and_identity(self):
         insp, _, _ = make_sync_introspector()
-        columns = insp._parse_columns(COLUMN_ROWS, "CUSTOMERS", "AR_CRM", ["ID"])
+        columns = insp.parse_columns(COLUMN_ROWS, "CUSTOMERS", "AR_CRM", ["ID"])
         id_col, name_col = columns
         assert id_col.is_primary_key and not name_col.is_primary_key
         assert id_col.is_auto_increment
@@ -227,7 +227,7 @@ class TestParseHelpers:
 
 class TestRawWidthSurvivesIntrospection:
     """``RAW``'s width used to be dropped here, which is a false identity claim
-    produced by introspection rather than by a declaration: ``_parse_columns``
+    produced by introspection rather than by a declaration: ``parse_columns``
     spelled out the size for ``NUMBER``/``FLOAT`` and the character types and
     not for ``RAW``, so every ``RAW`` column reached ``parse_type`` as a bare
     ``"RAW"`` and came back as ``OracleRawType(length=2000)`` — Oracle's
@@ -245,14 +245,14 @@ class TestRawWidthSurvivesIntrospection:
 
     def test_the_declared_width_is_spelled_out(self):
         insp, _, _ = make_sync_introspector()
-        columns = insp._parse_columns(
+        columns = insp.parse_columns(
             [_raw_row("A", 16, 1), _raw_row("B", 64, 2)], "T", "AR_CRM"
         )
         assert [c.data_type_full for c in columns] == ["RAW(16)", "RAW(64)"]
 
     def test_the_two_widths_parse_to_two_different_types(self):
         insp, backend, _ = make_sync_introspector()
-        columns = insp._parse_columns(
+        columns = insp.parse_columns(
             [_raw_row("A", 16, 1), _raw_row("B", 64, 2)], "T", "AR_CRM"
         )
         a, b = (c.parsed_data_type for c in columns)
@@ -267,7 +267,7 @@ class TestRawWidthSurvivesIntrospection:
         render alike."""
         insp, backend, _ = make_sync_introspector()
         dialect = backend.dialect
-        columns = insp._parse_columns(
+        columns = insp.parse_columns(
             [_raw_row("A", 16, 1), _raw_row("B", 64, 2)], "T", "AR_CRM"
         )
         assert columns[0].parsed_data_type == OracleRawType(dialect, length=16)
@@ -293,7 +293,7 @@ class TestRawWidthSurvivesIntrospection:
              "REFERENCED_TABLE_NAME": "CUSTOMERS", "COLUMN_NAME": "TENANT",
              "REFERENCED_COLUMN_NAME": "TENANT"},
         ]
-        fks = insp._parse_foreign_keys(rows, "ORDERS", "AR_SHOP")
+        fks = insp.parse_foreign_keys(rows, "ORDERS", "AR_SHOP")
         assert len(fks) == 1
         fk = fks[0]
         assert fk.columns == ["CID", "TENANT"]
@@ -302,7 +302,7 @@ class TestRawWidthSurvivesIntrospection:
 
     def test_parse_views_updatable_flag(self):
         insp, _, _ = make_sync_introspector()
-        views = insp._parse_views(
+        views = insp.parse_views(
             [{"VIEW_NAME": "V1", "TEXT_VC": "SELECT 1 FROM DUAL",
               "READ_ONLY": "N"}],
             "AR_CRM",
@@ -312,7 +312,7 @@ class TestRawWidthSurvivesIntrospection:
 
     def test_parse_triggers_splits_events(self):
         insp, _, _ = make_sync_introspector()
-        triggers = insp._parse_triggers(
+        triggers = insp.parse_triggers(
             [{"TRIGGER_NAME": "T1", "TRIGGER_TYPE": "BEFORE STATEMENT",
               "TRIGGERING_EVENT": "INSERT OR UPDATE", "TABLE_NAME": "C",
               "TRIGGER_BODY": "BEGIN NULL; END;"}],
@@ -324,7 +324,7 @@ class TestRawWidthSurvivesIntrospection:
 
     def test_parse_database_info_uses_backend_version(self):
         insp, backend, _ = make_sync_introspector(version=(23, 5, 0))
-        info = insp._parse_database_info([{"CHARSET": "AL32UTF8",
+        info = insp.parse_database_info([{"CHARSET": "AL32UTF8",
                                            "LANGUAGE": "AMERICAN"}])
         assert info.version_tuple == (23, 5, 0)
         assert info.vendor == "Oracle"
@@ -347,7 +347,7 @@ def provisioned():
         return (f"BEGIN EXECUTE IMMEDIATE 'DROP USER {user} CASCADE'; "
                 f"EXCEPTION WHEN OTHERS THEN NULL; END;")
 
-    backend_class, config = get_scenario_raw("oracle_23c")
+    backend_class, config = get_scenario_raw("oracle_26ai")
     DeepCustomer.configure(config, backend_class)
     backend = DeepCustomer.__backend__
     if not backend._connection:
@@ -574,7 +574,7 @@ def boolean_provisioned():
     from rhosocial.activerecord.backend.schema import StatementType
 
     ddl_options = ExecutionOptions(stmt_type=StatementType.DDL)
-    backend_class, config = get_scenario_raw("oracle_23c")
+    backend_class, config = get_scenario_raw("oracle_26ai")
     DeepCustomer.configure(config, backend_class)
     backend = DeepCustomer.__backend__
     if not backend._connection:
@@ -622,7 +622,7 @@ def wired_scenarios() -> List[str]:
     Used as the parametrisation source instead of a fixed tuple of names.
     A fixed tuple is not a list of the servers under test: CI wires **one**
     scenario per job (each job writes its own ``oracle_scenarios.yaml`` with a
-    single entry), so ``get_scenario_raw("oracle_23c")`` in the 21c job
+    single entry), so ``get_scenario_raw("oracle_26ai")`` in the 21c job
     silently answers with the 21c server -- see :func:`scenario_or_skip`.
     Parametrising over what is wired makes the ids tell the truth about which
     server each case ran against.
@@ -638,7 +638,7 @@ def scenario_or_skip(name: str):
     ``get_scenario_raw`` substitutes *the first wired scenario* for a name it
     does not recognise.  That fallback is reasonable for a provider that wants
     "some reachable server" and wrong for a test that says what it is talking
-    to: asking for ``oracle_23c`` in a job that wires only ``oracle_21c`` used
+    to: asking for ``oracle_26ai`` in a job that wires only ``oracle_21c`` used
     to hand back 21c, and a test then asserted things about the 23-line server
     while reading an 21c one.
 
@@ -956,9 +956,9 @@ class TestDialectCarriesTheServersOwnVersion:
         of this test fail for the wrong reason in CI:
 
         * CI wires **one** scenario per job. The 18c and 21c jobs do not wire
-          ``oracle_23c``, and ``get_scenario_raw`` answers an unknown name
+          ``oracle_26ai``, and ``get_scenario_raw`` answers an unknown name
           with the first wired scenario. So this test, which asked for
-          ``oracle_23c``, was silently handed 18c and 21c and then asserted
+          ``oracle_26ai``, was silently handed 18c and 21c and then asserted
           ``version[0] == 23`` about them -- failing with ``assert 18 == 23``
           and ``assert 21 == 23`` (measured, CI run 37245026297). The backend
           had detected each job's own server correctly; the assertion was about
@@ -968,7 +968,7 @@ class TestDialectCarriesTheServersOwnVersion:
           test), so the premise of this scenario was never contradicted by CI
           at all.
 
-        So: this test now skips unless ``oracle_23c`` is genuinely wired
+        So: this test now skips unless ``oracle_26ai`` is genuinely wired
         (:func:`scenario_or_skip`), and where it runs it says out loud which
         two facts about the fixture it depends on -- the line is 23, and the
         brand says 26 -- rather than leaving them implicit in a bare integer
@@ -982,12 +982,12 @@ class TestDialectCarriesTheServersOwnVersion:
         Database 23ai - it remains '23'. The second number of the release
         indicates the year of the release update, e.g. 26 for 2026."
         """
-        backend_class, config = scenario_or_skip("oracle_23c")
+        backend_class, config = scenario_or_skip("oracle_26ai")
         backend = backend_class(connection_config=config)
         try:
             backend.connect()
         except Exception as exc:
-            pytest.skip(f"oracle_23c is not reachable: {exc}")
+            pytest.skip(f"oracle_26ai is not reachable: {exc}")
         try:
             rows = fetch_all(backend, "SELECT VERSION, VERSION_FULL, PRODUCT "
                                       "FROM PRODUCT_COMPONENT_VERSION")
@@ -1009,7 +1009,7 @@ class TestDialectCarriesTheServersOwnVersion:
             )
             backend.introspect_and_adapt()
             assert full is not None, (
-                f"oracle_23c reports no VERSION_FULL, so the release-update "
+                f"oracle_26ai reports no VERSION_FULL, so the release-update "
                 f"number that tells 23ai from 26ai cannot be demonstrated"
             )
             # Both true at once, and neither read from the other: the product
@@ -1043,7 +1043,7 @@ class TestLiveStatusSurface:
 async def test_async_status_tablespaces():
     from rhosocial.activerecord.backend.impl.oracle.backend.async_backend import AsyncOracleBackend
 
-    _, config = get_scenario_raw("oracle_23c")
+    _, config = get_scenario_raw("oracle_26ai")
     backend = AsyncOracleBackend(connection_config=config)
     await backend.connect()
     try:

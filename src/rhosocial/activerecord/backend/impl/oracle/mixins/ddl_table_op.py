@@ -10,7 +10,7 @@ capability checks that were previously inlined in the monolithic
 from typing import Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover
-    from ....expression.statements import DropTableExpression
+    from ....expression.statements import DropTableStatement
 
 
 class OracleTableCapabilityMixin:
@@ -53,7 +53,7 @@ class OracleTableCapabilityMixin:
         return True
 
     def format_drop_table_statement(
-        self, expr: "DropTableExpression"
+        self, expr: "DropTableStatement"
     ) -> Tuple[str, tuple]:
         """Format DROP TABLE for Oracle.
 
@@ -77,7 +77,7 @@ class OracleTableCapabilityMixin:
 
         if not isinstance(expr.table, Table):
             raise TypeError(
-                f"DropTableExpression.table must be a Table, "
+                f"DropTableStatement.table must be a Table, "
                 f"got {type(expr.table).__name__}"
             )
 
@@ -94,7 +94,7 @@ class OracleTableCapabilityMixin:
             if not self.supports_drop_table_restrict():
                 raise UnsupportedFeatureError(self.name, "DROP TABLE ... RESTRICT")
             parts.append("RESTRICT")
-        if getattr(expr, "purge", False) and self.supports_purge_on_drop_table():
+        if expr.purge and self.supports_purge_on_drop_table():
             parts.append("PURGE")
         return " ".join(parts), table_params
 

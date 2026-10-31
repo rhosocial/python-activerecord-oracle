@@ -16,7 +16,7 @@ SQL-standard CASCADE) and supports ``PURGE``. The dialect never emits an
 import pytest
 
 from rhosocial.activerecord.backend.dialect import UnsupportedFeatureError
-from rhosocial.activerecord.backend.expression import DropTableExpression
+from rhosocial.activerecord.backend.expression import DropTableStatement
 from rhosocial.activerecord.backend.expression.objects import Table
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
@@ -38,14 +38,14 @@ class TestOracleDropTableCascadeCapabilities:
 
 class TestOracleDropTableRendering:
     def test_cascade_true_renders_cascade_constraints(self, dialect):
-        expr = DropTableExpression(dialect, table=Table(dialect, "users"), cascade=True)
+        expr = DropTableStatement(dialect, table=Table(dialect, "users"), cascade=True)
         sql, params = expr.to_sql()
         assert sql.endswith(" CASCADE CONSTRAINTS")
         assert "PURGE" not in sql
         assert params == ()
 
     def test_cascade_true_with_purge_option(self, dialect):
-        expr = DropTableExpression(
+        expr = DropTableStatement(
             dialect,
             table=Table(dialect, "users"),
             cascade=True,
@@ -56,19 +56,19 @@ class TestOracleDropTableRendering:
         assert params == ()
 
     def test_purge_without_cascade(self, dialect):
-        expr = DropTableExpression(dialect, table=Table(dialect, "users"), purge=True)
+        expr = DropTableStatement(dialect, table=Table(dialect, "users"), purge=True)
         sql, params = expr.to_sql()
         assert sql.endswith(" PURGE")
         assert "CASCADE" not in sql
         assert params == ()
 
     def test_restrict_true_raises(self, dialect):
-        expr = DropTableExpression(dialect, table=Table(dialect, "users"), restrict=True)
+        expr = DropTableStatement(dialect, table=Table(dialect, "users"), restrict=True)
         with pytest.raises(UnsupportedFeatureError, match="DROP TABLE ... RESTRICT"):
             expr.to_sql()
 
     def test_unspecified_omits_clause(self, dialect):
-        expr = DropTableExpression(dialect, table=Table(dialect, "users"))
+        expr = DropTableStatement(dialect, table=Table(dialect, "users"))
         sql, params = expr.to_sql()
         assert "CASCADE" not in sql
         assert "RESTRICT" not in sql
@@ -76,7 +76,7 @@ class TestOracleDropTableRendering:
 
     def test_if_exists_not_emitted(self, dialect):
         """Oracle has no IF EXISTS clause; the flag must be dropped silently."""
-        expr = DropTableExpression(dialect, table=Table(dialect, "users"), if_exists=True)
+        expr = DropTableStatement(dialect, table=Table(dialect, "users"), if_exists=True)
         sql, params = expr.to_sql()
         assert "IF EXISTS" not in sql
         assert sql.startswith("DROP TABLE")

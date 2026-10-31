@@ -49,4 +49,9 @@ class AsyncOracleIntrospectorExecutor(AsyncIntrospectorExecutor):
             rows = await cursor.fetchall()
             return [dict(zip(columns, row)) for row in rows]
         finally:
-            await cursor.close()
+            # ``oracledb``'s AsyncCursor.close() is synchronous, unlike its
+            # execute()/fetchall(). Awaiting it raised
+            # ``TypeError: 'NoneType' object can't be awaited`` *after* a
+            # successful query, so every async introspection call looked
+            # like a failed one.
+            cursor.close()

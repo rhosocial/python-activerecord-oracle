@@ -7,7 +7,7 @@ objects. Oracle has no inline column-comment clause (unlike MySQL's
 ``COMMENT '...'``); comments are always issued through a standalone
 ``COMMENT ON`` statement.
 
-* ``OracleCommentExpression`` — ``COMMENT ON {TABLE|COLUMN|...} obj IS
+* ``OracleCommentOnStatement`` — ``COMMENT ON {TABLE|COLUMN|...} obj IS
   'text'``.
 
 The object being annotated is held as the object it is, so an owner is quoted
@@ -18,13 +18,13 @@ identity is scoped to its table, not to the catalogue, so
 the column ``ID``, not an object called ``ORDERS.ID``.
 
 The expression delegates SQL generation to the dialect through the public
-``format_comment_statement`` formatter implemented by
+``format_comment_on_statement`` formatter implemented by
 ``OracleCommentMixin``.
 """
 from __future__ import annotations
 
 from enum import Enum
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING, Union
 
 from rhosocial.activerecord.backend.expression.bases import BaseExpression
 from rhosocial.activerecord.backend.expression.objects import (
@@ -47,8 +47,10 @@ if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
 
 
-class OracleCommentObjectType(Enum):
+class OracleCommentObjectType(str, Enum):
     """Oracle schema object kinds accepted by ``COMMENT ON``."""
+
+    __str__ = str.__str__
 
     TABLE = "TABLE"
     COLUMN = "COLUMN"
@@ -63,6 +65,25 @@ class OracleCommentObjectType(Enum):
     MATERIALIZED_VIEW = "MATERIALIZED VIEW"
     TYPE = "TYPE"
     SYNONYM = "SYNONYM"
+
+
+def normalize_comment_object_type(
+    object_type: Union[str, OracleCommentObjectType],
+) -> OracleCommentObjectType:
+    """A member passes through; the word it carries becomes that member.
+
+    The artifact carries the word, so a constructor reading one back gets a
+    str and must be able to spell the member from it.
+    """
+    if isinstance(object_type, OracleCommentObjectType):
+        return object_type
+    normalized = str(object_type).strip().upper()
+    if normalized in OracleCommentObjectType._value2member_map_:
+        return OracleCommentObjectType(normalized)
+    raise ValueError(
+        f"unsupported COMMENT ON object type: {object_type!r}; expected one of "
+        f"{[member.value for member in OracleCommentObjectType]}"
+    )
 
 
 # The object kind each COMMENT ON keyword names, so the statement cannot claim
@@ -86,7 +107,7 @@ _COMMENT_OBJECT_KINDS = {
 }
 
 
-class OracleCommentExpression(BaseExpression):
+class OracleCommentOnStatement(BaseExpression):
     """Oracle ``COMMENT ON ... IS ...`` statement expression.
 
     Args:
@@ -101,28 +122,22 @@ class OracleCommentExpression(BaseExpression):
         column: the column, when ``object_type`` is ``COLUMN``.
 
     Raises:
-        TypeError: if ``object_type`` is not an
-            :class:`OracleCommentObjectType`, if ``object`` is not a
-            :class:`SchemaObject`, or its kind disagrees with
-            ``object_type``.
-        ValueError: if ``column`` is given without ``COLUMN``, or
-            ``COLUMN`` is named without one.
+        ValueError: if ``object_type`` names no member, if ``object`` is not
+            a :class:`SchemaObject`, if its kind disagrees with
+            ``object_type``, or if ``column`` is given without ``COLUMN`` (or
+            ``COLUMN`` is named without one).
     """
 
     def __init__(
         self,
         dialect: "OracleDialect",
-        object_type: OracleCommentObjectType,
+        object_type: Union[str, OracleCommentObjectType],
         object: SchemaObject,
         comment: Optional[str] = None,
         column: Optional[str] = None,
     ):
         super().__init__(dialect)
-        if not isinstance(object_type, OracleCommentObjectType):
-            raise TypeError(
-                "object_type must be an OracleCommentObjectType value, "
-                f"got {type(object_type).__name__}"
-            )
+        object_type = normalize_comment_object_type(object_type)
         expected = _COMMENT_OBJECT_KINDS[object_type]
         if not isinstance(object, expected):
             raise TypeError(
@@ -148,4 +163,4 @@ class OracleCommentExpression(BaseExpression):
     @property
     def format_method(self) -> str:
         """The dialect formatting method that renders this expression."""
-        return "format_comment_statement"
+        return "format_comment_on_statement"

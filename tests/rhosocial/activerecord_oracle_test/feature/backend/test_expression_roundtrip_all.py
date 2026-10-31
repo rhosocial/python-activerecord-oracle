@@ -70,7 +70,7 @@ Why the dispatch's refusal is no longer allowed on its type alone
 The two ``UnsupportedFeatureError`` outcomes above were one branch until core
 turned ``trim``/``lpad``/``rpad``/``repeat`` into dedicated nodes. Oracle
 spells ``lpad``/``rpad``/``trim`` natively and has no ``REPEAT`` function, so
-``RepeatExpression`` reaches a dispatch that finds no
+``RepeatFunction`` reaches a dispatch that finds no
 ``format_repeat_expression`` -- and before this split, that refusal read as
 "Oracle lacks the feature" and passed, indistinguishable from a probe declining
 something Oracle genuinely does not have. The exception itself records who is
@@ -112,7 +112,7 @@ import pytest
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 from rhosocial.activerecord.backend.expression.bases import BaseExpression
 from rhosocial.activerecord.backend.expression.core import Column, Literal
-from rhosocial.activerecord.backend.expression.operators import RawSQLExpression
+from rhosocial.activerecord.backend.expression.operators import RawSQL
 from rhosocial.activerecord.backend.expression.objects import (
     Function,
     Index,
@@ -128,7 +128,6 @@ from rhosocial.activerecord.backend.expression.objects import (
 )
 from rhosocial.activerecord.backend.expression.predicates import ComparisonPredicate
 from rhosocial.activerecord.backend.expression.serialization import (
-    ExpressionRegistry,
     deserialize,
     deserialize_json,
     deserialize_xml,
@@ -137,13 +136,18 @@ from rhosocial.activerecord.backend.expression.serialization import (
     serialize_xml,
 )
 from rhosocial.activerecord.backend.expression.statements.ddl_table import (
+    ColumnConstraint,
+    ColumnNotNullConstraint,
     TableConstraint,
-    TableConstraintType,
+    TablePrimaryKeyConstraint,
 )
-from rhosocial.activerecord.backend.expression.statements.dql import QueryExpression
+from rhosocial.activerecord.backend.expression.statements.dql import QueryStatement
 from rhosocial.activerecord.backend.expression.sources import NamedRelationRef
 from rhosocial.activerecord.backend.expression.types import IntegerType
-from rhosocial.activerecord.testsuite.utils.expression import (
+# The round-trip harness is vendored beside this matrix (see its module
+# docstring for provenance): the testsuite retired it in e05edb0 with the
+# direction that round-trip coverage moves to the owning repository.
+from expression_roundtrip_harness import (
     assert_params_equal,
     collect_expression_classes,
     make_instance,
@@ -165,6 +169,75 @@ def assert_params_equal_local(a, b, path="params"):
     assert_params_equal(a, b, path)
 
 
+def _channel_payload(instance, channel):
+    """The ``channel``-encoded artifact for ``instance``."""
+    if channel == "dict":
+        return serialize(instance)
+    if channel == "json":
+        return serialize_json(instance)
+    return serialize_xml(instance)
+
+
+def _channel_decode(payload, dialect, channel):
+    """The node ``payload`` carries, read back through ``channel``."""
+    if channel == "dict":
+        return deserialize(payload, dialect)
+    if channel == "json":
+        return deserialize_json(payload, dialect)
+    return deserialize_xml(payload, dialect)
+
+
+def assert_bind_params_equal(a, b, path="bind parameters"):
+    """Compare two ``to_sql()`` parameter sequences, so the SQL can be trusted.
+
+    The same question :func:`assert_params_equal_local` asks of ``get_params()``,
+    with one rule added, and the rule is the whole reason this exists. A node
+    holds its bind parameters as a **tuple** and the plain-JSON artifact has no
+    tuple shape -- the value vocabulary spells ``list_value`` and nothing else --
+    so a parameter sequence written to an artifact and read back comes home a
+    list. The artifact rewrite's stated contract is that the constructor
+    normalises that array back to the type it declared, and a node that does not
+    is a node whose ``to_sql()`` returns a different *kind* of sequence than it
+    did before the round-trip. That difference is invisible to the structural
+    comparator, which accepts a list for a tuple on purpose, so this one asks
+    for the container type as well.
+
+    Nested expression nodes inside the sequence are still compared
+    structurally, for the reason :func:`assert_params_equal` states: two
+    ``BaseExpression`` instances are not equal by value -- neither core nor this
+    backend defines ``__eq__`` -- so a raw ``==`` on a parameter holding one
+    reports a difference that is an identity comparison, not a loss.
+    """
+    assert isinstance(a, (list, tuple)) and isinstance(b, (list, tuple)), (
+        f"{path}: expected parameter sequences, got "
+        f"{type(a).__name__} and {type(b).__name__}"
+    )
+    assert type(a) is type(b), (
+        f"{path}: the sequence changed type, {type(a).__name__} became "
+        f"{type(b).__name__}.\n"
+        f"  The artifact has no tuple shape, so a node declaring one must "
+        f"normalise the array its constructor reads back into that tuple. This "
+        f"one did not, which is core's to fix -- see CORE_ARTIFACT_GAPS."
+    )
+    assert len(a) == len(b), f"{path}: length differ"
+    for i, (x, y) in enumerate(zip(a, b)):
+        if isinstance(x, BaseExpression) or isinstance(y, BaseExpression):
+            assert isinstance(x, BaseExpression) and isinstance(y, BaseExpression), (
+                f"{path}[{i}]: expected a nested expression, got "
+                f"{type(x).__name__} and {type(y).__name__}"
+            )
+            assert_bind_params_equal(
+                _flatten_params(x), _flatten_params(y), f"{path}[{i}]"
+            )
+        else:
+            assert x == y, f"{path}[{i}]: {x!r} != {y!r}"
+
+
+def _flatten_params(instance):
+    """A node's own ``to_sql()`` parameters, for a nested comparison."""
+    return instance.to_sql()[1]
+
+
 # ---------------------------------------------------------------------------
 # Discovery: walk both packages, never the process-global registry
 # ---------------------------------------------------------------------------
@@ -181,16 +254,13 @@ def _collect_matrix_classes():
     for another. They are the same objects, so one entry per class.
 
     The name kept is the class's *own* ``__name__``, not whichever alias sorted
-    first, and that is load-bearing rather than cosmetic:
-    :meth:`ExpressionRegistry.register` keys on
-    ``f"{cls.__module__}.{cls.__name__}"``, so a matrix entry named after an
-    alias is a name the registry will never resolve -- the round-trip would look
-    for ``...OracleAddTypeAttributeAction`` and find nothing, while
-    ``register_all`` had filed the class under ``...OracleAlterTypeAddAttributeAction``.
-    Keying on the canonical name makes the matrix's keys and the registry's the
-    same strings by construction.
+    first, and that is load-bearing rather than cosmetic: the deserialization
+    whitelist keys a class by its kind (§4.11.1, the snake_case of the class
+    name) and resolves it back through :meth:`ExpressionRegistry.register_node`,
+    so a matrix entry named after an alias describes a class the walk also
+    filed under its canonical name -- one object, one kind, and the identity
+    dedup below is what keeps them from claiming the kind twice.
     """
-    ExpressionRegistry._auto_register_builtins()
     collected: Dict[str, type] = {}
     for package in (ORACLE_EXPR_PKG, CORE_EXPR_PKG):
         collected.update(collect_expression_classes(package))
@@ -207,6 +277,16 @@ def _collect_matrix_classes():
 
 
 REGISTERED = _collect_matrix_classes()
+# The split registry (core 8d474dc8): kinds resolve through the framework's
+# default whitelist -- core and the built-in backends are auto-populated, the
+# Oracle classes are what register_all adds. The plain-JSON rewrite
+# (core 679d9817) removed the enum and dataclass whitelists the matrix once
+# fed beside it: a string enum *is* a JSON string and needs no table, and a
+# dataclass has no place in an artifact at all, so nodes are all there is to
+# register. RawSQL and RawSQLPredicate come along with the rest -- core
+# deliberately leaves them out of the default table
+# (REGISTER_BY_DEFAULT = False, so an untrusted artifact cannot choose raw
+# SQL), and this matrix is the caller that trusts the artifacts it reads.
 register_all(REGISTERED)
 
 
@@ -231,7 +311,7 @@ def _column_predicate(dialect):
 
 def _one_column_query(dialect):
     """A single-column ``SELECT`` over a table."""
-    return QueryExpression(
+    return QueryStatement(
         dialect, select=[Column(dialect, "id")], from_=_table_obj(dialect)
     )
 
@@ -323,38 +403,41 @@ def _register_core_specials():
     )
     from rhosocial.activerecord.backend.expression.types.enum_ import EnumType
 
-    # ALTER CONSTRAINT. `constraint_type` is keyword-only behind defaulted
-    # positionals, so the introspective constructor skips it and the class
-    # refuses an incomplete action; the enforcement keyword is mandatory, so
-    # the factory picks a spelling.
-    def alter_constraint(dialect):
-        return ddl_alter.AlterConstraint(
-            dialect,
-            "c1",
-            constraint_type=TableConstraintType.FOREIGN_KEY,
-            enforced=True,
-        )
+    # ALTER CONSTRAINT / VALIDATE CONSTRAINT are not registered here at all.
+    # Core made ``constraint_kind`` a required keyword-only parameter, and the
+    # introspective constructor skips keyword-only parameters behind defaulted
+    # positionals, so the guess cannot build one; a factory would build it only
+    # to serialise a *branch class* through the three encodings, which is a core
+    # serialisation question rather than one this backend has an oracle for.
+    # They are pinned in ``UNCONSTRUCTIBLE`` instead.
 
+    # Core predicates whose operand slots the generic guess fills with plain
+    # strings. This is the wildcard-split follow-up core's commit ``61a1a458``
+    # calls out: the operand annotations are strings/``Any``, so the guess
+    # supplies a bare string where a value node belongs and the instance cannot
+    # render ("'str' object has no attribute 'to_sql'"). The factories hand them
+    # real value nodes, exactly as core registers them in its own dummy2 matrix.
+    from rhosocial.activerecord.backend.expression.predicates import (
+        ILikePredicate,
+        LikeOperator,
+        LikePredicate,
+    )
+
+    # The operator is a member of the closed enum, not the word. Core's
+    # ``f2bdf386`` split the LIKE family the way the comparison family was
+    # already split: the word is what the artifact carries and the keyword is
+    # a spelling the dialect owns, so a node constructed with a bare string
+    # renders a wire word into the SQL -- which is the whole defect that
+    # commit fixed, and passing ``"LIKE"`` here reintroduced it in the matrix.
     register_special_constructor(
-        "statements.ddl_alter.AlterConstraint", alter_constraint
+        "predicates.LikePredicate",
+        lambda d: LikePredicate(
+            d, LikeOperator.LIKE, Column(d, "a"), Literal(d, "%x%")
+        ),
     )
     register_special_constructor(
-        "statements.ddl_alter.AlterConstraintAction", alter_constraint
-    )
-    register_special_constructor(
-        "statements.ddl_alter.AlterTableConstraint", alter_constraint
-    )
-    register_special_constructor(
-        "statements.ddl_alter.ValidateConstraint",
-        lambda d: ddl_alter.ValidateConstraint(d, "c1"),
-    )
-    register_special_constructor(
-        "statements.ddl_alter.ValidateConstraintAction",
-        lambda d: ddl_alter.ValidateConstraint(d, "c1"),
-    )
-    register_special_constructor(
-        "statements.ddl_alter.ValidateTableConstraint",
-        lambda d: ddl_alter.ValidateConstraint(d, "c1"),
+        "predicates.ILikePredicate",
+        lambda d: ILikePredicate(d, Column(d, "a"), "%x%"),
     )
 
     # ADD DOMAIN CHECK. Widens a SQLPredicate into a DomainCheckConstraint and
@@ -369,12 +452,14 @@ def _register_core_specials():
 
     # ADD TABLE CONSTRAINT. The guess supplies a bare string where a
     # TableConstraint belongs, and the formatter reads its fields.
+    # (Core renamed the alter-table actions to their *Action spellings --
+    # the kinds follow the class names.)
     register_special_constructor(
-        "statements.ddl_alter.AddTableConstraint",
-        lambda d: ddl_alter.AddTableConstraint(
+        "statements.ddl_alter.AddTableConstraintAction",
+        lambda d: ddl_alter.AddTableConstraintAction(
             d,
             TableConstraint(
-                d, TableConstraintType.PRIMARY_KEY, name="c", columns=["a"]
+                d, branch=TablePrimaryKeyConstraint(d, ["a"]), name="c"
             ),
         ),
     )
@@ -382,7 +467,7 @@ def _register_core_specials():
     # ENUM type. `values` is keyword-only behind a defaulted positional, so the
     # introspective constructor skips it and the type declares no members.
     register_special_constructor(
-        "types.enum_.EnumType", lambda d: EnumType(d, ["first", "second"])
+        "types.enum_.EnumType", lambda d: EnumType(d, values=["first", "second"])
     )
 
     # Window pieces. A window definition is a name plus a *specification*, and
@@ -426,33 +511,115 @@ def _register_core_specials():
 
     # ALTER TABLE column actions. Each wants a ColumnDefinition carrying a
     # dialect-bound type, and the guess supplies a bare string where the formatter
-    # reads `.name` and `.data_type`.
+    # reads `.name` and `.data_type`. (Core renamed the actions to their
+    # *Action spellings; the kinds follow the class names.)
     from rhosocial.activerecord.backend.expression.statements.ddl_alter import (
-        AddColumn,
-        ModifyColumn,
+        AddColumnAction,
+        ModifyColumnAction,
     )
 
     register_special_constructor(
-        "statements.ddl_alter.AddColumn",
-        lambda dialect: AddColumn(dialect, column=_integer_column(dialect)),
+        "statements.ddl_alter.AddColumnAction",
+        lambda dialect: AddColumnAction(dialect, column=_integer_column(dialect)),
     )
     register_special_constructor(
-        "statements.ddl_alter.ModifyColumn",
-        lambda dialect: ModifyColumn(dialect, column=_integer_column(dialect)),
+        "statements.ddl_alter.ModifyColumnAction",
+        lambda dialect: ModifyColumnAction(dialect, column=_integer_column(dialect)),
     )
+
+    # EXTRACT with an explicit field: `field` is a word-or-enum the guess
+    # cannot spell, and the source must be an expression.
+    from rhosocial.activerecord.backend.expression import datetime as datetime_mod
+
+    register_special_constructor(
+        "datetime._ExtractBase",
+        lambda d: datetime_mod._ExtractBase(d, "YEAR", Column(d, "created_at")),
+    )
+    register_special_constructor(
+        "datetime.ExtractFieldExpression",
+        lambda d: datetime_mod.ExtractFieldExpression(
+            d, "YEAR", Column(d, "created_at")
+        ),
+    )
+
+    # SUBSTRING: both required operands are SQLValue forward references,
+    # so the guess hands the constructor strings it refuses.
+    from rhosocial.activerecord.backend.expression.functions.string import (
+        SubstringExpression,
+    )
+
+    register_special_constructor(
+        "functions.string.SubstringExpression",
+        lambda d: SubstringExpression(d, Column(d, "name"), Literal(d, 1)),
+    )
+
+    # Arithmetic over two operands: `op` is the closed operator enum, which
+    # no guess can name.
+    from rhosocial.activerecord.backend.expression.operators import (
+        ArithmeticOperation,
+        ArithmeticOperator,
+    )
+
+    register_special_constructor(
+        "operators.ArithmeticOperation",
+        lambda d: ArithmeticOperation(
+            d, ArithmeticOperator.ADD, Literal(d, 1), Literal(d, 2)
+        ),
+    )
+
+    # A compound SELECT: `op` is the closed set-operation enum and both
+    # operands must be queries.
+    from rhosocial.activerecord.backend.expression.query_sources import (
+        SetOperation,
+        SetOperationKind,
+    )
+
+    register_special_constructor(
+        "query_sources.SetOperation",
+        lambda d: SetOperation(
+            d,
+            SetOperationKind.UNION,
+            _one_column_query(d),
+            _one_column_query(d),
+        ),
+    )
+
+    # The declared-result annotations. The generic guess hands their
+    # ``source`` a Literal, and core's format_declared_result reads
+    # ``.alias`` off the source -- a Literal carries no alias (core
+    # 239678e5: a bind parameter has nothing to name), so the render dies
+    # reading a field the node does not have. An annotation wraps a call in
+    # practice -- that is what as_text() and its siblings produce -- so
+    # each special hands the class a niladic FunctionCall, which is
+    # aliasable.
+    from rhosocial.activerecord.backend.expression import declared as declared_mod
+    from rhosocial.activerecord.backend.expression.core import FunctionCall
+
+    for _ann_name in (
+        "_Annotation",
+        "TextAnnotation", "NumberAnnotation", "IntegerAnnotation",
+        "TemporalAnnotation", "BooleanAnnotation", "ArrayAnnotation",
+        "JSONAnnotation", "UUIDAnnotation", "BinaryAnnotation",
+        "XMLAnnotation",
+    ):
+        _ann_cls = getattr(declared_mod, _ann_name)
+        register_special_constructor(
+            f"declared.{_ann_name}",
+            lambda d, _c=_ann_cls: _c(d, FunctionCall(d, "FUNC", niladic=True)),
+        )
 
     # CREATE TRIGGER. `timing` and `events` are enums and the formatter reads
     # `.value` off each; the guess supplies strings, so it fails on the first
     # attribute access rather than on a type check.
     from rhosocial.activerecord.backend.expression.statements.ddl_trigger import (
-        CreateTriggerExpression,
+        CreateTriggerStatement,
         TriggerEvent,
         TriggerTiming,
     )
 
     register_special_constructor(
-        "statements.ddl_trigger.CreateTriggerExpression",
-        lambda dialect: CreateTriggerExpression(
+        "statements.ddl_trigger.CreateTriggerStatement",
+        lambda dialect: CreateTriggerStatement(
             dialect,
             trigger=Trigger(dialect, "trg"),
             table=_table_obj(dialect),
@@ -481,17 +648,13 @@ def _register_core_specials():
         ),
     )
 
-    # Column constraint. `constraint_type` is an enum and the formatter reads it
-    # as one; the guess supplies a string, which the class itself refuses.
-    from rhosocial.activerecord.backend.expression.statements.ddl_table import (
-        ColumnConstraint,
-        ColumnConstraintType,
-    )
-
+    # Column constraint. The branch names the kind and the production refuses
+    # a branch that is not one; the guess supplies a string where a
+    # ColumnConstraintBranch belongs.
     register_special_constructor(
         "statements.ddl_table.ColumnConstraint",
         lambda dialect: ColumnConstraint(
-            dialect, ColumnConstraintType.NOT_NULL, name="c"
+            dialect, branch=ColumnNotNullConstraint(dialect), name="c"
         ),
     )
 
@@ -508,12 +671,12 @@ def _register_core_specials():
 
     # COLLATE. The collation name is validated against a whitelist, and the
     # guess's "x" is not a collation any engine has.
-    from rhosocial.activerecord.backend.expression.collation import CollateExpression
+    from rhosocial.activerecord.backend.expression.collation import CollateFunction
     from rhosocial.activerecord.backend.impl.oracle.collation import OracleCollation
 
     register_special_constructor(
-        "collation.CollateExpression",
-        lambda dialect: CollateExpression(
+        "collation.CollateFunction",
+        lambda dialect: CollateFunction(
             dialect, Column(dialect, "name"), OracleCollation.BINARY_CI
         ),
     )
@@ -535,7 +698,6 @@ def _register_core_specials():
     # guess supplies a bare string where a GraphVertex belongs.
     from rhosocial.activerecord.backend.expression import graph as graph_mod
     from rhosocial.activerecord.backend.expression.objects import (
-        EdgeTable as EdgeTableObject,
         NodeTable,
     )
 
@@ -615,82 +777,82 @@ def _register_core_specials():
     )
     from rhosocial.activerecord.backend.expression.statements import ddl_table as ddl_tbl
     register_special_constructor(
-        "statements.ddl_table.DropTableExpression",
-        lambda d: ddl_tbl.DropTableExpression(d, table=_table_obj(d)),
+        "statements.ddl_table.DropTableStatement",
+        lambda d: ddl_tbl.DropTableStatement(d, table=_table_obj(d)),
     )
     register_special_constructor(
-        "statements.ddl_truncate.TruncateExpression",
-        lambda d: ddl_truncate.TruncateExpression(d, table=_table_obj(d)),
+        "statements.ddl_truncate.TruncateStatement",
+        lambda d: ddl_truncate.TruncateStatement(d, table=_table_obj(d)),
     )
     register_special_constructor(
-        "statements.ddl_index.CreateIndexExpression",
-        lambda d: ddl_index.CreateIndexExpression(
+        "statements.ddl_index.CreateIndexStatement",
+        lambda d: ddl_index.CreateIndexStatement(
             d, index=_index_obj(d), table=_table_obj(d), columns=[Column(d, "a")]
         ),
     )
     register_special_constructor(
-        "statements.ddl_index.DropIndexExpression",
-        lambda d: ddl_index.DropIndexExpression(d, index=_index_obj(d)),
+        "statements.ddl_index.DropIndexStatement",
+        lambda d: ddl_index.DropIndexStatement(d, index=_index_obj(d)),
     )
     register_special_constructor(
-        "statements.ddl_index.CreateFulltextIndexExpression",
-        lambda d: ddl_index.CreateFulltextIndexExpression(
+        "statements.ddl_index.CreateFulltextIndexStatement",
+        lambda d: ddl_index.CreateFulltextIndexStatement(
             d, index=_index_obj(d), table=_table_obj(d), columns=[Column(d, "a")]
         ),
     )
     register_special_constructor(
-        "statements.ddl_index.DropFulltextIndexExpression",
-        lambda d: ddl_index.DropFulltextIndexExpression(
+        "statements.ddl_index.DropFulltextIndexStatement",
+        lambda d: ddl_index.DropFulltextIndexStatement(
             d, index=_index_obj(d), table=_table_obj(d)
         ),
     )
     register_special_constructor(
-        "statements.ddl_schema.CreateSchemaExpression",
-        lambda d: ddl_schema.CreateSchemaExpression(d, schema=_schema_obj(d)),
+        "statements.ddl_schema.CreateSchemaStatement",
+        lambda d: ddl_schema.CreateSchemaStatement(d, schema=_schema_obj(d)),
     )
     register_special_constructor(
-        "statements.ddl_schema.DropSchemaExpression",
-        lambda d: ddl_schema.DropSchemaExpression(d, schema=_schema_obj(d)),
+        "statements.ddl_schema.DropSchemaStatement",
+        lambda d: ddl_schema.DropSchemaStatement(d, schema=_schema_obj(d)),
     )
     register_special_constructor(
-        "statements.ddl_sequence.CreateSequenceExpression",
-        lambda d: ddl_sequence.CreateSequenceExpression(d, sequence=_sequence_obj(d)),
+        "statements.ddl_sequence.CreateSequenceStatement",
+        lambda d: ddl_sequence.CreateSequenceStatement(d, sequence=_sequence_obj(d)),
     )
     register_special_constructor(
-        "statements.ddl_sequence.DropSequenceExpression",
-        lambda d: ddl_sequence.DropSequenceExpression(d, sequence=_sequence_obj(d)),
+        "statements.ddl_sequence.DropSequenceStatement",
+        lambda d: ddl_sequence.DropSequenceStatement(d, sequence=_sequence_obj(d)),
     )
     register_special_constructor(
-        "statements.ddl_sequence.AlterSequenceExpression",
-        lambda d: ddl_sequence.AlterSequenceExpression(
+        "statements.ddl_sequence.AlterSequenceStatement",
+        lambda d: ddl_sequence.AlterSequenceStatement(
             d, sequence=_sequence_obj(d), start=1
         ),
     )
     register_special_constructor(
-        "statements.ddl_view.CreateViewExpression",
-        lambda d: ddl_view.CreateViewExpression(
+        "statements.ddl_view.CreateViewStatement",
+        lambda d: ddl_view.CreateViewStatement(
             d, view=_view_obj(d), query=_one_column_query(d)
         ),
     )
     register_special_constructor(
-        "statements.ddl_view.DropViewExpression",
-        lambda d: ddl_view.DropViewExpression(d, view=_view_obj(d)),
+        "statements.ddl_view.DropViewStatement",
+        lambda d: ddl_view.DropViewStatement(d, view=_view_obj(d)),
     )
     register_special_constructor(
-        "statements.ddl_view.CreateMaterializedViewExpression",
-        lambda d: ddl_view.CreateMaterializedViewExpression(
+        "statements.ddl_view.CreateMaterializedViewStatement",
+        lambda d: ddl_view.CreateMaterializedViewStatement(
             d, view=_materialized_view_obj(d), query=_one_column_query(d)
         ),
     )
     register_special_constructor(
-        "statements.ddl_view.DropMaterializedViewExpression",
-        lambda d: ddl_view.DropMaterializedViewExpression(
+        "statements.ddl_view.DropMaterializedViewStatement",
+        lambda d: ddl_view.DropMaterializedViewStatement(
             d, view=_materialized_view_obj(d)
         ),
     )
     register_special_constructor(
-        "statements.ddl_view.RefreshMaterializedViewExpression",
-        lambda d: ddl_view.RefreshMaterializedViewExpression(
+        "statements.ddl_view.RefreshMaterializedViewStatement",
+        lambda d: ddl_view.RefreshMaterializedViewStatement(
             d, view=_materialized_view_obj(d)
         ),
     )
@@ -702,26 +864,26 @@ def _register_core_specials():
         "statements.ddl_table.ColumnDefinition", _integer_column
     )
     register_special_constructor(
-        "statements.ddl_table.CreateTableExpression",
-        lambda d: ddl_tbl.CreateTableExpression(
+        "statements.ddl_table.CreateTableStatement",
+        lambda d: ddl_tbl.CreateTableStatement(
             d, table=_table_obj(d), columns=[_integer_column(d)]
         ),
     )
     register_special_constructor(
-        "statements.ddl_table.CreateTableAsExpression",
-        lambda d: ddl_tbl.CreateTableAsExpression(
+        "statements.ddl_table.CreateTableAsStatement",
+        lambda d: ddl_tbl.CreateTableAsStatement(
             d, table=_table_obj(d), as_query=_one_column_query(d)
         ),
     )
     register_special_constructor(
-        "statements.ddl_table.CreateTableLikeExpression",
-        lambda d: ddl_tbl.CreateTableLikeExpression(
+        "statements.ddl_table.CreateTableLikeStatement",
+        lambda d: ddl_tbl.CreateTableLikeStatement(
             d, table=_table_obj(d), like_table=Table(d, "other")
         ),
     )
     register_special_constructor(
-        "statements.ddl_table.CreateTableCloneExpression",
-        lambda d: ddl_tbl.CreateTableCloneExpression(
+        "statements.ddl_table.CreateTableCloneStatement",
+        lambda d: ddl_tbl.CreateTableCloneStatement(
             d,
             table=_table_obj(d),
             source_table=Table(d, "other"),
@@ -729,20 +891,20 @@ def _register_core_specials():
         ),
     )
     register_special_constructor(
-        "statements.ddl_table.CreateTableFromTemplateExpression",
-        lambda d: ddl_tbl.CreateTableFromTemplateExpression(
+        "statements.ddl_table.CreateTableFromTemplateStatement",
+        lambda d: ddl_tbl.CreateTableFromTemplateStatement(
             d, table=_table_obj(d), template=_one_column_query(d)
         ),
     )
     register_special_constructor(
-        "statements.ddl_comment.CommentOnExpression",
-        lambda d: ddl_comment.CommentOnExpression(
+        "statements.ddl_comment.CommentOnStatement",
+        lambda d: ddl_comment.CommentOnStatement(
             d, ddl_comment.CommentObjectType.TABLE, _table_obj(d), "a comment"
         ),
     )
     register_special_constructor(
-        "statements.ddl_function.CreateFunctionExpression",
-        lambda d: ddl_fn.CreateFunctionExpression(
+        "statements.ddl_function.CreateFunctionStatement",
+        lambda d: ddl_fn.CreateFunctionStatement(
             d,
             function=_function_obj(d),
             returns=IntegerType(d),
@@ -752,14 +914,14 @@ def _register_core_specials():
     # ALTER TABLE's actions name the index they drop, and the statement names the
     # table it alters; both are objects, so both need one.
     register_special_constructor(
-        "statements.ddl_alter.AlterTableExpression",
-        lambda d: ddl_alter.AlterTableExpression(
-            d, table=_table_obj(d), actions=[ddl_alter.DropColumn(d, "a")]
+        "statements.ddl_alter.AlterTableStatement",
+        lambda d: ddl_alter.AlterTableStatement(
+            d, table=_table_obj(d), actions=[ddl_alter.DropColumnAction(d, "a")]
         ),
     )
     register_special_constructor(
-        "statements.ddl_alter.DropIndex",
-        lambda d: ddl_alter.DropIndex(d, index=_index_obj(d)),
+        "statements.ddl_alter.DropIndexAction",
+        lambda d: ddl_alter.DropIndexAction(d, index=_index_obj(d)),
     )
     # INSERT names the table it writes; a VALUES source needs one row.
     # CREATE TYPE carries a *type definition*, not a bare value: the formatter
@@ -771,7 +933,7 @@ def _register_core_specials():
             OracleTypeAttribute,
         )
 
-        return ddl_type.CreateTypeExpression(
+        return ddl_type.CreateTypeStatement(
             dialect,
             type=_type_obj(dialect),
             definition=OracleObjectTypeDefinition(
@@ -783,22 +945,22 @@ def _register_core_specials():
         )
 
     register_special_constructor(
-        "statements.ddl_type.CreateTypeExpression", create_type
+        "statements.ddl_type.CreateTypeStatement", create_type
     )
     register_special_constructor(
-        "statements.ddl_type.DropTypeExpression",
-        lambda d: ddl_type.DropTypeExpression(d, type=_type_obj(d)),
+        "statements.ddl_type.DropTypeStatement",
+        lambda d: ddl_type.DropTypeStatement(d, type=_type_obj(d)),
     )
     register_special_constructor(
-        "statements.ddl_trigger.DropTriggerExpression",
-        lambda d: ddl_trigger.DropTriggerExpression(
+        "statements.ddl_trigger.DropTriggerStatement",
+        lambda d: ddl_trigger.DropTriggerStatement(
             d, trigger=Trigger(d, "trg"), table=_table_obj(d)
         ),
     )
     # INSERT names the table it writes; a VALUES source needs one row.
     register_special_constructor(
-        "statements.dml.InsertExpression",
-        lambda d: dml.InsertExpression(
+        "statements.dml.InsertStatement",
+        lambda d: dml.InsertStatement(
             d,
             into=_table_obj(d),
             columns=["a"],
@@ -810,14 +972,14 @@ def _register_core_specials():
         lambda d: dml.ValuesSource(d, [[Literal(d, 1)]]),
     )
     register_special_constructor(
-        "statements.dml.UpdateExpression",
-        lambda d: dml.UpdateExpression(
+        "statements.dml.UpdateStatement",
+        lambda d: dml.UpdateStatement(
             d, table=_table_obj(d), assignments={"a": Literal(d, 1)}
         ),
     )
     register_special_constructor(
-        "dml.DeleteExpression",
-        lambda d: dml.DeleteExpression(d, tables=[_table_obj(d)]),
+        "dml.DeleteStatement",
+        lambda d: dml.DeleteStatement(d, tables=[_table_obj(d)]),
     )
     # A JOIN carries no condition or USING clause unless one is given, so the
     # empty join the guess builds is refused by the formatter.
@@ -836,7 +998,8 @@ def _register_core_specials():
     # too. The graph expressions render through the SQL/PGQ layer, which Oracle
     # has not adapted; the object-bearing ones below are built anyway so the
     # matrix can say so by name.
-    from rhosocial.activerecord.backend.expression import graph as graph_mod
+    # The graph module is imported once above (as ``graph_mod``); re-importing
+    # it here would shadow that binding for no gain.
 
     def _node_table(dialect):
         return graph_mod.NodeTable(dialect, "n")
@@ -874,27 +1037,31 @@ def _register_core_specials():
         lambda d: graph_mod.VertexTable(d, _node_table(d)),
     )
     register_special_constructor(
-        "graph.EdgeTable",
-        lambda d: graph_mod.EdgeTable(d, _edge_table_obj(d), ["a"], ["b"]),
+        "graph.EdgeTableDefinition",
+        lambda d: graph_mod.EdgeTableDefinition(
+            d, _edge_table_obj(d), ["a"], ["b"]
+        ),
     )
     register_special_constructor(
-        "graph.CreatePropertyGraphExpression",
-        lambda d: graph_mod.CreatePropertyGraphExpression(
+        "graph.CreatePropertyGraphStatement",
+        lambda d: graph_mod.CreatePropertyGraphStatement(
             d,
             graph=_property_graph(d),
             vertex_tables=[graph_mod.VertexTable(d, _node_table(d))],
             edge_tables=[
-                graph_mod.EdgeTable(d, _edge_table_obj(d), ["a"], ["b"])
+                graph_mod.EdgeTableDefinition(
+                    d, _edge_table_obj(d), ["a"], ["b"]
+                )
             ],
         ),
     )
     register_special_constructor(
-        "graph.DropPropertyGraphExpression",
-        lambda d: graph_mod.DropPropertyGraphExpression(d, graph=_property_graph(d)),
+        "graph.DropPropertyGraphStatement",
+        lambda d: graph_mod.DropPropertyGraphStatement(d, graph=_property_graph(d)),
     )
     register_special_constructor(
-        "graph.AlterPropertyGraphExpression",
-        lambda d: graph_mod.AlterPropertyGraphExpression(
+        "graph.AlterPropertyGraphStatement",
+        lambda d: graph_mod.AlterPropertyGraphStatement(
             d, graph=_property_graph(d), action="DROP", target="LABEL v"
         ),
     )
@@ -923,10 +1090,10 @@ def _register_core_specials():
 
         return XMLTableExpression(
             dialect,
-            RawSQLExpression(dialect, "'.'"),
+            RawSQL(dialect, "'.'"),
             [
                 XMLTableColumn(
-                    "c", "VARCHAR(10)", path=RawSQLExpression(dialect, "'.'")
+                    "c", "VARCHAR(10)", path=RawSQL(dialect, "'.'")
                 )
             ],
         )
@@ -943,7 +1110,7 @@ def _register_core_specials():
             CustomType,
         )
 
-        return CustomType(dialect, "VARCHAR2(10)")
+        return CustomType(dialect, raw="VARCHAR2(10)")
 
     register_special_constructor("types.custom.CustomType", custom_type)
 
@@ -952,11 +1119,48 @@ def _register_core_specials():
     # and every round-trip lost it; core fixed that in ae5b7f9 and the round-trip
     # comparison below is now what holds the line, per channel.
 
+    # DDL positions hold no bind parameters, so the value a DDL expression
+    # carries has to be inlined. The generic guess reaches for a binding
+    # Literal, which every CHECK and generated-column formatter refuses with
+    # "DDL condition must not contain bind parameters". These factories say
+    # ``inline=True`` explicitly, which is the same thing every caller of
+    # these constructors has to do outside the matrix.
+    from rhosocial.activerecord.backend.expression.statements.ddl_table import (
+        ColumnCheckConstraint,
+        ColumnGeneratedConstraint,
+        TableCheckConstraint,
+    )
+
+    register_special_constructor(
+        "statements.ddl_table.ColumnCheckConstraint",
+        lambda d: ColumnCheckConstraint(d, _column_predicate(d)),
+    )
+    register_special_constructor(
+        "statements.ddl_table.TableCheckConstraint",
+        lambda d: TableCheckConstraint(d, condition=_column_predicate(d)),
+    )
+    register_special_constructor(
+        "statements.ddl_table.ColumnGeneratedConstraint",
+        lambda d: ColumnGeneratedConstraint(
+            d, _inline_column_expression(d), storage_type=None
+        ),
+    )
+
+
+def _inline_column_expression(dialect):
+    """A value expression a DDL position accepts: inlined, never bound.
+
+    ``Literal(value, inline=True)`` is the spelling core's DDL validators
+    demand, and the same constructor a real caller writes. The matrix builds
+    it rather than letting the guess reach for a bound parameter, because the
+    guess has no way to know which position it is filling.
+    """
+    return Literal(dialect, 1, inline=True)
+
 
 def _register_oracle_specials():
     """Oracle's own expressions, each of which carries an object or a payload."""
     from rhosocial.activerecord.backend.impl.oracle.expression import (
-        materialized_view as mv_mod,
         partition as part_mod,
         partition_lifecycle as pl_mod,
     )
@@ -965,27 +1169,27 @@ def _register_oracle_specials():
         OracleRowMovementAction,
     )
     from rhosocial.activerecord.backend.impl.oracle.expression.analyze import (
-        OracleAnalyzeExpression,
+        OracleAnalyzeStatement,
         OracleAnalyzeMode,
     )
     from rhosocial.activerecord.backend.impl.oracle.expression.column import (
         OracleColumnDefinition,
     )
     from rhosocial.activerecord.backend.impl.oracle.expression.comment import (
-        OracleCommentExpression,
+        OracleCommentOnStatement,
         OracleCommentObjectType,
     )
     from rhosocial.activerecord.backend.impl.oracle.expression.ddl.routine import (
-        OracleCreateFunctionExpression,
-        OracleCreatePackageBodyExpression,
-        OracleCreatePackageExpression,
-        OracleCreateProcedureExpression,
-        OracleDropRoutineExpression,
+        OracleCreateFunctionStatement,
+        OracleCreatePackageBodyStatement,
+        OracleCreatePackageStatement,
+        OracleCreateProcedureStatement,
+        OracleDropRoutineStatement,
         OracleDropRoutineObjectType,
     )
     from rhosocial.activerecord.backend.impl.oracle.expression.ddl.synonym import (
-        OracleCreateSynonymExpression,
-        OracleDropSynonymExpression,
+        OracleCreateSynonymStatement,
+        OracleDropSynonymStatement,
     )
     from rhosocial.activerecord.backend.impl.oracle.expression.ddl.type import (
         OracleAlterTypeAddAttributeAction,
@@ -996,7 +1200,7 @@ def _register_oracle_specials():
         OracleAlterTypeFinalAction,
         OracleAlterTypeInstantiableAction,
         OracleAlterTypeLimitAction,
-        OracleCreateTypeBodyExpression,
+        OracleCreateTypeBodyStatement,
         OracleDropTypeBodyExpression,
         OracleDropTypeExpression,
         OracleNestedTableTypeDefinition,
@@ -1009,33 +1213,33 @@ def _register_oracle_specials():
     from rhosocial.activerecord.backend.impl.oracle.expression.flashback import (
         OracleAsOfClause,
         OracleAsOfMode,
-        OracleFlashbackTableExpression,
-        OraclePurgeExpression,
+        OracleFlashbackTableStatement,
+        OraclePurgeStatement,
         OraclePurgeObjectType,
         OracleVersionsBetweenClause,
         OracleVersionsBetweenMode,
     )
     from rhosocial.activerecord.backend.impl.oracle.expression.materialized_view import (
-        OracleCreateMaterializedViewExpression,
-        OracleCreateMaterializedViewLogExpression,
-        OracleDropMaterializedViewExpression,
-        OracleRefreshMaterializedViewExpression,
+        OracleCreateMaterializedViewStatement,
+        OracleCreateMaterializedViewLogStatement,
+        OracleDropMaterializedViewStatement,
+        OracleRefreshMaterializedViewStatement,
     )
     from rhosocial.activerecord.backend.impl.oracle.expression.objects import (
         OraclePackage,
         OracleTable,
     )
     from rhosocial.activerecord.backend.impl.oracle.expression.sequence import (
-        OracleCreateSequenceExpression,
-        OracleDropSequenceExpression,
+        OracleCreateSequenceStatement,
+        OracleDropSequenceStatement,
     )
     from rhosocial.activerecord.backend.impl.oracle.expression.trigger import (
-        DisableTriggerExpression,
-        EnableTriggerExpression,
+        DisableTriggerStatement,
+        EnableTriggerStatement,
     )
 
     def analyze_expression(d):
-        return OracleAnalyzeExpression(
+        return OracleAnalyzeStatement(
             d, table=_table_obj(d), mode=OracleAnalyzeMode.COMPUTE_STATISTICS
         )
 
@@ -1050,7 +1254,7 @@ def _register_oracle_specials():
         return OracleRowMovementAction(d, enable=True)
 
     def comment_expression(d):
-        return OracleCommentExpression(
+        return OracleCommentOnStatement(
             d,
             object_type=OracleCommentObjectType.TABLE,
             object=_table_obj(d),
@@ -1071,33 +1275,33 @@ def _register_oracle_specials():
         )
 
     def flashback_table_expression(d):
-        return OracleFlashbackTableExpression(
+        return OracleFlashbackTableStatement(
             d, table=_table_obj(d), to_before_drop=True, rename_to="t2"
         )
 
     def purge_expression(d):
-        return OraclePurgeExpression(
+        return OraclePurgeStatement(
             d, object_type=OraclePurgeObjectType.TABLE, target=_table_obj(d)
         )
 
     def materialized_view_log_expression(d):
-        return OracleCreateMaterializedViewLogExpression(
+        return OracleCreateMaterializedViewLogStatement(
             d, table=_table_obj(d), with_rowid=True
         )
 
     def create_materialized_view(d):
-        return OracleCreateMaterializedViewExpression(
+        return OracleCreateMaterializedViewStatement(
             d, view=MaterializedView(d, "mv"), query=_one_column_query(d)
         )
 
     def drop_materialized_view(d):
-        return OracleDropMaterializedViewExpression(d, view=MaterializedView(d, "mv"))
+        return OracleDropMaterializedViewStatement(d, view=MaterializedView(d, "mv"))
 
     def refresh_materialized_view(d):
-        return OracleRefreshMaterializedViewExpression(d, view=MaterializedView(d, "mv"))
+        return OracleRefreshMaterializedViewStatement(d, view=MaterializedView(d, "mv"))
 
     def drop_routine_expression(d):
-        return OracleDropRoutineExpression(
+        return OracleDropRoutineStatement(
             d,
             object_type=OracleDropRoutineObjectType.PROCEDURE,
             routine=Procedure(d, "p"),
@@ -1121,13 +1325,13 @@ def _register_oracle_specials():
         return part_mod.OraclePartitionByHash(d, [Column(d, "id")], partitions_count=4)
 
     def interval_partition_clause(d):
-        # The interval is a RawSQLExpression, not a Literal: Oracle DDL carries no
+        # The interval is a RawSQL, not a Literal: Oracle DDL carries no
         # bind parameters, and a Literal would render as one -- which the
         # formatter refuses rather than inlining.
         return part_mod.OracleIntervalPartitionClause(
             d,
             [Column(d, "created_at")],
-            interval=RawSQLExpression(d, "INTERVAL '1' MONTH"),
+            interval=RawSQL(d, "INTERVAL '1' MONTH"),
             partitions=[
                 part_mod.OraclePartitionDefinition(
                     name="p1", less_than=[part_mod.OraclePartitionValue(d, 100)]
@@ -1139,12 +1343,12 @@ def _register_oracle_specials():
         definition = part_mod.OraclePartitionDefinition(
             name="p_new", less_than=[part_mod.OraclePartitionMaxValue(d)]
         )
-        return pl_mod.OracleAddPartitionExpression(
+        return pl_mod.OracleAddPartitionStatement(
             d, table=_table_obj(d), partition=definition
         )
 
     def drop_partition_expression(d):
-        return pl_mod.OracleDropPartitionExpression(
+        return pl_mod.OracleDropPartitionStatement(
             d, table=_table_obj(d), partition_name="p1"
         )
 
@@ -1152,7 +1356,7 @@ def _register_oracle_specials():
         # SPLIT PARTITION splits one partition into exactly two, so the class
         # refuses a definition carrying any other number -- which is why the
         # introspective guess (no new partitions at all) cannot build it.
-        return pl_mod.OracleSplitPartitionExpression(
+        return pl_mod.OracleSplitPartitionStatement(
             d,
             table=_table_obj(d),
             partition_name="p_old",
@@ -1168,7 +1372,7 @@ def _register_oracle_specials():
         )
 
     def merge_partitions_expression(d):
-        return pl_mod.OracleMergePartitionsExpression(
+        return pl_mod.OracleMergePartitionsStatement(
             d,
             table=_table_obj(d),
             partition_names=["p1", "p2"],
@@ -1178,7 +1382,7 @@ def _register_oracle_specials():
         )
 
     def exchange_partition_expression(d):
-        return pl_mod.OracleExchangePartitionExpression(
+        return pl_mod.OracleExchangePartitionStatement(
             d,
             table=_table_obj(d),
             partition_name="p1",
@@ -1186,12 +1390,12 @@ def _register_oracle_specials():
         )
 
     def move_partition_expression(d):
-        return pl_mod.OracleMovePartitionExpression(
+        return pl_mod.OracleMovePartitionStatement(
             d, table=_table_obj(d), partition_name="p1"
         )
 
     def truncate_partition_expression(d):
-        return pl_mod.OracleTruncatePartitionExpression(
+        return pl_mod.OracleTruncatePartitionStatement(
             d, table=_table_obj(d), partition_name="p1"
         )
 
@@ -1205,12 +1409,12 @@ def _register_oracle_specials():
         return OracleColumnDefinition(d, "c", IntegerType(d))
 
     def create_procedure(d):
-        return OracleCreateProcedureExpression(
+        return OracleCreateProcedureStatement(
             d, procedure=Procedure(d, "p"), body="BEGIN NULL; END;"
         )
 
     def create_function(d):
-        return OracleCreateFunctionExpression(
+        return OracleCreateFunctionStatement(
             d,
             function=Function(d, "f"),
             return_type="NUMBER",
@@ -1221,34 +1425,34 @@ def _register_oracle_specials():
         return OraclePackage(d, "pkg", schema_name="ar_crm")
 
     def create_package(d):
-        return OracleCreatePackageExpression(
+        return OracleCreatePackageStatement(
             d, package=_package(d), body="END pkg;"
         )
 
     def create_package_body(d):
-        return OracleCreatePackageBodyExpression(
+        return OracleCreatePackageBodyStatement(
             d, package=_package(d), body="END pkg;"
         )
 
     def create_synonym(d):
-        return OracleCreateSynonymExpression(
+        return OracleCreateSynonymStatement(
             d, synonym=Synonym(d, "s"), table=_table_obj(d)
         )
 
     def drop_synonym(d):
-        return OracleDropSynonymExpression(d, synonym=Synonym(d, "s"))
+        return OracleDropSynonymStatement(d, synonym=Synonym(d, "s"))
 
     def create_sequence(d):
-        return OracleCreateSequenceExpression(d, sequence=Sequence(d, "seq"))
+        return OracleCreateSequenceStatement(d, sequence=Sequence(d, "seq"))
 
     def drop_sequence(d):
-        return OracleDropSequenceExpression(d, sequence=Sequence(d, "seq"))
+        return OracleDropSequenceStatement(d, sequence=Sequence(d, "seq"))
 
     def disable_trigger(d):
-        return DisableTriggerExpression(d, trigger=Trigger(d, "trg"))
+        return DisableTriggerStatement(d, trigger=Trigger(d, "trg"))
 
     def enable_trigger(d):
-        return EnableTriggerExpression(d, trigger=Trigger(d, "trg"))
+        return EnableTriggerStatement(d, trigger=Trigger(d, "trg"))
 
     def drop_type_body(d):
         return OracleDropTypeBodyExpression(d, type=_type_obj(d))
@@ -1257,7 +1461,7 @@ def _register_oracle_specials():
         return OracleDropTypeExpression(d, type=_type_obj(d), if_exists=True)
 
     def create_type_body(d):
-        return OracleCreateTypeBodyExpression(d, type=Type(d, "t"), body="END;")
+        return OracleCreateTypeBodyStatement(d, type=Type(d, "t"), body="END;")
 
     def _attribute(d):
         return OracleTypeAttribute(name="attr", data_type=IntegerType(d))
@@ -1323,24 +1527,24 @@ def _register_oracle_specials():
     registrations = (
         ("alter_table.OracleReadOnlyAction", read_only_action),
         ("alter_table.OracleRowMovementAction", row_movement_action),
-        ("analyze.OracleAnalyzeExpression", analyze_expression),
+        ("analyze.OracleAnalyzeStatement", analyze_expression),
         ("column.OracleColumnDefinition", oracle_column_definition),
-        ("comment.OracleCommentExpression", comment_expression),
-        ("ddl.routine.OracleCreateProcedureExpression", create_procedure),
-        ("ddl.routine.OracleCreateFunctionExpression", create_function),
-        ("ddl.routine.OracleCreatePackageExpression", create_package),
-        ("ddl.routine.OracleCreatePackageBodyExpression", create_package_body),
-        ("ddl.routine.OracleDropRoutineExpression", drop_routine_expression),
-        ("ddl.synonym.OracleCreateSynonymExpression", create_synonym),
-        ("ddl.synonym.OracleDropSynonymExpression", drop_synonym),
+        ("comment.OracleCommentOnStatement", comment_expression),
+        ("ddl.routine.OracleCreateProcedureStatement", create_procedure),
+        ("ddl.routine.OracleCreateFunctionStatement", create_function),
+        ("ddl.routine.OracleCreatePackageStatement", create_package),
+        ("ddl.routine.OracleCreatePackageBodyStatement", create_package_body),
+        ("ddl.routine.OracleDropRoutineStatement", drop_routine_expression),
+        ("ddl.synonym.OracleCreateSynonymStatement", create_synonym),
+        ("ddl.synonym.OracleDropSynonymStatement", drop_synonym),
         ("flashback.OracleAsOfClause", as_of_clause),
         ("flashback.OracleVersionsBetweenClause", versions_between_clause),
-        ("flashback.OracleFlashbackTableExpression", flashback_table_expression),
-        ("flashback.OraclePurgeExpression", purge_expression),
-        ("materialized_view.OracleCreateMaterializedViewExpression", create_materialized_view),
-        ("materialized_view.OracleCreateMaterializedViewLogExpression", materialized_view_log_expression),
-        ("materialized_view.OracleDropMaterializedViewExpression", drop_materialized_view),
-        ("materialized_view.OracleRefreshMaterializedViewExpression", refresh_materialized_view),
+        ("flashback.OracleFlashbackTableStatement", flashback_table_expression),
+        ("flashback.OraclePurgeStatement", purge_expression),
+        ("materialized_view.OracleCreateMaterializedViewStatement", create_materialized_view),
+        ("materialized_view.OracleCreateMaterializedViewLogStatement", materialized_view_log_expression),
+        ("materialized_view.OracleDropMaterializedViewStatement", drop_materialized_view),
+        ("materialized_view.OracleRefreshMaterializedViewStatement", refresh_materialized_view),
         ("objects.OracleTable", oracle_table),
         ("partition.OracleSubpartitionClause", subpartition_clause),
         ("partition.OraclePartitionClause", partition_clause),
@@ -1348,61 +1552,49 @@ def _register_oracle_specials():
         ("partition.OraclePartitionByList", partition_by_list),
         ("partition.OraclePartitionByHash", partition_by_hash),
         ("partition.OracleIntervalPartitionClause", interval_partition_clause),
-        ("partition_lifecycle.OracleAddPartitionExpression", add_partition_expression),
-        ("partition_lifecycle.OracleDropPartitionExpression", drop_partition_expression),
-        ("partition_lifecycle.OracleSplitPartitionExpression", split_partition_expression),
-        ("partition_lifecycle.OracleMergePartitionsExpression", merge_partitions_expression),
-        ("partition_lifecycle.OracleExchangePartitionExpression", exchange_partition_expression),
-        ("partition_lifecycle.OracleMovePartitionExpression", move_partition_expression),
-        ("partition_lifecycle.OracleTruncatePartitionExpression", truncate_partition_expression),
-        ("sequence.OracleCreateSequenceExpression", create_sequence),
-        ("sequence.OracleDropSequenceExpression", drop_sequence),
-        ("trigger.DisableTriggerExpression", disable_trigger),
-        ("trigger.EnableTriggerExpression", enable_trigger),
-        # The Oracle TYPE tree exports every action and definition under two
-        # names (OracleAlterTypeXxxAction and OracleTypeXxxAction). Both names
-        # are collected, so both are registered to the same factory.
+        ("partition_lifecycle.OracleAddPartitionStatement", add_partition_expression),
+        ("partition_lifecycle.OracleDropPartitionStatement", drop_partition_expression),
+        ("partition_lifecycle.OracleSplitPartitionStatement", split_partition_expression),
+        ("partition_lifecycle.OracleMergePartitionsStatement", merge_partitions_expression),
+        ("partition_lifecycle.OracleExchangePartitionStatement", exchange_partition_expression),
+        ("partition_lifecycle.OracleMovePartitionStatement", move_partition_expression),
+        ("partition_lifecycle.OracleTruncatePartitionStatement", truncate_partition_expression),
+        ("sequence.OracleCreateSequenceStatement", create_sequence),
+        ("sequence.OracleDropSequenceStatement", drop_sequence),
+        ("trigger.DisableTriggerStatement", disable_trigger),
+        ("trigger.EnableTriggerStatement", enable_trigger),
+        # The Oracle TYPE tree once exported every action and definition under
+        # two names (OracleAlterTypeXxxAction and an OracleTypeXxxAction /
+        # OracleAddTypeXxxAction alias). Both were registered to the same
+        # factory here, which read as belt-and-braces but was dead work in one
+        # direction: a registration key is a *suffix* matched against the
+        # class's own name, and an alias is not the class's name. The alias
+        # keys matched nothing, so the factory they named never ran, and the
+        # class fell through to the heuristic instead -- exactly the silent
+        # failure the harness's own docstring warns a suffix key can produce.
+        # The aliases are gone from the package now, and one key per class
+        # remains: the one spelled the way the class calls itself.
         ("type.OracleAlterTypeAddAttributeAction", add_attribute),
-        ("type.OracleTypeAddAttributeAction", add_attribute),
-        ("type.OracleAddTypeAttributeAction", add_attribute),
         # MODIFY shares ADD's payload -- the same attribute declaration, a
         # different keyword -- so it is built the same way.
         ("type.OracleAlterTypeModifyAttributeAction", modify_attribute),
-        ("type.OracleTypeModifyAttributeAction", modify_attribute),
-        ("type.OracleModifyTypeAttributeAction", modify_attribute),
         ("type.OracleAlterTypeDropAttributeAction", drop_attribute),
-        ("type.OracleTypeDropAttributeAction", drop_attribute),
-        ("type.OracleDropTypeAttributeAction", drop_attribute),
         ("type.OracleAlterTypeAddMethodAction", add_method),
-        ("type.OracleTypeAddMethodAction", add_method),
-        ("type.OracleAddTypeMethodAction", add_method),
         ("type.OracleAlterTypeDropMethodAction", drop_method),
-        ("type.OracleTypeDropMethodAction", drop_method),
-        ("type.OracleDropTypeMethodAction", drop_method),
         ("type.OracleAlterTypeFinalAction", final_action),
-        ("type.OracleTypeFinalAction", final_action),
-        ("type.OracleSetTypeFinalAction", final_action),
         ("type.OracleAlterTypeInstantiableAction", instantiable_action),
-        ("type.OracleTypeInstantiableAction", instantiable_action),
-        ("type.OracleSetTypeInstantiableAction", instantiable_action),
         ("type.OracleAlterTypeElementTypeAction", element_type),
-        ("type.OracleTypeElementTypeAction", element_type),
         ("type.OracleAlterTypeLimitAction", limit_action),
-        ("type.OracleTypeLimitAction", limit_action),
-        ("type.OracleModifyTypeLimitAction", limit_action),
-        ("type.OracleAlterTypeModifyLimitAction", limit_action),
         ("type.OracleObjectTypeDefinition", object_definition),
         ("type.OracleSqljTypeDefinition", sqlj_definition),
         ("type.OracleVarrayTypeDefinition", varray_definition),
         ("type.OracleNestedTableTypeDefinition", nested_table_definition),
-        ("type.DropTypeBodyExpression", drop_type_body),
+        ("type.DropTypeBodyStatement", drop_type_body),
         ("type.OracleDropTypeBodyExpression", drop_type_body),
-        ("type.OracleTypeBodyDropExpression", drop_type_body),
         # Oracle's own DROP TYPE adds FORCE / VALIDATE, and the guess hands it
         # strings for the type and the flags, which its superclass refuses.
         ("type.OracleDropTypeExpression", drop_type),
-        ("type.OracleCreateTypeBodyExpression", create_type_body),
-        ("type.OracleTypeBodyCreateExpression", create_type_body),
+        ("type.OracleCreateTypeBodyStatement", create_type_body),
         # The abstract partition-maintenance base declares no formatter, so it is
         # built here only so the matrix can assert it says so by name.
         ("partition_lifecycle._OraclePartitionMaintenanceExpression", partition_maintenance_base),
@@ -1430,12 +1622,27 @@ _register_oracle_specials()
 #: it is given a *valid* ``which``: an invalid one raises ValueError first, which is
 #: a different answer entirely and hides the dialect's.
 #:
+#: ``AlterConstraintAction`` fails for a reason that is structural rather than a
+#: capability: core made ``constraint_kind`` a required *keyword-only*
+#: parameter and the introspective constructor skips keyword-only parameters
+#: that sit behind defaulted positionals, so no generic guess reaches it. A
+#: dedicated factory would have to hand ``constraint_kind`` a branch class --
+#: and a class object has no encoding in the dict/JSON/XML channels, so the
+#: round-trip could not be asserted even if it were built. Pinning it here
+#: records that it is *out of the matrix's reach*, not that Oracle refuses it;
+#: the render path itself is covered by ``test_oracle_clause_pair_guard`` and
+#: the backend's own constraint tests. Its sibling ``ValidateConstraintAction``
+#: used to sit here for the same reason and no longer does: core made its
+#: arguments required, so the generic constructor reaches them and the class
+#: round-trips like everything else.
+#:
 #: The tuple stays because a class that starts failing to build must be pinned here
 #: with the fault located, not left to become a silent skip;
 #: :func:`TestMatrixIntegrity.test_unconstructible_list_is_exact` fails in both
 #: directions when the sets disagree.
 UNCONSTRUCTIBLE: tuple = (
-    "rhosocial.activerecord.backend.expression.uuid.UUIDCastExpression",
+    "rhosocial.activerecord.backend.expression.statements.ddl_alter.AlterConstraintAction",
+    "rhosocial.activerecord.backend.expression.uuid.UUIDCastFunction",
     "rhosocial.activerecord.backend.expression.uuid.UUIDConstantExpression",
     "rhosocial.activerecord.backend.expression.uuid.UUIDGenerationExpression",
 )
@@ -1470,28 +1677,29 @@ UNCONSTRUCTIBLE: tuple = (
 #
 # Oracle has no CREATE/DROP/ALTER DATABASE (an Oracle database is an instance),
 # no DOMAIN, no FULLTEXT, and no ILIKE -- case-insensitive matching goes through
-# UPPER() + LIKE. PIVOT and UNPIVOT go through this backend's own PivotExpression
+# UPPER() + LIKE. PIVOT and UNPIVOT go through this backend's own Pivot
 # and its format_pivot, so the core PivotMixin is not composed.
 LEGITIMATE_NON_RENDERS: Dict[str, tuple] = {
-    "rhosocial.activerecord.backend.expression.pivot.PivotExpression": (
-        UnsupportedFeatureError, "does not support the 'format_pivot_expression' statement"
+    "rhosocial.activerecord.backend.expression.pivot.Pivot": (
+        UnsupportedFeatureError, "does not support the 'format_pivot' statement"
     ),
-    "rhosocial.activerecord.backend.expression.pivot.UnpivotExpression": (
-        UnsupportedFeatureError, "does not support the 'format_unpivot_expression' statement"
+    "rhosocial.activerecord.backend.expression.pivot.Unpivot": (
+        UnsupportedFeatureError, "does not support the 'format_unpivot' statement"
     ),
-    "rhosocial.activerecord.backend.expression.predicates.ILIKEExpression": (
-        UnsupportedFeatureError, "does not support the 'format_ilike_expression' statement"
+    "rhosocial.activerecord.backend.expression.predicates.ILikePredicate": (
+        UnsupportedFeatureError,
+        "does not support the 'format_ilike_predicate' statement",
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_database."
-    "AlterDatabaseExpression": (
+    "AlterDatabaseStatement": (
         UnsupportedFeatureError, "does not support the 'format_alter_database_statement' statement"
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_database."
-    "CreateDatabaseExpression": (
+    "CreateDatabaseStatement": (
         UnsupportedFeatureError, "does not support the 'format_create_database_statement' statement"
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_database."
-    "DropDatabaseExpression": (
+    "DropDatabaseStatement": (
         UnsupportedFeatureError, "does not support the 'format_drop_database_statement' statement"
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_domain."
@@ -1499,11 +1707,11 @@ LEGITIMATE_NON_RENDERS: Dict[str, tuple] = {
         UnsupportedFeatureError, "does not support the 'format_domain_alter_action' statement"
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_domain."
-    "AlterDomainExpression": (
+    "AlterDomainStatement": (
         UnsupportedFeatureError, "does not support the 'format_alter_domain_statement' statement"
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_domain."
-    "CreateDomainExpression": (
+    "CreateDomainStatement": (
         UnsupportedFeatureError, "does not support the 'format_create_domain_statement' statement"
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_domain."
@@ -1523,7 +1731,7 @@ LEGITIMATE_NON_RENDERS: Dict[str, tuple] = {
         UnsupportedFeatureError, "does not support the 'format_domain_alter_action' statement"
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_domain."
-    "DropDomainExpression": (
+    "DropDomainStatement": (
         UnsupportedFeatureError, "does not support the 'format_drop_domain_statement' statement"
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_domain."
@@ -1543,7 +1751,7 @@ LEGITIMATE_NON_RENDERS: Dict[str, tuple] = {
         UnsupportedFeatureError, "does not support the 'format_domain_alter_action' statement"
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_function."
-    "DropFunctionExpression": (
+    "DropFunctionStatement": (
         UnsupportedFeatureError, "does not support the 'format_drop_function_statement' statement"
     ),
     # The root of the row-source tree. No concrete source renders through
@@ -1563,59 +1771,58 @@ LEGITIMATE_NON_RENDERS: Dict[str, tuple] = {
     # --- in `to_sql()` inspects what answers a lookup, not what a formatter does
     # --- once called.
     "rhosocial.activerecord.backend.expression.statements.ddl_function."
-    "CreateFunctionExpression": (
+    "CreateFunctionStatement": (
         AttributeError, "has no attribute 'return_keyword'"
     ),
-    "rhosocial.activerecord.backend.expression.query_sources."
-    "JSONTableExpression": (
-        AttributeError, "has no attribute 'args'"
+    # The shared-state base of the declared-result family, and the same kind of
+    # entry. It carries one field -- the node being annotated -- and deliberately
+    # no alias: the alias belongs to the concrete ``TextAnnotation`` and its ten
+    # siblings, each of which renders through ``format_declared_result`` reading
+    # ``expr.alias`` off *its own* class. The base is not abstract, so the walk
+    # collects it and a generic constructor can build one, but rendering it is a
+    # category error rather than a capability gap: the field it fails on is one
+    # an annotation is meant to carry, and no Oracle feature adds it to the
+    # base. Pinned as the AttributeError it raises, with the fragment that names
+    # the field, so a base that later grows an alias fails here rather than
+    # staying quietly green.
+    "rhosocial.activerecord.backend.expression.declared._Annotation": (
+        AttributeError, "has no attribute 'alias'"
     ),
+    # query_sources.JSONTableExpression used to sit here: it dispatched to a
+    # formatter built for this backend's own JSON_TABLE expression and died
+    # reading a field it does not have. It renders now -- the dispatch and
+    # the core node found each other -- so the pin is gone and the matrix
+    # asserts the round-trip.
     "rhosocial.activerecord.backend.expression.sources.json."
     "JsonTableSource": (
         TypeError, "missing 2 required positional arguments"
     ),
     "rhosocial.activerecord.backend.expression.statements.dml."
-    "MergeExpression": (
+    "MergeStatement": (
         TypeError, "missing 5 required positional arguments"
     ),
-    # --- group three: the SHOW query layer is defined but not composed.
-    # --- OracleShowDialectMixin holds every compose_query_*_sql method and the
-    # --- expressions below are the only callers, but neither the mixin nor
-    # --- OracleShowMixin reaches OracleDialect or OracleBackend, so `show()` is
-    # --- unreachable and these render nothing. Pinned so the eight are visible;
-    # --- composing the mixin is a change to the feature's wiring, not to this
-    # --- matrix.
+    # --- group three was the SHOW query layer: the eight OracleQuery*
+    # --- expressions were pinned because OracleShowDialectMixin was exported
+    # --- and documented as composed but never listed in OracleDialect's bases,
+    # --- so every compose_query_*_sql lookup missed. The mixin is composed now
+    # --- and all eight render, so the pins are gone. What replaces them is the
+    # --- matrix's own contract: a class that renders must round-trip, and the
+    # --- exact method names it renders through are named in the class docstrings
+    # --- rather than kept alive here by an exception type.
     # ---
-    # --- AttributeError, not UnsupportedFeatureError, and deliberately so: the
-    # --- formatter each of these names *is* composed on OracleDialect. It is the
-    # --- mixin's compose_query_*_sql method inside its body that the dialect does
-    # --- not have, so the lookup succeeded and the missing method is a second
-    # --- hop down. `to_sql()` inspecting what answers a lookup does not reach it,
-    # --- which is the right boundary: the fault is Oracle's wiring, and naming it
-    # --- UnsupportedFeatureError would read as core declining a feature.
-    **{
-        f"rhosocial.activerecord.backend.impl.oracle.expression.show."
-        f"{cls}": (AttributeError, f"has no attribute 'compose_query_{stem}_sql'")
-        for cls, stem in (
-            ("OracleQuerySessionsExpression", "sessions"),
-            ("OracleQueryRunningSQLExpression", "running_sql"),
-            ("OracleQueryDatabaseInfoExpression", "database_info"),
-            ("OracleQueryInstanceInfoExpression", "instance_info"),
-            ("OracleQueryObjectsExpression", "objects"),
-            ("OracleQueryLocksExpression", "locks"),
-            ("OracleQueryWaitEventsExpression", "wait_events"),
-            ("OracleQueryNlsParametersExpression", "nls_parameters"),
-        )
-    },
     # --- group four: roots and types this dialect does not model.
     # --- The root of the type tree declares no generic type name, so there is
     # --- nothing for format_data_type to dispatch on. Each type below is a core
     # --- type with no Oracle counterpart: Oracle spells arrays as nested tables
     # --- of a declared TYPE, binary as RAW/LONG RAW, and has no INT, ENUM,
     # --- VARBINARY, CUSTOM or SQL INTERVAL type. The error names the type, so a
-    # --- dialect that starts modelling one fails here.
+    # --- dialect that starts modelling one fails here. The root's own message
+    # --- changed shape when core stopped special-casing it: it now reports the
+    # --- dialect has no formatter for the *absent* name it was handed, rather
+    # --- than that the class declares none, and the fragment follows the
+    # --- current wording rather than the old one.
     "rhosocial.activerecord.backend.expression.types._base.DataType": (
-        TypeError, "does not declare a valid generic type name"
+        TypeError, "does not support the generic type None"
     ),
     "rhosocial.activerecord.backend.expression.types.array.ArrayType": (
         TypeError, "does not support the generic type 'array'"
@@ -1689,6 +1896,173 @@ CORE_SERIALISATION_DEFECTS: Dict[str, tuple] = {}
 
 
 # ---------------------------------------------------------------------------
+# What a plain-JSON artifact cannot carry, where the fault is core's
+# ---------------------------------------------------------------------------
+#
+# The artifact rewrite (core 679d9817) left ``_encode_value`` able to write
+# exactly these shapes: a nested node, a :class:`Literal`, a list, a dict, and
+# whatever :meth:`LiteralKind.of` accepts. Two shapes a node legitimately
+# holds are outside that set, and each gap below is one of them:
+#
+# 1. **a dataclass value.** ``OracleTypeAttribute``, ``OracleTypeMethod``,
+#    ``OraclePartitionDefinition``, ``GraphColumn``, ``XMLAttribute``,
+#    ``XMLForestItem``, ``XMLTableColumn`` and ``ViewOptions`` are plain
+#    dataclasses held as node parameters. ``_encode_value`` reaches
+#    ``_encode_scalar``, which asks the value vocabulary and is told the type
+#    is not one of its kinds -- and the message says so, naming the type. The
+#    rewrite's own note is that "a dataclass has no place in an artifact at
+#    all", so the fix belongs there rather than here: either those parameters
+#    become nodes with a kind, or the encoder learns a dataclass shape. Until
+#    one lands, no encoding of these classes exists, on any channel.
+#
+# 2. **a plain (non-str) enum carried through the XML channel.**
+#    ``DateTimeField`` and ``IntervalUnit`` are ``(str, Enum)`` members, so
+#    JSON writes the word they carry and the constructor reads it back. The
+#    XML encoder serializes them through ``str()`` instead, and the members
+#    do **not** set ``__str__ = str.__str__`` -- which core does set on
+#    ``TriggerTiming``, ``ComparisonOperator``, ``SetOperationKind`` and
+#    ``ArithmeticOperator``, all four of which round-trip fine. So the XML
+#    artifact reads ``DateTimeField.YEAR``, core's own
+#    ``normalize_datetime_field`` refuses it as "unsupported", and the class
+#    is lost on XML alone. dict and json work, which is what makes this a
+#    per-channel entry rather than a class-wide one.
+#
+# 3. **a dataclass that survives another channel as the wrong thing.**
+#    ``XMLParseExpression`` and ``XMLSerializeExpression`` carry
+#    ``XMLParseDocumentType``, and ``GraphEdge`` carries
+#    ``GraphEdgeDirection``: JSON and XML hand those back as a bare word,
+#    which the constructors then refuse ("must be a ... value, got str"). The
+#    same two-step the enum spelling in (2) would fix -- a word-or-enum
+#    parameter whose constructor normalizes the word -- is missing here.
+#
+# 4. **a bind-parameter tuple.** The value vocabulary has ``list_value`` and
+#    no ``tuple_value``, so a tuple a node holds for its bind parameters
+#    travels as a plain JSON list and comes back a list. ``get_params()``
+#    then disagrees with the original, and the matrix's SQL comparison sees
+#    the two bind sequences differ. Finding it wants the round-trip, not the
+#    encode: the encoder is happy to write the list.
+#
+# Every entry is one *class* plus the channels it is lost on, so the table is
+# read per class and asserted per class in both directions:
+# ``test_core_artifact_gaps_still_lose_the_class`` re-runs each one and fails
+# when a listed channel starts working, and
+# ``test_core_artifact_gaps_list_is_exact`` compares the table against what
+# the encoders actually lose, so a gap nobody has written down fails the run
+# rather than passing as a green tick.
+CORE_ARTIFACT_GAPS: Dict[str, tuple] = {
+    # ---------------------------------------------------------------
+    # One: a dataclass parameter. core's ``_encode_value`` reaches
+    # ``_encode_scalar``, the value vocabulary refuses the type, and
+    # the message names it. The rewrite's own note is that a
+    # dataclass has no place in an artifact; making these travel
+    # needs either a kind on the parameter's class or an encoder
+    # branch, both of which are core's to write.
+    # ---------------------------------------------------------------
+    "rhosocial.activerecord.backend.expression.statements.ddl_type.CreateTypeStatement":
+        ("dict", "json", "xml"),
+    "rhosocial.activerecord.backend.expression.statements.ddl_view.CreateViewStatement":
+        ("dict", "json", "xml"),
+    "rhosocial.activerecord.backend.expression.xml.XMLAttributesExpression":
+        ("dict", "json", "xml"),
+    "rhosocial.activerecord.backend.expression.xml.XMLForestExpression":
+        ("dict", "json", "xml"),
+    "rhosocial.activerecord.backend.expression.xml.XMLTableExpression":
+        ("dict", "json", "xml"),
+    "rhosocial.activerecord.backend.impl.oracle.expression.ddl.type.OracleAlterTypeAddAttributeAction":
+        ("dict", "json", "xml"),
+    "rhosocial.activerecord.backend.impl.oracle.expression.ddl.type.OracleAlterTypeAddMethodAction":
+        ("dict", "json", "xml"),
+    "rhosocial.activerecord.backend.impl.oracle.expression.ddl.type.OracleAlterTypeDropMethodAction":
+        ("dict", "json", "xml"),
+    "rhosocial.activerecord.backend.impl.oracle.expression.ddl.type.OracleAlterTypeModifyAttributeAction":
+        ("dict", "json", "xml"),
+    "rhosocial.activerecord.backend.impl.oracle.expression.ddl.type.OracleObjectTypeDefinition":
+        ("dict", "json", "xml"),
+    "rhosocial.activerecord.backend.impl.oracle.expression.ddl.type.OracleSqljTypeDefinition":
+        ("dict", "json", "xml"),
+    "rhosocial.activerecord.backend.impl.oracle.expression.partition.OracleIntervalPartitionClause":
+        ("dict", "json", "xml"),
+    "rhosocial.activerecord.backend.impl.oracle.expression.partition_lifecycle.OracleAddPartitionStatement":
+        ("dict", "json", "xml"),
+    "rhosocial.activerecord.backend.impl.oracle.expression.partition_lifecycle.OracleMergePartitionsStatement":
+        ("dict", "json", "xml"),
+    "rhosocial.activerecord.backend.impl.oracle.expression.partition_lifecycle.OracleSplitPartitionStatement":
+        ("dict", "json", "xml"),
+
+    # ---------------------------------------------------------------
+    # Two: the XML channel alone used to lose the datetime family.
+    # ``DateTimeField`` and ``IntervalUnit`` are ``(str, Enum)``, so
+    # JSON wrote the word the member carries and the constructor read
+    # it back; the XML encoder wrote them through ``str()`` instead,
+    # and neither family set ``__str__ = str.__str__`` the way
+    # ``TriggerTiming``, ``ComparisonOperator``, ``SetOperationKind``
+    # and ``ArithmeticOperator`` do. Core gave them the missing
+    # ``__str__``, so the encoder writes "year" / "day" and the
+    # normaliser accepts it. No rows left here, and the block stays to
+    # say why the family was the one place the XML channel diverged.
+    # ---------------------------------------------------------------
+
+    # ---------------------------------------------------------------
+    # Three: a word-or-enum parameter whose constructor does not
+    # normalise the word back into the member. ``GraphEdge``,
+    # ``XMLParseExpression`` and ``XMLSerializeExpression`` refuse the
+    # word outright; ``CreateTriggerStatement`` stores it, so the node
+    # it decodes to cannot render. Either way the fix is a
+    # normalising constructor argument, which is core's to add.
+    #
+    # ``CommentOnStatement``, ``ColumnGeneratedConstraint`` and
+    # ``ForeignKeyConstraint`` used to sit in the all-channels block
+    # beside this one. Core made ``CommentObjectType``,
+    # ``GeneratedColumnType`` and ``ReferentialAction`` str enums, so
+    # the writer carries them on every channel and the classes
+    # round-trip here: measured against the SQL and the bind
+    # parameters, a parameter that comes back as the member's word is
+    # the same SQL. They are gone from the table rather than narrowed,
+    # because no channel loses them any more.
+    # ---------------------------------------------------------------
+    "rhosocial.activerecord.backend.expression.statements.ddl_trigger.CreateTriggerStatement":
+        ("json", "xml"),
+    "rhosocial.activerecord.backend.expression.graph.GraphEdge": ("json", "xml"),
+    "rhosocial.activerecord.backend.expression.xml.XMLParseExpression": ("json", "xml"),
+    "rhosocial.activerecord.backend.expression.xml.XMLSerializeExpression": ("json", "xml"),
+
+    # ---------------------------------------------------------------
+    # Four: a bind-parameter *tuple*, written as a plain JSON list and
+    # read back as one. ``Subquery.query_params`` is a tuple of the
+    # values the subquery binds, and the artifact rewrite's value
+    # vocabulary has no ``tuple_value`` to spell one with -- only
+    # ``list_value`` -- so the payload writes ``[1]`` and the reader
+    # hands back a ``list``. ``get_params()`` then reports ``[1]``
+    # where the original held ``(1,)``, and the SQL test below is
+    # what compares the two bind-parameter sequences. The rewrite's
+    # own contract is that the constructor normalises the array back
+    # to the declared tuple, and the nodes that carry one do not, so
+    # the sequence changes *type* on every channel. The SQL text is
+    # identical either way, which is what makes this a parameter-shape
+    # entry rather than a render one.
+    # ---------------------------------------------------------------
+    "rhosocial.activerecord.backend.expression.advanced_functions.ExistsPredicate": (
+        "dict", "json", "xml",
+    ),
+
+    # ---------------------------------------------------------------
+    # Five: a dataclass parameter on a class this dialect also cannot
+    # render. ``GraphTableExpression`` holds a ``GraphColumn``, which is
+    # (1)'s story exactly -- no kind, so ``_encode_scalar`` refuses it
+    # and names the type -- and Oracle happens to decline GRAPH_TABLE
+    # as a feature besides. The two findings are recorded apart, in the
+    # tables that ask the question each answers: the classifier reports
+    # the capability gap, and this row records the artifact one, so a
+    # channel core later learns to encode is noticed here even while
+    # the class still renders no SQL for Oracle.
+    # ---------------------------------------------------------------
+    "rhosocial.activerecord.backend.expression.graph.GraphTableExpression": (
+        "dict", "json", "xml",
+    ),
+}
+
+
+# ---------------------------------------------------------------------------
 # The dispatch gap: a missing formatter is a decision, not an omission
 # ---------------------------------------------------------------------------
 #
@@ -1741,7 +2115,7 @@ def _dispatched_formatter(exc):
 #:
 #: These are not defects: they are features Oracle does not have -- or spells
 #: through this backend's own expressions -- which the shared renderer reports
-#: by naming the method it could not find. ``RepeatExpression`` is the one
+#: by naming the method it could not find. ``RepeatFunction`` is the one
 #: that made the accounting necessary: Oracle has no ``REPEAT`` function, the
 #: node dispatches to a formatter no base in this dialect provides, and before
 #: the table existed that refusal was allowed on its type alone.
@@ -1762,15 +2136,15 @@ UNMODELLED_FORMATTERS = {
         "format_domain_value_expression",
     ),
     "the core SQL/PSM DROP FUNCTION statement (this backend renders routine "
-    "DDL through its own OracleCreateFunctionExpression family, and composes "
+    "DDL through its own OracleCreateFunctionStatement family, and composes "
     "no formatter for the core statement)": ("format_drop_function_statement",),
     "ILIKE (Oracle has no ILIKE operator; case-insensitive matching goes "
-    "through UPPER() + LIKE)": ("format_ilike_expression",),
+    "through UPPER() + LIKE)": ("format_ilike_predicate",),
     "the core PIVOT / UNPIVOT expressions (PIVOT goes through this backend's "
-    "own PivotExpression and its format_pivot, so the core mixin is not "
+    "own Pivot and its format_pivot, so the core mixin is not "
     "composed)": (
-        "format_pivot_expression",
-        "format_unpivot_expression",
+        "format_pivot",
+        "format_unpivot",
     ),
     "REPEAT (Oracle has no REPEAT function; the node exists for the backends "
     "that spell it natively, and this dialect declares no formatter to "
@@ -1872,40 +2246,96 @@ def assert_sql_roundtrip_classified(fqn, instance, dialect):
         )
         return "non-render"
 
-    for channel, decoded in (
-        ("dict", deserialize(serialize(instance), dialect)),
-        ("json", deserialize_json(serialize_json(instance), dialect)),
-        ("xml", deserialize_xml(serialize_xml(instance), dialect)),
-    ):
+    # A plain-JSON artifact cannot carry what this node holds, on the channels
+    # the table names. The encoder either refuses by type and names it, or it
+    # writes a plain JSON shape the node's own constructor then refuses, or it
+    # writes a *different* shape the node accepts -- a list where the node held
+    # a tuple -- and the bind parameters come back unequal. All three are the
+    # same finding: the round-trip is what decides, not the encode, and an
+    # encode that "succeeds" by parking an enum member inside the payload is
+    # exactly the loss this table records. So the pin is read here, beside the
+    # strict comparison it exempts, in the same spirit as
+    # :data:`CORE_SERIALISATION_DEFECTS` is read beside it: a channel named in
+    # the table is allowed to lose the class, and one that starts restoring
+    # *both* the SQL and the bind parameters is the moment to delete it. The
+    # gap is core's to close -- the file's header says why each shape has no
+    # encoding -- so the row records which channels are lost and why rather
+    # than reporting the class as a non-render. The class *does* render; the
+    # check above is what proves it.
+    gaps = CORE_ARTIFACT_GAPS.get(fqn, ())
+    # Each channel is decoded *inside* the try, not before the loop: the three
+    # decoders are built lazily as functions rather than eagerly as values,
+    # because the one that raises is the one the table below exempts, and an
+    # eagerly-built tuple would abort on it before the classification could
+    # read which channel it was.
+    def _channels():
+        return (
+            (
+                name,
+                (lambda n=name: _channel_decode(
+                    _channel_payload(instance, n), dialect, n
+                )),
+            )
+            for name in ("dict", "json", "xml")
+        )
+
+    for channel, decode in _channels():
         try:
+            decoded = decode()
             decoded_sql, decoded_params = decoded.to_sql()
         except Exception as exc:
-            if channel not in CORE_SERIALISATION_DEFECTS.get(fqn, ()):
+            if channel not in gaps:
                 raise AssertionError(
                     f"{fqn}: the {channel} channel did not deserialise into "
                     f"something renderable.\n"
                     f"  {type(exc).__name__}: {exc}\n"
+                    f"  A class listed in CORE_ARTIFACT_GAPS names the channels "
+                    f"core's plain-JSON artifact cannot carry it on; the file's "
+                    f"header says what each one is missing.\n"
                     f"  A class listed in CORE_SERIALISATION_DEFECTS names the "
                     f"channels core is known to lose it on."
                 ) from exc
-            continue
-        if channel in CORE_SERIALISATION_DEFECTS.get(fqn, ()):
-            raise AssertionError(
-                f"{fqn}: CORE_SERIALISATION_DEFECTS names the {channel} channel as "
-                f"one core loses this class on, and it now round-trips. Core has "
-                f"been fixed -- remove the entry."
-            )
+            continue  # still lost, which is what the row claims
+        roundtrips = _roundtrips(expected_sql, expected_params, decoded_sql, decoded_params)
+        if channel in gaps:
+            if roundtrips:
+                raise AssertionError(
+                    f"{fqn}: CORE_ARTIFACT_GAPS names the {channel} channel as "
+                    f"one core loses this class on, and it now round-trips. Core "
+                    f"has been fixed -- remove the entry."
+                )
+            continue  # the SQL survived and the parameters did not: still lost
         assert decoded_sql == expected_sql, (
             f"{fqn}: {channel} round-trip changed the SQL.\n"
             f"  original: {expected_sql!r}\n"
             f"  {channel}: {decoded_sql!r}"
         )
-        assert decoded_params == expected_params, (
-            f"{fqn}: {channel} round-trip changed the bind parameters.\n"
-            f"  original: {expected_params!r}\n"
-            f"  {channel}: {decoded_params!r}"
-        )
+        assert_bind_params_equal(decoded_params, expected_params, fqn)
     return "rendered"
+
+
+def _roundtrips(expected_sql, expected_params, decoded_sql, decoded_params):
+    """Whether a channel restored both the SQL and the bind parameters.
+
+    A predicate rather than an assertion, because the two places that ask it --
+    the classifier's pin check and the two integrity tests below -- are each
+    asking in order to *report* the answer rather than to fail on it, and each
+    reports differently.
+
+    ``expected_sql`` is ``None`` when the class renders nothing on this dialect
+    and is pinned in :data:`CORE_ARTIFACT_GAPS` anyway (see the walk that
+    observes it): there is then no SQL for a channel to restore, so no channel
+    can round-trip it and the answer is ``False`` for all three.
+    """
+    if expected_sql is None:
+        return False
+    if decoded_sql != expected_sql:
+        return False
+    try:
+        assert_bind_params_equal(decoded_params, expected_params)
+    except AssertionError:
+        return False
+    return True
 
 
 @pytest.fixture(scope="function")
@@ -1940,6 +2370,20 @@ class TestOracleExpressionRoundtrip:
 
     def test_get_params_roundtrip(self, oracle_expr_case, oracle_dialect):
         fqn, instance = oracle_expr_case
+        # A class core's plain-JSON artifact cannot write at all is pinned in
+        # CORE_ARTIFACT_GAPS on every channel; the SQL test below is what
+        # re-checks that the pins still hold, so this one skips it rather than
+        # failing inside ``serialize`` with core's refusal.
+        if set(CORE_ARTIFACT_GAPS.get(fqn, ())) == {"dict", "json", "xml"}:
+            pytest.skip(f"{fqn}: no encoding channel can carry its parameters")
+        # A class whose *parameters* core loses on the dict channel alone --
+        # the artifact writes a plain JSON list where the node held a tuple,
+        # so ``get_params()`` reads ``[1]`` back for a ``(1,)`` -- is pinned
+        # on that one channel. The SQL it renders is unchanged either way,
+        # which is why the classification lives with the SQL test and this
+        # one reports the skip rather than a second copy of core's fault.
+        if "dict" in CORE_ARTIFACT_GAPS.get(fqn, ()):
+            pytest.skip(f"{fqn}: core loses this class's parameters on dict")
         original = instance.get_params()
         # The ``dict`` channel only, deliberately. ``get_params`` on the decoded
         # side is where core's JSON and XML encoders show their loss -- a plain
@@ -1948,7 +2392,9 @@ class TestOracleExpressionRoundtrip:
         # well would report one core defect twice and through two different
         # messages.
         assert_params_equal_local(
-            deserialize(serialize(instance), oracle_dialect).get_params(),
+            _channel_decode(
+                _channel_payload(instance, "dict"), oracle_dialect, "dict"
+            ).get_params(),
             original,
             fqn,
         )
@@ -2006,17 +2452,11 @@ class TestMatrixIntegrity:
                 f"so the entry no longer describes the defect."
             )
             for channel in channels:
-                payload = {
-                    "json": lambda: serialize_json(instance),
-                    "xml": lambda: serialize_xml(instance),
-                }[channel]()
-                decoded = {
-                    "json": lambda: deserialize_json(payload, oracle_dialect),
-                    "xml": lambda: deserialize_xml(payload, oracle_dialect),
-                }[channel]()
+                payload = _channel_payload(instance, channel)
+                decoded = _channel_decode(payload, oracle_dialect, channel)
                 try:
                     decoded_sql, _ = decoded.to_sql()
-                except Exception as exc:
+                except Exception:
                     continue  # still lost, which is what the entry claims
                 raise AssertionError(
                     f"{fqn}: the {channel} channel is pinned in "
@@ -2035,6 +2475,147 @@ class TestMatrixIntegrity:
         assert not unknown, (
             f"UNCONSTRUCTIBLE names classes that were not registered: {sorted(unknown)}"
         )
+
+    def test_core_artifact_gaps_are_real_classes(self):
+        """Every pinned gap names a collected class.
+
+        A row for a class the walk no longer finds would read as a decision
+        about nothing, so it fails here rather than sitting quietly in the
+        table.
+        """
+        unknown = set(CORE_ARTIFACT_GAPS) - set(REGISTERED)
+        assert not unknown, (
+            f"CORE_ARTIFACT_GAPS names classes that were not registered: "
+            f"{sorted(unknown)}"
+        )
+
+    def test_core_artifact_gaps_list_is_exact(self, oracle_dialect):
+        """Pin the artifact gaps against what the encoders actually lose.
+
+        Observed rather than assumed: each class the matrix covers is encoded
+        through every channel, and a channel that fails to encode, to decode,
+        or to render the same afterwards is recorded. The table is then
+        compared in both directions, so
+
+        * a row nobody needs fails, because its channel works and the entry is
+          a lie about core;
+        * a gap nobody wrote down fails, because the class is lost and the run
+          would otherwise report it as a defect with nothing to read.
+
+        This is the counterpart to ``test_unmodelled_formatter_list_is_exact``
+        for the artifact: a missing formatter is a *dialect* decision, while a
+        missing encoding is *core's* answer about what an artifact can carry,
+        and the two are recorded separately for that reason.
+
+        "Lost" is the same test :func:`assert_sql_roundtrip_classified` applies,
+        which is the whole round-trip reaching both the SQL *and* the bind
+        parameters: a channel that restores the SQL and drops the parameters
+        is still lost, and treating it otherwise would leave the tuple entry
+        that records it reading as a row nobody needs.
+        """
+        observed: Dict[str, set] = {}
+        for fqn in sorted(REGISTERED):
+            instance, _source = make_instance(REGISTERED[fqn], oracle_dialect)
+            if instance is None:
+                continue
+            try:
+                expected_sql, expected_params = instance.to_sql()
+            except Exception:
+                # A non-render is classified elsewhere, not here -- with one
+                # exception, taken deliberately and narrowly. A class pinned
+                # below *and* rendering nothing still holds parameters, and
+                # those can still be unencodable: GraphTableExpression is
+                # exactly that pair, and skipping it here would leave its row
+                # un-checked by the walk that is supposed to verify it. So a
+                # pinned class that renders nothing is observed with nothing
+                # to restore, and every channel it loses on is recorded.
+                if fqn not in CORE_ARTIFACT_GAPS:
+                    continue
+                expected_sql = expected_params = None
+            lost = set()
+            for channel in ("dict", "json", "xml"):
+                try:
+                    payload = _channel_payload(instance, channel)
+                    restored = _channel_decode(payload, oracle_dialect, channel)
+                    decoded_sql, decoded_params = restored.to_sql()
+                    if not _roundtrips(
+                        expected_sql, expected_params, decoded_sql, decoded_params
+                    ):
+                        lost.add(channel)
+                except Exception:
+                    lost.add(channel)
+            if lost:
+                observed[fqn] = lost
+        declared = {fqn: set(channels) for fqn, channels in CORE_ARTIFACT_GAPS.items()}
+        assert declared == observed, (
+            "CORE_ARTIFACT_GAPS and the observed losses disagree.\
+"
+            f"  pinned but not lost: "
+            f"{sorted(k for k in declared if observed.get(k) != declared[k])}\
+"
+            f"  lost but not pinned: {sorted(set(observed) - set(declared))}"
+        )
+
+    def test_core_artifact_gaps_still_lose_the_class(self, oracle_dialect):
+        """Each pinned channel still loses its class, and the others still work.
+
+        Both directions, separately, and on the round-trip rather than on the
+        encode: a listed channel that starts restoring both the SQL and the
+        bind parameters is the moment to delete the row; a channel nobody listed
+        that stops working means core regressed, and the per-class assertion in
+        :func:`assert_sql_roundtrip_classified` is what catches that one.
+        """
+        for fqn, channels in CORE_ARTIFACT_GAPS.items():
+            instance, _ = make_instance(REGISTERED[fqn], oracle_dialect)
+            assert instance is not None, f"{fqn}: pinned as a gap but will not build"
+            try:
+                expected_sql, expected_params = instance.to_sql()
+            except UnsupportedFeatureError:
+                # The class is pinned here for what an artifact cannot carry,
+                # and it also happens to be a feature this dialect declines --
+                # GraphTableExpression is both. The capability answer is
+                # asserted by the classifier; with no SQL to compare against
+                # there is nothing this test can say about the channels, so it
+                # reports the coexistence and moves on.
+                pytest.skip(
+                    f"{fqn}: pinned as an artifact gap and not renderable "
+                    f"on Oracle, so the channels have nothing to compare"
+                )
+            for channel in ("dict", "json", "xml"):
+                # Decoded inside the try, for the reason the classifier states:
+                # the channel core loses this class on is the one that raises.
+                try:
+                    payload = _channel_payload(instance, channel)
+                    restored = _channel_decode(payload, oracle_dialect, channel)
+                    decoded_sql, decoded_params = restored.to_sql()
+                except AssertionError:
+                    raise
+                except Exception:
+                    # The encode, the decode, or the render after it failed.
+                    assert channel in channels, (
+                        f"{fqn}: {channel} is not pinned in CORE_ARTIFACT_GAPS "
+                        f"and it stopped working. Either core regressed, or the "
+                        f"pin was never written -- run the matrix and read the "
+                        f"observed set."
+                    )
+                    continue
+                roundtrips = _roundtrips(
+                    expected_sql, expected_params, decoded_sql, decoded_params
+                )
+                if channel in channels:
+                    assert not roundtrips, (
+                        f"{fqn}: {channel} is pinned in CORE_ARTIFACT_GAPS as "
+                        f"one core loses this class on, and it now round-trips "
+                        f"to {decoded_sql!r} with {decoded_params!r}. Core has "
+                        f"been fixed -- remove the channel from the entry."
+                    )
+                    continue
+                assert roundtrips, (
+                    f"{fqn}: {channel} is not pinned in CORE_ARTIFACT_GAPS and "
+                    f"it rendered {decoded_sql!r} with {decoded_params!r} where "
+                    f"the original rendered {expected_sql!r} with "
+                    f"{expected_params!r}."
+                )
 
     def test_legitimate_non_renders_are_real_classes(self):
         """Every pinned non-render names a class that was actually collected."""
@@ -2091,7 +2672,7 @@ class TestMatrixIntegrity:
         This is the regression test for the pad/trim incident. Core turned
         ``trim``/``lpad``/``rpad``/``repeat`` into dedicated nodes; Oracle
         spells three of them natively and has no ``REPEAT`` function, so
-        ``RepeatExpression`` is exactly the shape this test exists for: a
+        ``RepeatFunction`` is exactly the shape this test exists for: a
         class whose formatter no base in this dialect provides, which before
         the split was allowed through as "Oracle lacks the feature" without
         anything asking whether the feature was even claimed.
@@ -2133,7 +2714,6 @@ class TestMatrixIntegrity:
         rather than the registry because the registry also holds whatever
         backends other test modules happened to import.
         """
-        ExpressionRegistry._auto_register_builtins()
         expected = set(_collect_matrix_classes())
         stray = [
             fqn
@@ -2170,12 +2750,27 @@ class TestMatrixIntegrity:
     def test_every_covered_class_is_registered_for_deserialization(self):
         """A class in the matrix can be found again when deserializing.
 
-        Deserialization looks the class up by name, so a class the matrix renders
-        but the registry cannot resolve would round-trip into the wrong thing or
-        nothing at all.
+        An artifact carries a kind, not a class path (core 8d474dc8), and the
+        reader resolves that kind through the deserialization whitelist, so a
+        class the matrix renders but the registry cannot resolve -- or whose
+        kind resolves to a different class -- would round-trip into the wrong
+        thing or nothing at all. register_all has run at module scope; this
+        re-resolves each kind and checks it lands on the same class.
         """
-        ExpressionRegistry._auto_register_builtins()
-        unresolved = sorted(set(REGISTERED) - set(ExpressionRegistry._registry))
+        from rhosocial.activerecord.backend.expression.registry import RegistryError
+        from rhosocial.activerecord.backend.expression.serialization import (
+            default_registry,
+        )
+
+        registry = default_registry()
+        unresolved = []
+        for fqn, cls in REGISTERED.items():
+            kind = cls.kind()
+            try:
+                if registry.resolve_node(kind) is not cls:
+                    unresolved.append(f"{fqn}: kind '{kind}' resolves elsewhere")
+            except RegistryError:
+                unresolved.append(f"{fqn}: kind '{kind}' is not registered")
         assert not unresolved, (
             f"the matrix covers classes the registry cannot resolve: {unresolved}"
         )
@@ -2206,7 +2801,6 @@ class TestMatrixIntegrity:
         :data:`UNMODELLED_FORMATTERS`, while a probe's refusal stays
         ``unsupported`` and needs no row.
         """
-        ExpressionRegistry._auto_register_builtins()
         counts: Dict[str, int] = {}
         for fqn in sorted(REGISTERED):
             instance, _source = make_instance(REGISTERED[fqn], oracle_dialect)

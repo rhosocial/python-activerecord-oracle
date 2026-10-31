@@ -7,15 +7,15 @@ procedures, functions and packages:
 * ``OracleRoutineParameterMode`` / ``OracleRoutineParameter`` — formal
   parameter declarations (name, optional ``IN``/``OUT``/``IN OUT`` mode,
   data type).
-* ``OracleCreateProcedureExpression`` — ``CREATE [OR REPLACE] PROCEDURE
+* ``OracleCreateProcedureStatement`` — ``CREATE [OR REPLACE] PROCEDURE
   p (x IN NUMBER) AS ...``.
-* ``OracleCreateFunctionExpression`` — ``CREATE [OR REPLACE] FUNCTION
+* ``OracleCreateFunctionStatement`` — ``CREATE [OR REPLACE] FUNCTION
   f (x NUMBER) RETURN NUMBER AS ...``.
-* ``OracleCreatePackageExpression`` — ``CREATE [OR REPLACE] PACKAGE pk
+* ``OracleCreatePackageStatement`` — ``CREATE [OR REPLACE] PACKAGE pk
   AS ...``.
-* ``OracleCreatePackageBodyExpression`` — ``CREATE [OR REPLACE] PACKAGE
+* ``OracleCreatePackageBodyStatement`` — ``CREATE [OR REPLACE] PACKAGE
   BODY pk AS ...``.
-* ``OracleDropRoutineObjectType`` / ``OracleDropRoutineExpression`` —
+* ``OracleDropRoutineObjectType`` / ``OracleDropRoutineStatement`` —
   ``DROP PROCEDURE/FUNCTION/PACKAGE [BODY] ...``.
 
 Routine bodies are passed through verbatim as raw PL/SQL strings; the
@@ -27,7 +27,7 @@ All expressions delegate SQL generation to the dialect through the public
 from __future__ import annotations
 
 from enum import Enum
-from typing import List, Optional, TYPE_CHECKING
+from typing import List, Optional, TYPE_CHECKING, Union
 
 from rhosocial.activerecord.backend.expression.bases import BaseExpression
 from rhosocial.activerecord.backend.expression.objects import (
@@ -42,12 +42,38 @@ if TYPE_CHECKING:  # pragma: no cover
     from ...dialect import OracleDialect
 
 
-class OracleRoutineParameterMode(Enum):
-    """Oracle routine parameter direction modes."""
+class OracleRoutineParameterMode(str, Enum):
+    """Oracle routine parameter direction modes.
+
+    A word, carried by the artifact as the str it is: ``(str, Enum)`` alone
+    is not enough, because ``Enum.__str__`` wins over the mixin and writes
+    ``OracleRoutineParameterMode.IN`` -- a name nothing on the wire can read.
+    """
+
+    __str__ = str.__str__
 
     IN = "IN"
     OUT = "OUT"
     IN_OUT = "IN OUT"
+
+
+def normalize_routine_parameter_mode(
+    mode: Union[str, OracleRoutineParameterMode],
+) -> OracleRoutineParameterMode:
+    """A member passes through; the word it carries becomes that member.
+
+    The artifact carries the word, so a constructor reading one back gets a
+    str and must be able to spell the member from it.
+    """
+    if isinstance(mode, OracleRoutineParameterMode):
+        return mode
+    normalized = str(mode).strip().upper()
+    if normalized in OracleRoutineParameterMode._value2member_map_:
+        return OracleRoutineParameterMode(normalized)
+    raise ValueError(
+        f"unsupported routine parameter mode: {mode!r}; expected one of "
+        f"{[member.value for member in OracleRoutineParameterMode]}"
+    )
 
 
 class OracleRoutineParameter:
@@ -74,17 +100,14 @@ class OracleRoutineParameter:
             raise ValueError("parameter name must be a non-empty string")
         if not isinstance(data_type, str) or not data_type.strip():
             raise ValueError("parameter data_type must be a non-empty string")
-        if mode is not None and not isinstance(mode, OracleRoutineParameterMode):
-            raise TypeError(
-                "mode must be an OracleRoutineParameterMode value, "
-                f"got {type(mode).__name__}"
-            )
+        if mode is not None:
+            mode = normalize_routine_parameter_mode(mode)
         self.name = name
         self.data_type = data_type
         self.mode = mode
 
 
-class OracleCreateProcedureExpression(BaseExpression):
+class OracleCreateProcedureStatement(BaseExpression):
     """Oracle ``CREATE [OR REPLACE] PROCEDURE ...`` expression.
 
     Args:
@@ -132,7 +155,7 @@ class OracleCreateProcedureExpression(BaseExpression):
         return "format_create_procedure_statement"
 
 
-class OracleCreateFunctionExpression(BaseExpression):
+class OracleCreateFunctionStatement(BaseExpression):
     """Oracle ``CREATE [OR REPLACE] FUNCTION ...`` expression.
 
     Args:
@@ -191,7 +214,7 @@ class OracleCreateFunctionExpression(BaseExpression):
         return "format_create_function_statement"
 
 
-class OracleCreatePackageExpression(BaseExpression):
+class OracleCreatePackageStatement(BaseExpression):
     """Oracle ``CREATE [OR REPLACE] PACKAGE ...`` expression.
 
     Args:
@@ -238,7 +261,7 @@ class OracleCreatePackageExpression(BaseExpression):
         return "format_create_package_statement"
 
 
-class OracleCreatePackageBodyExpression(BaseExpression):
+class OracleCreatePackageBodyStatement(BaseExpression):
     """Oracle ``CREATE [OR REPLACE] PACKAGE BODY ...`` expression.
 
     Args:
@@ -282,8 +305,10 @@ class OracleCreatePackageBodyExpression(BaseExpression):
         return "format_create_package_body_statement"
 
 
-class OracleDropRoutineObjectType(Enum):
-    """Oracle PL/SQL object kinds accepted by ``DROP``."""
+class OracleDropRoutineObjectType(str, Enum):
+    """Objects ``DROP`` accepts for a routine."""
+
+    __str__ = str.__str__
 
     PROCEDURE = "PROCEDURE"
     FUNCTION = "FUNCTION"
@@ -291,7 +316,26 @@ class OracleDropRoutineObjectType(Enum):
     PACKAGE_BODY = "PACKAGE BODY"
 
 
-class OracleDropRoutineExpression(BaseExpression):
+def normalize_drop_routine_object_type(
+    object_type: Union[str, OracleDropRoutineObjectType],
+) -> OracleDropRoutineObjectType:
+    """A member passes through; the word it carries becomes that member.
+
+    The artifact carries the word, so a constructor reading one back gets a
+    str and must be able to spell the member from it.
+    """
+    if isinstance(object_type, OracleDropRoutineObjectType):
+        return object_type
+    normalized = str(object_type).strip().upper()
+    if normalized in OracleDropRoutineObjectType._value2member_map_:
+        return OracleDropRoutineObjectType(normalized)
+    raise ValueError(
+        f"unsupported DROP routine object type: {object_type!r}; expected one of "
+        f"{[member.value for member in OracleDropRoutineObjectType]}"
+    )
+
+
+class OracleDropRoutineStatement(BaseExpression):
     """Oracle ``DROP PROCEDURE/FUNCTION/PACKAGE [BODY] ...`` expression.
 
     Args:
@@ -311,15 +355,11 @@ class OracleDropRoutineExpression(BaseExpression):
     def __init__(
         self,
         dialect: "OracleDialect",
-        object_type: OracleDropRoutineObjectType,
+        object_type: Union[str, OracleDropRoutineObjectType],
         routine: RoutineObject,
     ):
         super().__init__(dialect)
-        if not isinstance(object_type, OracleDropRoutineObjectType):
-            raise TypeError(
-                "object_type must be an OracleDropRoutineObjectType value, "
-                f"got {type(object_type).__name__}"
-            )
+        object_type = normalize_drop_routine_object_type(object_type)
         if not isinstance(routine, RoutineObject):
             raise TypeError(
                 f"routine must be a RoutineObject, got {type(routine).__name__}"

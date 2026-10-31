@@ -11,9 +11,8 @@ from typing import Any, List, Optional, Sequence, Tuple, TYPE_CHECKING, cast
 
 from rhosocial.activerecord.backend.expression.bases import BaseExpression
 from rhosocial.activerecord.backend.expression.objects import Type
-from rhosocial.activerecord.backend.expression.serialization import ExpressionRegistry
 from rhosocial.activerecord.backend.expression.statements.ddl_type import (
-    DropTypeExpression,
+    DropTypeStatement,
     TypeAlterAction,
     TypeDefinition,
 )
@@ -831,8 +830,16 @@ class OracleIncompleteTypeDefinition(TypeDefinition):
         super().__init__(dialect)
 
 
-class OracleAlterTypeDependentHandling(Enum):
-    """Dependent handling clauses accepted after ALTER TYPE actions."""
+class OracleAlterTypeDependentHandling(str, Enum):
+    """Dependent handling clauses accepted after ALTER TYPE actions.
+
+    A word, carried by the artifact as the str it is: ``(str, Enum)`` alone
+    is not enough, because ``Enum.__str__`` wins over the mixin and writes
+    ``OracleAlterTypeDependentHandling.CASCADE`` -- a name nothing on the
+    wire can read.
+    """
+
+    __str__ = str.__str__
 
     INVALIDATE = "INVALIDATE"
     CASCADE = "CASCADE"
@@ -1320,7 +1327,7 @@ class OracleAlterTypeResetAction(OracleTypeAlterAction):
         super().__init__(dialect, dependent_handling=dependent_handling, force=force)
 
 
-class OracleCreateTypeBodyExpression(BaseExpression):
+class OracleCreateTypeBodyStatement(BaseExpression):
     """Oracle CREATE TYPE BODY expression.
 
     ``schema`` is a deprecated alias of ``schema_name``; both are stored
@@ -1368,7 +1375,7 @@ class OracleCreateTypeBodyExpression(BaseExpression):
         return "format_create_type_body_statement"
 
 
-class OracleDropTypeExpression(DropTypeExpression):
+class OracleDropTypeExpression(DropTypeStatement):
     """Oracle DROP TYPE expression with FORCE or VALIDATE.
 
     ``schema`` is a deprecated alias of ``schema_name``; both are stored
@@ -1397,7 +1404,7 @@ class OracleDropTypeExpression(DropTypeExpression):
         self.validate = validate
 
 
-class DropTypeBodyExpression(BaseExpression):
+class DropTypeBodyStatement(BaseExpression):
     """Oracle DROP TYPE BODY expression.
 
     ``schema`` is a deprecated alias of ``schema_name``; both are stored
@@ -1424,63 +1431,8 @@ class DropTypeBodyExpression(BaseExpression):
         return "format_drop_type_body_statement"
 
 
-class OracleDropTypeBodyExpression(DropTypeBodyExpression):
+class OracleDropTypeBodyExpression(DropTypeBodyStatement):
     """Oracle-prefixed alias for DROP TYPE BODY."""
-
-
-OracleTypeAddAttributeAction = OracleAlterTypeAddAttributeAction
-OracleTypeModifyAttributeAction = OracleAlterTypeModifyAttributeAction
-OracleTypeDropAttributeAction = OracleAlterTypeDropAttributeAction
-OracleTypeAddMethodAction = OracleAlterTypeAddMethodAction
-OracleTypeDropMethodAction = OracleAlterTypeDropMethodAction
-OracleTypeLimitAction = OracleAlterTypeLimitAction
-OracleTypeElementTypeAction = OracleAlterTypeElementTypeAction
-OracleTypeCompileAction = OracleAlterTypeCompileAction
-OracleTypeFinalAction = OracleAlterTypeFinalAction
-OracleTypeInstantiableAction = OracleAlterTypeInstantiableAction
-OracleTypeResetAction = OracleAlterTypeResetAction
-OracleAddTypeAttributeAction = OracleAlterTypeAddAttributeAction
-OracleModifyTypeAttributeAction = OracleAlterTypeModifyAttributeAction
-OracleDropTypeAttributeAction = OracleAlterTypeDropAttributeAction
-OracleAddTypeMethodAction = OracleAlterTypeAddMethodAction
-OracleDropTypeMethodAction = OracleAlterTypeDropMethodAction
-OracleModifyTypeLimitAction = OracleAlterTypeLimitAction
-OracleTypeBodyCreateExpression = OracleCreateTypeBodyExpression
-OracleTypeBodyDropExpression = DropTypeBodyExpression
-OracleTypeDependentHandling = OracleAlterTypeDependentHandling
-OracleAlterTypeAttributeAction = OracleAlterTypeAddAttributeAction
-OracleAlterTypeMethodAction = OracleAlterTypeAddMethodAction
-OracleAlterTypeModifyLimitAction = OracleAlterTypeLimitAction
-OracleCompileTypeAction = OracleAlterTypeCompileAction
-OracleSetTypeFinalAction = OracleAlterTypeFinalAction
-OracleSetTypeInstantiableAction = OracleAlterTypeInstantiableAction
-OracleDropTypeWithOptionsExpression = OracleDropTypeExpression
-
-
-_EXPRESSION_TYPES = (
-    OracleObjectTypeDefinition,
-    OracleSqljTypeDefinition,
-    OracleVarrayTypeDefinition,
-    OracleNestedTableTypeDefinition,
-    OracleIncompleteTypeDefinition,
-    OracleAlterTypeAddAttributeAction,
-    OracleAlterTypeModifyAttributeAction,
-    OracleAlterTypeDropAttributeAction,
-    OracleAlterTypeAddMethodAction,
-    OracleAlterTypeDropMethodAction,
-    OracleAlterTypeLimitAction,
-    OracleAlterTypeElementTypeAction,
-    OracleAlterTypeCompileAction,
-    OracleAlterTypeFinalAction,
-    OracleAlterTypeInstantiableAction,
-    OracleAlterTypeResetAction,
-    OracleCreateTypeBodyExpression,
-    OracleDropTypeExpression,
-    DropTypeBodyExpression,
-    OracleDropTypeBodyExpression,
-)
-for _expression_type in _EXPRESSION_TYPES:
-    ExpressionRegistry.register(_expression_type)
 
 
 __all__ = [
@@ -1504,35 +1456,8 @@ __all__ = [
     "OracleAlterTypeFinalAction",
     "OracleAlterTypeInstantiableAction",
     "OracleAlterTypeResetAction",
-    "OracleCreateTypeBodyExpression",
+    "OracleCreateTypeBodyStatement",
     "OracleDropTypeExpression",
-    "DropTypeBodyExpression",
+    "DropTypeBodyStatement",
     "OracleDropTypeBodyExpression",
-    "OracleTypeAddAttributeAction",
-    "OracleTypeModifyAttributeAction",
-    "OracleTypeDropAttributeAction",
-    "OracleTypeAddMethodAction",
-    "OracleTypeDropMethodAction",
-    "OracleTypeLimitAction",
-    "OracleTypeElementTypeAction",
-    "OracleTypeCompileAction",
-    "OracleTypeFinalAction",
-    "OracleTypeInstantiableAction",
-    "OracleTypeResetAction",
-    "OracleAddTypeAttributeAction",
-    "OracleModifyTypeAttributeAction",
-    "OracleDropTypeAttributeAction",
-    "OracleAddTypeMethodAction",
-    "OracleDropTypeMethodAction",
-    "OracleModifyTypeLimitAction",
-    "OracleTypeBodyCreateExpression",
-    "OracleTypeBodyDropExpression",
-    "OracleTypeDependentHandling",
-    "OracleAlterTypeAttributeAction",
-    "OracleAlterTypeMethodAction",
-    "OracleAlterTypeModifyLimitAction",
-    "OracleCompileTypeAction",
-    "OracleSetTypeFinalAction",
-    "OracleSetTypeInstantiableAction",
-    "OracleDropTypeWithOptionsExpression",
 ]

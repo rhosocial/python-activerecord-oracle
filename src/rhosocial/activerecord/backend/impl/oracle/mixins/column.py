@@ -4,7 +4,7 @@ from typing import List, Tuple, Union, TYPE_CHECKING
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 
 if TYPE_CHECKING:
-    from rhosocial.activerecord.backend.expression.statements import AlterTableExpression
+    from rhosocial.activerecord.backend.expression.statements import AlterTableStatement
     from rhosocial.activerecord.backend.expression.statements.ddl_alter import (
         AddColumn,
         DropColumn,
@@ -37,6 +37,15 @@ class OracleModifyColumnMixin:
         return False
 
     def supports_drop_constraint_if_exists(self) -> bool:
+        """Oracle does not support ``DROP CONSTRAINT IF EXISTS``.
+
+        Measured on 21c XE (18c and 23c agree): ``ALTER TABLE t DROP
+        CONSTRAINT IF EXISTS c`` is refused with ``ORA-01735: invalid ALTER
+        TABLE option``.  Unlike MySQL -- where the syntax is missing
+        outright -- Oracle parses the statement and rejects the option, so a
+        caller must pre-check ``USER_CONSTRAINTS`` rather than rely on
+        catching an error code.
+        """
         return False
 
     def supports_modify_column(self) -> bool:
@@ -110,7 +119,7 @@ class OracleModifyColumnMixin:
         modifier and delegate the plain form to the base implementation
         (``ADD COLUMN <col>``, which Oracle accepts).
         """
-        if getattr(action, "if_not_exists", None):
+        if action.if_not_exists:
             raise UnsupportedFeatureError(
                 self.name,
                 "ALTER TABLE ADD COLUMN IF NOT EXISTS",
@@ -135,7 +144,7 @@ class OracleModifyColumnMixin:
         return super().format_drop_table_constraint_action(action)
 
     def format_alter_table_statement(
-        self, expr: "AlterTableExpression"
+        self, expr: "AlterTableStatement"
     ) -> Tuple[str, tuple]:
         """Format an ALTER TABLE statement with clean clause joining.
 
@@ -175,7 +184,7 @@ class OracleModifyColumnMixin:
         return True
 
     def supports_read_only(self) -> bool:
-        return self.version >= (11, 0, 0)
+        return self.version_at_least((11, 0, 0))
 
     def supports_row_movement(self) -> bool:
         return True

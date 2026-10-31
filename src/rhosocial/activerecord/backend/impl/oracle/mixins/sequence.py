@@ -7,9 +7,9 @@ from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeature
 
 if TYPE_CHECKING:  # pragma: no cover
     from rhosocial.activerecord.backend.expression.statements import (
-        AlterSequenceExpression,
-        CreateSequenceExpression,
-        DropSequenceExpression,
+        AlterSequenceStatement,
+        CreateSequenceStatement,
+        DropSequenceStatement,
     )
 
 
@@ -38,9 +38,16 @@ class OracleSequenceMixin:
     :meth:`format_alter_sequence_statement` is where that spelling lives.
     """
 
+    def supports_sequence_introspection(self) -> bool:
+        """Oracle answers for its sequences from ``ALL_SEQUENCES``.
+
+        The capability for the ``introspect sequences`` family, under the same
+        name Postgres's and MariaDB's switches use."""
+        return True
+
     def supports_sequence(self) -> bool:
         """Oracle supports sequence objects from 9i onward."""
-        return self.version >= (9, 0, 0)
+        return self.version_at_least((9, 0, 0))
 
     def supports_create_sequence(self) -> bool:
         return self.supports_sequence()
@@ -53,11 +60,11 @@ class OracleSequenceMixin:
 
     def supports_sequence_if_not_exists(self) -> bool:
         """``CREATE SEQUENCE IF NOT EXISTS`` arrived in Oracle 23ai."""
-        return self.version >= (23, 0, 0)
+        return self.version_at_least((23, 0, 0))
 
     def supports_sequence_if_exists(self) -> bool:
         """``DROP SEQUENCE IF EXISTS`` arrived in Oracle 23ai."""
-        return self.version >= (23, 0, 0)
+        return self.version_at_least((23, 0, 0))
 
     def supports_sequence_start(self) -> bool:
         """``START WITH`` is a ``CREATE SEQUENCE`` clause in Oracle.
@@ -139,7 +146,7 @@ class OracleSequenceMixin:
         return f"{self.format_identifier(expr.sequence)}.CURRVAL", ()
 
     def format_create_sequence_statement(
-        self, expr: "CreateSequenceExpression"
+        self, expr: "CreateSequenceStatement"
     ) -> Tuple[str, tuple]:
         """Format ``CREATE SEQUENCE`` for Oracle.
 
@@ -181,7 +188,7 @@ class OracleSequenceMixin:
                 ),
             )
         parts = ["CREATE SEQUENCE"]
-        if getattr(expr, "if_not_exists", False):
+        if expr.if_not_exists:
             if not self.supports_sequence_if_not_exists():
                 raise UnsupportedFeatureError(
                     self.name,
@@ -281,7 +288,15 @@ class OracleSequenceMixin:
                     ),
                 )
             parts.append("ORDER" if expr.order else "NOORDER")
-        if getattr(expr, "owned_by", None) is not None:
+        # ``owned_by`` is declared by the core CreateSequenceStatement alone;
+        # Oracle's own expression models only the options Oracle spells, so
+        # there is nothing to refuse on that contract. Oracle has no OWNER
+        # clause at all, so a requested one is refused.
+        from rhosocial.activerecord.backend.expression.statements import (
+            CreateSequenceStatement,
+        )
+
+        if isinstance(expr, CreateSequenceStatement) and expr.owned_by is not None:
             if not self.supports_sequence_owned_by():
                 raise UnsupportedFeatureError(
                     self.name,
@@ -294,7 +309,7 @@ class OracleSequenceMixin:
         return " ".join(parts), ()
 
     def format_drop_sequence_statement(
-        self, expr: "DropSequenceExpression"
+        self, expr: "DropSequenceStatement"
     ) -> Tuple[str, tuple]:
         """Format ``DROP SEQUENCE`` for Oracle.
 
@@ -324,7 +339,7 @@ class OracleSequenceMixin:
                 ),
             )
         parts = ["DROP SEQUENCE"]
-        if getattr(expr, "if_exists", False):
+        if expr.if_exists:
             if not self.supports_sequence_if_exists():
                 raise UnsupportedFeatureError(
                     self.name,
@@ -339,7 +354,7 @@ class OracleSequenceMixin:
         return " ".join(parts), ()
 
     def format_alter_sequence_statement(
-        self, expr: "AlterSequenceExpression"
+        self, expr: "AlterSequenceStatement"
     ) -> Tuple[str, tuple]:
         """Format ``ALTER SEQUENCE`` for Oracle.
 
@@ -484,7 +499,14 @@ class OracleSequenceMixin:
                     ),
                 )
             parts.append("ORDER" if expr.order else "NOORDER")
-        if expr.owned_by is not None:
+        # ``owned_by`` is declared by the core AlterSequenceStatement alone;
+        # Oracle's own model has no ALTER statement of its own, and Oracle has
+        # no OWNER clause at all, so a requested one is refused.
+        from rhosocial.activerecord.backend.expression.statements import (
+            AlterSequenceStatement,
+        )
+
+        if isinstance(expr, AlterSequenceStatement) and expr.owned_by is not None:
             if not self.supports_sequence_owned_by():
                 raise UnsupportedFeatureError(
                     self.name,

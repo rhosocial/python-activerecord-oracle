@@ -49,7 +49,7 @@ class OracleVectorMixin(object):
             return vec
         raise TypeError(f"Cannot format vector literal from {type(vec).__name__}")
 
-    def format_vector_literal(self, expr: "VectorLiteralExpression") -> Tuple[str, tuple]:
+    def format_vector_literal_expression(self, expr: "VectorLiteralExpression") -> Tuple[str, tuple]:
         """Format a VectorLiteralExpression as Oracle VECTOR string literal."""
         return self._format_vector_literal_value(expr.vec), ()
 
@@ -60,8 +60,10 @@ class OracleVectorMixin(object):
 
         Args:
             expr: An object (or dict) describing the distance expression,
-                expected to expose ``vector1``, ``vector2`` and ``metric``
-                attributes/keys. ``metric`` defaults to ``'COSINE'``.
+                declaring ``vector1``, ``vector2`` and ``metric`` attributes
+                (or keys). ``metric`` defaults to ``'COSINE'``. An object
+                that does not declare the fields fails with AttributeError
+                rather than rendering a silent default.
 
         Returns:
             Tuple of (sql, params) where params supplies the operand
@@ -73,9 +75,9 @@ class OracleVectorMixin(object):
             vector2 = expr.get('vector2')
             metric = str(expr.get('metric', metric)).upper()
         else:
-            vector1 = getattr(expr, 'vector1', None)
-            vector2 = getattr(expr, 'vector2', None)
-            metric = str(getattr(expr, 'metric', metric)).upper() or metric
+            vector1 = expr.vector1
+            vector2 = expr.vector2
+            metric = str(expr.metric).upper() or metric
 
         if not self.supports_vector_distance_metric(metric):
             from rhosocial.activerecord.backend.dialect.exceptions import (
@@ -109,7 +111,7 @@ class OracleVectorMixin(object):
         params.append(operand)
         return self.p()
 
-    def format_vector_operand(self, expr: "VectorOperandExpression") -> Tuple[str, tuple]:
+    def format_vector_operand_expression(self, expr: "VectorOperandExpression") -> Tuple[str, tuple]:
         """Format a VectorOperandExpression into SQL and params."""
         params: List[Any] = []
         sql = self._format_vector_operand_raw(expr.operand, params)

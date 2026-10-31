@@ -4,7 +4,7 @@
 import pytest
 
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
-from rhosocial.activerecord.backend.expression.core import Column, FunctionCall, WildcardExpression
+from rhosocial.activerecord.backend.expression.core import Column, FunctionCall, AllColumnsWildcard
 from rhosocial.activerecord.backend.expression.statements import ReturningClause
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
@@ -58,6 +58,6 @@ class TestOracleReturningFormatting:
             dialect.format_returning_clause(clause)
 
     def test_rejects_wildcard(self, dialect):
-        clause = ReturningClause(dialect, expressions=[WildcardExpression(dialect)])
+        clause = ReturningClause(dialect, expressions=[AllColumnsWildcard(dialect)])
         with pytest.raises(UnsupportedFeatureError, match="wildcard in RETURNING"):
             dialect.format_returning_clause(clause)

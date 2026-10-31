@@ -19,11 +19,11 @@ from rhosocial.activerecord.backend.expression.objects import (
 )
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.expression import (
-    OracleCreateFunctionExpression,
-    OracleCreatePackageBodyExpression,
-    OracleCreatePackageExpression,
-    OracleCreateProcedureExpression,
-    OracleDropRoutineExpression,
+    OracleCreateFunctionStatement,
+    OracleCreatePackageBodyStatement,
+    OracleCreatePackageStatement,
+    OracleCreateProcedureStatement,
+    OracleDropRoutineStatement,
     OracleDropRoutineObjectType,
     OracleRoutineParameter,
     OracleRoutineParameterMode,
@@ -46,7 +46,7 @@ class TestOracleRoutineCapabilities:
 
 class TestOracleCreateProcedureExpression:
     def test_or_replace_with_in_parameter(self, dialect):
-        expr = OracleCreateProcedureExpression(
+        expr = OracleCreateProcedureStatement(
             dialect,
             procedure=Procedure(dialect, "p"),
             body="BEGIN NULL; END;",
@@ -57,7 +57,7 @@ class TestOracleCreateProcedureExpression:
         assert params == ()
 
     def test_without_or_replace(self, dialect):
-        expr = OracleCreateProcedureExpression(
+        expr = OracleCreateProcedureStatement(
             dialect, procedure=Procedure(dialect, "p"), body="BEGIN NULL; END;", or_replace=False
         )
         sql, params = expr.to_sql()
@@ -65,7 +65,7 @@ class TestOracleCreateProcedureExpression:
         assert params == ()
 
     def test_is_separator(self, dialect):
-        expr = OracleCreateProcedureExpression(
+        expr = OracleCreateProcedureStatement(
             dialect, procedure=Procedure(dialect, "p"), body="BEGIN NULL; END;", keyword="IS"
         )
         sql, params = expr.to_sql()
@@ -73,7 +73,7 @@ class TestOracleCreateProcedureExpression:
         assert params == ()
 
     def test_no_parameters_omits_parentheses(self, dialect):
-        expr = OracleCreateProcedureExpression(
+        expr = OracleCreateProcedureStatement(
             dialect, procedure=Procedure(dialect, "p"), body="BEGIN NULL; END;"
         )
         sql, params = expr.to_sql()
@@ -81,7 +81,7 @@ class TestOracleCreateProcedureExpression:
         assert params == ()
 
     def test_multiple_parameters(self, dialect):
-        expr = OracleCreateProcedureExpression(
+        expr = OracleCreateProcedureStatement(
             dialect,
             procedure=Procedure(dialect, "p"),
             body="BEGIN NULL; END;",
@@ -99,7 +99,7 @@ class TestOracleCreateProcedureExpression:
         assert params == ()
 
     def test_identifier_upper_cased(self, dialect):
-        expr = OracleCreateProcedureExpression(
+        expr = OracleCreateProcedureStatement(
             dialect,
             procedure=Procedure(dialect, "my_proc"),
             body="BEGIN NULL; END;",
@@ -110,7 +110,7 @@ class TestOracleCreateProcedureExpression:
         assert params == ()
 
     def test_body_passed_through_verbatim(self, dialect):
-        expr = OracleCreateProcedureExpression(
+        expr = OracleCreateProcedureStatement(
             dialect,
             procedure=Procedure(dialect, "p"),
             body="BEGIN dbms_output.put_line(x); END;",
@@ -124,31 +124,31 @@ class TestOracleCreateProcedureExpression:
     def test_empty_procedure_name_rejected(self, dialect):
         """The name is rejected by the object itself, which owns the slot."""
         with pytest.raises(ValueError, match="name must be a non-empty string"):
-            OracleCreateProcedureExpression(
+            OracleCreateProcedureStatement(
                 dialect, procedure=Procedure(dialect, "  "), body="BEGIN NULL; END;"
             )
 
     def test_procedure_object_required(self, dialect):
         with pytest.raises(TypeError, match="procedure must be a Procedure"):
-            OracleCreateProcedureExpression(
+            OracleCreateProcedureStatement(
                 dialect, procedure="p", body="BEGIN NULL; END;"
             )
 
     def test_empty_body_rejected(self, dialect):
         with pytest.raises(ValueError, match="body must be a non-empty string"):
-            OracleCreateProcedureExpression(dialect, procedure=Procedure(dialect, "p"), body="  ")
+            OracleCreateProcedureStatement(dialect, procedure=Procedure(dialect, "p"), body="  ")
 
     def test_invalid_keyword_rejected(self, dialect):
         with pytest.raises(ValueError, match="keyword must be 'AS' or 'IS'"):
-            OracleCreateProcedureExpression(
+            OracleCreateProcedureStatement(
                 dialect, procedure=Procedure(dialect, "p"), body="BEGIN NULL; END;", keyword="WHEN"
             )
 
 
 class TestOracleRoutineParameter:
     def test_invalid_mode_rejected(self, dialect):
-        with pytest.raises(TypeError, match="mode must be an OracleRoutineParameterMode"):
-            OracleRoutineParameter("x", "NUMBER", mode="IN")
+        with pytest.raises(ValueError, match="unsupported routine parameter mode"):
+            OracleRoutineParameter("x", "NUMBER", mode="NOT A MODE")
 
     def test_empty_name_rejected(self):
         with pytest.raises(ValueError, match="parameter name must be a non-empty string"):
@@ -161,7 +161,7 @@ class TestOracleRoutineParameter:
 
 class TestOracleCreateFunctionExpression:
     def test_with_return_type_and_parameter(self, dialect):
-        expr = OracleCreateFunctionExpression(
+        expr = OracleCreateFunctionStatement(
             dialect,
             function=Function(dialect, "f"),
             return_type="NUMBER",
@@ -173,7 +173,7 @@ class TestOracleCreateFunctionExpression:
         assert params == ()
 
     def test_returns_keyword(self, dialect):
-        expr = OracleCreateFunctionExpression(
+        expr = OracleCreateFunctionStatement(
             dialect,
             function=Function(dialect, "f"),
             return_type="NUMBER",
@@ -185,7 +185,7 @@ class TestOracleCreateFunctionExpression:
         assert params == ()
 
     def test_without_or_replace(self, dialect):
-        expr = OracleCreateFunctionExpression(
+        expr = OracleCreateFunctionStatement(
             dialect,
             function=Function(dialect, "f"),
             return_type="NUMBER",
@@ -197,7 +197,7 @@ class TestOracleCreateFunctionExpression:
         assert params == ()
 
     def test_is_separator(self, dialect):
-        expr = OracleCreateFunctionExpression(
+        expr = OracleCreateFunctionStatement(
             dialect,
             function=Function(dialect, "f"),
             return_type="NUMBER",
@@ -210,13 +210,13 @@ class TestOracleCreateFunctionExpression:
 
     def test_empty_return_type_rejected(self, dialect):
         with pytest.raises(ValueError, match="return_type must be a non-empty string"):
-            OracleCreateFunctionExpression(
+            OracleCreateFunctionStatement(
                 dialect, function=Function(dialect, "f"), return_type="  ", body="BEGIN RETURN 1; END;"
             )
 
     def test_invalid_return_keyword_rejected(self, dialect):
         with pytest.raises(ValueError, match="return_keyword must be 'RETURN' or 'RETURNS'"):
-            OracleCreateFunctionExpression(
+            OracleCreateFunctionStatement(
                 dialect, function=Function(dialect, "f"), return_type="NUMBER", body="BEGIN RETURN 1; END;",
                 return_keyword="IS",
             )
@@ -224,7 +224,7 @@ class TestOracleCreateFunctionExpression:
 
 class TestOracleCreatePackageExpression:
     def test_or_replace_package(self, dialect):
-        expr = OracleCreatePackageExpression(
+        expr = OracleCreatePackageStatement(
             dialect,
             package=OraclePackage(dialect, "pk"),
             body="PROCEDURE p (x NUMBER);",
@@ -234,7 +234,7 @@ class TestOracleCreatePackageExpression:
         assert params == ()
 
     def test_package_with_is(self, dialect):
-        expr = OracleCreatePackageExpression(
+        expr = OracleCreatePackageStatement(
             dialect, package=OraclePackage(dialect, "pk"), body="PROCEDURE p (x NUMBER);", keyword="IS"
         )
         sql, params = expr.to_sql()
@@ -242,7 +242,7 @@ class TestOracleCreatePackageExpression:
         assert params == ()
 
     def test_package_without_or_replace(self, dialect):
-        expr = OracleCreatePackageExpression(
+        expr = OracleCreatePackageStatement(
             dialect, package=OraclePackage(dialect, "pk"), body="PROCEDURE p (x NUMBER);", or_replace=False
         )
         sql, params = expr.to_sql()
@@ -252,7 +252,7 @@ class TestOracleCreatePackageExpression:
     def test_empty_package_name_rejected(self, dialect):
         """The name is rejected by the object itself, which owns the slot."""
         with pytest.raises(ValueError, match="name must be a non-empty string"):
-            OracleCreatePackageExpression(
+            OracleCreatePackageStatement(
                 dialect,
                 package=OraclePackage(dialect, "  "),
                 body="PROCEDURE p (x NUMBER);",
@@ -260,14 +260,14 @@ class TestOracleCreatePackageExpression:
 
     def test_package_object_required(self, dialect):
         with pytest.raises(TypeError, match="package must be an OraclePackage"):
-            OracleCreatePackageExpression(
+            OracleCreatePackageStatement(
                 dialect, package="pk", body="PROCEDURE p (x NUMBER);"
             )
 
 
 class TestOracleCreatePackageBodyExpression:
     def test_or_replace_package_body(self, dialect):
-        expr = OracleCreatePackageBodyExpression(
+        expr = OracleCreatePackageBodyStatement(
             dialect,
             package=OraclePackage(dialect, "pk"),
             body="PROCEDURE p (x NUMBER) AS BEGIN NULL; END p;",
@@ -277,7 +277,7 @@ class TestOracleCreatePackageBodyExpression:
         assert params == ()
 
     def test_package_body_with_is(self, dialect):
-        expr = OracleCreatePackageBodyExpression(
+        expr = OracleCreatePackageBodyStatement(
             dialect,
             package=OraclePackage(dialect, "pk"),
             body="PROCEDURE p (x NUMBER) AS BEGIN NULL; END p;",
@@ -288,7 +288,7 @@ class TestOracleCreatePackageBodyExpression:
         assert params == ()
 
     def test_package_body_without_or_replace(self, dialect):
-        expr = OracleCreatePackageBodyExpression(
+        expr = OracleCreatePackageBodyStatement(
             dialect, package=OraclePackage(dialect, "pk"), body="PROCEDURE p (x NUMBER) AS BEGIN NULL; END p;",
             or_replace=False,
         )
@@ -299,7 +299,7 @@ class TestOracleCreatePackageBodyExpression:
 
 class TestOracleDropRoutineExpression:
     def test_drop_procedure(self, dialect):
-        expr = OracleDropRoutineExpression(
+        expr = OracleDropRoutineStatement(
             dialect, OracleDropRoutineObjectType.PROCEDURE, Procedure(dialect, "p")
         )
         sql, params = expr.to_sql()
@@ -307,7 +307,7 @@ class TestOracleDropRoutineExpression:
         assert params == ()
 
     def test_drop_function(self, dialect):
-        expr = OracleDropRoutineExpression(
+        expr = OracleDropRoutineStatement(
             dialect, OracleDropRoutineObjectType.FUNCTION, Function(dialect, "f")
         )
         sql, params = expr.to_sql()
@@ -315,7 +315,7 @@ class TestOracleDropRoutineExpression:
         assert params == ()
 
     def test_drop_package(self, dialect):
-        expr = OracleDropRoutineExpression(
+        expr = OracleDropRoutineStatement(
             dialect, OracleDropRoutineObjectType.PACKAGE, OraclePackage(dialect, "pk")
         )
         sql, params = expr.to_sql()
@@ -323,7 +323,7 @@ class TestOracleDropRoutineExpression:
         assert params == ()
 
     def test_drop_package_body(self, dialect):
-        expr = OracleDropRoutineExpression(
+        expr = OracleDropRoutineStatement(
             dialect,
             OracleDropRoutineObjectType.PACKAGE_BODY,
             OraclePackage(dialect, "pk"),
@@ -333,7 +333,7 @@ class TestOracleDropRoutineExpression:
         assert params == ()
 
     def test_identifier_upper_cased(self, dialect):
-        expr = OracleDropRoutineExpression(
+        expr = OracleDropRoutineStatement(
             dialect,
             OracleDropRoutineObjectType.PROCEDURE,
             Procedure(dialect, "my_proc"),
@@ -343,7 +343,7 @@ class TestOracleDropRoutineExpression:
         assert params == ()
 
     def test_owner_is_rendered_on_the_object(self, dialect):
-        expr = OracleDropRoutineExpression(
+        expr = OracleDropRoutineStatement(
             dialect,
             OracleDropRoutineObjectType.PROCEDURE,
             Procedure(dialect, "p", schema_name="scott"),
@@ -351,20 +351,20 @@ class TestOracleDropRoutineExpression:
         assert expr.to_sql()[0] == 'DROP PROCEDURE "SCOTT"."P"'
 
     def test_invalid_object_type_rejected(self, dialect):
-        with pytest.raises(TypeError, match="object_type must be an OracleDropRoutineObjectType"):
-            OracleDropRoutineExpression(dialect, "PROCEDURE", Procedure(dialect, "p"))
+        with pytest.raises(ValueError, match="unsupported DROP routine object type"):
+            OracleDropRoutineStatement(dialect, "NOT A TYPE", Procedure(dialect, "p"))
 
     def test_routine_kind_must_match_the_keyword(self, dialect):
         """A PROCEDURE drop naming a function would name the wrong object."""
         with pytest.raises(TypeError, match="PROCEDURE names a Procedure"):
-            OracleDropRoutineExpression(
+            OracleDropRoutineStatement(
                 dialect, OracleDropRoutineObjectType.PROCEDURE, Function(dialect, "f")
             )
 
     def test_empty_name_rejected(self, dialect):
         """The name is rejected by the object itself, which owns the slot."""
         with pytest.raises(ValueError, match="name must be a non-empty string"):
-            OracleDropRoutineExpression(
+            OracleDropRoutineStatement(
                 dialect, OracleDropRoutineObjectType.PROCEDURE, Procedure(dialect, "  ")
             )
 
@@ -372,13 +372,13 @@ class TestOracleDropRoutineExpression:
 class TestOracleRoutineVersionBoundary:
     def test_create_procedure_below_9i_raises(self):
         d8 = OracleDialect(version=(8, 1, 0))
-        expr = OracleCreateProcedureExpression(d8, procedure=Procedure(d8, "p"), body="BEGIN NULL; END;")
+        expr = OracleCreateProcedureStatement(d8, procedure=Procedure(d8, "p"), body="BEGIN NULL; END;")
         with pytest.raises(UnsupportedFeatureError, match="CREATE PROCEDURE"):
             expr.to_sql()
 
     def test_create_function_below_9i_raises(self):
         d8 = OracleDialect(version=(8, 1, 0))
-        expr = OracleCreateFunctionExpression(
+        expr = OracleCreateFunctionStatement(
             d8, function=Function(d8, "f"), return_type="NUMBER", body="BEGIN RETURN 1; END;"
         )
         with pytest.raises(UnsupportedFeatureError, match="CREATE FUNCTION"):
@@ -386,13 +386,13 @@ class TestOracleRoutineVersionBoundary:
 
     def test_create_package_below_9i_raises(self):
         d8 = OracleDialect(version=(8, 1, 0))
-        expr = OracleCreatePackageExpression(d8, package=OraclePackage(d8, "pk"), body="PROCEDURE p (x NUMBER);")
+        expr = OracleCreatePackageStatement(d8, package=OraclePackage(d8, "pk"), body="PROCEDURE p (x NUMBER);")
         with pytest.raises(UnsupportedFeatureError, match="CREATE PACKAGE"):
             expr.to_sql()
 
     def test_create_package_body_below_9i_raises(self):
         d8 = OracleDialect(version=(8, 1, 0))
-        expr = OracleCreatePackageBodyExpression(
+        expr = OracleCreatePackageBodyStatement(
             d8, package=OraclePackage(d8, "pk"), body="PROCEDURE p (x NUMBER) AS BEGIN NULL; END p;"
         )
         with pytest.raises(UnsupportedFeatureError, match="CREATE PACKAGE BODY"):
@@ -400,7 +400,7 @@ class TestOracleRoutineVersionBoundary:
 
     def test_drop_below_9i_raises(self):
         d8 = OracleDialect(version=(8, 1, 0))
-        expr = OracleDropRoutineExpression(
+        expr = OracleDropRoutineStatement(
             d8, OracleDropRoutineObjectType.PROCEDURE, Procedure(d8, "p")
         )
         with pytest.raises(UnsupportedFeatureError, match="DROP PROCEDURE"):
@@ -408,12 +408,12 @@ class TestOracleRoutineVersionBoundary:
 
     def test_at_9i_works(self):
         d9 = OracleDialect(version=(9, 0, 0))
-        assert OracleCreateProcedureExpression(
+        assert OracleCreateProcedureStatement(
             d9, procedure=Procedure(d9, "p"), body="BEGIN NULL; END;"
         ).to_sql()[0] == 'CREATE OR REPLACE PROCEDURE "P" AS BEGIN NULL; END;'
-        assert OracleCreateFunctionExpression(
+        assert OracleCreateFunctionStatement(
             d9, function=Function(d9, "f"), return_type="NUMBER", body="BEGIN RETURN 1; END;"
         ).to_sql()[0] == 'CREATE OR REPLACE FUNCTION "F" RETURN NUMBER AS BEGIN RETURN 1; END;'
-        assert OracleDropRoutineExpression(
+        assert OracleDropRoutineStatement(
             d9, OracleDropRoutineObjectType.PACKAGE_BODY, OraclePackage(d9, "pk")
         ).to_sql()[0] == 'DROP PACKAGE BODY "PK"'

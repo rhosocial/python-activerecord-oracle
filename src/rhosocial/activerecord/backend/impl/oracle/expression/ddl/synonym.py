@@ -4,9 +4,9 @@
 This module defines the backend-specific expressions for Oracle synonyms,
 which provide a transparent alias for another schema object:
 
-* ``OracleCreateSynonymExpression`` — ``CREATE [PUBLIC] SYNONYM s FOR
+* ``OracleCreateSynonymStatement`` — ``CREATE [PUBLIC] SYNONYM s FOR
   [schema.]table``.
-* ``OracleDropSynonymExpression`` — ``DROP [PUBLIC] SYNONYM s`` (optionally
+* ``OracleDropSynonymStatement`` — ``DROP [PUBLIC] SYNONYM s`` (optionally
   ``FORCE``).
 
 Each takes the objects it names rather than a name and an owner. A synonym and
@@ -29,7 +29,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from ...dialect import OracleDialect
 
 
-class OracleCreateSynonymExpression(BaseExpression):
+class OracleCreateSynonymStatement(BaseExpression):
     """Oracle ``CREATE [PUBLIC] SYNONYM ... FOR ...`` expression.
 
     Args:
@@ -71,7 +71,7 @@ class OracleCreateSynonymExpression(BaseExpression):
         return "format_create_synonym_statement"
 
 
-class OracleDropSynonymExpression(BaseExpression):
+class OracleDropSynonymStatement(BaseExpression):
     """Oracle ``DROP [PUBLIC] SYNONYM ...`` expression.
 
     Args:

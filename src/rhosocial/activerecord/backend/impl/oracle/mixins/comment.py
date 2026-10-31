@@ -1,6 +1,7 @@
 # src/rhosocial/activerecord/backend/impl/oracle/mixins/comment.py
 """Oracle COMMENT ON formatter mixin."""
 
+from enum import Enum
 from typing import Tuple
 
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
@@ -20,17 +21,17 @@ class OracleCommentMixin:
 
         Oracle annotates schema objects through the standalone statement;
         always ``True`` (the version gate lives in
-        :meth:`format_comment_statement`).
+        :meth:`format_comment_on_statement`).
         """
         return True
 
-    def format_comment_statement(
+    def format_comment_on_statement(
         self, expr
     ) -> Tuple[str, tuple]:
         """Format a standalone ``COMMENT ON`` statement.
 
         Accepts the Oracle expression and the core
-        :class:`~rhosocial.activerecord.backend.expression.statements.CommentOnExpression`,
+        :class:`~rhosocial.activerecord.backend.expression.statements.CommentOnStatement`,
         which carry the same fields.
 
         The annotated object is rendered by its own protocol, and a column --
@@ -61,12 +62,16 @@ class OracleCommentMixin:
                 ),
             )
         object_sql = expr.object.to_sql()[0]
-        column = getattr(expr, "column", None)
-        if column is not None:
-            object_sql = f"{object_sql}.{self.format_identifier(column)}"
-        object_type = getattr(expr.object_type, "value", expr.object_type)
+        if expr.column is not None:
+            object_sql = f"{object_sql}.{self.format_identifier(expr.column)}"
+        # ``object_type`` accepts the enum or its raw spelling; the value is
+        # the enum's, so the rendering asks the declared type rather than
+        # probing for a ``value`` field (expression-dialect rules §11.2).
+        object_type = (
+            expr.object_type.value if isinstance(expr.object_type, Enum) else expr.object_type
+        )
         head = f"COMMENT ON {object_type} {object_sql} IS"
         if expr.comment is None:
             return f"{head} NULL", ()
-        escaped = self._escape_sql_string(expr.comment)
+        escaped = self.escape_sql_string(expr.comment)
         return f"{head} '{escaped}'", ()

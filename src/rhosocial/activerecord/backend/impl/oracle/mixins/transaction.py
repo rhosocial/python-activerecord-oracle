@@ -48,7 +48,7 @@ class OracleTransactionMixin:
     def supports_savepoint(self) -> bool:
         return True
 
-    def format_begin_transaction(self, expr) -> Tuple[str, tuple]:
+    def format_begin_transaction_statement(self, expr) -> Tuple[str, tuple]:
         """Format BEGIN for Oracle, which begins transactions implicitly.
 
         The statement itself renders as the empty string; a requested
@@ -90,23 +90,23 @@ class OracleTransactionMixin:
             )
         return ("", ())
 
-    def format_commit_transaction(self, expr) -> Tuple[str, tuple]:
+    def format_commit_statement(self, expr) -> Tuple[str, tuple]:
         return ("COMMIT", ())
 
-    def format_rollback_transaction(self, expr) -> Tuple[str, tuple]:
+    def format_rollback_statement(self, expr) -> Tuple[str, tuple]:
         params = expr.get_params()
         savepoint = params.get("savepoint")
         if savepoint:
             return (f"ROLLBACK TO SAVEPOINT {self.format_identifier(savepoint)}", ())
         return ("ROLLBACK", ())
 
-    def format_savepoint(self, expr) -> Tuple[str, tuple]:
+    def format_savepoint_statement(self, expr) -> Tuple[str, tuple]:
         return (f"SAVEPOINT {self.format_identifier(expr.name)}", ())
 
-    def format_release_savepoint(self, expr) -> Tuple[str, tuple]:
+    def format_release_savepoint_statement(self, expr) -> Tuple[str, tuple]:
         return ("", ())
 
-    def format_set_transaction(self, expr) -> Tuple[str, tuple]:
+    def format_set_transaction_statement(self, expr) -> Tuple[str, tuple]:
         """Format SET TRANSACTION for Oracle.
 
         ``deferrable`` renders the declared ``DEFERRABLE`` spelling; the

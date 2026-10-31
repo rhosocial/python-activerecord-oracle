@@ -196,7 +196,7 @@ def for_update_skip_locked(
     return OracleForUpdateExpression(dialect, columns=columns, skip_locked=True)
 
 
-class OracleLockTableExpression(BaseExpression):
+class OracleLockTableStatement(BaseExpression):
     """Oracle LOCK TABLE statement.
 
     Locks an entire table in exclusive or share mode.
@@ -229,9 +229,14 @@ class OracleLockTableExpression(BaseExpression):
         self.mode = mode
         self.nowait = bool(nowait)
 
-    def to_sql(self) -> SQLQueryAndParams:
-        """Generate LOCK TABLE SQL."""
-        sql = f"LOCK TABLE {self.dialect.format_identifier(self.table)} IN {self.mode.upper()} MODE"
-        if self.nowait:
-            sql += " NOWAIT"
-        return (sql, ())
+    @property
+    def format_method(self) -> str:
+        """The dialect method that renders this statement.
+
+        A node collects its parameters and a dialect formatter produces the
+        SQL; this one used to assemble its own text inside ``to_sql()``,
+        which is the shape the org rules put under §16.2. The rendering
+        moved to :meth:`OracleLockingMixin.format_oracle_lock_table_statement`
+        and the node names it the way every other expression here does.
+        """
+        return "format_oracle_lock_table_statement"

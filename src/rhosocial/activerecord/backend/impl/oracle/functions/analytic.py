@@ -17,9 +17,9 @@ def listagg(
 ) -> "bases.BaseExpression":
     """Oracle LISTAGG: aggregate values into a delimited list.
 
-    Uses ``FunctionCall`` with Oracle-specific metadata so the dialect's
-    ``format_function_call`` override can emit ``WITHIN GROUP`` and
-    ``ON OVERFLOW`` clauses.
+    Builds :class:`OracleListaggFunction`, the backend's derived function
+    node, so ``WITHIN GROUP`` and ``ON OVERFLOW`` travel on the node's own
+    contract fields rather than as metadata the formatter reflects back.
 
     Args:
         dialect: The Oracle dialect instance
@@ -29,20 +29,18 @@ def listagg(
         on_overflow: Action taken when the result overflows
 
     Returns:
-        A FunctionCall instance representing LISTAGG
+        An OracleListaggFunction node representing LISTAGG
     """
     from rhosocial.activerecord.backend.expression import core
+    from ..expression.functions import OracleListaggFunction
 
-    func = core.FunctionCall(
-        dialect, "LISTAGG",
+    return OracleListaggFunction(
+        dialect,
         expr,
         core.Literal(dialect, delimiter),
+        within_group_order_by=within_group_order_by or None,
+        on_overflow=on_overflow or None,
     )
-    if within_group_order_by:
-        func._oracle_within_group = within_group_order_by
-    if on_overflow:
-        func._oracle_on_overflow = on_overflow
-    return func
 
 
 def percentile_cont(
@@ -52,8 +50,9 @@ def percentile_cont(
 ) -> "bases.BaseExpression":
     """Oracle PERCENTILE_CONT: continuous percentile (ordered-set aggregate).
 
-    Uses ``FunctionCall`` with ``_oracle_within_group`` metadata so the
-    ``format_function_call`` override emits the ``WITHIN GROUP (...)`` clause.
+    Builds :class:`OraclePercentileContFunction`, whose
+    ``within_group_order_by`` contract field carries the clause to the
+    formatter.
 
     Args:
         dialect: The Oracle dialect instance
@@ -61,14 +60,16 @@ def percentile_cont(
         within_group_order_by: Order applied inside ``WITHIN GROUP``
 
     Returns:
-        A FunctionCall instance representing PERCENTILE_CONT
+        An OraclePercentileContFunction node representing PERCENTILE_CONT
     """
     from rhosocial.activerecord.backend.expression import core
+    from ..expression.functions import OraclePercentileContFunction
 
-    func = core.FunctionCall(dialect, "PERCENTILE_CONT", core.Literal(dialect, fraction))
-    if within_group_order_by:
-        func._oracle_within_group = within_group_order_by
-    return func
+    return OraclePercentileContFunction(
+        dialect,
+        core.Literal(dialect, fraction),
+        within_group_order_by=within_group_order_by or None,
+    )
 
 
 def percentile_disc(
@@ -78,8 +79,9 @@ def percentile_disc(
 ) -> "bases.BaseExpression":
     """Oracle PERCENTILE_DISC: discrete percentile (ordered-set aggregate).
 
-    Uses ``FunctionCall`` with ``_oracle_within_group`` metadata so the
-    ``format_function_call`` override emits the ``WITHIN GROUP (...)`` clause.
+    Builds :class:`OraclePercentileDiscFunction`, whose
+    ``within_group_order_by`` contract field carries the clause to the
+    formatter.
 
     Args:
         dialect: The Oracle dialect instance
@@ -87,11 +89,13 @@ def percentile_disc(
         within_group_order_by: Order applied inside ``WITHIN GROUP``
 
     Returns:
-        A FunctionCall instance representing PERCENTILE_DISC
+        An OraclePercentileDiscFunction node representing PERCENTILE_DISC
     """
     from rhosocial.activerecord.backend.expression import core
+    from ..expression.functions import OraclePercentileDiscFunction
 
-    func = core.FunctionCall(dialect, "PERCENTILE_DISC", core.Literal(dialect, fraction))
-    if within_group_order_by:
-        func._oracle_within_group = within_group_order_by
-    return func
+    return OraclePercentileDiscFunction(
+        dialect,
+        core.Literal(dialect, fraction),
+        within_group_order_by=within_group_order_by or None,
+    )

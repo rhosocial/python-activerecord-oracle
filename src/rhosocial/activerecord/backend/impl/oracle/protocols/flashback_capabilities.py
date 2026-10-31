@@ -24,7 +24,7 @@ class OracleFlashbackSupport(Protocol):
         ...  # pragma: no cover
     def format_versions_between_clause(self, expr: 'OracleVersionsBetweenClause') -> Tuple[str, tuple]:
         ...  # pragma: no cover
-    def format_flashback_table_statement(self, expr: 'OracleFlashbackTableExpression') -> Tuple[str, tuple]:
+    def format_flashback_table_statement(self, expr: 'OracleFlashbackTableStatement') -> Tuple[str, tuple]:
         ...  # pragma: no cover
-    def format_purge_statement(self, expr: 'OraclePurgeExpression') -> Tuple[str, tuple]:
+    def format_purge_statement(self, expr: 'OraclePurgeStatement') -> Tuple[str, tuple]:
         ...  # pragma: no cover

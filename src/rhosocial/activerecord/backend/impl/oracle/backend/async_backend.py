@@ -440,8 +440,8 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
                         db_type = col_types.get(col_name)
                         if db_type in (oracledb.DB_TYPE_CHAR, oracledb.DB_TYPE_NCHAR):
                             row_dict[col_name] = value.rstrip()
-            adapted_row = self._adapt_row_types(row_dict, adapters)
-            final_row = self._remap_row_columns(adapted_row, mapping)
+            adapted_row = self.adapt_row_types(row_dict, adapters)
+            final_row = self.remap_row_columns(adapted_row, mapping)
             final_results.append(final_row)
         return final_results
 
@@ -628,6 +628,16 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             if cursor:
                 cursor.close()
 
+    def get_cached_server_version(self) -> Optional[Tuple[int, int, int]]:
+        """The version this backend already knows, without a round trip.
+
+        The asynchronous twin of the sync method: ``_version`` is what the
+        constructor was told or what :meth:`get_server_version` measured, and
+        introspection's status surface reports it rather than opening a
+        connection just to learn a number it already holds.
+        """
+        return self._version
+
     async def get_server_version(self) -> Optional[Tuple[int, int, int]]:
         """Read the server's own release version, asynchronously.
 
@@ -770,7 +780,7 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
 
     async def bulk_insert(self, options) -> 'QueryResult':
         """Insert multiple rows using Oracle-compatible single-row statements."""
-        from rhosocial.activerecord.backend.base.operations import _is_sql_expression
+        from rhosocial.activerecord.backend.base.operations import is_sql_expression
 
         if not options.rows:
             return QueryResult(affected_rows=0, data=[], duration=0.0, last_insert_id=None)
@@ -796,7 +806,7 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             cursor = await self._get_cursor()
 
             for row in options.rows:
-                if any(_is_sql_expression(value) for value in row):
+                if any(is_sql_expression(value) for value in row):
                     raise QueryError("Oracle bulk_insert does not support SQL expressions in row values")
 
                 converted_params = self._convert_datetime_params(tuple(row))
@@ -908,8 +918,8 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         Oracle requires RETURNING ... INTO syntax with output bind variables.
         This method uses the Expression-Dialect pattern to generate proper Oracle SQL.
         """
-        from rhosocial.activerecord.backend.base.operations import _is_sql_expression
-        from rhosocial.activerecord.backend.expression import InsertExpression, Literal
+        from rhosocial.activerecord.backend.base.operations import is_sql_expression
+        from rhosocial.activerecord.backend.expression import InsertStatement, Literal
         from rhosocial.activerecord.backend.expression.objects import Table
         from rhosocial.activerecord.backend.expression.statements import ValuesSource, ReturningClause
         from rhosocial.activerecord.backend.expression import Column as ExprColumn
@@ -918,7 +928,7 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         # Process values - wrap in Literal if not already an expression
         processed_values = []
         for v in options.data.values():
-            if _is_sql_expression(v):
+            if is_sql_expression(v):
                 processed_values.append(v)
             else:
                 processed_values.append(Literal(self.dialect, v))
@@ -936,10 +946,10 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             returning_expressions = [ExprColumn(self.dialect, col) for col in options.returning_columns]
             returning_clause = ReturningClause(self.dialect, returning_expressions)
 
-        # Create InsertExpression and generate SQL. The target is the table
+        # Create InsertStatement and generate SQL. The target is the table
         # object, so its owner -- when there is one -- is quoted by the same
         # rules as every other Oracle name rather than being spliced in here.
-        insert_expr = InsertExpression(
+        insert_expr = InsertStatement(
             dialect=self.dialect,
             into=Table(
                 self.dialect, options.table, schema_name=options.schema_name
@@ -1003,8 +1013,8 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         Oracle requires RETURNING ... INTO syntax with output bind variables.
         This method uses the Expression-Dialect pattern to generate proper Oracle SQL.
         """
-        from rhosocial.activerecord.backend.base.operations import _is_sql_expression
-        from rhosocial.activerecord.backend.expression import UpdateExpression, Literal
+        from rhosocial.activerecord.backend.base.operations import is_sql_expression
+        from rhosocial.activerecord.backend.expression import UpdateStatement, Literal
         from rhosocial.activerecord.backend.expression.objects import Table
         from rhosocial.activerecord.backend.expression.statements import ReturningClause
         from rhosocial.activerecord.backend.expression import Column as ExprColumn
@@ -1013,7 +1023,7 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         # Process assignments
         assignments = {}
         for k, v in options.data.items():
-            if _is_sql_expression(v):
+            if is_sql_expression(v):
                 assignments[k] = v
             else:
                 assignments[k] = Literal(self.dialect, v)
@@ -1024,10 +1034,10 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             returning_expressions = [ExprColumn(self.dialect, col) for col in options.returning_columns]
             returning_clause = ReturningClause(self.dialect, returning_expressions)
 
-        # Create UpdateExpression and generate SQL. The target is the table
+        # Create UpdateStatement and generate SQL. The target is the table
         # object, so its owner -- when there is one -- is quoted by the same
         # rules as every other Oracle name rather than being spliced in here.
-        update_expr = UpdateExpression(
+        update_expr = UpdateStatement(
             dialect=self.dialect,
             table=Table(
                 self.dialect, options.table, schema_name=options.schema_name
@@ -1073,7 +1083,7 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         Oracle requires RETURNING ... INTO syntax with output bind variables.
         This method uses the Expression-Dialect pattern to generate proper Oracle SQL.
         """
-        from rhosocial.activerecord.backend.expression import DeleteExpression
+        from rhosocial.activerecord.backend.expression import DeleteStatement
         from rhosocial.activerecord.backend.expression.objects import Table
         from rhosocial.activerecord.backend.expression.statements import ReturningClause
         from rhosocial.activerecord.backend.expression import Column as ExprColumn
@@ -1085,10 +1095,10 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             returning_expressions = [ExprColumn(self.dialect, col) for col in options.returning_columns]
             returning_clause = ReturningClause(self.dialect, returning_expressions)
 
-        # Create DeleteExpression and generate SQL. The target is the table
+        # Create DeleteStatement and generate SQL. The target is the table
         # object, so its owner -- when there is one -- is quoted by the same
         # rules as every other Oracle name rather than being spliced in here.
-        delete_expr = DeleteExpression(
+        delete_expr = DeleteStatement(
             dialect=self.dialect,
             tables=Table(
                 self.dialect, options.table, schema_name=options.schema_name

@@ -17,7 +17,7 @@ renders perfectly happily on a dialect that cannot execute it.
 
 import pytest
 
-from rhosocial.activerecord.backend.expression import Column, TimestampColumn
+from rhosocial.activerecord.backend.expression import TimestampColumn
 
 
 @pytest.fixture

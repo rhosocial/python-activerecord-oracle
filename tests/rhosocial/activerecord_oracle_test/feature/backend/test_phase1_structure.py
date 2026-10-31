@@ -103,7 +103,6 @@ class TestTypesModule:
     def test_interval_to_timedelta(self):
         """Test timedelta conversion."""
         from rhosocial.activerecord.backend.impl.oracle.type_values import IntervalDayToSecond
-        from datetime import timedelta
         interval = IntervalDayToSecond(days=1, hours=2, minutes=30, seconds=0)
         td = interval.to_timedelta()
         assert td.days == 1
@@ -189,14 +188,17 @@ class TestExpressionModule:
         )
         assert ConnectByExpression is not None
         assert PriorExpression is not None
+        assert ConnectByRootExpression is not None
+        assert SysConnectByPathExpression is not None
+        assert LevelExpression is not None
     
     def test_import_pivot_expressions(self):
         """Test pivot expression imports."""
         from rhosocial.activerecord.backend.impl.oracle.expression import (
-            PivotExpression, UnpivotExpression
+            OraclePivot, OracleUnpivot
         )
-        assert PivotExpression is not None
-        assert UnpivotExpression is not None
+        assert OraclePivot is not None
+        assert OracleUnpivot is not None
     
     def test_import_hint_expressions(self):
         """Test hint expression imports."""
@@ -208,6 +210,7 @@ class TestExpressionModule:
         )
         assert OracleHintExpression is not None
         assert index_hint("t", "idx") == "INDEX(t idx)"
+        assert callable(parallel_hint)
     
     def test_connect_by_root(self):
         """Test CONNECT_BY_ROOT expression."""
@@ -230,10 +233,10 @@ class TestExpressionModule:
     
     def test_pivot_expression(self):
         """Test PIVOT expression."""
-        from rhosocial.activerecord.backend.impl.oracle.expression import PivotExpression
+        from rhosocial.activerecord.backend.impl.oracle.expression import OraclePivot
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
         dialect = OracleDialect(version=(19, 0, 0))
-        pivot = PivotExpression(
+        pivot = OraclePivot(
             dialect,
             aggregate_function="SUM",
             value_column="amount",
@@ -334,6 +337,8 @@ class TestFunctionsPackage:
             listagg, percentile_cont, percentile_disc
         )
         assert callable(listagg)
+        assert callable(percentile_cont)
+        assert callable(percentile_disc)
     
     def test_import_conversion_functions(self):
         """Test conversion function imports."""

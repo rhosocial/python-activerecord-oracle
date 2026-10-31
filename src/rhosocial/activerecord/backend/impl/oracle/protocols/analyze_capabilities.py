@@ -16,5 +16,5 @@ class OracleAnalyzeSupport(Protocol):
 
     def supports_analyze(self) -> bool:
         ...  # pragma: no cover
-    def format_analyze_statement(self, expr: 'OracleAnalyzeExpression') -> Tuple[str, tuple]:
+    def format_analyze_statement(self, expr: 'OracleAnalyzeStatement') -> Tuple[str, tuple]:
         ...  # pragma: no cover

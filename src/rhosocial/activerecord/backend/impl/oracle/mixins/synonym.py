@@ -7,8 +7,8 @@ from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeature
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..expression.ddl.synonym import (
-        OracleCreateSynonymExpression,
-        OracleDropSynonymExpression,
+        OracleCreateSynonymStatement,
+        OracleDropSynonymStatement,
     )
 
 
@@ -25,6 +25,13 @@ class OracleSynonymMixin:
     quoting rules.
     """
 
+    def supports_synonym_introspection(self) -> bool:
+        """Oracle answers for its synonyms from ``ALL_SYNONYMS``.
+
+        The capability for the ``introspect synonyms`` family. Public synonyms
+        are rows of the same view, not a second capability."""
+        return True
+
     def supports_create_synonym(self) -> bool:
         return True
 
@@ -32,7 +39,7 @@ class OracleSynonymMixin:
         return True
 
     def format_create_synonym_statement(
-        self, expr: "OracleCreateSynonymExpression"
+        self, expr: "OracleCreateSynonymStatement"
     ) -> Tuple[str, tuple]:
         """Format ``CREATE [PUBLIC] SYNONYM`` for Oracle.
 
@@ -50,12 +57,12 @@ class OracleSynonymMixin:
 
         if not isinstance(expr.synonym, Synonym):
             raise TypeError(
-                f"OracleCreateSynonymExpression.synonym must be a Synonym, "
+                f"OracleCreateSynonymStatement.synonym must be a Synonym, "
                 f"got {type(expr.synonym).__name__}"
             )
         if not isinstance(expr.table, Table):
             raise TypeError(
-                f"OracleCreateSynonymExpression.table must be a Table, "
+                f"OracleCreateSynonymStatement.table must be a Table, "
                 f"got {type(expr.table).__name__}"
             )
 
@@ -78,7 +85,7 @@ class OracleSynonymMixin:
         return " ".join(parts), ()
 
     def format_drop_synonym_statement(
-        self, expr: "OracleDropSynonymExpression"
+        self, expr: "OracleDropSynonymStatement"
     ) -> Tuple[str, tuple]:
         """Format ``DROP [PUBLIC] SYNONYM`` for Oracle.
 
@@ -92,7 +99,7 @@ class OracleSynonymMixin:
 
         if not isinstance(expr.synonym, Synonym):
             raise TypeError(
-                f"OracleDropSynonymExpression.synonym must be a Synonym, "
+                f"OracleDropSynonymStatement.synonym must be a Synonym, "
                 f"got {type(expr.synonym).__name__}"
             )
 

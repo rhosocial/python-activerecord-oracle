@@ -12,7 +12,7 @@ import pytest
 
 from rhosocial.activerecord.backend.dialect import UnsupportedFeatureError
 from rhosocial.activerecord.backend.expression import (
-    InsertExpression,
+    InsertStatement,
     Literal,
     OnConflictClause,
     ValuesSource,
@@ -41,7 +41,7 @@ class TestOracleOnConflictCapabilities:
         """Oracle has no ON CONFLICT clause form; the gate raises."""
         source = ValuesSource(dialect, values_list=[[Literal(dialect, 1)]])
         clause = OnConflictClause(dialect, conflict_target=["id"], do_nothing=True)
-        expr = InsertExpression(dialect, into=Table(dialect, "users"), source=source, on_conflict=clause)
+        expr = InsertStatement(dialect, into=Table(dialect, "users"), source=source, on_conflict=clause)
 
         with pytest.raises(UnsupportedFeatureError, match="does not support ON CONFLICT"):
             expr.to_sql()
@@ -51,7 +51,7 @@ class TestOracleOnConflictCapabilities:
         source = ValuesSource(dialect, values_list=[[Literal(dialect, 1)]])
         clause1 = OnConflictClause(dialect, conflict_target=["a"], do_nothing=True)
         clause2 = OnConflictClause(dialect, conflict_target=["b"], do_nothing=True)
-        expr = InsertExpression(dialect, into=Table(dialect, "t"), source=source, on_conflict=[clause1, clause2])
+        expr = InsertStatement(dialect, into=Table(dialect, "t"), source=source, on_conflict=[clause1, clause2])
 
         with pytest.raises(UnsupportedFeatureError):
             expr.to_sql()
@@ -59,7 +59,7 @@ class TestOracleOnConflictCapabilities:
     def test_plain_insert_still_works(self, dialect):
         """An INSERT without on_conflict renders normally."""
         source = ValuesSource(dialect, values_list=[[Literal(dialect, 1)]])
-        expr = InsertExpression(dialect, into=Table(dialect, "users"), columns=["id"], source=source)
+        expr = InsertStatement(dialect, into=Table(dialect, "users"), columns=["id"], source=source)
         sql, params = expr.to_sql()
         assert "INSERT INTO" in sql
         assert params == (1,)

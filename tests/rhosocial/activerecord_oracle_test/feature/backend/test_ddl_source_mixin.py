@@ -10,14 +10,20 @@ import pytest
 from rhosocial.activerecord.backend.expression import ColumnDefinition, ComparisonPredicate
 from rhosocial.activerecord.backend.expression.core import Column, Literal
 from rhosocial.activerecord.backend.expression.statements import (
-    ColumnConstraintType,
+    ColumnCheckConstraint,
+    ColumnDefaultConstraint,
+    ColumnGeneratedConstraint,
+    ColumnNotNullConstraint,
+    ColumnNullableConstraint,
+    ColumnPrimaryKeyConstraint,
     CreateTableOptions,
-    GeneratedColumnExpression,
     GeneratedColumnType,
     IndexDefinition,
     StorageOptionsExpression,
+    TableCheckConstraint,
     TableConstraint,
-    TableConstraintType,
+    TablePrimaryKeyConstraint,
+    TableUniqueConstraint,
 )
 from rhosocial.activerecord.backend.expression.statements.ddl_partition import (
     PartitionClause,
@@ -74,16 +80,16 @@ def index_condition(dialect):
 PRIMARY_TYPE = VarCharType(length=64)
 FALLBACK_TYPE = CharType(length=8)
 TYPE_MARKER = UseSqlType(PRIMARY_TYPE, FALLBACK_TYPE)
-DEFAULT_VALUE = Literal(None, "model-default", inline_literals=True)
+DEFAULT_VALUE = Literal(None, "model-default", inline=True)
 DEFAULT_CONSTRAINT = UseConstraint(
-    ColumnConstraintType.DEFAULT,
+    ColumnDefaultConstraint,
     name="df_value",
-    default_value=DEFAULT_VALUE,
+    value=DEFAULT_VALUE,
 )
 CHECK_CONSTRAINT = UseConstraint(
-    ColumnConstraintType.CHECK,
+    ColumnCheckConstraint,
     name="ck_value",
-    check_condition=check_condition,
+    condition=check_condition,
 )
 INCLUDE_COLUMNS = ["nullable_col"]
 INDEX_MARKER = UseIndex(
@@ -104,7 +110,7 @@ CHARACTER_SET_ATTRIBUTE = CharacterSetAttribute(name="utf8mb4")
 ATTRIBUTES_MARKER = UseColumnAttributes(IDENTITY_ATTRIBUTE, COLLATION_ATTRIBUTE)
 SECOND_ATTRIBUTES_MARKER = UseColumnAttributes(CHARACTER_SET_ATTRIBUTE)
 COMMENT_MARKER = UseComment("value comment")
-GENERATED_EXPRESSION = GeneratedColumnExpression(
+GENERATED_EXPRESSION = ColumnGeneratedConstraint(
     None,
     Column(None, "value_col"),
     GeneratedColumnType.STORED,
@@ -117,7 +123,7 @@ VALUE_OPTIONS = (
 VALUE_OPTIONS_MARKER = UseColumnOptions(*VALUE_OPTIONS)
 SINGLE_OPTION = OracleColumnOptions(invisible=True)
 SINGLE_OPTION_MARKER = UseColumnOptions(SINGLE_OPTION)
-NULL_CONSTRAINT = UseConstraint(ColumnConstraintType.NULL)
+NULL_CONSTRAINT = UseConstraint(ColumnNullableConstraint)
 PK_TYPE = Annotated[int, UseColumn("id")]
 NULLABLE_TYPE = Annotated[Optional[str], NULL_CONSTRAINT]
 VALUE_TYPE = Annotated[
@@ -142,16 +148,13 @@ TABLE_INDEXES = [
 TABLE_CONSTRAINTS = [
     TableConstraint(
         None,
-        TableConstraintType.UNIQUE,
+        branch=TableUniqueConstraint(None, ["value_col"]),
         name="uq_value",
-        columns=["value_col"],
     ),
     TableConstraint(
         None,
-        TableConstraintType.CHECK,
+        branch=TableCheckConstraint(None, condition=lambda dialect: check_condition(dialect)),
         name="ck_value_table",
-        columns=["value_col"],
-        check_condition=check_condition,
     ),
 ]
 TABLE_OPTIONS = CreateTableOptions(None, or_replace=True)
@@ -255,12 +258,15 @@ class AsyncPlainModel(AsyncActiveRecord):
 
 
 def _constraint_signature(model, field):
+    # The kind is the branch class since the two-level split: the removed
+    # ``constraint_type`` tag raises, so the signature reads the branch and
+    # each branch's own field.
     return [
         (
-            constraint.constraint_type,
+            type(constraint.branch),
             constraint.name,
-            constraint.default_value,
-            constraint.check_condition,
+            getattr(constraint.branch, "value", None),
+            getattr(constraint.branch, "condition", None),
         )
         for constraint in model.column_constraints(field)
     ]
@@ -313,9 +319,9 @@ def test_field_declarations_are_collected_in_declaration_order(model):
     value_constraints = model.column_constraints("value_field")
     assert value_constraints[0] is DEFAULT_CONSTRAINT.constraint
     assert value_constraints[1] is CHECK_CONSTRAINT.constraint
-    assert value_constraints[2].constraint_type is ColumnConstraintType.NOT_NULL
-    assert value_constraints[0].default_value is DEFAULT_VALUE
-    assert value_constraints[1].check_condition is check_condition
+    assert isinstance(value_constraints[2].branch, ColumnNotNullConstraint)
+    assert value_constraints[0].branch.value is DEFAULT_VALUE
+    assert value_constraints[1].branch.condition is check_condition
     assert model.column_constraints("nullable_field") == [NULL_CONSTRAINT.constraint]
     assert model.column_constraints("optional_field") == []
 
@@ -391,12 +397,12 @@ def test_single_primary_key_is_composed_on_the_physical_column(model):
     assert model.primary_key_field() == "pk_field"
     assert model.column_name("pk_field") == "id"
     constraints = model.column_constraints("pk_field")
-    assert [item.constraint_type for item in constraints] == [
-        ColumnConstraintType.PRIMARY_KEY,
-        ColumnConstraintType.NOT_NULL,
+    assert [type(item.branch) for item in constraints] == [
+        ColumnPrimaryKeyConstraint,
+        ColumnNotNullConstraint,
     ]
     assert all(
-        item.constraint_type is not TableConstraintType.PRIMARY_KEY
+        not isinstance(item.branch, TablePrimaryKeyConstraint)
         for item in model.table_constraints()
     )
 
@@ -409,17 +415,17 @@ def test_composite_primary_key_is_composed_as_a_table_constraint(model):
     assert model.primary_key_field() == ("left_field", "right_field")
     assert model.column_name("left_field") == "left_col"
     assert model.column_name("right_field") == "right_col"
-    assert [item.constraint_type for item in model.column_constraints("left_field")] == [
-        ColumnConstraintType.NOT_NULL
-    ]
-    assert [item.constraint_type for item in model.column_constraints("right_field")] == [
-        ColumnConstraintType.NOT_NULL
-    ]
+    assert [
+        type(item.branch) for item in model.column_constraints("left_field")
+    ] == [ColumnNotNullConstraint]
+    assert [
+        type(item.branch) for item in model.column_constraints("right_field")
+    ] == [ColumnNotNullConstraint]
     constraints = model.table_constraints()
     assert constraints[0] is TABLE_CONSTRAINTS[0]
     assert constraints[1] is TABLE_CONSTRAINTS[1]
-    assert constraints[2].constraint_type is TableConstraintType.PRIMARY_KEY
-    assert constraints[2].columns == ["left_col", "right_col"]
+    assert isinstance(constraints[2].branch, TablePrimaryKeyConstraint)
+    assert constraints[2].branch.columns == ["left_col", "right_col"]
 
 
 @pytest.mark.parametrize("model", [PlainModel, AsyncPlainModel], ids=("sync", "async"))
@@ -433,9 +439,9 @@ def test_default_declarations_and_batch_interfaces(model):
     assert model.column_options("id") is None
     assert model.column_attributes("id") == []
     assert model.column_indexes("id") == []
-    assert [item.constraint_type for item in model.column_constraints("id")] == [
-        ColumnConstraintType.PRIMARY_KEY,
-        ColumnConstraintType.NOT_NULL,
+    assert [type(item.branch) for item in model.column_constraints("id")] == [
+        ColumnPrimaryKeyConstraint,
+        ColumnNotNullConstraint,
     ]
     assert model.column_constraints("optional") == []
     assert model.columns_data_type() == {"id": None, "optional": None}
@@ -526,8 +532,9 @@ def test_sync_and_async_ddl_sources_collect_the_same_declarations():
         AsyncCompositeModel, "right_field"
     )
     assert [
-        (item.constraint_type, item.columns) for item in CompositeModel.table_constraints()
+        (type(item.branch), getattr(item.branch, "columns", None))
+        for item in CompositeModel.table_constraints()
     ] == [
-        (item.constraint_type, item.columns)
+        (type(item.branch), getattr(item.branch, "columns", None))
         for item in AsyncCompositeModel.table_constraints()
     ]

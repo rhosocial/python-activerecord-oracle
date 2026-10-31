@@ -10,9 +10,9 @@ from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.expression import (
     GraphVertex, GraphEdge, GraphEdgeDirection, MatchClause,
     GraphColumn, ColumnsClause, GraphTableExpression,
-    TablePropertiesClause, VertexTable, EdgeTable,
-    CreatePropertyGraphExpression, DropPropertyGraphExpression,
-    AlterPropertyGraphExpression,
+    TablePropertiesClause, VertexTable, EdgeTableDefinition,
+    CreatePropertyGraphStatement, DropPropertyGraphStatement,
+    AlterPropertyGraphStatement,
 )
 from rhosocial.activerecord.backend.expression.query_parts import WhereClause
 from rhosocial.activerecord.backend.expression.core import Column, Literal
@@ -22,7 +22,7 @@ from rhosocial.activerecord.backend.expression.objects import (
     PropertyGraph,
 )
 # The graph *expressions* above name an object; the objects themselves come from
-# the object tree, where EdgeTable is the catalogue entry rather than the
+# the object tree, where the catalogue entry is aliased rather than the
 # CREATE PROPERTY GRAPH clause -- hence the alias.
 from rhosocial.activerecord.backend.expression.objects import (
     EdgeTable as EdgeTableObject,
@@ -33,7 +33,7 @@ from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeature
 class TestPGQProtocolVersionGating:
     """Version gating tests for PGQ support in Oracle."""
 
-    def test_supports_graph_match_oracle_23c(self):
+    def test_supports_graph_match_oracle_26ai(self):
         d = OracleDialect((23, 0, 0))
         assert d.supports_graph_match() is True
 
@@ -43,7 +43,7 @@ class TestPGQProtocolVersionGating:
         assert d.supports_graph_match() is True  # PG features since 12c
 
     @pytest.mark.requires_protocol((GraphTableSupport, "supports_graph_table"))
-    def test_supports_graph_table_oracle_23c(self):
+    def test_supports_graph_table_oracle_26ai(self):
         d = OracleDialect((23, 0, 0))
         assert d.supports_graph_table() is True
 
@@ -134,23 +134,23 @@ class TestPGQDDLFormat:
                          labels=["person"],
                          key_columns=["id"],
                          properties=TablePropertiesClause(o23c_dialect, columns=["id", "name"]))
-        et = EdgeTable(o23c_dialect, EdgeTableObject(o23c_dialect, "knows"), ["person_a"], ["person_b"],
+        et = EdgeTableDefinition(o23c_dialect, EdgeTableObject(o23c_dialect, "knows"), ["person_a"], ["person_b"],
                        labels=["knows"],
                        properties=TablePropertiesClause(o23c_dialect, columns=["since"]))
-        expr = CreatePropertyGraphExpression(o23c_dialect, PropertyGraph(o23c_dialect, "test_graph"), [vt], [et])
+        expr = CreatePropertyGraphStatement(o23c_dialect, PropertyGraph(o23c_dialect, "test_graph"), [vt], [et])
         sql, params = expr.to_sql()
         assert "CREATE PROPERTY GRAPH" in sql.upper()
         assert "SOURCE KEY" in sql.upper()
         assert "DESTINATION KEY" in sql.upper()
 
     def test_drop_property_graph(self, o23c_dialect: OracleDialect):
-        expr = DropPropertyGraphExpression(o23c_dialect, PropertyGraph(o23c_dialect, "test_graph"), if_exists=True)
+        expr = DropPropertyGraphStatement(o23c_dialect, PropertyGraph(o23c_dialect, "test_graph"), if_exists=True)
         sql, params = expr.to_sql()
         assert "IF EXISTS" in sql.upper()
 
     def test_alter_add_vertex(self, o23c_dialect: OracleDialect):
         vt = VertexTable(o23c_dialect, NodeTable(o23c_dialect, "new_table"), labels=["NewLabel"])
-        expr = AlterPropertyGraphExpression(o23c_dialect, PropertyGraph(o23c_dialect, "g"), "ADD", "VERTEX TABLES",
+        expr = AlterPropertyGraphStatement(o23c_dialect, PropertyGraph(o23c_dialect, "g"), "ADD", "VERTEX TABLES",
                                             vertex_tables=[vt])
         sql, params = expr.to_sql()
         assert "ALTER PROPERTY GRAPH" in sql.upper()

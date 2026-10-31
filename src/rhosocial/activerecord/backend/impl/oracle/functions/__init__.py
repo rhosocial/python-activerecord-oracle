@@ -13,7 +13,7 @@ Usage Rules:
 - Data that is not yet an expression -- a geometry given as WKT, for
   instance -- is turned into one by a named constructor here
   (``sdo_geom_from_wkt``), not by the function that consumes it
-- Functions return appropriate expression objects (FunctionCall, RawSQLExpression, etc.)
+- Functions return appropriate expression objects (FunctionCall, RawSQL, etc.)
 
 Version Requirements:
 - JSON functions: Oracle 12c (12.1.0.2+) / 21c for JSON type

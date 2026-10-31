@@ -15,10 +15,10 @@ from rhosocial.activerecord.backend.dialect import UnsupportedFeatureError
 from rhosocial.activerecord.backend.expression.objects import Synonym, Table
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.expression import (
-    OracleCreateDatabaseLinkExpression,
-    OracleCreateSynonymExpression,
-    OracleDropDatabaseLinkExpression,
-    OracleDropSynonymExpression,
+    OracleCreateDatabaseLinkStatement,
+    OracleCreateSynonymStatement,
+    OracleDropDatabaseLinkStatement,
+    OracleDropSynonymStatement,
     OracleNamedRelationRef,
     OracleTable,
 )
@@ -41,7 +41,7 @@ class TestOracleSynonymCapabilities:
 
 class TestOracleCreateSynonymExpression:
     def test_private_synonym(self, dialect):
-        expr = OracleCreateSynonymExpression(
+        expr = OracleCreateSynonymStatement(
             dialect, synonym=Synonym(dialect, "s"), table=Table(dialect, "t")
         )
         sql, params = expr.to_sql()
@@ -50,7 +50,7 @@ class TestOracleCreateSynonymExpression:
 
     def test_schema_qualified_target(self, dialect):
         """The owner rides on the target table; the synonym keeps its own."""
-        expr = OracleCreateSynonymExpression(
+        expr = OracleCreateSynonymStatement(
             dialect,
             synonym=Synonym(dialect, "s"),
             table=Table(dialect, "t", schema_name="scott"),
@@ -65,7 +65,7 @@ class TestOracleCreateSynonymExpression:
         One ``schema_name`` beside both names could not say so: it had to be the
         same string for the two halves of one statement.
         """
-        expr = OracleCreateSynonymExpression(
+        expr = OracleCreateSynonymStatement(
             dialect,
             synonym=Synonym(dialect, "s", schema_name="app"),
             table=Table(dialect, "t", schema_name="hr"),
@@ -73,7 +73,7 @@ class TestOracleCreateSynonymExpression:
         assert expr.to_sql()[0] == 'CREATE SYNONYM "APP"."S" FOR "HR"."T"'
 
     def test_public_synonym(self, dialect):
-        expr = OracleCreateSynonymExpression(
+        expr = OracleCreateSynonymStatement(
             dialect, synonym=Synonym(dialect, "s"), table=Table(dialect, "t"),
             public=True,
         )
@@ -82,7 +82,7 @@ class TestOracleCreateSynonymExpression:
         assert params == ()
 
     def test_public_synonym_with_schema(self, dialect):
-        expr = OracleCreateSynonymExpression(
+        expr = OracleCreateSynonymStatement(
             dialect,
             synonym=Synonym(dialect, "s"),
             table=Table(dialect, "emp", schema_name="hr"),
@@ -93,7 +93,7 @@ class TestOracleCreateSynonymExpression:
         assert params == ()
 
     def test_identifier_upper_cased(self, dialect):
-        expr = OracleCreateSynonymExpression(
+        expr = OracleCreateSynonymStatement(
             dialect, synonym=Synonym(dialect, "My_Syn"), table=Table(dialect, "t")
         )
         sql, params = expr.to_sql()
@@ -103,38 +103,38 @@ class TestOracleCreateSynonymExpression:
     def test_empty_synonym_name_rejected(self, dialect):
         """The name is rejected by the object itself, which owns the slot."""
         with pytest.raises(ValueError, match="name must be a non-empty string"):
-            OracleCreateSynonymExpression(
+            OracleCreateSynonymStatement(
                 dialect, synonym=Synonym(dialect, "  "), table=Table(dialect, "t")
             )
 
     def test_synonym_object_required(self, dialect):
         with pytest.raises(TypeError, match="synonym must be a Synonym"):
-            OracleCreateSynonymExpression(
+            OracleCreateSynonymStatement(
                 dialect, synonym="s", table=Table(dialect, "t")
             )
 
     def test_table_object_required(self, dialect):
         with pytest.raises(TypeError, match="table must be a Table"):
-            OracleCreateSynonymExpression(
+            OracleCreateSynonymStatement(
                 dialect, synonym=Synonym(dialect, "s"), table="t"
             )
 
 
 class TestOracleDropSynonymExpression:
     def test_private_drop(self, dialect):
-        expr = OracleDropSynonymExpression(dialect, synonym=Synonym(dialect, "s"))
+        expr = OracleDropSynonymStatement(dialect, synonym=Synonym(dialect, "s"))
         sql, params = expr.to_sql()
         assert sql == 'DROP SYNONYM "S"'
         assert params == ()
 
     def test_public_drop(self, dialect):
-        expr = OracleDropSynonymExpression(dialect, synonym=Synonym(dialect, "s"), public=True)
+        expr = OracleDropSynonymStatement(dialect, synonym=Synonym(dialect, "s"), public=True)
         sql, params = expr.to_sql()
         assert sql == 'DROP PUBLIC SYNONYM "S"'
         assert params == ()
 
     def test_drop_force(self, dialect):
-        expr = OracleDropSynonymExpression(dialect, synonym=Synonym(dialect, "s"), force=True)
+        expr = OracleDropSynonymStatement(dialect, synonym=Synonym(dialect, "s"), force=True)
         sql, params = expr.to_sql()
         assert sql == 'DROP SYNONYM "S" FORCE'
         assert params == ()
@@ -142,12 +142,12 @@ class TestOracleDropSynonymExpression:
     def test_empty_synonym_name_rejected(self, dialect):
         """The name is rejected by the object itself, which owns the slot."""
         with pytest.raises(ValueError, match="name must be a non-empty string"):
-            OracleDropSynonymExpression(dialect, synonym=Synonym(dialect, "  "))
+            OracleDropSynonymStatement(dialect, synonym=Synonym(dialect, "  "))
 
 
 class TestOracleCreateDatabaseLinkExpression:
     def test_full_clause(self, dialect):
-        expr = OracleCreateDatabaseLinkExpression(
+        expr = OracleCreateDatabaseLinkStatement(
             dialect,
             link_name="dl",
             user="u",
@@ -159,7 +159,7 @@ class TestOracleCreateDatabaseLinkExpression:
         assert params == ()
 
     def test_public_link(self, dialect):
-        expr = OracleCreateDatabaseLinkExpression(
+        expr = OracleCreateDatabaseLinkStatement(
             dialect, link_name="dl", user="u", identified_by="pwd", public=True
         )
         sql, params = expr.to_sql()
@@ -167,7 +167,7 @@ class TestOracleCreateDatabaseLinkExpression:
         assert params == ()
 
     def test_shared_link(self, dialect):
-        expr = OracleCreateDatabaseLinkExpression(
+        expr = OracleCreateDatabaseLinkStatement(
             dialect, link_name="dl", user="u", identified_by="pwd", shared=True
         )
         sql, params = expr.to_sql()
@@ -175,13 +175,13 @@ class TestOracleCreateDatabaseLinkExpression:
         assert params == ()
 
     def test_link_name_only(self, dialect):
-        expr = OracleCreateDatabaseLinkExpression(dialect, link_name="dl")
+        expr = OracleCreateDatabaseLinkStatement(dialect, link_name="dl")
         sql, params = expr.to_sql()
         assert sql == 'CREATE DATABASE LINK "DL"'
         assert params == ()
 
     def test_connect_string_escaped(self, dialect):
-        expr = OracleCreateDatabaseLinkExpression(
+        expr = OracleCreateDatabaseLinkStatement(
             dialect, link_name="dl", user="u", identified_by="pwd", using="it's"
         )
         sql, params = expr.to_sql()
@@ -190,33 +190,33 @@ class TestOracleCreateDatabaseLinkExpression:
 
     def test_user_without_password_rejected(self, dialect):
         with pytest.raises(ValueError, match="user and identified_by must be supplied together"):
-            OracleCreateDatabaseLinkExpression(dialect, link_name="dl", user="u")
+            OracleCreateDatabaseLinkStatement(dialect, link_name="dl", user="u")
 
     def test_password_without_user_rejected(self, dialect):
         with pytest.raises(ValueError, match="user and identified_by must be supplied together"):
-            OracleCreateDatabaseLinkExpression(dialect, link_name="dl", identified_by="pwd")
+            OracleCreateDatabaseLinkStatement(dialect, link_name="dl", identified_by="pwd")
 
     def test_empty_link_name_rejected(self, dialect):
         with pytest.raises(ValueError, match="link_name must be a non-empty string"):
-            OracleCreateDatabaseLinkExpression(dialect, link_name="  ")
+            OracleCreateDatabaseLinkStatement(dialect, link_name="  ")
 
 
 class TestOracleDropDatabaseLinkExpression:
     def test_private_drop(self, dialect):
-        expr = OracleDropDatabaseLinkExpression(dialect, link_name="dl")
+        expr = OracleDropDatabaseLinkStatement(dialect, link_name="dl")
         sql, params = expr.to_sql()
         assert sql == 'DROP DATABASE LINK "DL"'
         assert params == ()
 
     def test_public_drop(self, dialect):
-        expr = OracleDropDatabaseLinkExpression(dialect, link_name="dl", public=True)
+        expr = OracleDropDatabaseLinkStatement(dialect, link_name="dl", public=True)
         sql, params = expr.to_sql()
         assert sql == 'DROP PUBLIC DATABASE LINK "DL"'
         assert params == ()
 
     def test_empty_link_name_rejected(self, dialect):
         with pytest.raises(ValueError, match="link_name must be a non-empty string"):
-            OracleDropDatabaseLinkExpression(dialect, link_name="  ")
+            OracleDropDatabaseLinkStatement(dialect, link_name="  ")
 
 
 class TestOracleDblinkTableReference:
@@ -258,9 +258,11 @@ class TestOracleDblinkTableReference:
             dialect, OracleTable(dialect, "remote_table", dblink="dl"), alias="r"
         )
         sql, params = ref.to_sql()
-        # The alias keeps the core's ``AS`` separator, as it does for every
-        # other backend: Oracle accepts ``FROM t AS r``.
-        assert sql == '"REMOTE_TABLE"@"DL" AS "R"'
+        # The alias is written bare, not with ``AS``: Oracle allows ``AS`` for a
+        # column alias and rejects it for a row source's (``FROM t AS r`` is
+        # ORA-00933), so the separator comes from the dialect's
+        # ``source_alias_separator`` -- a space here.
+        assert sql == '"REMOTE_TABLE"@"DL" "R"'
         assert params == ()
 
     def test_dblink_rendered_by_the_table_object(self, dialect):
@@ -298,33 +300,33 @@ class TestOracleDblinkTableReference:
 class TestOracleSynonymDatabaseLinkVersionBoundary:
     def test_create_synonym_below_9i_raises(self):
         d8 = OracleDialect(version=(8, 1, 0))
-        expr = OracleCreateSynonymExpression(d8, synonym=Synonym(d8, "s"), table=Table(d8, "t"))
+        expr = OracleCreateSynonymStatement(d8, synonym=Synonym(d8, "s"), table=Table(d8, "t"))
         with pytest.raises(UnsupportedFeatureError, match="CREATE SYNONYM"):
             expr.to_sql()
 
     def test_drop_synonym_below_9i_raises(self):
         d8 = OracleDialect(version=(8, 1, 0))
-        expr = OracleDropSynonymExpression(d8, synonym=Synonym(d8, "s"))
+        expr = OracleDropSynonymStatement(d8, synonym=Synonym(d8, "s"))
         with pytest.raises(UnsupportedFeatureError, match="DROP SYNONYM"):
             expr.to_sql()
 
     def test_create_database_link_below_9i_raises(self):
         d8 = OracleDialect(version=(8, 1, 0))
-        expr = OracleCreateDatabaseLinkExpression(d8, link_name="dl")
+        expr = OracleCreateDatabaseLinkStatement(d8, link_name="dl")
         with pytest.raises(UnsupportedFeatureError, match="CREATE DATABASE LINK"):
             expr.to_sql()
 
     def test_drop_database_link_below_9i_raises(self):
         d8 = OracleDialect(version=(8, 1, 0))
-        expr = OracleDropDatabaseLinkExpression(d8, link_name="dl")
+        expr = OracleDropDatabaseLinkStatement(d8, link_name="dl")
         with pytest.raises(UnsupportedFeatureError, match="DROP DATABASE LINK"):
             expr.to_sql()
 
     def test_at_9i_works(self):
         d9 = OracleDialect(version=(9, 0, 0))
-        assert OracleCreateSynonymExpression(
+        assert OracleCreateSynonymStatement(
             d9, synonym=Synonym(d9, "s"), table=Table(d9, "t")
         ).to_sql()[0] == 'CREATE SYNONYM "S" FOR "T"'
-        assert OracleCreateDatabaseLinkExpression(
+        assert OracleCreateDatabaseLinkStatement(
             d9, link_name="dl"
         ).to_sql()[0] == 'CREATE DATABASE LINK "DL"'

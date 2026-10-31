@@ -8,8 +8,8 @@ from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeature
 if TYPE_CHECKING:  # pragma: no cover
     from ..expression.flashback import (
         OracleAsOfClause,
-        OracleFlashbackTableExpression,
-        OraclePurgeExpression,
+        OracleFlashbackTableStatement,
+        OraclePurgeStatement,
         OracleVersionsBetweenClause,
     )
 
@@ -76,7 +76,7 @@ class OracleFlashbackMixin:
         )
 
     def format_flashback_table_statement(
-        self, expr: "OracleFlashbackTableExpression"
+        self, expr: "OracleFlashbackTableStatement"
     ) -> Tuple[str, tuple]:
         """Format ``FLASHBACK TABLE`` for Oracle.
 
@@ -91,7 +91,7 @@ class OracleFlashbackMixin:
 
         if not isinstance(expr.table, Table):
             raise TypeError(
-                f"OracleFlashbackTableExpression.table must be a Table, "
+                f"OracleFlashbackTableStatement.table must be a Table, "
                 f"got {type(expr.table).__name__}"
             )
 
@@ -123,7 +123,7 @@ class OracleFlashbackMixin:
             parts.append("DISABLE TRIGGERS")
         return " ".join(parts), params
 
-    def format_purge_statement(self, expr: "OraclePurgeExpression") -> Tuple[str, tuple]:
+    def format_purge_statement(self, expr: "OraclePurgeStatement") -> Tuple[str, tuple]:
         """Format ``PURGE <OBJECT KIND> <NAME>`` (or ``PURGE RECYCLEBIN``).
 
         Oracle purges a table *or* an index, so the expected object kind follows
@@ -144,7 +144,7 @@ class OracleFlashbackMixin:
         }.get(expr.object_type.value)
         if expected is not None and not isinstance(expr.target, expected):
             raise TypeError(
-                f"OraclePurgeExpression.target must be a {expected.__name__} for "
+                f"OraclePurgeStatement.target must be a {expected.__name__} for "
                 f"PURGE {expr.object_type.value}, got {type(expr.target).__name__}"
             )
 

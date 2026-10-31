@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Oracle 容器连接测试脚本
 用法: python scripts/connect_oracle.py [版本标签]
-      版本标签可选: 11g, 18c, 21c, 23c (默认 21c)
+      版本标签可选: 11g, 18c, 21c, 26ai (默认 21c)
 """
 
 import sys
@@ -24,7 +24,7 @@ CONFIGS = {
         "password": "Password1!",
         "dsn": "localhost:11522/XEPDB1",
     },
-    "23c": {
+    "26ai": {
         "user": "testuser",
         "password": "Password1!",
         "dsn": "localhost:11523/FREEPDB1",

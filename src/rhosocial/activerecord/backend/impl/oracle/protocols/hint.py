@@ -1,7 +1,7 @@
 # src/rhosocial/activerecord/backend/impl/oracle/protocols/hint.py
 """Protocol for query hints support."""
 
-from typing import Protocol, runtime_checkable, Tuple, Any
+from typing import Protocol, runtime_checkable
 
 
 @runtime_checkable
@@ -11,4 +11,3 @@ class QueryHintSupport(Protocol):
     def supports_index_hint(self) -> bool: ...
     def supports_leading_hint(self) -> bool: ...
     def supports_optimizer_hints(self) -> bool: ...
-    def format_hint(self, expr: Any) -> Tuple[str, tuple]: ...

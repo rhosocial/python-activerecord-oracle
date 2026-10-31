@@ -35,21 +35,21 @@ from rhosocial.activerecord.backend.expression.objects import (
     MaterializedView,
     Table,
 )
-from rhosocial.activerecord.backend.expression.query_sources import CTEExpression
+from rhosocial.activerecord.backend.expression.query_sources import CTEClause
 from rhosocial.activerecord.backend.expression.statements.ddl_table import (
-    CreateTableAsExpression,
+    CreateTableAsStatement,
 )
 from rhosocial.activerecord.backend.expression.statements.ddl_truncate import (
-    TruncateExpression,
+    TruncateStatement,
 )
 from rhosocial.activerecord.backend.expression.statements.ddl_view import (
-    CreateMaterializedViewExpression,
-    RefreshMaterializedViewExpression,
+    CreateMaterializedViewStatement,
+    RefreshMaterializedViewStatement,
 )
-from rhosocial.activerecord.backend.expression.statements.dql import QueryExpression
+from rhosocial.activerecord.backend.expression.statements.dql import QueryStatement
 from rhosocial.activerecord.backend.expression.transaction import (
-    BeginTransactionExpression,
-    SetTransactionExpression,
+    BeginTransactionStatement,
+    SetTransactionStatement,
 )
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
@@ -58,8 +58,13 @@ def _dialect() -> OracleDialect:
     return OracleDialect(version=(19, 0, 0))
 
 
-def _query(dialect: OracleDialect) -> QueryExpression:
-    return QueryExpression(dialect, select=[Literal(dialect, 1)])
+def _query(dialect: OracleDialect) -> QueryStatement:
+    """One row over nothing.
+
+    An inlined literal: Oracle's DDL statements never carry bind variables,
+    so a binding one would be refused before the server sees it (DPY-4009).
+    """
+    return QueryStatement(dialect, select=[Literal(dialect, 1, inline=True)])
 
 
 def _refuse(expr, expected_feature: str) -> UnsupportedFeatureError:
@@ -127,18 +132,18 @@ class TestMaterializedCTEGate:
 
     def test_materialized_is_refused_by_name(self):
         d = _dialect()
-        _refuse(CTEExpression(d, "c", _query(d), materialized=True), "MATERIALIZED CTE")
+        _refuse(CTEClause(d, "c", _query(d), materialized=True), "MATERIALIZED CTE")
 
     def test_not_materialized_is_refused_by_name(self):
         d = _dialect()
         _refuse(
-            CTEExpression(d, "c", _query(d), not_materialized=True),
+            CTEClause(d, "c", _query(d), not_materialized=True),
             "NOT MATERIALIZED CTE",
         )
 
     def test_unspecified_renders_no_hint(self):
         d = _dialect()
-        sql, _params = CTEExpression(d, "c", _query(d)).to_sql()
+        sql, _params = CTEClause(d, "c", _query(d)).to_sql()
         assert "MATERIALIZED" not in sql, sql
 
     def test_probe_is_what_refuses(self):
@@ -149,7 +154,7 @@ class TestMaterializedCTEGate:
                 return True
 
         d = _Materialized(version=(19, 0, 0))
-        sql, _params = CTEExpression(d, "c", _query(d), not_materialized=True).to_sql()
+        sql, _params = CTEClause(d, "c", _query(d), not_materialized=True).to_sql()
         assert "AS NOT MATERIALIZED" in sql, sql
 
 
@@ -159,7 +164,7 @@ class TestWithDataGate:
     def test_ctas_with_data_is_refused_by_name(self):
         d = _dialect()
         _refuse(
-            CreateTableAsExpression(d, Table(d, "t"), _query(d), with_data=True),
+            CreateTableAsStatement(d, Table(d, "t"), _query(d), with_data=True),
             "WITH DATA",
         )
 
@@ -167,24 +172,24 @@ class TestWithDataGate:
         """The finding this round closes: no_data must not render WITH NO DATA."""
         d = _dialect()
         _refuse(
-            CreateTableAsExpression(d, Table(d, "t"), _query(d), no_data=True),
+            CreateTableAsStatement(d, Table(d, "t"), _query(d), no_data=True),
             "WITH NO DATA",
         )
 
     def test_ctas_unspecified_renders_plain(self):
         d = _dialect()
-        sql, _params = CreateTableAsExpression(d, Table(d, "t"), _query(d)).to_sql()
+        sql, _params = CreateTableAsStatement(d, Table(d, "t"), _query(d)).to_sql()
         assert "WITH" not in sql.upper().replace("CREATE", ""), sql
 
     def test_mv_create_spells_build_instead(self):
         """The dialect hook: with_data/no_data become BUILD IMMEDIATE/DEFERRED."""
         d = _dialect()
-        immediate, _ = CreateMaterializedViewExpression(
+        immediate, _ = CreateMaterializedViewStatement(
             d, MaterializedView(d, "mv"), _query(d), with_data=True
         ).to_sql()
         assert "BUILD IMMEDIATE" in immediate, immediate
         assert "WITH DATA" not in immediate, immediate
-        deferred, _ = CreateMaterializedViewExpression(
+        deferred, _ = CreateMaterializedViewStatement(
             d, MaterializedView(d, "mv"), _query(d), no_data=True
         ).to_sql()
         assert "BUILD DEFERRED" in deferred, deferred
@@ -192,7 +197,7 @@ class TestWithDataGate:
 
     def test_mv_create_unspecified_emits_no_build(self):
         d = _dialect()
-        sql, _params = CreateMaterializedViewExpression(
+        sql, _params = CreateMaterializedViewStatement(
             d, MaterializedView(d, "mv"), _query(d)
         ).to_sql()
         assert "BUILD" not in sql, sql
@@ -200,14 +205,14 @@ class TestWithDataGate:
     def test_mv_refresh_with_data_is_refused_by_name(self):
         d = _dialect()
         _refuse(
-            RefreshMaterializedViewExpression(d, MaterializedView(d, "mv"), with_data=True),
+            RefreshMaterializedViewStatement(d, MaterializedView(d, "mv"), with_data=True),
             "REFRESH MATERIALIZED VIEW WITH DATA",
         )
 
     def test_mv_refresh_no_data_is_refused_by_name(self):
         d = _dialect()
         _refuse(
-            RefreshMaterializedViewExpression(d, MaterializedView(d, "mv"), no_data=True),
+            RefreshMaterializedViewStatement(d, MaterializedView(d, "mv"), no_data=True),
             "REFRESH MATERIALIZED VIEW WITH NO DATA",
         )
 
@@ -217,7 +222,7 @@ class TestTruncateGate:
 
     def test_plain_truncate_renders(self):
         d = _dialect()
-        sql, _params = TruncateExpression(d, Table(d, "t")).to_sql()
+        sql, _params = TruncateStatement(d, Table(d, "t")).to_sql()
         assert sql == 'TRUNCATE TABLE "T"', sql
 
     def test_a_dialect_that_declines_truncate_is_refused(self):
@@ -230,7 +235,7 @@ class TestTruncateGate:
         d = _NoTruncate(version=(19, 0, 0))
         assert d.supports_truncate() is False
         with pytest.raises(UnsupportedFeatureError) as excinfo:
-            TruncateExpression(d, Table(d, "t")).to_sql()
+            TruncateStatement(d, Table(d, "t")).to_sql()
         # The flipped subclass names itself in ``name``; what this asserts is
         # that the declared probe is the gate the formatter consults.
         assert excinfo.value.feature_name == "TRUNCATE"
@@ -247,21 +252,21 @@ class TestTransactionWaitGate:
 
     def test_begin_wait_is_refused_by_name(self):
         d = _dialect()
-        _refuse(BeginTransactionExpression(d, wait=True), "BEGIN WAIT")
+        _refuse(BeginTransactionStatement(d, wait=True), "BEGIN WAIT")
 
     def test_begin_no_wait_is_refused_by_name(self):
         d = _dialect()
-        _refuse(BeginTransactionExpression(d, no_wait=True), "BEGIN NO WAIT")
+        _refuse(BeginTransactionStatement(d, no_wait=True), "BEGIN NO WAIT")
 
     def test_set_transaction_wait_is_refused_by_name(self):
         d = _dialect()
-        _refuse(SetTransactionExpression(d, wait=True), "SET TRANSACTION WAIT")
+        _refuse(SetTransactionStatement(d, wait=True), "SET TRANSACTION WAIT")
 
     def test_set_transaction_no_wait_is_refused_by_name(self):
         d = _dialect()
-        _refuse(SetTransactionExpression(d, no_wait=True), "SET TRANSACTION NO WAIT")
+        _refuse(SetTransactionStatement(d, no_wait=True), "SET TRANSACTION NO WAIT")
 
     def test_unspecified_still_renders(self):
         d = _dialect()
-        sql, _params = SetTransactionExpression(d).to_sql()
+        sql, _params = SetTransactionStatement(d).to_sql()
         assert sql == "SET TRANSACTION", sql

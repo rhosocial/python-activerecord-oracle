@@ -29,7 +29,7 @@ class OracleBooleanAdapter(BaseSQLTypeAdapter):
 
     def __init__(self):
         super().__init__()
-        self._register_type(bool, int)
+        self.register_type(bool, int)
 
     def _do_to_database(self, value: Any, target_type: Type, options: Optional[Dict[str, Any]]) -> Any:
         return 1 if bool(value) else 0
@@ -43,8 +43,8 @@ class OracleDateTimeAdapter(BaseSQLTypeAdapter):
 
     def __init__(self):
         super().__init__()
-        self._register_type(datetime, str)
-        self._register_type(datetime, int)
+        self.register_type(datetime, str)
+        self.register_type(datetime, int)
 
     def _do_to_database(self, value: Any, target_type: Type, options: Optional[Dict[str, Any]]) -> Any:
         # Oracle thin client handles datetime objects directly
@@ -101,7 +101,7 @@ class OracleDateAdapter(BaseSQLTypeAdapter):
 
     def __init__(self):
         super().__init__()
-        self._register_type(date, str)
+        self.register_type(date, str)
 
     def _do_to_database(self, value: Any, target_type: Type, options: Optional[Dict[str, Any]]) -> Any:
         return value
@@ -118,7 +118,7 @@ class OracleTimeAdapter(BaseSQLTypeAdapter):
 
     def __init__(self):
         super().__init__()
-        self._register_type(time, str)
+        self.register_type(time, str)
 
     def _do_to_database(self, value: Any, target_type: Type, options: Optional[Dict[str, Any]]) -> Any:
         # Store as ISO format string for simplicity
@@ -145,8 +145,8 @@ class OracleDecimalAdapter(BaseSQLTypeAdapter):
 
     def __init__(self):
         super().__init__()
-        self._register_type(Decimal, float)
-        self._register_type(float, float)
+        self.register_type(Decimal, float)
+        self.register_type(float, float)
 
     def _do_to_database(self, value: Any, target_type: Type, options: Optional[Dict[str, Any]]) -> Any:
         return float(value)
@@ -164,8 +164,8 @@ class OracleJSONAdapter(BaseSQLTypeAdapter):
 
     def __init__(self):
         super().__init__()
-        self._register_type(dict, str)
-        self._register_type(list, str)
+        self.register_type(dict, str)
+        self.register_type(list, str)
 
     def _do_to_database(self, value: Any, target_type: Type, options: Optional[Dict[str, Any]]) -> Any:
         return json.dumps(value)
@@ -203,7 +203,7 @@ class OracleBytesAdapter(BaseSQLTypeAdapter):
 
     def __init__(self):
         super().__init__()
-        self._register_type(bytes, bytes)
+        self.register_type(bytes, bytes)
 
     def _do_to_database(self, value: Any, target_type: Type, options: Optional[Dict[str, Any]]) -> Any:
         return value
@@ -226,8 +226,8 @@ class OracleIntervalAdapter(BaseSQLTypeAdapter):
         from .type_values import IntervalYearToMonth, IntervalDayToSecond
         self.IntervalYearToMonth = IntervalYearToMonth
         self.IntervalDayToSecond = IntervalDayToSecond
-        self._register_type(IntervalYearToMonth, str)
-        self._register_type(IntervalDayToSecond, str)
+        self.register_type(IntervalYearToMonth, str)
+        self.register_type(IntervalDayToSecond, str)
 
     def _do_to_database(self, value: Any, target_type: Type, options: Optional[Dict[str, Any]]) -> Any:
         return str(value)
@@ -252,8 +252,8 @@ class OracleRowIDAdapter(BaseSQLTypeAdapter):
         from .type_values import OracleRowID, OracleURowID
         self.OracleRowID = OracleRowID
         self.OracleURowID = OracleURowID
-        self._register_type(OracleRowID, str)
-        self._register_type(OracleURowID, str)
+        self.register_type(OracleRowID, str)
+        self.register_type(OracleURowID, str)
 
     def _do_to_database(self, value: Any, target_type: Type, options: Optional[Dict[str, Any]]) -> Any:
         if hasattr(value, 'value'):
@@ -278,7 +278,7 @@ class OracleXMLAdapter(BaseSQLTypeAdapter):
         super().__init__()
         from .type_values import OracleXMLType
         self.OracleXMLType = OracleXMLType
-        self._register_type(OracleXMLType, str)
+        self.register_type(OracleXMLType, str)
 
     def _do_to_database(self, value: Any, target_type: Type, options: Optional[Dict[str, Any]]) -> Any:
         if hasattr(value, 'content'):
@@ -299,7 +299,7 @@ class OracleSDOGeometryAdapter(BaseSQLTypeAdapter):
         from .type_values import SDOGeometry, SDOPoint
         self.SDOGeometry = SDOGeometry
         self.SDOPoint = SDOPoint
-        self._register_type(SDOGeometry, str)
+        self.register_type(SDOGeometry, str)
 
     def _do_to_database(self, value: Any, target_type: Type, options: Optional[Dict[str, Any]]) -> Any:
         if hasattr(value, 'to_constructor_sql'):
@@ -319,7 +319,7 @@ class OracleVectorAdapter(BaseSQLTypeAdapter):
         super().__init__()
         from .type_values import OracleVector
         self.OracleVector = OracleVector
-        self._register_type(OracleVector, str)
+        self.register_type(OracleVector, str)
 
     def _do_to_database(self, value: Any, target_type: Type, options: Optional[Dict[str, Any]]) -> Any:
         if hasattr(value, 'to_string'):
@@ -347,8 +347,8 @@ class OracleUUIDAdapter(BaseSQLTypeAdapter):
 
     def __init__(self):
         super().__init__()
-        self._register_type(uuid.UUID, str)
-        self._register_type(uuid.UUID, bytes)
+        self.register_type(uuid.UUID, str)
+        self.register_type(uuid.UUID, bytes)
 
     def _do_to_database(
         self,
@@ -398,8 +398,8 @@ class OracleEnumAdapter(BaseSQLTypeAdapter):
                 f"OracleEnumAdapter storage must be 'name' or 'value', got {storage!r}"
             )
         self._storage = storage
-        self._register_type(Enum, str)
-        self._register_type(Enum, object)
+        self.register_type(Enum, str)
+        self.register_type(Enum, object)
 
     def _do_to_database(
         self,
@@ -456,7 +456,7 @@ class OracleStringAdapter(BaseSQLTypeAdapter):
 
     def __init__(self):
         super().__init__()
-        self._register_type(str, str)
+        self.register_type(str, str)
 
     def _do_to_database(self, value: Any, target_type: Type, options: Optional[Dict[str, Any]]) -> Any:
         return value

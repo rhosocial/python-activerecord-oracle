@@ -20,9 +20,9 @@ from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.expression import (
     OracleAsOfClause,
     OracleAsOfMode,
-    OracleFlashbackTableExpression,
+    OracleFlashbackTableStatement,
     OracleNamedRelationRef,
-    OraclePurgeExpression,
+    OraclePurgeStatement,
     OraclePurgeObjectType,
     OracleTable,
     OracleVersionsBetweenClause,
@@ -83,8 +83,11 @@ class TestOracleAsOfClause:
         )
         sql, params = ref.to_sql()
         # The flashback clause is a clause on the statement, so it lands
-        # between the name and the alias; the alias keeps the core's ``AS``.
-        assert sql == '"T" AS OF SCN 100 AS "X"'
+        # between the name and the alias. The alias itself is written bare:
+        # Oracle allows ``AS`` for a column alias and rejects it for a row
+        # source's (``FROM t AS x`` is ORA-00933), so the separator is the
+        # dialect's ``source_alias_separator`` -- a space here.
+        assert sql == '"T" AS OF SCN 100 "X"'
         assert params == ()
 
     def test_schema_qualified_with_flashback(self, dialect):
@@ -97,8 +100,8 @@ class TestOracleAsOfClause:
         assert params == ()
 
     def test_invalid_mode_rejected(self, dialect):
-        with pytest.raises(TypeError, match="mode must be an OracleAsOfMode"):
-            OracleAsOfClause(dialect, "TIMESTAMP", "x")
+        with pytest.raises(ValueError, match="unsupported AS OF mode"):
+            OracleAsOfClause(dialect, "SOMETHING ELSE", "x")
 
 
 class TestOracleVersionsBetweenClause:
@@ -144,19 +147,19 @@ class TestOracleVersionsBetweenClause:
         assert params == ("a", "b")
 
     def test_invalid_mode_rejected(self, dialect):
-        with pytest.raises(TypeError, match="mode must be an OracleVersionsBetweenMode"):
-            OracleVersionsBetweenClause(dialect, "SCN", "1", "2")
+        with pytest.raises(ValueError, match="unsupported VERSIONS BETWEEN mode"):
+            OracleVersionsBetweenClause(dialect, "SOMETHING ELSE", "1", "2")
 
 
 class TestOracleFlashbackTableExpression:
     def test_to_before_drop(self, dialect):
-        expr = OracleFlashbackTableExpression(dialect, Table(dialect, "t"), to_before_drop=True)
+        expr = OracleFlashbackTableStatement(dialect, Table(dialect, "t"), to_before_drop=True)
         sql, params = expr.to_sql()
         assert sql == 'FLASHBACK TABLE "T" TO BEFORE DROP'
         assert params == ()
 
     def test_to_before_drop_rename_to(self, dialect):
-        expr = OracleFlashbackTableExpression(
+        expr = OracleFlashbackTableStatement(
             dialect, Table(dialect, "t"), to_before_drop=True, rename_to="t2"
         )
         sql, params = expr.to_sql()
@@ -164,13 +167,13 @@ class TestOracleFlashbackTableExpression:
         assert params == ()
 
     def test_to_scn(self, dialect):
-        expr = OracleFlashbackTableExpression(dialect, Table(dialect, "t"), to_scn=1234567)
+        expr = OracleFlashbackTableStatement(dialect, Table(dialect, "t"), to_scn=1234567)
         sql, params = expr.to_sql()
         assert sql == 'FLASHBACK TABLE "T" TO SCN 1234567'
         assert params == ()
 
     def test_to_timestamp(self, dialect):
-        expr = OracleFlashbackTableExpression(
+        expr = OracleFlashbackTableStatement(
             dialect, Table(dialect, "t"), to_timestamp="TIMESTAMP '2026-01-01 00:00:00'"
         )
         sql, params = expr.to_sql()
@@ -178,7 +181,7 @@ class TestOracleFlashbackTableExpression:
         assert params == ()
 
     def test_enable_triggers(self, dialect):
-        expr = OracleFlashbackTableExpression(
+        expr = OracleFlashbackTableStatement(
             dialect, Table(dialect, "t"), to_before_drop=True, enable_triggers=True
         )
         sql, params = expr.to_sql()
@@ -186,7 +189,7 @@ class TestOracleFlashbackTableExpression:
         assert params == ()
 
     def test_disable_triggers(self, dialect):
-        expr = OracleFlashbackTableExpression(
+        expr = OracleFlashbackTableStatement(
             dialect, Table(dialect, "t"), to_timestamp="SYSTIMESTAMP", disable_triggers=True
         )
         sql, params = expr.to_sql()
@@ -194,26 +197,26 @@ class TestOracleFlashbackTableExpression:
         assert params == ()
 
     def test_identifier_upper_cased(self, dialect):
-        expr = OracleFlashbackTableExpression(dialect, Table(dialect, "My_Table"), to_before_drop=True)
+        expr = OracleFlashbackTableStatement(dialect, Table(dialect, "My_Table"), to_before_drop=True)
         sql, params = expr.to_sql()
         assert sql == 'FLASHBACK TABLE "MY_TABLE" TO BEFORE DROP'
         assert params == ()
 
     def test_no_target_rejected(self, dialect):
         with pytest.raises(ValueError, match="exactly one of to_scn, to_timestamp or to_before_drop"):
-            OracleFlashbackTableExpression(dialect, Table(dialect, "t"))
+            OracleFlashbackTableStatement(dialect, Table(dialect, "t"))
 
     def test_multiple_targets_rejected(self, dialect):
         with pytest.raises(ValueError, match="exactly one of to_scn, to_timestamp or to_before_drop"):
-            OracleFlashbackTableExpression(dialect, Table(dialect, "t"), to_scn=1, to_before_drop=True)
+            OracleFlashbackTableStatement(dialect, Table(dialect, "t"), to_scn=1, to_before_drop=True)
 
     def test_rename_without_before_drop_rejected(self, dialect):
         with pytest.raises(ValueError, match="rename_to requires to_before_drop"):
-            OracleFlashbackTableExpression(dialect, Table(dialect, "t"), to_scn=1, rename_to="t2")
+            OracleFlashbackTableStatement(dialect, Table(dialect, "t"), to_scn=1, rename_to="t2")
 
     def test_triggers_mutually_exclusive_rejected(self, dialect):
         with pytest.raises(ValueError, match="mutually exclusive"):
-            OracleFlashbackTableExpression(
+            OracleFlashbackTableStatement(
                 dialect, Table(dialect, "t"), to_before_drop=True,
                 enable_triggers=True, disable_triggers=True,
             )
@@ -221,16 +224,16 @@ class TestOracleFlashbackTableExpression:
     def test_empty_table_name_rejected(self, dialect):
         """The table is an object, so its own construction rejects the name."""
         with pytest.raises(ValueError, match="name must be a non-empty string"):
-            OracleFlashbackTableExpression(dialect, Table(dialect, "  "), to_before_drop=True)
+            OracleFlashbackTableStatement(dialect, Table(dialect, "  "), to_before_drop=True)
 
     def test_table_object_required(self, dialect):
         with pytest.raises(TypeError, match="table must be a Table"):
-            OracleFlashbackTableExpression(dialect, "t", to_before_drop=True)
+            OracleFlashbackTableStatement(dialect, "t", to_before_drop=True)
 
 
 class TestOraclePurgeExpression:
     def test_purge_table(self, dialect):
-        expr = OraclePurgeExpression(
+        expr = OraclePurgeStatement(
             dialect, OraclePurgeObjectType.TABLE, Table(dialect, "t")
         )
         sql, params = expr.to_sql()
@@ -238,7 +241,7 @@ class TestOraclePurgeExpression:
         assert params == ()
 
     def test_purge_index(self, dialect):
-        expr = OraclePurgeExpression(
+        expr = OraclePurgeStatement(
             dialect, OraclePurgeObjectType.INDEX, Index(dialect, "idx_t")
         )
         sql, params = expr.to_sql()
@@ -246,31 +249,31 @@ class TestOraclePurgeExpression:
         assert params == ()
 
     def test_purge_recyclebin(self, dialect):
-        expr = OraclePurgeExpression(dialect, OraclePurgeObjectType.RECYCLEBIN)
+        expr = OraclePurgeStatement(dialect, OraclePurgeObjectType.RECYCLEBIN)
         sql, params = expr.to_sql()
         assert sql == "PURGE RECYCLEBIN"
         assert params == ()
 
     def test_recyclebin_with_target_rejected(self, dialect):
         with pytest.raises(ValueError, match="RECYCLEBIN purge does not take a target object"):
-            OraclePurgeExpression(
+            OraclePurgeStatement(
                 dialect, OraclePurgeObjectType.RECYCLEBIN, Table(dialect, "t")
             )
 
     def test_table_without_target_rejected(self, dialect):
         with pytest.raises(TypeError, match="target must be a Table"):
-            OraclePurgeExpression(dialect, OraclePurgeObjectType.TABLE)
+            OraclePurgeStatement(dialect, OraclePurgeObjectType.TABLE)
 
     def test_target_kind_must_match_the_keyword(self, dialect):
         """PURGE TABLE cannot name an index: the statement would purge the wrong object."""
         with pytest.raises(TypeError, match="target must be a Table"):
-            OraclePurgeExpression(
+            OraclePurgeStatement(
                 dialect, OraclePurgeObjectType.TABLE, Index(dialect, "idx_t")
             )
 
     def test_invalid_object_type_rejected(self, dialect):
-        with pytest.raises(TypeError, match="object_type must be an OraclePurgeObjectType"):
-            OraclePurgeExpression(dialect, "TABLE", Table(dialect, "t"))
+        with pytest.raises(ValueError, match="unsupported PURGE object type"):
+            OraclePurgeStatement(dialect, "NOT A TYPE", Table(dialect, "t"))
 
 
 class TestOracleFlashbackVersionBoundary:
@@ -288,13 +291,13 @@ class TestOracleFlashbackVersionBoundary:
 
     def test_flashback_table_below_10g_raises(self):
         d9 = OracleDialect(version=(9, 2, 0))
-        expr = OracleFlashbackTableExpression(d9, Table(d9, "t"), to_before_drop=True)
+        expr = OracleFlashbackTableStatement(d9, Table(d9, "t"), to_before_drop=True)
         with pytest.raises(UnsupportedFeatureError, match="FLASHBACK TABLE"):
             expr.to_sql()
 
     def test_purge_below_10g_raises(self):
         d9 = OracleDialect(version=(9, 2, 0))
-        expr = OraclePurgeExpression(
+        expr = OraclePurgeStatement(
             d9, OraclePurgeObjectType.TABLE, Table(d9, "t")
         )
         with pytest.raises(UnsupportedFeatureError, match="PURGE"):
@@ -303,9 +306,9 @@ class TestOracleFlashbackVersionBoundary:
     def test_at_10g_works(self):
         d10 = OracleDialect(version=(10, 0, 0))
         assert OracleAsOfClause(d10, OracleAsOfMode.SCN, "1").to_sql()[0] == "AS OF SCN 1"
-        assert OracleFlashbackTableExpression(
+        assert OracleFlashbackTableStatement(
             d10, Table(d10, "t"), to_before_drop=True
         ).to_sql()[0] == 'FLASHBACK TABLE "T" TO BEFORE DROP'
-        assert OraclePurgeExpression(
+        assert OraclePurgeStatement(
             d10, OraclePurgeObjectType.RECYCLEBIN
         ).to_sql()[0] == "PURGE RECYCLEBIN"

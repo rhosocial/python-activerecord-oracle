@@ -7,21 +7,28 @@ to the OracleShowDialectMixin's compose_query_* methods.
 
 Inheritance pattern mirrors MySQL's ShowExpression:
 - OracleQueryExpression is the base, accepting an OracleDialect.
-- Subclasses collect params via fluent setters (schema, owner, like_pattern).
-- to_sql() delegates to the dialect's compose_query_* method.
+- Subclasses collect params via constructor keyword arguments.
 
 Bound-parameter placeholders use Oracle's native colon prefix (":1", ":name"),
 as emitted by the dialect mixin.
+
+Every parameter is a constructor field, stored under its own name and read
+back by ``get_params()`` -- the introspection-based default reads a
+parameter off ``self.<parameter name>``, so a field stored as ``_name``
+while the constructor declares ``name`` makes the class unserialisable and
+the dialect's ``params.get("name")`` read nothing. There are no fluent
+setters here either: a builder that patches a node after construction has
+no parameter an artifact can name (expression-dialect §7).
 """
 
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 
 from rhosocial.activerecord.backend.expression.bases import (
     BaseExpression,
     SQLQueryAndParams,
 )
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
 
 
@@ -29,7 +36,13 @@ class OracleQueryExpression(BaseExpression):
     """Base class for Oracle data dictionary query expressions.
 
     Subclasses wrap a SELECT against Oracle data dictionary views
-    (USER_/ALL_/DBA_/V$) and expose fluent setters.
+    (USER_/ALL_/DBA_/V$) and take their filters as constructor arguments.
+
+    Args:
+        dialect: the Oracle dialect instance.
+        schema: the schema the query is scoped to.
+        owner: the owner filter (ALL_/DBA_ views).
+        name_pattern: a LIKE-style object name filter.
     """
 
     def __init__(
@@ -41,24 +54,9 @@ class OracleQueryExpression(BaseExpression):
         name_pattern: Optional[str] = None,
     ):
         super().__init__(dialect)
-        self._schema: Optional[str] = schema
-        self._owner: Optional[str] = owner
-        self._name_pattern: Optional[str] = name_pattern
-
-    def schema(self, name: str) -> "OracleQueryExpression":
-        """Set schema/owner prefix (USER_/ALL_/DBA_ scope selection)."""
-        self._schema = name
-        return self
-
-    def owner(self, name: str) -> "OracleQueryExpression":
-        """Filter objects by owner (ALL_/DBA_ views)."""
-        self._owner = name
-        return self
-
-    def like(self, pattern: str) -> "OracleQueryExpression":
-        """Apply a LIKE-style object name filter."""
-        self._name_pattern = pattern
-        return self
+        self.schema: Optional[str] = schema
+        self.owner: Optional[str] = owner
+        self.name_pattern: Optional[str] = name_pattern
 
     def to_sql(self) -> SQLQueryAndParams:
         raise NotImplementedError("Subclasses must implement to_sql()")
@@ -72,13 +70,19 @@ class OracleQueryExpression(BaseExpression):
 class OracleQuerySessionsExpression(OracleQueryExpression):
     """Query V$SESSION for active sessions."""
 
-    def __init__(self, dialect: "OracleDialect", active_only: bool = False):
-        super().__init__(dialect)
-        self._active_only = active_only
-
-    def active_only(self, value: bool = True) -> "OracleQuerySessionsExpression":
-        self._active_only = value
-        return self
+    def __init__(
+        self,
+        dialect: "OracleDialect",
+        *,
+        active_only: bool = False,
+        schema: Optional[str] = None,
+        owner: Optional[str] = None,
+        name_pattern: Optional[str] = None,
+    ):
+        super().__init__(
+            dialect, schema=schema, owner=owner, name_pattern=name_pattern
+        )
+        self.active_only: bool = active_only
 
     def to_sql(self) -> SQLQueryAndParams:
         return self._dialect.compose_query_sessions_sql(self)  # type: ignore[attr-defined]
@@ -87,13 +91,19 @@ class OracleQuerySessionsExpression(OracleQueryExpression):
 class OracleQueryRunningSQLExpression(OracleQueryExpression):
     """Query V$SQL for currently running SQL statements."""
 
-    def __init__(self, dialect: "OracleDialect", limit: int = 50):
-        super().__init__(dialect)
-        self._limit = limit
-
-    def limit(self, value: int) -> "OracleQueryRunningSQLExpression":
-        self._limit = value
-        return self
+    def __init__(
+        self,
+        dialect: "OracleDialect",
+        *,
+        limit: int = 50,
+        schema: Optional[str] = None,
+        owner: Optional[str] = None,
+        name_pattern: Optional[str] = None,
+    ):
+        super().__init__(
+            dialect, schema=schema, owner=owner, name_pattern=name_pattern
+        )
+        self.limit: int = limit
 
     def to_sql(self) -> SQLQueryAndParams:
         return self._dialect.compose_query_running_sql_sql(self)  # type: ignore[attr-defined]
@@ -119,21 +129,18 @@ class OracleQueryObjectsExpression(OracleQueryExpression):
     def __init__(
         self,
         dialect: "OracleDialect",
-        object_type: Optional[str] = None,
         *,
+        object_type: Optional[str] = None,
         include_invalid: bool = False,
+        schema: Optional[str] = None,
+        owner: Optional[str] = None,
+        name_pattern: Optional[str] = None,
     ):
-        super().__init__(dialect)
-        self._object_type = object_type
-        self._include_invalid: bool = include_invalid
-
-    def object_type(self, value: str) -> "OracleQueryObjectsExpression":
-        self._object_type = value
-        return self
-
-    def include_invalid(self, value: bool = True) -> "OracleQueryObjectsExpression":
-        self._include_invalid = value
-        return self
+        super().__init__(
+            dialect, schema=schema, owner=owner, name_pattern=name_pattern
+        )
+        self.object_type: Optional[str] = object_type
+        self.include_invalid: bool = include_invalid
 
     def to_sql(self) -> SQLQueryAndParams:
         return self._dialect.compose_query_objects_sql(self)  # type: ignore[attr-defined]
@@ -156,13 +163,19 @@ class OracleQueryWaitEventsExpression(OracleQueryExpression):
 class OracleQueryNlsParametersExpression(OracleQueryExpression):
     """Query NLS_SESSION_PARAMETERS / NLS_DATABASE_PARAMETERS."""
 
-    def __init__(self, dialect: "OracleDialect", scope: str = "SESSION"):
-        super().__init__(dialect)
-        self._scope = scope.upper()
-
-    def scope(self, value: str) -> "OracleQueryNlsParametersExpression":
-        self._scope = value.upper()
-        return self
+    def __init__(
+        self,
+        dialect: "OracleDialect",
+        *,
+        scope: str = "SESSION",
+        schema: Optional[str] = None,
+        owner: Optional[str] = None,
+        name_pattern: Optional[str] = None,
+    ):
+        super().__init__(
+            dialect, schema=schema, owner=owner, name_pattern=name_pattern
+        )
+        self.scope: str = scope.upper()
 
     def to_sql(self) -> SQLQueryAndParams:
         return self._dialect.compose_query_nls_parameters_sql(self)  # type: ignore[attr-defined]

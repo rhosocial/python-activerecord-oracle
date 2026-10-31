@@ -21,7 +21,7 @@ from rhosocial.activerecord.backend.expression.objects import (
 )
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.expression import (
-    OracleCommentExpression,
+    OracleCommentOnStatement,
     OracleCommentObjectType,
 )
 from rhosocial.activerecord.backend.impl.oracle.expression.objects import OraclePackage
@@ -39,7 +39,7 @@ class TestOracleCommentCapabilities:
 
 class TestOracleCommentExpression:
     def test_comment_on_table(self, dialect):
-        expr = OracleCommentExpression(
+        expr = OracleCommentOnStatement(
             dialect, OracleCommentObjectType.TABLE, Table(dialect, "t"), "用户表"
         )
         sql, params = expr.to_sql()
@@ -47,7 +47,7 @@ class TestOracleCommentExpression:
         assert params == ()
 
     def test_comment_on_column(self, dialect):
-        expr = OracleCommentExpression(
+        expr = OracleCommentOnStatement(
             dialect, OracleCommentObjectType.COLUMN, Table(dialect, "t"), "列注释",
             column="c",
         )
@@ -56,7 +56,7 @@ class TestOracleCommentExpression:
         assert params == ()
 
     def test_comment_on_view(self, dialect):
-        expr = OracleCommentExpression(
+        expr = OracleCommentOnStatement(
             dialect, OracleCommentObjectType.VIEW, View(dialect, "v"), "view"
         )
         sql, params = expr.to_sql()
@@ -64,7 +64,7 @@ class TestOracleCommentExpression:
         assert params == ()
 
     def test_comment_on_index(self, dialect):
-        expr = OracleCommentExpression(
+        expr = OracleCommentOnStatement(
             dialect, OracleCommentObjectType.INDEX, Index(dialect, "idx_t"), "i"
         )
         sql, params = expr.to_sql()
@@ -72,7 +72,7 @@ class TestOracleCommentExpression:
         assert params == ()
 
     def test_comment_on_sequence(self, dialect):
-        expr = OracleCommentExpression(
+        expr = OracleCommentOnStatement(
             dialect, OracleCommentObjectType.SEQUENCE, Sequence(dialect, "seq"), "s"
         )
         sql, params = expr.to_sql()
@@ -80,7 +80,7 @@ class TestOracleCommentExpression:
         assert params == ()
 
     def test_comment_on_procedure(self, dialect):
-        expr = OracleCommentExpression(
+        expr = OracleCommentOnStatement(
             dialect, OracleCommentObjectType.PROCEDURE, Procedure(dialect, "p"), "proc"
         )
         sql, params = expr.to_sql()
@@ -88,7 +88,7 @@ class TestOracleCommentExpression:
         assert params == ()
 
     def test_comment_on_package(self, dialect):
-        expr = OracleCommentExpression(
+        expr = OracleCommentOnStatement(
             dialect, OracleCommentObjectType.PACKAGE, OraclePackage(dialect, "pk"), "pkg"
         )
         sql, params = expr.to_sql()
@@ -96,7 +96,7 @@ class TestOracleCommentExpression:
         assert params == ()
 
     def test_comment_on_materialized_view(self, dialect):
-        expr = OracleCommentExpression(
+        expr = OracleCommentOnStatement(
             dialect,
             OracleCommentObjectType.MATERIALIZED_VIEW,
             MaterializedView(dialect, "mv"),
@@ -107,7 +107,7 @@ class TestOracleCommentExpression:
         assert params == ()
 
     def test_clear_comment_with_null(self, dialect):
-        expr = OracleCommentExpression(
+        expr = OracleCommentOnStatement(
             dialect, OracleCommentObjectType.TABLE, Table(dialect, "t")
         )
         sql, params = expr.to_sql()
@@ -115,7 +115,7 @@ class TestOracleCommentExpression:
         assert params == ()
 
     def test_apostrophe_escaped(self, dialect):
-        expr = OracleCommentExpression(
+        expr = OracleCommentOnStatement(
             dialect, OracleCommentObjectType.TABLE, Table(dialect, "t"), "it's"
         )
         sql, params = expr.to_sql()
@@ -123,7 +123,7 @@ class TestOracleCommentExpression:
         assert params == ()
 
     def test_identifier_upper_cased(self, dialect):
-        expr = OracleCommentExpression(
+        expr = OracleCommentOnStatement(
             dialect, OracleCommentObjectType.TABLE, Table(dialect, "My_Table"), "x"
         )
         sql, params = expr.to_sql()
@@ -132,7 +132,7 @@ class TestOracleCommentExpression:
 
     def test_schema_qualified_column(self, dialect):
         """The owner rides on the table object; the column is named beside it."""
-        expr = OracleCommentExpression(
+        expr = OracleCommentOnStatement(
             dialect,
             OracleCommentObjectType.COLUMN,
             Table(dialect, "emp", schema_name="scott"),
@@ -144,25 +144,25 @@ class TestOracleCommentExpression:
         assert params == ()
 
     def test_invalid_object_type_rejected(self, dialect):
-        with pytest.raises(TypeError, match="object_type must be an OracleCommentObjectType"):
-            OracleCommentExpression(dialect, "TABLE", Table(dialect, "t"), "x")
+        with pytest.raises(ValueError, match="unsupported COMMENT ON object type"):
+            OracleCommentOnStatement(dialect, "NOT A TYPE", Table(dialect, "t"), "x")
 
     def test_object_kind_must_match_the_keyword(self, dialect):
         """A TABLE comment cannot hold a view: the statement would name the wrong object."""
         with pytest.raises(TypeError, match="TABLE names a Table"):
-            OracleCommentExpression(
+            OracleCommentOnStatement(
                 dialect, OracleCommentObjectType.TABLE, View(dialect, "v"), "x"
             )
 
     def test_column_requires_a_column(self, dialect):
         with pytest.raises(ValueError, match="COLUMN comment requires a column name"):
-            OracleCommentExpression(
+            OracleCommentOnStatement(
                 dialect, OracleCommentObjectType.COLUMN, Table(dialect, "t"), "x"
             )
 
     def test_non_column_rejects_a_column(self, dialect):
         with pytest.raises(ValueError, match="does not take a column name"):
-            OracleCommentExpression(
+            OracleCommentOnStatement(
                 dialect,
                 OracleCommentObjectType.TABLE,
                 Table(dialect, "t"),
@@ -174,7 +174,7 @@ class TestOracleCommentExpression:
 class TestOracleCommentVersionBoundary:
     def test_below_9i_raises(self):
         d8 = OracleDialect(version=(8, 1, 0))
-        expr = OracleCommentExpression(
+        expr = OracleCommentOnStatement(
             d8, OracleCommentObjectType.TABLE, Table(d8, "t"), "x"
         )
         with pytest.raises(UnsupportedFeatureError, match="COMMENT ON"):
@@ -182,7 +182,7 @@ class TestOracleCommentVersionBoundary:
 
     def test_at_9i_works(self):
         d9 = OracleDialect(version=(9, 0, 0))
-        expr = OracleCommentExpression(
+        expr = OracleCommentOnStatement(
             d9, OracleCommentObjectType.TABLE, Table(d9, "t"), "x"
         )
         sql, params = expr.to_sql()

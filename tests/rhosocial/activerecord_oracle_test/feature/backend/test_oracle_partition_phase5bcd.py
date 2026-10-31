@@ -9,7 +9,7 @@ Oracle execution is covered in ``test_oracle_partition_phase5_real.py``.
 import pytest
 
 from rhosocial.activerecord.backend.expression import Column, Literal
-from rhosocial.activerecord.backend.expression.operators import RawSQLExpression
+from rhosocial.activerecord.backend.expression.operators import RawSQL
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.expression.partition import (
@@ -43,7 +43,7 @@ class TestOracleIntervalPartition:
         d = _dialect()
         c = OracleIntervalPartitionClause(
             d, [Column(d, "created_at")],
-            interval=RawSQLExpression(d, "NUMTOYMINTERVAL(1, 'YEAR')"),
+            interval=RawSQL(d, "NUMTOYMINTERVAL(1, 'YEAR')"),
             partitions=[
                 OraclePartitionDefinition(name="p0", less_than=[OraclePartitionValue(d, "2026-01-01")]),
             ],
@@ -59,7 +59,7 @@ class TestOracleIntervalPartition:
         with pytest.raises(ValueError, match="exactly one"):
             OracleIntervalPartitionClause(
                 d, [Column(d, "a"), Column(d, "b")],
-                interval=RawSQLExpression(d, "x"),
+                interval=RawSQL(d, "x"),
                 partitions=[OraclePartitionDefinition(name="p0", less_than=[OraclePartitionValue(d, 1)])],
             )
 
@@ -68,7 +68,7 @@ class TestOracleIntervalPartition:
         with pytest.raises(ValueError, match="seed partition"):
             OracleIntervalPartitionClause(
                 d, [Column(d, "created_at")],
-                interval=RawSQLExpression(d, "x"),
+                interval=RawSQL(d, "x"),
                 partitions=[],
             )
 
@@ -87,7 +87,7 @@ class TestOracleIntervalPartition:
         d = OracleDialect(version=(10, 0, 0))
         c = OracleIntervalPartitionClause(
             d, [Column(d, "created_at")],
-            interval=RawSQLExpression(d, "x"),
+            interval=RawSQL(d, "x"),
             partitions=[OraclePartitionDefinition(name="p0", less_than=[OraclePartitionValue(d, 1)])],
         )
         with pytest.raises(UnsupportedFeatureError):
@@ -268,10 +268,29 @@ class TestOracleCompositePartition:
                 d, OracleSubpartitionStrategy.HASH, keys=[Column(d, "id")], count=True
             )
 
-    def test_subpartition_strategy_must_be_enum(self):
+    def test_subpartition_strategy_must_be_word_or_member(self):
+        """A word that names a member is accepted; a word that names none is not.
+
+        ``ValueError`` rather than ``TypeError`` because the parameter is a
+        word-or-enum: the constructor normalizes a word to its member, so a
+        node read back out of an artifact -- which carries the word -- builds.
+        A word naming no member is a value problem, not a type problem.
+
+        This used to assert that ``"HASH"`` was refused, which was really
+        asserting that the word form had not been taught yet: ``HASH`` is a
+        valid member. Both halves are pinned here, so the acceptance cannot
+        regress into "refuses every word" and the refusal cannot regress into
+        "accepts any word".
+        """
         d = _dialect()
-        with pytest.raises(TypeError):
-            OracleSubpartitionClause(d, "HASH", keys=[Column(d, "id")])  # type: ignore[arg-type]
+        # The accepted half: the word, spelled the way an artifact carries it.
+        OracleSubpartitionClause(d, "HASH", keys=[Column(d, "id")])
+        OracleSubpartitionClause(d, OracleSubpartitionStrategy.HASH, keys=[Column(d, "id")])
+        # The refused half, with a word naming no member at all.
+        with pytest.raises(ValueError, match="unsupported subpartition strategy"):
+            OracleSubpartitionClause(
+                d, "NOT A STRATEGY", keys=[Column(d, "id")]  # type: ignore[arg-type]
+            )
 
     def test_subpartition_definition_with_less_than(self):
         d = _dialect()

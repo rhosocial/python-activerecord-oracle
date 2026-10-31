@@ -41,9 +41,9 @@ from rhosocial.activerecord.backend.dialect.mixins.identity_column import (
 )
 from rhosocial.activerecord.backend.expression import (
     ColumnConstraint,
-    ColumnConstraintType,
+    ColumnPrimaryKeyConstraint,
     ColumnDefinition,
-    CreateTableExpression,
+    CreateTableStatement,
 )
 from rhosocial.activerecord.backend.expression.execution_testing import (
     ExecutionOutcome,
@@ -138,14 +138,13 @@ def _column(dialect, *, name="id", attribute=None, constraints=(), invisible=Fal
 def _pk_constraint(dialect, *, is_auto_increment=False):
     return ColumnConstraint(
         dialect,
-        ColumnConstraintType.PRIMARY_KEY,
-        is_auto_increment=is_auto_increment,
+        branch=ColumnPrimaryKeyConstraint(dialect, is_auto_increment=is_auto_increment),
     )
 
 
 def _create_table_with_identity(dialect, table_name, attribute):
     """The model-shaped path: the attribute is wrapped into an IdentityClause."""
-    return CreateTableExpression(
+    return CreateTableStatement(
         dialect=dialect,
         table=Table(dialect, table_name),
         columns=[_column(dialect, attribute=attribute)],
@@ -284,7 +283,7 @@ class TestOracleIdentityRender:
     def test_pk_and_identity_render_identity_first(self):
         """Identity precedes the inline constraint, as Oracle's grammar wants."""
         dialect = _oracle()
-        expression = CreateTableExpression(
+        expression = CreateTableStatement(
             dialect=dialect,
             table=Table(dialect, "pk_identity"),
             columns=[
@@ -301,7 +300,7 @@ class TestOracleIdentityRender:
     def test_invisible_identity_renders_in_grammar_order(self):
         """``INVISIBLE`` follows the type and precedes the identity clause."""
         dialect = _oracle()
-        expression = CreateTableExpression(
+        expression = CreateTableStatement(
             dialect=dialect,
             table=Table(dialect, "invisible_identity"),
             columns=[
@@ -344,7 +343,7 @@ class TestOracleLegacyAutoIncrement:
     """The legacy ``is_auto_increment`` constraint routes through the gate."""
 
     def _legacy_table(self, dialect, table_name):
-        return CreateTableExpression(
+        return CreateTableStatement(
             dialect=dialect,
             table=Table(dialect, table_name),
             columns=[
@@ -419,7 +418,7 @@ class TestOracleIdentityColumnShapes:
         _assert_channel(backend)
 
         table_name = f"AR_ID_PK_{uuid.uuid4().hex[:8]}"
-        expression = CreateTableExpression(
+        expression = CreateTableStatement(
             dialect=dialect,
             table=Table(dialect, table_name),
             columns=[
@@ -441,7 +440,7 @@ class TestOracleIdentityColumnShapes:
         _assert_channel(backend)
 
         table_name = f"AR_ID_INV_{uuid.uuid4().hex[:8]}"
-        expression = CreateTableExpression(
+        expression = CreateTableStatement(
             dialect=dialect,
             table=Table(dialect, table_name),
             columns=[
@@ -468,7 +467,7 @@ class TestOracleIdentityColumnShapes:
         _assert_channel(backend)
 
         table_name = f"AR_ID_LEGACY_{uuid.uuid4().hex[:8]}"
-        expression = CreateTableExpression(
+        expression = CreateTableStatement(
             dialect=dialect,
             table=Table(dialect, table_name),
             columns=[

@@ -15,16 +15,16 @@ from rhosocial.activerecord.backend.dialect.protocols import (
 from rhosocial.activerecord.backend.expression.objects import Type
 from rhosocial.activerecord.backend.expression.serialization import deserialize, serialize
 from rhosocial.activerecord.backend.expression.statements import (
-    AlterTypeExpression,
-    CreateTypeExpression,
-    DropTypeExpression,
+    AlterTypeStatement,
+    CreateTypeStatement,
+    DropTypeStatement,
 )
 from rhosocial.activerecord.backend.impl.oracle.backend.async_backend import AsyncOracleBackend
 from rhosocial.activerecord.backend.impl.oracle.backend import OracleBackend
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.mixins import OracleTypeDDLMixin
 from rhosocial.activerecord.backend.impl.oracle.expression.ddl.type import (
-    DropTypeBodyExpression,
+    DropTypeBodyStatement,
     OracleAlterTypeAddAttributeAction,
     OracleAlterTypeAddMethodAction,
     OracleAlterTypeCompileAction,
@@ -35,7 +35,7 @@ from rhosocial.activerecord.backend.impl.oracle.expression.ddl.type import (
     OracleAlterTypeInstantiableAction,
     OracleAlterTypeLimitAction,
     OracleAlterTypeModifyAttributeAction,
-    OracleCreateTypeBodyExpression,
+    OracleCreateTypeBodyStatement,
     OracleDropTypeExpression,
     OracleIncompleteTypeDefinition,
     OracleNestedTableTypeDefinition,
@@ -79,7 +79,7 @@ def test_type_protocol_and_definition_sql() -> None:
         not_final=True,
         instantiable=False,
     )
-    create = CreateTypeExpression(dialect, Type(dialect, "person_t"), definition, or_replace=True)
+    create = CreateTypeStatement(dialect, Type(dialect, "person_t"), definition, or_replace=True)
     sql, params = create.to_sql()
     assert sql == (
         'CREATE OR REPLACE TYPE "PERSON_T" AS OBJECT ('
@@ -96,7 +96,7 @@ def test_definition_option_validation_and_accessible_by() -> None:
         attributes=[OracleTypeAttribute("id", "NUMBER")],
         accessible_by=["PROCEDURE trusted", "PACKAGE APP.TRUSTED"],
     )
-    assert CreateTypeExpression(dialect, Type(dialect, "secured_t"), definition).to_sql()[0] == (
+    assert CreateTypeStatement(dialect, Type(dialect, "secured_t"), definition).to_sql()[0] == (
         'CREATE TYPE "SECURED_T" ACCESSIBLE BY (PROCEDURE trusted, '
         'PACKAGE APP.TRUSTED) AS OBJECT ("ID" NUMBER)'
     )
@@ -112,7 +112,7 @@ def test_definition_option_validation_and_accessible_by() -> None:
         attributes=[OracleTypeAttribute("id", "NUMBER")],
         under="base_t",
     )
-    assert "PERSISTABLE" not in CreateTypeExpression(dialect, Type(dialect, "sub_t"), subtype).to_sql()[0]
+    assert "PERSISTABLE" not in CreateTypeStatement(dialect, Type(dialect, "sub_t"), subtype).to_sql()[0]
     with pytest.raises(ValueError):
         OracleObjectTypeDefinition(
             dialect,
@@ -152,7 +152,7 @@ def test_invoker_rights_is_validated_and_rendered_canonically() -> None:
             attributes=[OracleTypeAttribute("id", "NUMBER")],
             invoker_rights=invoker_rights,
         )
-        sql = CreateTypeExpression(dialect, Type(dialect, "secure_t"), definition).to_sql()[0]
+        sql = CreateTypeStatement(dialect, Type(dialect, "secure_t"), definition).to_sql()[0]
         assert "AUTHID CURRENT_USER" in sql
         assert "INVOKER RIGHTS" not in sql
     with pytest.raises(ValueError, match="invoker_rights"):
@@ -170,7 +170,7 @@ def test_invoker_rights_is_validated_and_rendered_canonically() -> None:
         )
     definition.invoker_rights = "INVALID"
     with pytest.raises(ValueError, match="invoker_rights"):
-        CreateTypeExpression(dialect, Type(dialect, "secure_t"), definition).to_sql()
+        CreateTypeStatement(dialect, Type(dialect, "secure_t"), definition).to_sql()
 
 
 def test_structured_method_kind_return_type_and_name_validation() -> None:
@@ -198,13 +198,13 @@ def test_collection_sqlj_and_incomplete_sql() -> None:
     )
     incomplete = OracleIncompleteTypeDefinition(dialect)
 
-    assert CreateTypeExpression(dialect, Type(dialect, "numbers_t"), varray).to_sql()[0] == (
+    assert CreateTypeStatement(dialect, Type(dialect, "numbers_t"), varray).to_sql()[0] == (
         'CREATE TYPE "NUMBERS_T" AS VARRAY(10) OF NUMBER NOT NULL'
     )
-    assert CreateTypeExpression(dialect, Type(dialect, "names_t"), nested).to_sql()[0] == (
+    assert CreateTypeStatement(dialect, Type(dialect, "names_t"), nested).to_sql()[0] == (
         'CREATE TYPE "NAMES_T" AS TABLE OF (VARCHAR2(30)) NOT PERSISTABLE'
     )
-    assert CreateTypeExpression(dialect, Type(dialect, "person_java"), sqlj).to_sql()[0] == (
+    assert CreateTypeStatement(dialect, Type(dialect, "person_java"), sqlj).to_sql()[0] == (
         'CREATE TYPE "PERSON_JAVA" AS OBJECT EXTERNAL NAME \'Person\' LANGUAGE JAVA '
         'USING SQLData ("NAME" VARCHAR2(30) EXTERNAL NAME \'name\', '
         'MEMBER FUNCTION id RETURN NUMBER EXTERNAL NAME \'id() return int\')'
@@ -230,7 +230,7 @@ def test_collection_sqlj_and_incomplete_sql() -> None:
             external_name="Person",
             language="JAVA",
         )
-    assert CreateTypeExpression(dialect, Type(dialect, "forward_t"), incomplete).to_sql()[0] == (
+    assert CreateTypeStatement(dialect, Type(dialect, "forward_t"), incomplete).to_sql()[0] == (
         'CREATE TYPE "FORWARD_T"'
     )
 
@@ -249,8 +249,8 @@ def test_persistable_clause_requires_oracle_18c() -> None:
     assert legacy.supports_type_persistable() is False
     assert supported.supports_type_persistable() is True
     with pytest.raises(UnsupportedFeatureError, match="PERSISTABLE"):
-        CreateTypeExpression(legacy, Type(legacy, "legacy_numbers_t"), legacy_definition).to_sql()
-    assert "NOT PERSISTABLE" in CreateTypeExpression(
+        CreateTypeStatement(legacy, Type(legacy, "legacy_numbers_t"), legacy_definition).to_sql()
+    assert "NOT PERSISTABLE" in CreateTypeStatement(
         supported,
         Type(supported, "numbers_t"),
         supported_definition,
@@ -270,7 +270,7 @@ def test_alter_actions_and_dependent_handling() -> None:
             OracleTypeAttribute("tag", "VARCHAR2(20)"),
         ),
     ]
-    alter = AlterTypeExpression(dialect, Type(dialect, "person_t"), actions)
+    alter = AlterTypeStatement(dialect, Type(dialect, "person_t"), actions)
     sql, params = alter.to_sql()
     assert sql == (
         'ALTER TYPE "PERSON_T" ADD ATTRIBUTE ("CREATED_AT" TIMESTAMP, '
@@ -288,19 +288,19 @@ def test_alter_actions_and_dependent_handling() -> None:
             dependent_handling=OracleAlterTypeDependentHandling.CASCADE,
         ),
     ]
-    method_sql = AlterTypeExpression(dialect, Type(dialect, "person_t"), method_actions).to_sql()[0]
+    method_sql = AlterTypeStatement(dialect, Type(dialect, "person_t"), method_actions).to_sql()[0]
     assert method_sql == (
         'ALTER TYPE "PERSON_T" ADD MEMBER FUNCTION label RETURN VARCHAR2, '
         'DROP MEMBER FUNCTION old_label() CASCADE'
     )
     with pytest.raises(UnsupportedFeatureError):
-        AlterTypeExpression(
+        AlterTypeStatement(
             dialect,
             Type(dialect, "person_t"),
             [actions[0], method_actions[0]],
         ).to_sql()
     with pytest.raises(UnsupportedFeatureError):
-        AlterTypeExpression(
+        AlterTypeStatement(
             dialect,
             Type(dialect, "person_t"),
             [
@@ -333,7 +333,7 @@ def test_alter_actions_and_dependent_handling() -> None:
 
 def test_body_and_force_validate_drop_are_separate_expressions() -> None:
     dialect = _dialect(version_full=(19, 28, 0, 0, 0))
-    body = OracleCreateTypeBodyExpression(
+    body = OracleCreateTypeBodyStatement(
         dialect,
         Type(dialect, "person_t"),
         "MEMBER FUNCTION display RETURN VARCHAR2 IS BEGIN RETURN name; END;",
@@ -341,7 +341,7 @@ def test_body_and_force_validate_drop_are_separate_expressions() -> None:
     )
     force_drop = OracleDropTypeExpression(dialect, Type(dialect, "person_t"), force=True)
     validate_drop = OracleDropTypeExpression(dialect, Type(dialect, "person_t"), validate=True)
-    body_drop = DropTypeBodyExpression(dialect, Type(dialect, "person_t"), if_exists=True)
+    body_drop = DropTypeBodyStatement(dialect, Type(dialect, "person_t"), if_exists=True)
 
     assert body.to_sql()[0].startswith("CREATE OR REPLACE TYPE BODY")
     assert force_drop.to_sql()[0] == 'DROP TYPE "PERSON_T" FORCE'
@@ -372,17 +372,17 @@ def test_if_clauses_require_reliable_19_28_ru_source() -> None:
     assert other_major.supports_create_type_if_not_exists() is False
     assert supported.supports_create_type_if_not_exists() is True
     with pytest.raises(UnsupportedFeatureError):
-        CreateTypeExpression(base, Type(base, "forward_t"), definition, if_not_exists=True).to_sql()
+        CreateTypeStatement(base, Type(base, "forward_t"), definition, if_not_exists=True).to_sql()
     with pytest.raises(UnsupportedFeatureError):
-        DropTypeBodyExpression(base, Type(base, "forward_t"), if_exists=True).to_sql()
-    assert CreateTypeExpression(
+        DropTypeBodyStatement(base, Type(base, "forward_t"), if_exists=True).to_sql()
+    assert CreateTypeStatement(
         supported,
         Type(supported, "forward_t"),
         OracleIncompleteTypeDefinition(supported),
         if_not_exists=True,
     ).to_sql()[0] == 'CREATE TYPE IF NOT EXISTS "FORWARD_T"'
     with pytest.raises(ValueError):
-        CreateTypeExpression(
+        CreateTypeStatement(
             supported,
             Type(supported, "forward_t"),
             OracleIncompleteTypeDefinition(supported),
@@ -415,13 +415,13 @@ def test_if_clauses_are_a_base_release_fact_from_23ai_on() -> None:
         assert dialect.supports_create_type_body_if_not_exists() is True
         assert dialect.supports_drop_type_body_if_exists() is True
 
-    assert CreateTypeExpression(
+    assert CreateTypeStatement(
         base_release,
         Type(base_release, "forward_t"),
         OracleIncompleteTypeDefinition(base_release),
         if_not_exists=True,
     ).to_sql()[0] == 'CREATE TYPE IF NOT EXISTS "FORWARD_T"'
-    assert DropTypeExpression(
+    assert DropTypeStatement(
         base_release, Type(base_release, "forward_t"), if_exists=True,
     ).to_sql()[0] == 'DROP TYPE IF EXISTS "FORWARD_T"'
 
@@ -450,7 +450,7 @@ def test_21c_refuses_every_if_clause_and_says_what_to_write_instead() -> None:
         assert getattr(dialect, name)() is False, name
 
     with pytest.raises(UnsupportedFeatureError) as create_exc:
-        CreateTypeExpression(
+        CreateTypeStatement(
             dialect,
             Type(dialect, "forward_t"),
             OracleIncompleteTypeDefinition(dialect),
@@ -460,15 +460,15 @@ def test_21c_refuses_every_if_clause_and_says_what_to_write_instead() -> None:
     assert "CREATE OR REPLACE TYPE" in str(create_exc.value)
 
     with pytest.raises(UnsupportedFeatureError) as drop_exc:
-        DropTypeExpression(dialect, Type(dialect, "forward_t"), if_exists=True).to_sql()
+        DropTypeStatement(dialect, Type(dialect, "forward_t"), if_exists=True).to_sql()
     assert "DROP TYPE IF EXISTS" in str(drop_exc.value)
     assert "USER_OBJECTS" in str(drop_exc.value)
 
     # ...and the unadorned statements, which run everywhere, are untouched.
-    assert CreateTypeExpression(
+    assert CreateTypeStatement(
         dialect, Type(dialect, "forward_t"), OracleIncompleteTypeDefinition(dialect),
     ).to_sql()[0] == 'CREATE TYPE "FORWARD_T"'
-    assert DropTypeExpression(
+    assert DropTypeStatement(
         dialect, Type(dialect, "forward_t"), if_exists=False,
     ).to_sql()[0] == 'DROP TYPE "FORWARD_T"'
 
@@ -492,7 +492,54 @@ def test_common_definition_does_not_accept_method_body() -> None:
 
 def test_type_ddl_serialization_registration() -> None:
     dialect = _dialect(version_full=(19, 28, 0, 0, 0))
-    expressions = (
+    # A kind is read back through a caller-supplied whitelist (core
+    # 8d474dc8): the backend package registers nothing at import, so the
+    # registry this test reads through is one it assembles itself --
+    # framework nodes to resolve the nested core nodes, then this tree's
+    # own kinds.
+    from rhosocial.activerecord.backend.expression.registry import ExpressionRegistry
+    from rhosocial.activerecord.backend.expression.serialization import default_registry
+
+    # What an artifact can carry: a nested node, a list, a dict, a value kind.
+    # Every expression below holds nothing else in a *parameter*, so each one
+    # survives all three encodings and comes back the same class rendering the
+    # same SQL.
+    #
+    # The action classes sit here even though they build attributes: the
+    # attribute they assemble is reached through a ``resolved_*`` property, not
+    # stored under the constructor parameter's name, so ``get_params()`` never
+    # offers it to the encoder. That is also why the matrix's
+    # CORE_ARTIFACT_GAPS lists them and this assertion does not -- the matrix
+    # exercises the round-trip through core's formatter, which reads the
+    # property and so meets the dataclass; this one only asks what an artifact
+    # can carry, and the artifact only ever sees parameters.
+    round_trippable = (
+        OracleVarrayTypeDefinition(dialect, "NUMBER", 4),
+        OracleNestedTableTypeDefinition(dialect, "NUMBER"),
+        OracleIncompleteTypeDefinition(dialect),
+        OracleAlterTypeLimitAction(dialect, 4),
+        OracleAlterTypeCompileAction(dialect),
+        OracleAlterTypeFinalAction(dialect, final=True),
+        OracleAlterTypeInstantiableAction(dialect, instantiable=True),
+        OracleCreateTypeBodyStatement(dialect, Type(dialect, "person_t"), "BEGIN NULL; END;"),
+        OracleDropTypeExpression(dialect, Type(dialect, "person_t"), force=True),
+        DropTypeBodyStatement(dialect, Type(dialect, "person_t")),
+        OracleAlterTypeAddAttributeAction(dialect, "id", "NUMBER"),
+        OracleAlterTypeModifyAttributeAction(dialect, "id", "NUMBER"),
+        OracleAlterTypeDropAttributeAction(dialect, "id"),
+        OracleAlterTypeAddMethodAction(dialect, "MEMBER FUNCTION id RETURN NUMBER"),
+        OracleAlterTypeDropMethodAction(dialect, name="id", kind="MEMBER FUNCTION", parameters=[]),
+    )
+    # What an artifact cannot carry: the two type *definitions* store an
+    # ``OracleTypeAttribute`` -- a plain dataclass -- as a constructor
+    # parameter. The plain-JSON rewrite's ``_encode_value`` asks the value
+    # vocabulary, is told the type is not one of its kinds, and names the type
+    # in the message, so the fix has to give the parameter a kind or teach the
+    # encoder a dataclass shape, and both of those are core's to write. The
+    # matrix records these same classes under CORE_ARTIFACT_GAPS on all three
+    # channels; this asserts the refusal still names the type, so the gap
+    # cannot silently close in either direction without a failure here.
+    unencodable = (
         OracleObjectTypeDefinition(dialect, [OracleTypeAttribute("id", "NUMBER")]),
         OracleSqljTypeDefinition(
             dialect,
@@ -501,26 +548,30 @@ def test_type_ddl_serialization_registration() -> None:
             language="JAVA",
             using_clause="SQLData",
         ),
-        OracleVarrayTypeDefinition(dialect, "NUMBER", 4),
-        OracleNestedTableTypeDefinition(dialect, "NUMBER"),
-        OracleIncompleteTypeDefinition(dialect),
-        OracleAlterTypeAddAttributeAction(dialect, "id", "NUMBER"),
-        OracleAlterTypeModifyAttributeAction(dialect, "id", "NUMBER"),
-        OracleAlterTypeDropAttributeAction(dialect, "id"),
-        OracleAlterTypeAddMethodAction(dialect, "MEMBER FUNCTION id RETURN NUMBER"),
-        OracleAlterTypeDropMethodAction(dialect, name="id", kind="MEMBER FUNCTION", parameters=[]),
-        OracleAlterTypeLimitAction(dialect, 4),
-        OracleAlterTypeCompileAction(dialect),
-        OracleAlterTypeFinalAction(dialect, final=True),
-        OracleAlterTypeInstantiableAction(dialect, instantiable=True),
-        OracleCreateTypeBodyExpression(dialect, Type(dialect, "person_t"), "BEGIN NULL; END;"),
-        OracleDropTypeExpression(dialect, Type(dialect, "person_t"), force=True),
-        DropTypeBodyExpression(dialect, Type(dialect, "person_t")),
     )
-    for expression in expressions:
-        restored = deserialize(serialize(expression), dialect)
+
+    framework = default_registry()
+    registry = ExpressionRegistry()
+    for kind in framework.node_kinds():
+        registry.register_node(framework.resolve_node(kind))
+    for expression in round_trippable + unencodable:
+        registry.register_node(type(expression))
+    # No register_dataclass / register_enum here, and that is the plain-JSON
+    # rewrite's point rather than an omission. The artifact carries a nested
+    # node, a list, a dict or one of the value kinds -- full stop. A string
+    # enum *is* a JSON string and needs no table, and a dataclass has no place
+    # in an artifact at all. Both registration entry points were removed with
+    # the marker tables that existed only to be marked, so calling them here
+    # would be asserting an API core no longer has.
+
+    for expression in round_trippable:
+        restored = deserialize(serialize(expression), dialect, registry=registry)
         assert type(restored) is type(expression)
         assert serialize(restored) == serialize(expression)
+
+    for expression in unencodable:
+        with pytest.raises(TypeError, match="is not one of the value kinds"):
+            serialize(expression)
 
 
 def _bare_backend(backend_type: Any) -> Any:
@@ -574,6 +625,6 @@ async def test_async_introspect_refreshes_version_full_cache() -> None:
 
 def test_core_drop_type_expression_is_supported() -> None:
     dialect = _dialect()
-    sql, params = DropTypeExpression(dialect, Type(dialect, "person_t")).to_sql()
+    sql, params = DropTypeStatement(dialect, Type(dialect, "person_t")).to_sql()
     assert sql == 'DROP TYPE "PERSON_T"'
     assert params == ()

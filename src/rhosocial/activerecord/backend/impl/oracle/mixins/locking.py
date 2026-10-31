@@ -11,7 +11,7 @@ This mixin is mixed into :class:`OracleDialect` alongside the other
 dialect mixins. All methods are defensive and side-effect free; they
 return strings or booleans only.
 """
-from typing import Any, List, Optional, Tuple, TYPE_CHECKING
+from typing import Any, List, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from rhosocial.activerecord.backend.expression.query_parts import ForUpdateClause
@@ -94,8 +94,11 @@ class OracleLockingMixin(object):
         from ..expression.locking import OracleForUpdateClause
 
         if clause.strength != LockStrength.UPDATE:
+            # The message names the strength the way a SQL writer spells it,
+            # which is `.phrase`; `.value` is the word an artifact carries and
+            # reads as a bare `update` with no `FOR ` in front of it.
             raise UnsupportedFeatureError(
-                self.name, f"{clause.strength.value} (unsupported lock strength)"
+                self.name, f"{clause.strength.phrase} (unsupported lock strength)"
             )
 
         sql_parts: List[str] = ["FOR UPDATE"]
@@ -131,3 +134,22 @@ class OracleLockingMixin(object):
 
         return " ".join(sql_parts), tuple(all_params)
     # endregion
+
+    def format_oracle_lock_table_statement(self, expr) -> Tuple[str, tuple]:
+        """Render an ``OracleLockTableStatement``.
+
+        A table-level lock is a statement the dialect spells, so the node
+        holds the table, the mode and the NOWAIT flag and the text is
+        assembled here -- the split the org rules' §16.2 asks for, and which
+        this node previously did not observe (it rendered itself). The mode
+        is uppercased on the way out so a caller writing "share" gets
+        Oracle's spelling; the constructor is what refuses a mode Oracle has
+        no form of.
+        """
+        sql = (
+            f"LOCK TABLE {self.format_identifier(expr.table)} "
+            f"IN {expr.mode.upper()} MODE"
+        )
+        if expr.nowait:
+            sql += " NOWAIT"
+        return (sql, ())

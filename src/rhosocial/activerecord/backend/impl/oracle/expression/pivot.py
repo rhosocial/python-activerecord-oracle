@@ -6,6 +6,14 @@ PIVOT rotates rows to columns, creating a cross-tabulation query.
 UNPIVOT rotates columns to rows, the inverse of PIVOT.
 
 These operations are useful for reporting and data transformation.
+
+The two self-rendering clauses are Oracle's own nodes and carry the backend
+prefix in their class names (rules §3: a backend-specific node's name starts
+with the backend's), which is what keeps their kinds -- ``oracle_pivot`` /
+``oracle_unpivot`` -- distinct from core's classed ``pivot`` / ``unpivot``
+nodes. An artifact carries the kind, so two same-named classes would be one
+ambiguous kind no reader could resolve; the split registry names the
+collision at assembly time rather than reading one class as the other.
 """
 from __future__ import annotations
 
@@ -17,7 +25,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
 
 
-class PivotExpression(BaseExpression):
+class OraclePivot(BaseExpression):
     """Oracle PIVOT clause for row-to-column transformation.
 
     PIVOT allows you to rotate rows into columns, creating a
@@ -29,7 +37,7 @@ class PivotExpression(BaseExpression):
         PIVOT (SUM(amount) FOR month IN ('Jan' AS "Jan", 'Feb' AS "Feb"))
 
     Example usage:
-        pivot = PivotExpression(
+        pivot = OraclePivot(
             dialect,
             aggregate_function="SUM",
             value_column="amount",
@@ -65,35 +73,17 @@ class PivotExpression(BaseExpression):
         self.alias = alias
         self.default = default
 
-    def to_sql(self) -> SQLQueryAndParams:
-        """Generate PIVOT SQL."""
-        dialect = self.dialect
-        # Format values with aliases
-        value_parts = []
-        for v in self.values:
-            if isinstance(v, str):
-                value_parts.append(f"'{v}' AS \"{v}\"")
-            else:
-                value_parts.append(f"{v} AS \"{v}\"")
+    @property
+    def format_method(self) -> str:
+        """The dialect method that renders this clause.
 
-        values_str = ", ".join(value_parts)
-
-        sql = (
-            f"PIVOT ("
-            f"{self.aggregate_function}({dialect.format_identifier(self.value_column)}) "
-            f"FOR {dialect.format_identifier(self.pivot_column)} "
-            f"IN ({values_str})"
-        )
-
-        if self.default is not None:
-            sql += f" DEFAULT {dialect.format_literal(self.default)}"
-
-        sql += ")"
-
-        if self.alias:
-            sql = f"{sql} {dialect.format_identifier(self.alias)}"
-
-        return (sql, ())
+        A node collects its parameters and a dialect formatter produces the
+        SQL; this clause used to assemble its own text inside ``to_sql()``,
+        which is the shape the org rules put under §16.2. The rendering
+        moved to :meth:`OraclePivotMixin.format_oracle_pivot`, and the node
+        names it the way every other expression here does.
+        """
+        return "format_oracle_pivot"
 
 
 class PivotXMLExpression(BaseExpression):
@@ -142,7 +132,7 @@ class PivotXMLExpression(BaseExpression):
         return (sql, ())
 
 
-class UnpivotExpression(BaseExpression):
+class OracleUnpivot(BaseExpression):
     """Oracle UNPIVOT clause for column-to-row transformation.
 
     UNPIVOT rotates columns into rows, essentially the inverse of PIVOT.
@@ -153,7 +143,7 @@ class UnpivotExpression(BaseExpression):
         UNPIVOT (amount FOR month IN (jan_sales, feb_sales, mar_sales))
 
     Example usage:
-        unpivot = UnpivotExpression(
+        unpivot = OracleUnpivot(
             dialect,
             value_column="amount",
             pivot_column="month",

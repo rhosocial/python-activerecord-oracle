@@ -15,7 +15,7 @@ from rhosocial.activerecord.backend.dialect import UnsupportedFeatureError
 from rhosocial.activerecord.backend.expression.objects import Table
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.expression import (
-    OracleAnalyzeExpression,
+    OracleAnalyzeStatement,
     OracleAnalyzeMode,
 )
 
@@ -32,13 +32,13 @@ class TestOracleAnalyzeCapabilities:
 
 class TestOracleAnalyzeExpression:
     def test_compute_statistics(self, dialect):
-        expr = OracleAnalyzeExpression(dialect, Table(dialect, "t"), OracleAnalyzeMode.COMPUTE_STATISTICS)
+        expr = OracleAnalyzeStatement(dialect, Table(dialect, "t"), OracleAnalyzeMode.COMPUTE_STATISTICS)
         sql, params = expr.to_sql()
         assert sql == 'ANALYZE TABLE "T" COMPUTE STATISTICS'
         assert params == ()
 
     def test_estimate_statistics_with_sample(self, dialect):
-        expr = OracleAnalyzeExpression(
+        expr = OracleAnalyzeStatement(
             dialect, Table(dialect, "t"), OracleAnalyzeMode.ESTIMATE_STATISTICS, sample_percent=5
         )
         sql, params = expr.to_sql()
@@ -46,19 +46,19 @@ class TestOracleAnalyzeExpression:
         assert params == ()
 
     def test_estimate_statistics_without_sample(self, dialect):
-        expr = OracleAnalyzeExpression(dialect, Table(dialect, "t"), OracleAnalyzeMode.ESTIMATE_STATISTICS)
+        expr = OracleAnalyzeStatement(dialect, Table(dialect, "t"), OracleAnalyzeMode.ESTIMATE_STATISTICS)
         sql, params = expr.to_sql()
         assert sql == 'ANALYZE TABLE "T" ESTIMATE STATISTICS'
         assert params == ()
 
     def test_validate_structure(self, dialect):
-        expr = OracleAnalyzeExpression(dialect, Table(dialect, "t"), OracleAnalyzeMode.VALIDATE_STRUCTURE)
+        expr = OracleAnalyzeStatement(dialect, Table(dialect, "t"), OracleAnalyzeMode.VALIDATE_STRUCTURE)
         sql, params = expr.to_sql()
         assert sql == 'ANALYZE TABLE "T" VALIDATE STRUCTURE'
         assert params == ()
 
     def test_validate_structure_cascade(self, dialect):
-        expr = OracleAnalyzeExpression(
+        expr = OracleAnalyzeStatement(
             dialect, Table(dialect, "t"), OracleAnalyzeMode.VALIDATE_STRUCTURE, cascade=True
         )
         sql, params = expr.to_sql()
@@ -66,13 +66,13 @@ class TestOracleAnalyzeExpression:
         assert params == ()
 
     def test_list_chained_rows(self, dialect):
-        expr = OracleAnalyzeExpression(dialect, Table(dialect, "t"), OracleAnalyzeMode.LIST_CHAINED_ROWS)
+        expr = OracleAnalyzeStatement(dialect, Table(dialect, "t"), OracleAnalyzeMode.LIST_CHAINED_ROWS)
         sql, params = expr.to_sql()
         assert sql == 'ANALYZE TABLE "T" LIST CHAINED ROWS'
         assert params == ()
 
     def test_list_chained_rows_into(self, dialect):
-        expr = OracleAnalyzeExpression(
+        expr = OracleAnalyzeStatement(
             dialect, Table(dialect, "t"), OracleAnalyzeMode.LIST_CHAINED_ROWS, into="chained_rows"
         )
         sql, params = expr.to_sql()
@@ -80,13 +80,13 @@ class TestOracleAnalyzeExpression:
         assert params == ()
 
     def test_delete_system_statistics(self, dialect):
-        expr = OracleAnalyzeExpression(dialect, Table(dialect, "t"), OracleAnalyzeMode.DELETE_SYSTEM_STATISTICS)
+        expr = OracleAnalyzeStatement(dialect, Table(dialect, "t"), OracleAnalyzeMode.DELETE_SYSTEM_STATISTICS)
         sql, params = expr.to_sql()
         assert sql == 'ANALYZE TABLE "T" DELETE SYSTEM STATISTICS'
         assert params == ()
 
     def test_identifier_upper_cased(self, dialect):
-        expr = OracleAnalyzeExpression(dialect, Table(dialect, "My_Table"), OracleAnalyzeMode.COMPUTE_STATISTICS)
+        expr = OracleAnalyzeStatement(dialect, Table(dialect, "My_Table"), OracleAnalyzeMode.COMPUTE_STATISTICS)
         sql, params = expr.to_sql()
         assert sql == 'ANALYZE TABLE "MY_TABLE" COMPUTE STATISTICS'
         assert params == ()
@@ -94,50 +94,60 @@ class TestOracleAnalyzeExpression:
     def test_empty_table_name_rejected(self, dialect):
         """The table is an object, so its own construction rejects the name."""
         with pytest.raises(ValueError, match="name must be a non-empty string"):
-            OracleAnalyzeExpression(dialect, Table(dialect, "  "), OracleAnalyzeMode.COMPUTE_STATISTICS)
+            OracleAnalyzeStatement(dialect, Table(dialect, "  "), OracleAnalyzeMode.COMPUTE_STATISTICS)
 
     def test_table_object_required(self, dialect):
         """A bare string cannot say which kind of object is named."""
         with pytest.raises(TypeError, match="table must be a Table"):
-            OracleAnalyzeExpression(dialect, "t", OracleAnalyzeMode.COMPUTE_STATISTICS)
+            OracleAnalyzeStatement(dialect, "t", OracleAnalyzeMode.COMPUTE_STATISTICS)
 
     def test_invalid_mode_rejected(self, dialect):
-        with pytest.raises(TypeError, match="mode must be an OracleAnalyzeMode"):
-            OracleAnalyzeExpression(dialect, Table(dialect, "t"), "COMPUTE STATISTICS")
+        """An unknown mode is refused, and the message says what was accepted.
+
+        ``ValueError`` rather than ``TypeError`` because the parameter is a
+        word-or-enum: a node reading one out of an artifact carries the *word*
+        a member spells, and a constructor that refused every word would make
+        each deserialized node unbuildable. So the member passes through, the
+        word is normalized to it, and anything that names no member is a value
+        problem rather than a type problem. The message lists the members, so a
+        reader learns the accepted vocabulary instead of only the refusal.
+        """
+        with pytest.raises(ValueError, match="unsupported ANALYZE mode"):
+            OracleAnalyzeStatement(dialect, Table(dialect, "t"), "NOT A MODE")
 
     def test_sample_with_compute_statistics_rejected(self, dialect):
         with pytest.raises(ValueError, match="sample_percent requires ESTIMATE STATISTICS"):
-            OracleAnalyzeExpression(
+            OracleAnalyzeStatement(
                 dialect, Table(dialect, "t"), OracleAnalyzeMode.COMPUTE_STATISTICS, sample_percent=5
             )
 
     def test_cascade_with_compute_statistics_rejected(self, dialect):
         with pytest.raises(ValueError, match="cascade requires VALIDATE STRUCTURE"):
-            OracleAnalyzeExpression(
+            OracleAnalyzeStatement(
                 dialect, Table(dialect, "t"), OracleAnalyzeMode.COMPUTE_STATISTICS, cascade=True
             )
 
     def test_into_with_compute_statistics_rejected(self, dialect):
         with pytest.raises(ValueError, match="into requires LIST CHAINED ROWS"):
-            OracleAnalyzeExpression(
+            OracleAnalyzeStatement(
                 dialect, Table(dialect, "t"), OracleAnalyzeMode.COMPUTE_STATISTICS, into="ct"
             )
 
     def test_non_int_sample_rejected(self, dialect):
         with pytest.raises(TypeError, match="sample_percent must be an int"):
-            OracleAnalyzeExpression(
+            OracleAnalyzeStatement(
                 dialect, Table(dialect, "t"), OracleAnalyzeMode.ESTIMATE_STATISTICS, sample_percent="5"
             )
 
     def test_non_positive_sample_rejected(self, dialect):
         with pytest.raises(ValueError, match="sample_percent must be a positive integer"):
-            OracleAnalyzeExpression(
+            OracleAnalyzeStatement(
                 dialect, Table(dialect, "t"), OracleAnalyzeMode.ESTIMATE_STATISTICS, sample_percent=0
             )
 
     def test_empty_into_rejected(self, dialect):
         with pytest.raises(ValueError, match="into must be a non-empty string"):
-            OracleAnalyzeExpression(
+            OracleAnalyzeStatement(
                 dialect, Table(dialect, "t"), OracleAnalyzeMode.LIST_CHAINED_ROWS, into="  "
             )
 
@@ -145,13 +155,13 @@ class TestOracleAnalyzeExpression:
 class TestOracleAnalyzeVersionBoundary:
     def test_below_9i_raises(self):
         d8 = OracleDialect(version=(8, 1, 0))
-        expr = OracleAnalyzeExpression(d8, Table(d8, "t"), OracleAnalyzeMode.COMPUTE_STATISTICS)
+        expr = OracleAnalyzeStatement(d8, Table(d8, "t"), OracleAnalyzeMode.COMPUTE_STATISTICS)
         with pytest.raises(UnsupportedFeatureError, match="ANALYZE TABLE"):
             expr.to_sql()
 
     def test_at_9i_works(self):
         d9 = OracleDialect(version=(9, 0, 0))
-        expr = OracleAnalyzeExpression(d9, Table(d9, "t"), OracleAnalyzeMode.COMPUTE_STATISTICS)
+        expr = OracleAnalyzeStatement(d9, Table(d9, "t"), OracleAnalyzeMode.COMPUTE_STATISTICS)
         sql, params = expr.to_sql()
         assert sql == 'ANALYZE TABLE "T" COMPUTE STATISTICS'
         assert params == ()

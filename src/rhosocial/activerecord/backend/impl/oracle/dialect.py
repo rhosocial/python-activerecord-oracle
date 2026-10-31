@@ -153,6 +153,7 @@ from .mixins import (
     OracleTruncateMixin,
     OracleTypeSupportMixin,
     OracleTypeSuggestionMixin,
+    OracleLiteralValueMixin,
     OracleTypeDDLMixin,
     OracleVectorMixin,
     OracleViewMixin,
@@ -162,12 +163,31 @@ from .protocols.partition import OraclePartitionSupport
 from .protocols.data_type import OracleDataTypeSupport
 from .protocols.ddl_type import OracleTypeDDLSupport
 from .reserved_words import ORACLE_RESERVED_WORDS
+from .show import OracleShowDialectMixin
 
 if TYPE_CHECKING:
-    pass
+    from rhosocial.activerecord.backend.expression.bases import BaseExpression
 
 
 class OracleDialect(
+    # The bases below come in bundles: a backend mixin, then the core bundle
+    # it stands in for. The backend's answer has to come first -- a mixin
+    # placed after the class it overrides never wins -- so a new mixin goes
+    # immediately before the core mixin it overrides, and the pairing is read
+    # off the list. Two positions sit outside that pairing and are called out
+    # where they occur: a mixin that overrides a method ``SQLDialectBase``
+    # defines has to precede the base, and a mixin that subclasses a core
+    # mixin has to precede it too (C3: a subclass precedes its base).
+    # Ahead of SQLDialectBase, unlike every other mixin in this list. Those
+    # add methods the base does not have, so their position is a readability
+    # choice; this one overrides ``format_literal``, and a mixin placed after
+    # the class it overrides never wins. It resolves Oracle's tier-2
+    # spellings (HEXTORAW, the INTERVAL literal, the quoted UUID text) and
+    # the tier-1 branches Oracle's grammar re-spells or refuses (TO_DATE /
+    # TO_TIMESTAMP against the session format, TRUE/FALSE gated on 23ai,
+    # the time-of-day refusal), and leaves the base's portable forms and
+    # the literal-construction protocol to it.
+    OracleLiteralValueMixin,
     SQLDialectBase,
     # ================================================================
     # Oracle-specific overrides – listed BEFORE the generic mixins they
@@ -205,6 +225,12 @@ class OracleDialect(
     OracleNamespaceMixin,
     OracleRoutineMixin,
     OracleSchemaMixin,
+    # The SHOW-style data dictionary composer: its ``compose_query_*``
+    # methods are what ``expression/show.py`` delegates to, so the mixin has
+    # to be composed for those expressions to render at all. It was exported
+    # from ``.show`` and documented as composed here, but never listed, which
+    # left every ``OracleQuery*Expression`` failing on a missing attribute.
+    OracleShowDialectMixin,
     OracleSequenceMixin,
     OracleSetOperationMixin,
     OracleSpatialMixin,
@@ -451,6 +477,37 @@ class OracleDialect(
         ``:1, :2, ...`` at execution time.
         """
         return "?"
+
+    def source_alias_separator(self) -> str:
+        """The token before a row source's alias: a single space, no ``AS``.
+
+        Oracle allows ``AS`` for a *column* alias and rejects it for a row
+        source's: ``FROM emp AS e`` is ``ORA-00933``, and an inline view spelled
+        ``FROM (...) AS x`` is ``ORA-00907`` ("missing right parenthesis", which
+        is this parser's way of saying the alias form is not recognized). ``AS``
+        is optional for columns and forbidden here, so the bare space is the one
+        spelling legal in both positions. Every row source in this backend
+        renders through this method, which is why the answer lives at this level
+        rather than in each formatter.
+        """
+        return " "
+
+    def format_subquery(self, expr: "BaseExpression") -> Tuple[str, tuple]:
+        """Render a parenthesized query, aliased the way a row source is.
+
+        An inline view's alias is a correlation name, so it takes the same
+        separator a table alias does (see :meth:`source_alias_separator`) -- on
+        Oracle that is a bare space. An inline view also *requires* an alias in
+        ``FROM``; a caller that leaves one off gets Oracle's own refusal rather
+        than a silently unnameable derived table.
+        """
+        sql = f"({expr.query_input})"
+        if expr.alias:
+            sql = (
+                f"{sql}{self.source_alias_separator()}"
+                f"{self.format_identifier(expr.alias)}"
+            )
+        return sql, expr.query_params
 
     def get_server_version(self) -> Tuple[int, int, int]:
         """Return the configured Oracle version tuple."""

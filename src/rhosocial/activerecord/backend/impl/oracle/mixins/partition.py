@@ -54,13 +54,13 @@ from ..expression.partition import (
     OracleSubpartitionDefinition,
 )
 from ..expression.partition_lifecycle import (
-    OracleAddPartitionExpression,
-    OracleDropPartitionExpression,
-    OracleExchangePartitionExpression,
-    OracleMergePartitionsExpression,
-    OracleMovePartitionExpression,
-    OracleSplitPartitionExpression,
-    OracleTruncatePartitionExpression,
+    OracleAddPartitionStatement,
+    OracleDropPartitionStatement,
+    OracleExchangePartitionStatement,
+    OracleMergePartitionsStatement,
+    OracleMovePartitionStatement,
+    OracleSplitPartitionStatement,
+    OracleTruncatePartitionStatement,
 )
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -117,55 +117,55 @@ class OraclePartitionMixin:
     # ------------------------------------------------------------------
     def supports_table_partitioning(self) -> bool:
         """Oracle supports table partitioning since 8.0; backend tests 11g+."""
-        return self.version >= _ORACLE_PARTITION_MIN_VERSION
+        return self.version_at_least(_ORACLE_PARTITION_MIN_VERSION)
 
     def supports_partitioned_table_creation(self) -> bool:
         """CREATE TABLE ... PARTITION BY is supported for 11g+."""
-        return self.version >= _ORACLE_PARTITION_MIN_VERSION
+        return self.version_at_least(_ORACLE_PARTITION_MIN_VERSION)
 
     def supports_partition_metadata_introspection(self) -> bool:
         """Partition metadata is queryable through ALL_TAB_PARTITIONS."""
-        return self.version >= _ORACLE_PARTITION_MIN_VERSION
+        return self.version_at_least(_ORACLE_PARTITION_MIN_VERSION)
 
     def supports_range_table_partitioning(self) -> bool:
         """RANGE partitioning is supported for 11g+."""
-        return self.version >= _ORACLE_PARTITION_MIN_VERSION
+        return self.version_at_least(_ORACLE_PARTITION_MIN_VERSION)
 
     def supports_list_table_partitioning(self) -> bool:
         """LIST partitioning is supported for 11g+."""
-        return self.version >= _ORACLE_PARTITION_MIN_VERSION
+        return self.version_at_least(_ORACLE_PARTITION_MIN_VERSION)
 
     def supports_hash_table_partitioning(self) -> bool:
         """HASH partitioning is supported for 11g+."""
-        return self.version >= _ORACLE_PARTITION_MIN_VERSION
+        return self.version_at_least(_ORACLE_PARTITION_MIN_VERSION)
 
     def supports_subpartitioning(self) -> bool:
         """Oracle composite partitioning (subpartitioning) is supported for 11g+."""
-        return self.version >= _ORACLE_PARTITION_MIN_VERSION
+        return self.version_at_least(_ORACLE_PARTITION_MIN_VERSION)
 
     def supports_interval_partitioning(self) -> bool:
         """INTERVAL partitioning is supported for Oracle 11g+."""
-        return self.version >= _ORACLE_INTERVAL_MIN_VERSION
+        return self.version_at_least(_ORACLE_INTERVAL_MIN_VERSION)
 
     def supports_reference_partitioning(self) -> bool:
         """REFERENCE partitioning is supported for Oracle 11g+."""
-        return self.version >= _ORACLE_REFERENCE_MIN_VERSION
+        return self.version_at_least(_ORACLE_REFERENCE_MIN_VERSION)
 
     def supports_add_partition(self) -> bool:
         """ADD PARTITION maintenance statement is supported for 11g+."""
-        return self.version >= _ORACLE_PARTITION_MIN_VERSION
+        return self.version_at_least(_ORACLE_PARTITION_MIN_VERSION)
 
     def supports_drop_partition(self) -> bool:
         """DROP PARTITION maintenance statement is supported for 11g+."""
-        return self.version >= _ORACLE_PARTITION_MIN_VERSION
+        return self.version_at_least(_ORACLE_PARTITION_MIN_VERSION)
 
     def supports_truncate_partition(self) -> bool:
         """TRUNCATE PARTITION maintenance statement is supported for 11g+."""
-        return self.version >= _ORACLE_PARTITION_MIN_VERSION
+        return self.version_at_least(_ORACLE_PARTITION_MIN_VERSION)
 
     def supports_reorganize_partition(self) -> bool:
         """Partition reorganization (SPLIT/MERGE) is supported for 11g+."""
-        return self.version >= _ORACLE_PARTITION_MIN_VERSION
+        return self.version_at_least(_ORACLE_PARTITION_MIN_VERSION)
 
     def supports_attach_partition(self) -> bool:
         """ATTACH PARTITION is not applicable to Oracle (use EXCHANGE)."""
@@ -177,19 +177,19 @@ class OraclePartitionMixin:
 
     def supports_split_partition(self) -> bool:
         """SPLIT PARTITION maintenance statement is supported for 11g+."""
-        return self.version >= _ORACLE_PARTITION_MIN_VERSION
+        return self.version_at_least(_ORACLE_PARTITION_MIN_VERSION)
 
     def supports_merge_partition(self) -> bool:
         """MERGE PARTITIONS maintenance statement is supported for 11g+."""
-        return self.version >= _ORACLE_PARTITION_MIN_VERSION
+        return self.version_at_least(_ORACLE_PARTITION_MIN_VERSION)
 
     def supports_exchange_partition(self) -> bool:
         """EXCHANGE PARTITION maintenance statement is supported for 11g+."""
-        return self.version >= _ORACLE_PARTITION_MIN_VERSION
+        return self.version_at_least(_ORACLE_PARTITION_MIN_VERSION)
 
     def supports_move_partition(self) -> bool:
         """MOVE PARTITION maintenance statement is supported for 11g+."""
-        return self.version >= _ORACLE_PARTITION_MIN_VERSION
+        return self.version_at_least(_ORACLE_PARTITION_MIN_VERSION)
 
     # ------------------------------------------------------------------
     # Top-level dispatch formatter
@@ -336,7 +336,7 @@ class OraclePartitionMixin:
             raise ValueError(
                 "INTERVAL partitioning expression must not produce bind "
                 "parameters (Oracle DDL does not accept bind variables). "
-                "Use a RawSQLExpression for the interval expression."
+                "Use a RawSQL for the interval expression."
             )
         sql = f"PARTITION BY RANGE ({key_sql}) INTERVAL ({interval_sql})"
         part_sqls = [self.format_partition_definition(p, strategy="RANGE")[0] for p in expr.partitions]
@@ -552,7 +552,7 @@ class OraclePartitionMixin:
         )
 
     def format_add_partition_statement(
-        self, expr: OracleAddPartitionExpression
+        self, expr: OracleAddPartitionStatement
     ) -> Tuple[str, tuple]:
         """Format ``ALTER TABLE t ADD PARTITION (...)``."""
         if not self.supports_add_partition():
@@ -573,7 +573,7 @@ class OraclePartitionMixin:
         return f"ALTER TABLE {table_sql} ADD {part_sql}", ()
 
     def format_drop_partition_statement(
-        self, expr: OracleDropPartitionExpression
+        self, expr: OracleDropPartitionStatement
     ) -> Tuple[str, tuple]:
         """Format ``ALTER TABLE t DROP PARTITION p [UPDATE INDEXES]``."""
         if not self.supports_drop_partition():
@@ -590,7 +590,7 @@ class OraclePartitionMixin:
         return sql, ()
 
     def format_split_partition_statement(
-        self, expr: OracleSplitPartitionExpression
+        self, expr: OracleSplitPartitionStatement
     ) -> Tuple[str, tuple]:
         """Format ``ALTER TABLE t SPLIT PARTITION p AT (...) INTO (p1, p2)``."""
         if not self.supports_split_partition():
@@ -615,7 +615,7 @@ class OraclePartitionMixin:
         )
 
     def format_merge_partitions_statement(
-        self, expr: OracleMergePartitionsExpression
+        self, expr: OracleMergePartitionsStatement
     ) -> Tuple[str, tuple]:
         """Format ``ALTER TABLE t MERGE PARTITIONS p1, p2 INTO p3``."""
         if not self.supports_merge_partition():
@@ -634,7 +634,7 @@ class OraclePartitionMixin:
         )
 
     def format_exchange_partition_statement(
-        self, expr: OracleExchangePartitionExpression
+        self, expr: OracleExchangePartitionStatement
     ) -> Tuple[str, tuple]:
         """Format ``ALTER TABLE t EXCHANGE PARTITION p WITH TABLE other``."""
         if not self.supports_exchange_partition():
@@ -666,7 +666,7 @@ class OraclePartitionMixin:
         return sql, ()
 
     def format_move_partition_statement(
-        self, expr: OracleMovePartitionExpression
+        self, expr: OracleMovePartitionStatement
     ) -> Tuple[str, tuple]:
         """Format ``ALTER TABLE t MOVE PARTITION p [TABLESPACE ts]``."""
         if not self.supports_move_partition():
@@ -684,7 +684,7 @@ class OraclePartitionMixin:
         return sql, ()
 
     def format_truncate_partition_statement(
-        self, expr: OracleTruncatePartitionExpression
+        self, expr: OracleTruncatePartitionStatement
     ) -> Tuple[str, tuple]:
         """Format ``ALTER TABLE t TRUNCATE PARTITION p [UPDATE INDEXES]``."""
         if not self.supports_truncate_partition():
@@ -713,7 +713,7 @@ class OraclePartitionMixin:
 
         Mirrors MySQL ``format_partition_value`` semantics. Only scalar
         types that are valid Oracle partition boundary values are accepted;
-        all string/byte values are escaped through ``_escape_sql_string``.
+        all string/byte values are escaped through ``escape_sql_string``.
         """
         if value is None:
             return "NULL"
@@ -730,13 +730,13 @@ class OraclePartitionMixin:
                 raise ValueError("partition boundary Decimal must be finite")
             return str(value)
         if isinstance(value, datetime):
-            escaped = self._escape_sql_string(value.isoformat(sep=" "))
+            escaped = self.escape_sql_string(value.isoformat(sep=" "))
             return f"TIMESTAMP '{escaped}'"
         if isinstance(value, date):
-            escaped = self._escape_sql_string(value.isoformat())
+            escaped = self.escape_sql_string(value.isoformat())
             return f"DATE '{escaped}'"
         if isinstance(value, str):
-            escaped = self._escape_sql_string(value)
+            escaped = self.escape_sql_string(value)
             return f"'{escaped}'"
         raise TypeError(
             "partition boundary value must be str, int, float, Decimal, "

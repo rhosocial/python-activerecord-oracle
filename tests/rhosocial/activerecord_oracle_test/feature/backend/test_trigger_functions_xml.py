@@ -9,7 +9,7 @@ from xml.etree.ElementTree import Element
 from rhosocial.activerecord.backend.expression import core
 from rhosocial.activerecord.backend.expression.objects import Function, Table, Trigger
 from rhosocial.activerecord.backend.expression.statements.ddl_trigger import (
-    CreateTriggerExpression, DropTriggerExpression, TriggerEvent, TriggerLevel,
+    CreateTriggerStatement, DropTriggerStatement, TriggerEvent, TriggerLevel,
     TriggerTiming,
 )
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
@@ -25,7 +25,7 @@ def dialect() -> OracleDialect:
     return OracleDialect(version=(23, 0, 0))
 
 
-def _trigger(dialect: OracleDialect, **kwargs) -> CreateTriggerExpression:
+def _trigger(dialect: OracleDialect, **kwargs) -> CreateTriggerStatement:
     """Build a trigger; the three objects it names are built from the dialect."""
     defaults = dict(
         trigger=Trigger(dialect, "trg"), table=Table(dialect, "t"),
@@ -33,7 +33,7 @@ def _trigger(dialect: OracleDialect, **kwargs) -> CreateTriggerExpression:
         function=Function(dialect, "proc"), level=TriggerLevel.ROW,
     )
     defaults.update(kwargs)
-    return CreateTriggerExpression(dialect=dialect, **defaults)
+    return CreateTriggerStatement(dialect=dialect, **defaults)
 
 
 class TestTriggerCapabilities:
@@ -57,7 +57,10 @@ class TestCreateTriggerFormatting:
                         events=[TriggerEvent.INSERT, TriggerEvent.UPDATE],
                         function=Function(dialect, "audit_proc"))
         sql, params = expr.to_sql()
-        assert sql == ('CREATE OR REPLACE TRIGGER "TRG_AUDIT" BEFORE INSERT OR UPDATE ON "CUSTOMERS" FOR EACH ROW CALL "AUDIT_PROC"')
+        assert sql == (
+            'CREATE OR REPLACE TRIGGER "TRG_AUDIT" BEFORE INSERT OR UPDATE '
+            'ON "CUSTOMERS" FOR EACH ROW CALL "AUDIT_PROC"'
+        )
         assert params == ()
 
     def test_update_of_columns(self, dialect):
@@ -66,7 +69,10 @@ class TestCreateTriggerFormatting:
                         function=Function(dialect, "do_it"),
                         update_columns=["status", "note"])
         sql, _ = expr.to_sql()
-        assert sql == ('CREATE OR REPLACE TRIGGER "TRG" BEFORE UPDATE OF "STATUS", "NOTE" ON "ORDERS" FOR EACH ROW CALL "DO_IT"')
+        assert sql == (
+            'CREATE OR REPLACE TRIGGER "TRG" BEFORE UPDATE OF "STATUS", '
+            '"NOTE" ON "ORDERS" FOR EACH ROW CALL "DO_IT"'
+        )
 
     def test_instead_of_trigger_on_view(self, dialect):
         expr = _trigger(dialect, trigger=Trigger(dialect, "TRG"),
@@ -103,23 +109,23 @@ class TestCreateTriggerFormatting:
 
 class TestDropAndToggleTriggers:
     def test_drop_trigger(self, dialect):
-        sql, params = DropTriggerExpression(dialect, Trigger(dialect, "trg_x")).to_sql()
+        sql, params = DropTriggerStatement(dialect, Trigger(dialect, "trg_x")).to_sql()
         assert sql == 'DROP TRIGGER "TRG_X"'
         assert params == ()
 
     def test_drop_if_exists_rejected(self, dialect):
-        expr = DropTriggerExpression(dialect, Trigger(dialect, "trg_x"), if_exists=True)
+        expr = DropTriggerStatement(dialect, Trigger(dialect, "trg_x"), if_exists=True)
         with pytest.raises(NotImplementedError):
             expr.to_sql()
 
     def test_disable_and_enable(self, dialect):
         from rhosocial.activerecord.backend.impl.oracle.expression.trigger import (
-            DisableTriggerExpression,
-            EnableTriggerExpression,
+            DisableTriggerStatement,
+            EnableTriggerStatement,
         )
-        assert DisableTriggerExpression(dialect, Trigger(dialect, "trg_a")).to_sql() == \
+        assert DisableTriggerStatement(dialect, Trigger(dialect, "trg_a")).to_sql() == \
             ('ALTER TRIGGER "TRG_A" DISABLE', ())
-        assert EnableTriggerExpression(dialect, Trigger(dialect, "trg_a")).to_sql() == \
+        assert EnableTriggerStatement(dialect, Trigger(dialect, "trg_a")).to_sql() == \
             ('ALTER TRIGGER "TRG_A" ENABLE', ())
 
 
@@ -129,10 +135,18 @@ class TestOracleFunctionFormatMixin:
         assert func.to_sql() == ('LISTAGG("ENAME", ?)', (",",))
 
     def test_listagg_distinct_within_group_overflow(self, dialect):
-        func = core.FunctionCall(dialect, "LISTAGG", core.Column(dialect, "e"),
-                                 core.Literal(dialect, ";"), is_distinct=True)
-        func._oracle_within_group = "e"
-        func._oracle_on_overflow = "TRUNCATE"
+        from rhosocial.activerecord.backend.impl.oracle.expression.functions import (
+            OracleListaggFunction,
+        )
+
+        func = OracleListaggFunction(
+            dialect,
+            core.Column(dialect, "e"),
+            core.Literal(dialect, ";"),
+            is_distinct=True,
+            within_group_order_by="e",
+            on_overflow="TRUNCATE",
+        )
         sql, params = func.to_sql()
         # ON OVERFLOW sits inside the argument list. Oracle's grammar puts it
         # there and nowhere else -- the form with it after WITHIN GROUP is
@@ -159,8 +173,13 @@ class TestOracleFunctionFormatMixin:
         )
 
     def test_json_table_without_columns(self, dialect):
-        func = core.FunctionCall(dialect, "JSON_TABLE", core.Column(dialect, "doc"),
-                                 core.Literal(dialect, "$"))
+        from rhosocial.activerecord.backend.impl.oracle.expression.functions import (
+            OracleJsonTableFunction,
+        )
+
+        func = OracleJsonTableFunction(
+            dialect, core.Column(dialect, "doc"), core.Literal(dialect, "$")
+        )
         assert func.to_sql() == ('JSON_TABLE("DOC", ?)', ("$",))
 
     def test_plain_function_falls_back_to_generic(self, dialect):
@@ -180,6 +199,34 @@ class TestOracleFunctionFormatMixin:
 
 
 class TestStringFunctionFactories:
+    def test_char_length_keeps_the_default_length_spelling(self, dialect):
+        """Oracle's LENGTH counts characters, which is CHAR_LENGTH's own
+        semantics -- LENGTHB is the byte counter -- so the core default
+        spelling is the right one and this dialect overrides nothing."""
+        from rhosocial.activerecord.backend.expression.functions.string import (
+            CharLengthFunction,
+        )
+
+        sql, params = CharLengthFunction(dialect, core.Column(dialect, "name")).to_sql()
+        assert sql == 'LENGTH("NAME")'
+        assert params == ()
+
+    def test_coalesce_builds_the_classed_node(self, dialect):
+        """COALESCE is a classed core node now, so the factory builds
+        CoalesceFunction rather than hanging the name on a generic call."""
+        from rhosocial.activerecord.backend.expression.functions.string import (
+            CoalesceFunction,
+        )
+        from rhosocial.activerecord.backend.impl.oracle.functions.null import (
+            coalesce_oracle,
+        )
+
+        call = coalesce_oracle(
+            dialect, core.Column(dialect, "a"), core.Literal(dialect, 0)
+        )
+        assert isinstance(call, CoalesceFunction)
+        assert call.to_sql() == ('COALESCE("A", ?)', (0,))
+
     def test_decode_with_default(self, dialect):
         call = string_funcs.decode_expr(dialect, core.Column(dialect, "status"),
                                         "A", 1, "B", 2, default=0)

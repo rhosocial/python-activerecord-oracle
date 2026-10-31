@@ -18,7 +18,7 @@ class OracleSynonymSupport(Protocol):
         ...  # pragma: no cover
     def supports_drop_synonym(self) -> bool:
         ...  # pragma: no cover
-    def format_create_synonym_statement(self, expr: 'OracleCreateSynonymExpression') -> Tuple[str, tuple]:
+    def format_create_synonym_statement(self, expr: 'OracleCreateSynonymStatement') -> Tuple[str, tuple]:
         ...  # pragma: no cover
-    def format_drop_synonym_statement(self, expr: 'OracleDropSynonymExpression') -> Tuple[str, tuple]:
+    def format_drop_synonym_statement(self, expr: 'OracleDropSynonymStatement') -> Tuple[str, tuple]:
         ...  # pragma: no cover

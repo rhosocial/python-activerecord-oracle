@@ -126,13 +126,13 @@ def query_objects(
     include_invalid: bool = False,
     name_pattern: Optional[str] = None,
 ):
-    expr = OracleQueryObjectsExpression(backend.dialect, object_type=object_type)
-    if owner is not None:
-        expr.owner(owner)
-    if name_pattern is not None:
-        expr.like(name_pattern)
-    if include_invalid:
-        expr.include_invalid(True)
+    expr = OracleQueryObjectsExpression(
+        backend.dialect,
+        object_type=object_type,
+        include_invalid=include_invalid,
+        owner=owner,
+        name_pattern=name_pattern,
+    )
     sql, params = expr.to_sql()
     result = backend.execute(sql, params)
     return [

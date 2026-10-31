@@ -51,7 +51,7 @@ def _drop_user_block(user: str) -> str:
 def provisioned():
     from rhosocial.activerecord.backend.impl.oracle.backend import OracleBackend
 
-    backend_class, config = get_scenario_raw("oracle_23c")
+    backend_class, config = get_scenario_raw("oracle_26ai")
     backend = OracleBackend(connection_config=config)
     backend.connect()
     # The version has to be measured before the dialect answers anything: the
