@@ -102,7 +102,18 @@ def _oracle_statement(introspector, sql, params):
 
 @dataclass
 class TablespaceInfo:
-    """Oracle tablespace information."""
+    """Oracle tablespace information.
+
+    ``max_size_bytes`` used to sit here, declared and never answered: the
+    ceiling a tablespace can grow to. Filling it was measured -- the
+    obvious column (``DBA_TABLESPACES.MAX_BYTES``) is not one the view
+    carries on the servers CI exercises (18c, 21c, 26ai: ORA-00904, which
+    the dictionary's own "table or view does not exist" answer turned into
+    an empty listing), and the honest sum of per-file limits answers a
+    different question than "how large can this be". A declared field with
+    no source behind it is a promise a type has no business making, so it
+    was removed rather than left to answer ``None`` forever.
+    """
 
     name: str
     status: Optional[str] = None
@@ -110,7 +121,6 @@ class TablespaceInfo:
     size_bytes: Optional[int] = None
     free_bytes: Optional[int] = None
     used_bytes: Optional[int] = None
-    max_size_bytes: Optional[int] = None
     pct_used: Optional[float] = None
     extra: Dict[str, Any] = field(default_factory=dict)
 
@@ -135,21 +145,35 @@ class OracleStatusIntrospectorMixin:
         return "Oracle"
 
     def _create_status_item(
-        self, name: str, value: Any, category: StatusCategory,
-        description: Optional[str] = None, unit: Optional[str] = None,
-        is_readonly: bool = True, is_dynamic: bool = False,
+        self,
+        name: str,
+        value: Any,
+        category: StatusCategory,
+        description: Optional[str] = None,
+        unit: Optional[str] = None,
+        is_readonly: bool = True,
+        is_dynamic: bool = False,
     ) -> StatusItem:
         return StatusItem(
-            name=name, value=value, category=category,
-            description=description, unit=unit,
-            is_readonly=is_readonly, is_dynamic=is_dynamic,
+            name=name,
+            value=value,
+            category=category,
+            description=description,
+            unit=unit,
+            is_readonly=is_readonly,
+            is_dynamic=is_dynamic,
         )
 
     def _build_server_overview(
-        self, version: str, session: SessionInfo,
-        configuration: List[StatusItem], performance: List[StatusItem],
-        connections: ConnectionInfo, storage: StorageInfo,
-        databases: List[DatabaseBriefInfo], users: List[UserInfo],
+        self,
+        version: str,
+        session: SessionInfo,
+        configuration: List[StatusItem],
+        performance: List[StatusItem],
+        connections: ConnectionInfo,
+        storage: StorageInfo,
+        databases: List[DatabaseBriefInfo],
+        users: List[UserInfo],
     ) -> ServerOverview:
         return ServerOverview(
             server_version=version,
@@ -174,9 +198,7 @@ class SyncOracleStatusIntrospector(OracleStatusIntrospectorMixin, SyncAbstractSt
         finally:
             cursor.close()
 
-    def _execute_query_dict(
-        self, sql: str, params: Optional[tuple] = None
-    ) -> List[Dict[str, Any]]:
+    def _execute_query_dict(self, sql: str, params: Optional[tuple] = None) -> List[Dict[str, Any]]:
         cursor = self._backend._connection.cursor()
         try:
             oracle_sql, oracle_params = _oracle_statement(self, sql, params)
@@ -199,7 +221,14 @@ class SyncOracleStatusIntrospector(OracleStatusIntrospectorMixin, SyncAbstractSt
         databases = self.list_databases()
         users = self.list_users()
         return self._build_server_overview(
-            version, session, config, perf, conn, storage, databases, users,
+            version,
+            session,
+            config,
+            perf,
+            conn,
+            storage,
+            databases,
+            users,
         )
 
     def _get_version_string(self) -> str:
@@ -224,14 +253,21 @@ class SyncOracleStatusIntrospector(OracleStatusIntrospectorMixin, SyncAbstractSt
                 _, cat, desc, unit = param_map[name]
                 if category and cat != category:
                     continue
-                items.append(self._create_status_item(
-                    name=name, value=row["value"], category=cat,
-                    description=desc, unit=unit,
-                    is_readonly=(row.get("isdefault", "TRUE") == "TRUE"),
-                ))
+                items.append(
+                    self._create_status_item(
+                        name=name,
+                        value=row["value"],
+                        category=cat,
+                        description=desc,
+                        unit=unit,
+                        is_readonly=(row.get("isdefault", "TRUE") == "TRUE"),
+                    )
+                )
         return items
 
-    def list_performance_metrics(self, category: Optional[StatusCategory] = None) -> List[StatusItem]:
+    def list_performance_metrics(
+        self, category: Optional[StatusCategory] = None
+    ) -> List[StatusItem]:
         items: List[StatusItem] = []
         sql = """
             SELECT name, value FROM V$SYSSTAT
@@ -248,11 +284,15 @@ class SyncOracleStatusIntrospector(OracleStatusIntrospectorMixin, SyncAbstractSt
             return items
 
         for row in rows:
-            items.append(self._create_status_item(
-                name=row["name"], value=row["value"],
-                category=StatusCategory.PERFORMANCE,
-                is_readonly=True, is_dynamic=False,
-            ))
+            items.append(
+                self._create_status_item(
+                    name=row["name"],
+                    value=row["value"],
+                    category=StatusCategory.PERFORMANCE,
+                    is_readonly=True,
+                    is_dynamic=False,
+                )
+            )
         return items
 
     def get_connection_info(self) -> ConnectionInfo:
@@ -265,9 +305,7 @@ class SyncOracleStatusIntrospector(OracleStatusIntrospectorMixin, SyncAbstractSt
             active = 0
 
         try:
-            rows = self._execute_query_dict(
-                "SELECT value FROM V$PARAMETER WHERE name = 'sessions'"
-            )
+            rows = self._execute_query_dict("SELECT value FROM V$PARAMETER WHERE name = 'sessions'")
             max_conn = int(rows[0]["value"]) if rows else None
         except Exception:
             max_conn = None
@@ -295,9 +333,7 @@ class SyncOracleStatusIntrospector(OracleStatusIntrospectorMixin, SyncAbstractSt
 
     def list_databases(self) -> List[DatabaseBriefInfo]:
         try:
-            rows = self._execute_query_dict(
-                "SELECT name FROM V$DATABASE"
-            )
+            rows = self._execute_query_dict("SELECT name FROM V$DATABASE")
             return [DatabaseBriefInfo(name=row["name"]) for row in rows]
         except Exception:
             return []
@@ -314,11 +350,13 @@ class SyncOracleStatusIntrospector(OracleStatusIntrospectorMixin, SyncAbstractSt
 
         users: List[UserInfo] = []
         for row in rows:
-            users.append(UserInfo(
-                name=row["username"],
-                is_superuser=(row.get("is_dba") == "Y"),
-                extra={"account_status": row.get("account_status")},
-            ))
+            users.append(
+                UserInfo(
+                    name=row["username"],
+                    is_superuser=(row.get("is_dba") == "Y"),
+                    extra={"account_status": row.get("account_status")},
+                )
+            )
         return users
 
     def get_session_info(self) -> SessionInfo:
@@ -369,15 +407,17 @@ class SyncOracleStatusIntrospector(OracleStatusIntrospectorMixin, SyncAbstractSt
             free = int(row.get("free_bytes") or 0)
             used = total - free
             pct = (used / total * 100) if total > 0 else 0.0
-            result.append(TablespaceInfo(
-                name=row["tablespace_name"],
-                status=row.get("status"),
-                contents=row.get("contents"),
-                size_bytes=total,
-                free_bytes=free,
-                used_bytes=used,
-                pct_used=round(pct, 1),
-            ))
+            result.append(
+                TablespaceInfo(
+                    name=row["tablespace_name"],
+                    status=row.get("status"),
+                    contents=row.get("contents"),
+                        size_bytes=total,
+                    free_bytes=free,
+                    used_bytes=used,
+                    pct_used=round(pct, 1),
+                )
+            )
         return result
 
 
@@ -420,7 +460,14 @@ class AsyncOracleStatusIntrospector(OracleStatusIntrospectorMixin, AsyncAbstract
         databases = await self.list_databases()
         users = await self.list_users()
         return self._build_server_overview(
-            version, session, config, perf, conn, storage, databases, users,
+            version,
+            session,
+            config,
+            perf,
+            conn,
+            storage,
+            databases,
+            users,
         )
 
     async def _get_version_string(self) -> str:
@@ -430,7 +477,9 @@ class AsyncOracleStatusIntrospector(OracleStatusIntrospectorMixin, AsyncAbstract
         except Exception:
             return "Unknown"
 
-    async def list_configuration(self, category: Optional[StatusCategory] = None) -> List[StatusItem]:
+    async def list_configuration(
+        self, category: Optional[StatusCategory] = None
+    ) -> List[StatusItem]:
         items: List[StatusItem] = []
         sql, params = _parameter_query(_dialect_of(self)).to_sql()
         try:
@@ -445,14 +494,21 @@ class AsyncOracleStatusIntrospector(OracleStatusIntrospectorMixin, AsyncAbstract
                 _, cat, desc, unit = param_map[name]
                 if category and cat != category:
                     continue
-                items.append(self._create_status_item(
-                    name=name, value=row["value"], category=cat,
-                    description=desc, unit=unit,
-                    is_readonly=(row.get("isdefault", "TRUE") == "TRUE"),
-                ))
+                items.append(
+                    self._create_status_item(
+                        name=name,
+                        value=row["value"],
+                        category=cat,
+                        description=desc,
+                        unit=unit,
+                        is_readonly=(row.get("isdefault", "TRUE") == "TRUE"),
+                    )
+                )
         return items
 
-    async def list_performance_metrics(self, category: Optional[StatusCategory] = None) -> List[StatusItem]:
+    async def list_performance_metrics(
+        self, category: Optional[StatusCategory] = None
+    ) -> List[StatusItem]:
         items: List[StatusItem] = []
         sql = """
             SELECT name, value FROM V$SYSSTAT
@@ -469,11 +525,15 @@ class AsyncOracleStatusIntrospector(OracleStatusIntrospectorMixin, AsyncAbstract
             return items
 
         for row in rows:
-            items.append(self._create_status_item(
-                name=row["name"], value=row["value"],
-                category=StatusCategory.PERFORMANCE,
-                is_readonly=True, is_dynamic=False,
-            ))
+            items.append(
+                self._create_status_item(
+                    name=row["name"],
+                    value=row["value"],
+                    category=StatusCategory.PERFORMANCE,
+                    is_readonly=True,
+                    is_dynamic=False,
+                )
+            )
         return items
 
     async def get_connection_info(self) -> ConnectionInfo:
@@ -533,11 +593,13 @@ class AsyncOracleStatusIntrospector(OracleStatusIntrospectorMixin, AsyncAbstract
 
         users: List[UserInfo] = []
         for row in rows:
-            users.append(UserInfo(
-                name=row["username"],
-                is_superuser=(row.get("is_dba") == "Y"),
-                extra={"account_status": row.get("account_status")},
-            ))
+            users.append(
+                UserInfo(
+                    name=row["username"],
+                    is_superuser=(row.get("is_dba") == "Y"),
+                    extra={"account_status": row.get("account_status")},
+                )
+            )
         return users
 
     async def get_session_info(self) -> SessionInfo:
@@ -588,13 +650,15 @@ class AsyncOracleStatusIntrospector(OracleStatusIntrospectorMixin, AsyncAbstract
             free = int(row.get("free_bytes") or 0)
             used = total - free
             pct = (used / total * 100) if total > 0 else 0.0
-            result.append(TablespaceInfo(
-                name=row["tablespace_name"],
-                status=row.get("status"),
-                contents=row.get("contents"),
-                size_bytes=total,
-                free_bytes=free,
-                used_bytes=used,
-                pct_used=round(pct, 1),
-            ))
+            result.append(
+                TablespaceInfo(
+                    name=row["tablespace_name"],
+                    status=row.get("status"),
+                    contents=row.get("contents"),
+                        size_bytes=total,
+                    free_bytes=free,
+                    used_bytes=used,
+                    pct_used=round(pct, 1),
+                )
+            )
         return result

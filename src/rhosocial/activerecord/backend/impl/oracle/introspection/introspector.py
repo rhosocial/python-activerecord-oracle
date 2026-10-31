@@ -81,6 +81,23 @@ from .types import (
 _SYNONYM_FAMILY = "oracle:synonyms"
 _PACKAGE_FAMILY = "oracle:packages"
 
+
+def _as_int(value: Any) -> Optional[int]:
+    """The byte count a ``NUMBER`` arithmetic answer carries, as an int.
+
+    Oracle answers ``BLOCKS * BLOCK_SIZE`` as a ``NUMBER``, which the
+    driver returns as a :class:`~decimal.Decimal`; ``IntrospectionTableInfo``
+    declares the slot an ``Optional[int]``. A value that cannot be read as a
+    whole number stays ``None`` -- unknown is an answer, and a size the
+    catalogue cannot express is not zero.
+    """
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
 #: The object kinds the table listing can report, in core's vocabulary.
 #: The dictionary spells them for what they are -- ``ALL_TABLES`` answers
 #: ``TABLE``, ``ALL_VIEWS`` ``VIEW`` and ``ALL_MVIEWS`` ``MATERIALIZED VIEW``
@@ -262,7 +279,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
                     table_type=_TABLE_TYPE_BY_KIND.get(kind, TableType.BASE_TABLE),
                     comment=row.get("COMMENTS"),
                     row_count=row.get("NUM_ROWS"),
-                    size_bytes=row.get("DATA_LENGTH"),
+                    size_bytes=_as_int(row.get("DATA_LENGTH")),
                     create_time=None,  # Oracle doesn't store creation time
                     update_time=str(row["LAST_ANALYZED"]) if row.get("LAST_ANALYZED") else None,
                 )

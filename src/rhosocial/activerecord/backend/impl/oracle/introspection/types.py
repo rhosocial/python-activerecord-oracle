@@ -15,7 +15,10 @@ also be a shared result.
 """
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:  # pragma: no cover
+    from rhosocial.activerecord.backend.introspection import SequenceInfo
 
 
 @dataclass(frozen=True)
@@ -57,6 +60,35 @@ class OracleSequenceInfo:
     cache_size: Optional[int] = None
     order: bool = False
     last_number: Optional[int] = None
+
+    def to_core(self) -> "SequenceInfo":
+        """The cross-dialect minimum this answer carries.
+
+        Core's ``SequenceInfo`` names the smallest shape every engine with
+        sequences answers, and this is the projection onto it: ``owner``
+        lands on ``schema``, ``min_value``/``max_value`` on
+        ``minimum_value``/``maximum_value``, ``last_number`` on
+        ``last_value`` (with the semantics its docstring warns about: the
+        *next* value the cache would hand out, not the last one used).
+        ``start_value`` is ``None`` because ``ALL_SEQUENCES`` reports no
+        START_WITH -- the declaration's start is history the view does not
+        keep -- and ``order`` stays here: it is a deployment guarantee the
+        common minimum has no field for
+        (``.claude/rules/introspection.md`` §5).
+        """
+        from rhosocial.activerecord.backend.introspection import SequenceInfo
+
+        return SequenceInfo(
+            name=self.name,
+            schema=self.owner,
+            start_value=None,
+            minimum_value=self.min_value,
+            maximum_value=self.max_value,
+            increment=self.increment,
+            cycle=self.cycle,
+            cache_size=self.cache_size,
+            last_value=self.last_number,
+        )
 
 
 @dataclass(frozen=True)

@@ -87,6 +87,19 @@ class OracleIntrospectionMixin:
     def supports_trigger_introspection(self) -> bool:
         return True
 
+    def supports_table_storage_introspection(self) -> bool:
+        """``ALL_TABLES.BLOCKS`` times the tablespace's block size answers.
+
+        The capability for the per-table storage family: Oracle's block
+        counts are only bytes once the tablespace's own ``BLOCK_SIZE``
+        multiplies them, which the table listing now joins in. The split
+        slots stay ``None`` -- ``ALL_INDEXES`` is a family of its own rather
+        than a stored complement of the table's blocks, so
+        ``data_size_bytes`` and ``index_size_bytes`` have no allocation-
+        level fact to carry, and ``None`` says so rather than an estimate.
+        """
+        return True
+
     def get_supported_introspection_scopes(self) -> List["IntrospectionScope"]:
         from rhosocial.activerecord.backend.introspection.types import IntrospectionScope
 
@@ -278,7 +291,7 @@ class OracleIntrospectionMixin:
         around it.
         """
         from rhosocial.activerecord.backend.expression import (
-            ArithmeticOperation, JoinClause, JoinType, Literal, OrderByClause,
+            ArithmeticOperation, JoinClause, JoinType, OrderByClause,
             QueryStatement, SetOperation, Subquery,
         )
         from rhosocial.activerecord.backend.expression.query_sources import (
@@ -314,6 +327,27 @@ class OracleIntrospectionMixin:
                     self._equals(self._column("owner", "t"), self._column("owner", "c")),
                 ),
             )
+            # The tablespace's own block size, read rather than assumed:
+            # ``blocks`` counts 8 KiB units only on the default block size,
+            # and a database created with a different one made every size
+            # this listing reported wrong by that ratio.
+            # ``USER_TABLESPACES`` is the view of them, because it is the one
+            # every session can read -- ``ALL_TABLESPACES`` was measured to be
+            # unreadable on a live server (ORA-00942), which is a refusal the
+            # slot must be able to give rather than a reason to guess the
+            # 8192 back in. A LEFT JOIN keeps a table whose tablespace the
+            # session cannot see: its block size is null, the product is
+            # null, and the slot says so.
+            table_join = JoinClause(
+                self,
+                left_table=comment_join,
+                right_table=self._relation("user_tablespaces", "ts"),
+                join_type=JoinType.LEFT,
+                condition=self._equals(
+                    self._column("tablespace_name", "t"),
+                    self._column("tablespace_name", "ts"),
+                ),
+            )
             sides.append(
                 (
                     [
@@ -325,11 +359,11 @@ class OracleIntrospectionMixin:
                             self,
                             "mul",
                             self._column("blocks", "t"),
-                            Literal(self, 8192, inline=True),
+                            self._column("block_size", "ts"),
                         ).as_("DATA_LENGTH"),
                         self._column("last_analyzed", "t", "LAST_ANALYZED"),
                     ],
-                    comment_join,
+                    table_join,
                     self._where(
                         self._owner_predicate(
                             schema, self._column("OWNER", "t"), include_system
