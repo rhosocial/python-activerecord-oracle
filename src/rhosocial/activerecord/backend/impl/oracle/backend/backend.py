@@ -146,9 +146,9 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
 
     def _create_introspector(self):
         """Create an Oracle introspector."""
-        from ..introspection import SyncOracleIntrospector
-        from ..introspection.executor import SyncOracleIntrospectorExecutor
-        return SyncOracleIntrospector(self, SyncOracleIntrospectorExecutor(self))
+        from ..introspection import OracleIntrospector
+        from ..introspection.executor import OracleIntrospectorExecutor
+        return OracleIntrospector(self, OracleIntrospectorExecutor(self))
 
     def introspect_and_adapt(self) -> None:
         """Introspect backend and adapt to actual server capabilities."""

@@ -3,17 +3,17 @@
 Oracle introspection package.
 
 Provides:
-  SyncOracleIntrospector   — synchronous introspector for Oracle databases
+  OracleIntrospector   — synchronous introspector for Oracle databases
   AsyncOracleIntrospector  — asynchronous introspector for Oracle databases
   OracleSequenceInfo       — value object for one ALL_SEQUENCES row
   OracleSynonymInfo        — value object for one ALL_SYNONYMS row
   OraclePackageInfo        — value object for one ALL_OBJECTS package row
-  SyncOracleStatusIntrospector  — synchronous Oracle status introspector
+  OracleStatusIntrospector  — synchronous Oracle status introspector
   AsyncOracleStatusIntrospector — asynchronous Oracle status introspector
 """
 
 from .introspector import (
-    SyncOracleIntrospector,
+    OracleIntrospector,
     AsyncOracleIntrospector,
 )
 from .types import (
@@ -22,20 +22,20 @@ from .types import (
     OracleSynonymInfo,
 )
 from .status_introspector import (
-    SyncOracleStatusIntrospector,
+    OracleStatusIntrospector,
     AsyncOracleStatusIntrospector,
 )
 from .executor import (
-    SyncOracleIntrospectorExecutor,
+    OracleIntrospectorExecutor,
     AsyncOracleIntrospectorExecutor,
 )
 
 __all__ = [
-    "SyncOracleIntrospector",
+    "OracleIntrospector",
     "AsyncOracleIntrospector",
     "OraclePackageInfo",
     "OracleSequenceInfo",
     "OracleSynonymInfo",
-    "SyncOracleStatusIntrospector",
+    "OracleStatusIntrospector",
     "AsyncOracleStatusIntrospector",
 ]

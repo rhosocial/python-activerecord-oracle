@@ -17,7 +17,7 @@ from rhosocial.activerecord.backend.introspection.status import (
     ConnectionInfo,
     StorageInfo,
     SessionInfo,
-    SyncAbstractStatusIntrospector,
+    AbstractStatusIntrospector,
     AsyncAbstractStatusIntrospector,
 )
 from rhosocial.activerecord.backend.expression.core import Column, Literal
@@ -187,7 +187,7 @@ class OracleStatusIntrospectorMixin:
         )
 
 
-class SyncOracleStatusIntrospector(OracleStatusIntrospectorMixin, SyncAbstractStatusIntrospector):
+class OracleStatusIntrospector(OracleStatusIntrospectorMixin, AbstractStatusIntrospector):
     """Synchronous Oracle status introspector."""
 
     def _execute_query(self, sql: str) -> List[tuple]:

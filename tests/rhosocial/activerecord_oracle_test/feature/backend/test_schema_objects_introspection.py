@@ -31,7 +31,7 @@ from rhosocial.activerecord.backend.introspection.types import IntrospectionScop
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.introspection.introspector import (
     AsyncOracleIntrospector,
-    SyncOracleIntrospector,
+    OracleIntrospector,
 )
 from rhosocial.activerecord.backend.impl.oracle.introspection.types import (
     OraclePackageInfo,
@@ -125,9 +125,9 @@ PACKAGE_ROW = {
 
 def make_sync(
     rows: Optional[List[Dict[str, Any]]] = None, username: str = "ar_crm"
-) -> Tuple[SyncOracleIntrospector, RecordingExecutor]:
+) -> Tuple[OracleIntrospector, RecordingExecutor]:
     executor = RecordingExecutor(rows)
-    return SyncOracleIntrospector(StubBackend(username), executor), executor
+    return OracleIntrospector(StubBackend(username), executor), executor
 
 
 def make_async(
@@ -404,14 +404,14 @@ PARITY_METHODS = [
 class TestParity:
     @pytest.mark.parametrize("name", PARITY_METHODS)
     def test_sync_and_async_signatures_are_identical(self, name):
-        sync_sig = inspect.signature(getattr(SyncOracleIntrospector, name))
+        sync_sig = inspect.signature(getattr(OracleIntrospector, name))
         async_sig = inspect.signature(getattr(AsyncOracleIntrospector, name))
         assert sync_sig == async_sig
 
     @pytest.mark.parametrize("name", PARITY_METHODS)
     def test_the_async_half_is_actually_async(self, name):
         assert inspect.iscoroutinefunction(getattr(AsyncOracleIntrospector, name))
-        assert not inspect.iscoroutinefunction(getattr(SyncOracleIntrospector, name))
+        assert not inspect.iscoroutinefunction(getattr(OracleIntrospector, name))
 
     async def test_async_listing_caches_the_same_way(self):
         insp, executor = make_async([SEQUENCE_ROW])

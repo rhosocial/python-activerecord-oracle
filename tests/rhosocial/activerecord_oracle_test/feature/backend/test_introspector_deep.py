@@ -17,10 +17,10 @@ import pytest
 from rhosocial.activerecord.backend.errors import DatabaseError
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.introspection.introspector import (
-    AsyncOracleIntrospector, SyncOracleIntrospector,
+    AsyncOracleIntrospector, OracleIntrospector,
 )
 from rhosocial.activerecord.backend.impl.oracle.introspection.status_introspector import (
-    AsyncOracleStatusIntrospector, SyncOracleStatusIntrospector,
+    AsyncOracleStatusIntrospector, OracleStatusIntrospector,
 )
 from rhosocial.activerecord.backend.impl.oracle.version import (
     normalize_version, parse_version_row, product_name_from_row,
@@ -75,7 +75,7 @@ def make_sync_introspector(username: str = "ar_crm",
                            version: Tuple[int, ...] = (23, 0, 0)):
     backend = StubBackend(username, version)
     executor = StubExecutor()
-    return SyncOracleIntrospector(backend, executor), backend, executor
+    return OracleIntrospector(backend, executor), backend, executor
 
 
 class TestSchemaResolution:
@@ -90,7 +90,7 @@ class TestSchemaResolution:
     def test_status_property_is_lazy_and_cached(self):
         insp, _, _ = make_sync_introspector()
         first = insp.status
-        assert isinstance(first, SyncOracleStatusIntrospector)
+        assert isinstance(first, OracleStatusIntrospector)
         assert insp.status is first
 
 

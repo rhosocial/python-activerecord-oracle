@@ -563,7 +563,7 @@ class TestIntrospectorReportsUnknownAsUnknown:
     def _introspector(self, version):
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
         from rhosocial.activerecord.backend.impl.oracle.introspection.introspector import (
-            SyncOracleIntrospector,
+            OracleIntrospector,
         )
 
         backend = SimpleNamespace(
@@ -572,7 +572,7 @@ class TestIntrospectorReportsUnknownAsUnknown:
             dialect=OracleDialect(version=version),
             get_cached_server_version=lambda: version,
         )
-        return SyncOracleIntrospector(backend, SimpleNamespace(execute=None))
+        return OracleIntrospector(backend, SimpleNamespace(execute=None))
 
     def test_unknown_version_reports_unknown(self):
         info = self._introspector(None).parse_database_info([])
@@ -590,7 +590,7 @@ class TestIntrospectorReportsUnknownAsUnknown:
     def test_the_default_is_no_longer_a_fabricated_19(self):
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
         from rhosocial.activerecord.backend.impl.oracle.introspection.introspector import (
-            SyncOracleIntrospector,
+            OracleIntrospector,
         )
 
         # a backend that knows no version at all must also read as unknown
@@ -599,7 +599,7 @@ class TestIntrospectorReportsUnknownAsUnknown:
             dialect=OracleDialect(),
             get_cached_server_version=lambda: None,
         )
-        insp = SyncOracleIntrospector(backend, SimpleNamespace(execute=None))
+        insp = OracleIntrospector(backend, SimpleNamespace(execute=None))
         assert insp.server_version is None
         assert insp._get_version() is None
         assert insp.parse_database_info([]).version == "unknown"

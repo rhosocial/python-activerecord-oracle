@@ -2,7 +2,7 @@
 """
 Oracle concrete introspectors.
 
-Implements SyncAbstractIntrospector and AsyncAbstractIntrospector for Oracle
+Implements AbstractIntrospector and AsyncAbstractIntrospector for Oracle
 databases using Oracle data dictionary views for metadata queries.
 
 The introspectors are exposed via ``backend.introspector``.
@@ -20,7 +20,7 @@ Key behaviours:
   - parse_* methods are pure Python — shared by sync and async introspectors
 
 Design principle: Sync and Async are separate and cannot coexist.
-- SyncOracleIntrospector: for synchronous backends
+- OracleIntrospector: for synchronous backends
 - AsyncOracleIntrospector: for asynchronous backends
 """
 
@@ -39,12 +39,12 @@ if TYPE_CHECKING:  # pragma: no cover
 
 from rhosocial.activerecord.backend.introspection.base import (
     IntrospectorMixin,
-    SyncAbstractIntrospector,
+    AbstractIntrospector,
     AsyncAbstractIntrospector,
 )
 from rhosocial.activerecord.backend.introspection.cache import IntrospectionCache
 from rhosocial.activerecord.backend.introspection.executor import (
-    SyncIntrospectorExecutor,
+    IntrospectorExecutor,
     AsyncIntrospectorExecutor,
 )
 from rhosocial.activerecord.backend.introspection.types import (
@@ -64,7 +64,7 @@ from rhosocial.activerecord.backend.introspection.types import (
 )
 from rhosocial.activerecord.backend.expression.types import DataType
 from .status_introspector import (
-    SyncOracleStatusIntrospector,
+    OracleStatusIntrospector,
     AsyncOracleStatusIntrospector,
 )
 from .types import (
@@ -128,7 +128,7 @@ _NUMERIC_TYPES = frozenset({"NUMBER", "FLOAT"})
 class OracleIntrospectorMixin(IntrospectorMixin):
     """Mixin providing shared Oracle-specific introspection logic.
 
-    Both SyncOracleIntrospector and AsyncOracleIntrospector inherit
+    Both OracleIntrospector and AsyncOracleIntrospector inherit
     from this mixin to share:
     - Default schema handling
     - Oracle version detection
@@ -630,7 +630,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
         return packages
 
 
-class SyncOracleIntrospector(OracleIntrospectorMixin, SyncAbstractIntrospector):
+class OracleIntrospector(OracleIntrospectorMixin, AbstractIntrospector):
     """Synchronous introspector for Oracle backends.
 
     Provides introspection capabilities for Oracle databases using
@@ -640,21 +640,21 @@ class SyncOracleIntrospector(OracleIntrospectorMixin, SyncAbstractIntrospector):
     def __init__(
         self,
         backend: Any,
-        executor: SyncIntrospectorExecutor,
+        executor: IntrospectorExecutor,
         cache: Optional[IntrospectionCache] = None,
     ) -> None:
         super().__init__(backend, executor, cache)
-        self._status_instance: Optional[SyncOracleStatusIntrospector] = None
+        self._status_instance: Optional[OracleStatusIntrospector] = None
 
     # ------------------------------------------------------------------ #
     # status introspector
     # ------------------------------------------------------------------ #
 
     @property
-    def status(self) -> SyncOracleStatusIntrospector:
+    def status(self) -> OracleStatusIntrospector:
         """Oracle status introspector (lazily created)."""
         if self._status_instance is None:
-            self._status_instance = SyncOracleStatusIntrospector(self._backend)
+            self._status_instance = OracleStatusIntrospector(self._backend)
         return self._status_instance
 
     # ------------------------------------------------------------------ #
