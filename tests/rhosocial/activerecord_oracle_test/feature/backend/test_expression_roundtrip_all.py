@@ -109,7 +109,7 @@ from typing import Dict
 
 import pytest
 
-from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
+from rhosocial.activerecord.backend.dialect.exceptions import (ProtocolNotImplementedError, UnsupportedFeatureError)
 from rhosocial.activerecord.backend.expression.bases import BaseExpression
 from rhosocial.activerecord.backend.expression.core import Column, Literal
 from rhosocial.activerecord.backend.expression.operators import RawSQL
@@ -1680,6 +1680,17 @@ UNCONSTRUCTIBLE: tuple = (
 # UPPER() + LIKE. PIVOT and UNPIVOT go through this backend's own Pivot
 # and its format_pivot, so the core PivotMixin is not composed.
 LEGITIMATE_NON_RENDERS: Dict[str, tuple] = {
+    # Oracle exposes index and table use through GV$/V$ dynamic performance
+    # views, which name a live instance's state rather than a schema-scoped
+    # catalogue -- a dependency the dialect layer has no slot to carry. The
+    # probes answer False, and these stay a declared gap until that decision
+    # is made.
+    "rhosocial.activerecord.backend.expression.introspection.UnusedIndexesQueryStatement": (
+        ProtocolNotImplementedError, 'does not implement ',
+    ),
+    "rhosocial.activerecord.backend.expression.introspection.TableUsageStatsQueryStatement": (
+        ProtocolNotImplementedError, 'does not implement ',
+    ),
     "rhosocial.activerecord.backend.expression.pivot.Pivot": (
         UnsupportedFeatureError, "does not support the 'format_pivot' statement"
     ),
