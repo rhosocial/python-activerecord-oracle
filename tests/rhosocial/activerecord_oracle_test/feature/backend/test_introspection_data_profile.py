@@ -72,8 +72,11 @@ def _introspector() -> OracleIntrospector:
     return OracleIntrospector(StubBackend(), StubExecutor())
 
 
-#: An analysed column, exactly as ``ALL_TAB_COLUMNS`` reports one. The RAW
-#: extremes are present on purpose: the parser must ignore them.
+#: An analysed column, exactly as ``ALL_TAB_COLUMNS`` reports one: 600 nulls
+#: and 400 non-null rows sampled out of the same 1000-row table. ``SAMPLE_SIZE``
+#: is 400 rather than 1000 because Oracle leaves the nulls out of it, which is
+#: the trap the parser has to divide around. The RAW extremes are present on
+#: purpose: the parser must ignore them.
 ANALYSED_ROW = {
     "OWNER": "AR_CRM",
     "TABLE_NAME": TABLE,
@@ -81,7 +84,7 @@ ANALYSED_ROW = {
     "DATA_TYPE": "VARCHAR2",
     "NUM_DISTINCT": 2,
     "NUM_NULLS": 600,
-    "SAMPLE_SIZE": 1000,
+    "SAMPLE_SIZE": 400,
     "LAST_ANALYZED": datetime(2026, 1, 2, 3, 4, 5),
     "HISTOGRAM": "FREQUENCY",
     "LOW_VALUE": b"\x78",
@@ -103,8 +106,8 @@ UNANALYSED_ROW = {
     "HIGH_VALUE": None,
 }
 
-#: An analysed but empty table: the sample is zero, so the fraction is
-#: undefined rather than zero.
+#: An analysed but empty table: no nulls and nothing sampled, so the total is
+#: zero and the fraction is undefined rather than zero.
 EMPTY_ROW = {
     "OWNER": "AR_CRM",
     "TABLE_NAME": TABLE,
@@ -141,17 +144,33 @@ class TestProbes:
 class TestParserOffline:
     """The conversions the dictionary cannot do for itself."""
 
-    def test_the_fraction_is_nulls_over_the_sample(self):
+    def test_the_fraction_divides_by_both_parts_of_the_sample(self):
+        """600 nulls over a 400-row non-null sample is 0.6, not 1.5.
+
+        ``SAMPLE_SIZE`` excludes the nulls, so dividing by it alone counts
+        nulls per non-null row and can exceed 1. The denominator is the two
+        parts added together, and that total is what ``row_count`` carries.
+        """
         (profile,) = _introspector().parse_column_data_profiles(
             [ANALYSED_ROW], "AR_CRM", TABLE
         )
         assert isinstance(profile, ColumnDataProfile)
         assert profile.null_fraction == pytest.approx(0.6)
-        assert profile.distinct_count == 2
         assert profile.row_count == 1000
-        assert profile.sample_size == 1000
+        # The dictionary's own figure still travels, nulls excluded.
+        assert profile.sample_size == 400
+        assert profile.distinct_count == 2
         assert profile.histogram == "FREQUENCY"
         assert profile.data_type == "VARCHAR2"
+
+    def test_the_row_count_is_the_population_the_fraction_divides_by(self):
+        (profile,) = _introspector().parse_column_data_profiles(
+            [ANALYSED_ROW], "AR_CRM", TABLE
+        )
+        assert profile.row_count == profile.sample_size + ANALYSED_ROW["NUM_NULLS"]
+        assert profile.null_fraction == pytest.approx(
+            ANALYSED_ROW["NUM_NULLS"] / profile.row_count
+        )
 
     def test_an_analysed_column_carries_its_vintage(self):
         (profile,) = _introspector().parse_column_data_profiles(
@@ -188,6 +207,15 @@ class TestParserOffline:
         )
         assert profile.null_fraction is None
         assert profile.row_count == 0
+
+    def test_a_missing_null_count_leaves_the_total_unknown(self):
+        """The total needs both parts, so one absent means no row count."""
+        (profile,) = _introspector().parse_column_data_profiles(
+            [dict(ANALYSED_ROW, NUM_NULLS=None)], "AR_CRM", TABLE
+        )
+        assert profile.row_count is None
+        assert profile.null_fraction is None
+        assert profile.sample_size == 400
 
     def test_the_listing_pairs_each_value_with_its_count(self):
         found = _introspector().parse_column_value_samples(
@@ -328,13 +356,23 @@ class TestColumnDataProfile:
             assert profiles["AMOUNT"].null_fraction == pytest.approx(0.0)
             assert 900 <= profiles["AMOUNT"].distinct_count <= 1000
 
-            # 600 of 1000 rows are NULL. A profile that clamped the figure, or
-            # returned the count instead of the share, would fail here. The
-            # tolerance is loose on purpose: under AUTO_SAMPLE_SIZE the share
-            # is estimated from however many rows the optimizer chose to read,
-            # and even a small sample lands near the true 0.6.
-            assert profiles["NOTE"].null_fraction == pytest.approx(0.6, abs=0.05)
-            assert profiles["NOTE"].distinct_count == 2
+            # 600 of 1000 rows are NULL, so the share is 0.6 -- and the tell
+            # for the wrong denominator is that dividing by SAMPLE_SIZE alone
+            # gives 1.5, a fraction above one. row_count is tied to the
+            # population the fraction divides by rather than to a hard-coded
+            # 1000: a sampled table describes fewer rows, and both figures
+            # shrink together.
+            note = profiles["NOTE"]
+            assert note.null_fraction == pytest.approx(0.6, abs=0.02)
+            assert note.row_count is not None and note.sample_size is not None
+            assert note.row_count <= ROW_COUNT
+            assert note.row_count > note.sample_size
+            # The nulls are what the total has beyond the non-null sample, so
+            # the reported share is exactly their ratio to that total.
+            assert note.null_fraction == pytest.approx(
+                (note.row_count - note.sample_size) / note.row_count
+            )
+            assert note.distinct_count == 2
         finally:
             _teardown(backend)
 
@@ -358,17 +396,18 @@ class TestColumnDataProfile:
             }
             for name, row in _dictionary_stats(backend, TABLE).items():
                 profile = profiles[name]
-                sample_size = int(row["sample_size"])
-                assert profile.sample_size == sample_size
-                assert profile.row_count == sample_size
-                assert 0 < sample_size <= ROW_COUNT
+                non_null = int(row["sample_size"])
+                nulls = int(row["num_nulls"])
+                described = non_null + nulls
+                assert profile.sample_size == non_null
+                assert profile.row_count == described
+                assert 0 < described <= ROW_COUNT
                 assert profile.distinct_count == int(row["num_distinct"])
-                # The dictionary's own ratio. It is compared as a float, with
-                # a tolerance of one row: a sampled NUM_NULLS is scaled to the
-                # table size and may carry a fraction, while the profile
-                # stores a count.
+                # The dictionary's own ratio, with a tolerance of one row: a
+                # sampled NUM_NULLS is scaled to the table size and may carry
+                # a fraction, while the profile stores a count.
                 assert profile.null_fraction == pytest.approx(
-                    float(row["num_nulls"]) / sample_size, abs=1 / sample_size
+                    nulls / described, abs=1 / described
                 )
         finally:
             _teardown(backend)

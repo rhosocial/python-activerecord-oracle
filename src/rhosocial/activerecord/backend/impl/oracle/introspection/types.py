@@ -164,16 +164,15 @@ class OracleColumnDataProfile(ColumnDataProfile):
     statistics columns, and a consumer that knows it asked Oracle should read
     them off the object instead of guessing at dictionary keys.
 
-    ``sample_size`` is ``SAMPLE_SIZE``: the number of rows the figures were
-    computed over. Core's ``row_count`` carries the same number, because on
-    this engine the dictionary has no other row count for a column -- but the
-    two mean different things to a reader. ``row_count`` answers "what does
-    this profile describe", which is the cross-engine question;
-    ``sample_size`` answers "how much of the table did Oracle actually look
-    at", which is the question that decides how much weight the estimate
-    deserves. A table that has grown since the statistics were gathered has a
-    ``sample_size`` smaller than its present row count, and nothing in
-    ``row_count`` alone would say so.
+    ``sample_size`` is ``SAMPLE_SIZE``: the rows that were sampled **and were
+    not null**. Oracle counts the nulls separately in ``NUM_NULLS`` and leaves
+    them out of this figure, so it is *not* the number of rows the figures
+    describe -- the two parts added together are. Core's ``row_count`` carries
+    that total, because a profile's row count must be the population its
+    fractions were derived from; ``sample_size`` keeps the dictionary's own
+    number beside it. The distinction is worth having: a column whose
+    ``sample_size`` is 400 while ``row_count`` is 1000 is 60% null, and a
+    column whose ``sample_size`` is 1000 with the same ``row_count`` is not.
 
     ``histogram`` is ``HISTOGRAM`` -- ``NONE``, ``FREQUENCY``,
     ``HEIGHT BALANCED``, ``TOP-FREQUENCY`` or ``HYBRID``. It matters because
@@ -191,7 +190,9 @@ class OracleColumnDataProfile(ColumnDataProfile):
     been before deciding whether to decode the RAW itself.
     """
 
-    #: Rows the statistics were computed over (``SAMPLE_SIZE``).
+    #: Rows sampled that were not null (``SAMPLE_SIZE``). The rows the
+    #: profile describes are this plus ``num_nulls``, which core's
+    #: ``row_count`` carries.
     sample_size: Optional[int] = None
     #: The histogram kind Oracle built for this column (``HISTOGRAM``).
     histogram: Optional[str] = None

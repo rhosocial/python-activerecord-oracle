@@ -414,14 +414,24 @@ class OracleIntrospectorMixin(IntrospectorMixin):
 
         Three things happen here that the dictionary cannot do for itself:
 
-        * ``NUM_NULLS`` becomes a *fraction* of ``SAMPLE_SIZE`` -- the base
-          the collector actually counted against. A zero sample (an analysed
-          but empty table) makes the fraction undefined, not zero, so it
-          stays ``None``.
-        * ``row_count`` is filled from ``SAMPLE_SIZE``: the row count the
-          figures were computed over, which is the only row count the
-          dictionary holds for a column. ``sample_size`` keeps the
-          dictionary's own name for the same number.
+        * ``NUM_NULLS`` becomes a *fraction*, and its denominator is
+          ``NUM_NULLS + SAMPLE_SIZE`` rather than ``SAMPLE_SIZE`` alone.
+          ``SAMPLE_SIZE`` is the number of rows the statistics were computed
+          over **that were not null**: Oracle counts the nulls separately in
+          ``NUM_NULLS`` and leaves them out of the sample size. Dividing by it
+          alone therefore reports nulls per non-null row rather than per row,
+          and a column that is 60% null over 1000 rows comes out as
+          600/400 = 1.5 -- a fraction above 1, which is the arithmetic saying
+          the denominator was the wrong population. The rows the statistics
+          actually describe are the two parts added together, so that total is
+          both the fraction's denominator and the profile's ``row_count``; the
+          two travel together, or the count would not be the one the fraction
+          was derived from. A missing ``NUM_NULLS`` or ``SAMPLE_SIZE`` leaves
+          both ``None`` -- a total needs both parts -- and a zero total (an
+          analysed but empty table) leaves the fraction undefined rather than
+          zero. ``sample_size`` still travels as its own named field, nulls
+          excluded, so a caller can see how much of the table was sampled
+          without having to un-add the total.
         * ``source`` is ``ESTIMATE`` when ``LAST_ANALYZED`` records a vintage
           and ``UNKNOWN`` when it does not. Both are estimates; the rule for
           this family is that an estimate must be able to say when it was
@@ -444,11 +454,13 @@ class OracleIntrospectorMixin(IntrospectorMixin):
         ``None``; the follow-up, if there is one, is the per-column decode and
         not a shortcut here.
 
-        ``distinct_count`` is ``NUM_DISTINCT``. How exact that is depends on
-        the histogram: under ``FREQUENCY`` every distinct value has its own
-        bucket and the count is exact, otherwise it is an estimate derived
-        from the sample. ``histogram`` carries which, rather than this parser
-        guessing at the confidence.
+        ``distinct_count`` is ``NUM_DISTINCT`` and needs no adjustment: Oracle
+        computes it over the non-null sampled rows and reports it as a count
+        of distinct *values*, not as a share of anything. How exact that count
+        is depends on the histogram -- under ``FREQUENCY`` every distinct
+        value has its own bucket and the count is exact, otherwise it is an
+        estimate derived from the sample. ``histogram`` carries which, rather
+        than this parser guessing at the confidence.
         """
         profiles: List[Any] = []
         for row in rows or []:
@@ -460,9 +472,16 @@ class OracleIntrospectorMixin(IntrospectorMixin):
 
             sample_size = _as_int(row.get("SAMPLE_SIZE"))
             null_count = _as_int(row.get("NUM_NULLS"))
+            # ``SAMPLE_SIZE`` is the non-null part of the rows sampled, and
+            # ``NUM_NULLS`` is the null part; adding them gives the rows the
+            # statistics describe. Either part missing means the total is
+            # unknown, and a zero total means the fraction has no denominator.
+            row_count: Optional[int] = None
             null_fraction = None
-            if null_count is not None and sample_size:
-                null_fraction = float(null_count) / float(sample_size)
+            if sample_size is not None and null_count is not None:
+                row_count = sample_size + null_count
+                if row_count:
+                    null_fraction = float(null_count) / float(row_count)
 
             collected_at = row.get("LAST_ANALYZED")
             profiles.append(
@@ -474,7 +493,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
                     distinct_count=_as_int(row.get("NUM_DISTINCT")),
                     min_value=None,
                     max_value=None,
-                    row_count=sample_size,
+                    row_count=row_count,
                     source="estimate" if collected_at is not None else "unknown",
                     collected_at=(
                         str(collected_at) if collected_at is not None else None

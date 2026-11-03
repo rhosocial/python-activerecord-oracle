@@ -108,7 +108,10 @@ class OracleIntrospectionMixin:
         One dictionary row per column carries ``NUM_DISTINCT``, ``NUM_NULLS``,
         ``SAMPLE_SIZE`` and ``LAST_ANALYZED``, so profiling a table costs one
         catalogue read however large the table is -- the same shape as
-        PostgreSQL's ``pg_stats``.
+        PostgreSQL's ``pg_stats``. ``SAMPLE_SIZE`` counts only the sampled
+        rows that were not null, so the fraction the parser reports divides
+        the nulls by ``NUM_NULLS + SAMPLE_SIZE``; see its docstring for the
+        trap that arithmetic avoids.
 
         Every figure is an *estimate* of the last statistics gathering, not a
         count of the rows as they are now, which is why the parser labels the
@@ -588,8 +591,10 @@ class OracleIntrospectionMixin:
         last gathering left: ``NUM_DISTINCT``, ``NUM_NULLS``, ``SAMPLE_SIZE``,
         ``LAST_ANALYZED`` and ``HISTOGRAM``. The figures are read raw rather
         than converted here because two of the conversions need the whole
-        row: the null *fraction* is ``NUM_NULLS / SAMPLE_SIZE``, which must
-        not divide by a zero sample and so belongs in the parser, and
+        row: the null *fraction* is ``NUM_NULLS`` over
+        ``NUM_NULLS + SAMPLE_SIZE`` -- ``SAMPLE_SIZE`` excludes the nulls, so
+        dividing by it alone would overstate the share -- and that division
+        must not run against a zero total, so it belongs in the parser.
         ``NUM_DISTINCT`` means different things depending on whether the
         histogram is ``FREQUENCY`` -- a fact carried by ``HISTOGRAM``, which
         the parser reads.
