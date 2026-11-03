@@ -1680,6 +1680,20 @@ UNCONSTRUCTIBLE: tuple = (
 # UPPER() + LIKE. PIVOT and UNPIVOT go through this backend's own Pivot
 # and its format_pivot, so the core PivotMixin is not composed.
 LEGITIMATE_NON_RENDERS: Dict[str, tuple] = {
+    # ---- core operational families this dialect does not answer ----
+    #  Oracle exposes these through GV$/V$ dynamic performance views and DBMS_METADATA, both of which name connection state rather than a schema-scoped catalogue -- a shape the dialect layer has no slot for. The probes answer False pending that decision.
+    "rhosocial.activerecord.backend.expression.introspection.RuntimeMetricsQueryStatement": (
+        ProtocolNotImplementedError, 'does not implement ',
+    ),
+    "rhosocial.activerecord.backend.expression.introspection.IndexUsageStatsQueryStatement": (
+        ProtocolNotImplementedError, 'does not implement ',
+    ),
+    "rhosocial.activerecord.backend.expression.introspection.ObjectDependencyQueryStatement": (
+        ProtocolNotImplementedError, 'does not implement ',
+    ),
+    "rhosocial.activerecord.backend.expression.introspection.DDLStatementQueryStatement": (
+        ProtocolNotImplementedError, 'does not implement ',
+    ),
     # Oracle exposes index and table use through GV$/V$ dynamic performance
     # views, which name a live instance's state rather than a schema-scoped
     # catalogue -- a dependency the dialect layer has no slot to carry. The
