@@ -11,11 +11,15 @@ being bent into a table or a "miscellaneous" dict.
 They are frozen for the same reason the extracted rows are: they describe
 a database, and a caller that edits one is editing its own copy of an
 answer. Reads are cached by the introspector, so a mutable result would
-also be a shared result.
+also be a shared result. The one exception is
+:class:`OracleColumnDataProfile`, which *extends* a core dataclass and
+therefore cannot be frozen; it says so where it is declared.
 """
 
 from dataclasses import dataclass
 from typing import Optional, TYPE_CHECKING
+
+from rhosocial.activerecord.backend.introspection.types import ColumnDataProfile
 
 if TYPE_CHECKING:  # pragma: no cover
     from rhosocial.activerecord.backend.introspection import SequenceInfo
@@ -144,3 +148,52 @@ class OraclePackageInfo:
     status: str
     created_time: Optional[str] = None
     last_ddl_time: Optional[str] = None
+
+
+# Deliberately *not* frozen, unlike the three types above: it inherits core's
+# ``ColumnDataProfile``, which is a mutable dataclass, and Python refuses to
+# build a frozen dataclass on top of a non-frozen one. Consistency with the
+# backend's other value objects is worth less than the family fitting the
+# slot core reserved for it -- a caller holding ``ColumnDataProfile`` must be
+# able to treat this as one, and subclassing is how that is spelled.
+@dataclass
+class OracleColumnDataProfile(ColumnDataProfile):
+    """A column profile carrying the extra facts ``ALL_TAB_COLUMNS`` supplies.
+
+    Named fields rather than ``extra`` entries: these are Oracle's own
+    statistics columns, and a consumer that knows it asked Oracle should read
+    them off the object instead of guessing at dictionary keys.
+
+    ``sample_size`` is ``SAMPLE_SIZE``: the number of rows the figures were
+    computed over. Core's ``row_count`` carries the same number, because on
+    this engine the dictionary has no other row count for a column -- but the
+    two mean different things to a reader. ``row_count`` answers "what does
+    this profile describe", which is the cross-engine question;
+    ``sample_size`` answers "how much of the table did Oracle actually look
+    at", which is the question that decides how much weight the estimate
+    deserves. A table that has grown since the statistics were gathered has a
+    ``sample_size`` smaller than its present row count, and nothing in
+    ``row_count`` alone would say so.
+
+    ``histogram`` is ``HISTOGRAM`` -- ``NONE``, ``FREQUENCY``,
+    ``HEIGHT BALANCED``, ``TOP-FREQUENCY`` or ``HYBRID``. It matters because
+    it decides how exact ``distinct_count`` is: under a ``FREQUENCY``
+    histogram every distinct value has a bucket of its own and ``NUM_DISTINCT``
+    is an exact count; without one it is an estimate derived from a sample.
+    Core has no slot for this, and leaving it out would make two profiles
+    with very different confidence look identical.
+
+    ``data_type`` is the declared type as the dictionary spells it
+    (``NUMBER``, ``DATE``, ``VARCHAR2``, ...). It is here for the one thing
+    this profile cannot answer: ``min_value``/``max_value`` are always
+    ``None`` on Oracle because ``LOW_VALUE``/``HIGH_VALUE`` are RAW, so a
+    reader looking for an extreme needs to know which type it would have
+    been before deciding whether to decode the RAW itself.
+    """
+
+    #: Rows the statistics were computed over (``SAMPLE_SIZE``).
+    sample_size: Optional[int] = None
+    #: The histogram kind Oracle built for this column (``HISTOGRAM``).
+    histogram: Optional[str] = None
+    #: The declared type, in the dictionary's own spelling (``DATA_TYPE``).
+    data_type: Optional[str] = None

@@ -27,6 +27,8 @@ if TYPE_CHECKING:
         DatabaseInfoQueryStatement,
         TableListQueryStatement,
         ColumnInfoQueryStatement,
+        ColumnDataProfileQueryStatement,
+        ColumnValueSampleQueryStatement,
         IndexInfoQueryStatement,
         ForeignKeyQueryStatement,
         ViewListQueryStatement,
@@ -99,6 +101,70 @@ class OracleIntrospectionMixin:
         level fact to carry, and ``None`` says so rather than an estimate.
         """
         return True
+
+    def supports_column_data_profile(self) -> bool:
+        """``ALL_TAB_COLUMNS`` answers the profile without reading rows.
+
+        One dictionary row per column carries ``NUM_DISTINCT``, ``NUM_NULLS``,
+        ``SAMPLE_SIZE`` and ``LAST_ANALYZED``, so profiling a table costs one
+        catalogue read however large the table is -- the same shape as
+        PostgreSQL's ``pg_stats``.
+
+        Every figure is an *estimate* of the last statistics gathering, not a
+        count of the rows as they are now, which is why the parser labels the
+        family ``ESTIMATE`` and carries ``LAST_ANALYZED`` beside it. A table
+        that was never analysed still has rows in this view -- one per column,
+        with every statistics column NULL -- so the answer is a profile whose
+        figures are all ``None`` and whose ``source`` is ``UNKNOWN``. That is
+        deliberately different from PostgreSQL, where an unanalysed table has
+        no ``pg_stats`` row and the answer is empty: the dictionary lists the
+        columns either way, and hiding them would say Oracle could not name
+        the column it just named.
+
+        ``min_value``/``max_value`` are **not** answered. The dictionary
+        holds them in ``LOW_VALUE``/``HIGH_VALUE`` as RAW, in the column's
+        internal encoding, and converting that needs
+        ``DBMS_STATS.CONVERT_RAW_VALUE`` -- a PL/SQL procedure whose result
+        type depends on the column's type, so no ``SELECT`` can call it. The
+        slot stays ``None`` rather than carrying RAW bytes cast to text,
+        which would be a value nobody could compare.
+        """
+        return True
+
+    def supports_column_value_sample(self) -> bool:
+        """Oracle keeps no most-common-values list, so this is a scan.
+
+        Nothing in the dictionary holds the frequent values -- only how many
+        distinct ones there are -- so the listing is a ``GROUP BY`` over the
+        column with ``COUNT(*)``, ordered by that count and bounded by
+        ``FETCH FIRST ... ROWS ONLY``. It reads every row of the table, which
+        makes it the most expensive question this backend answers about a
+        column -- possibly by orders of magnitude, and on a large table it
+        may never be worth asking. That cost is why it is a probe of its own
+        rather than part of the profile: a caller who wants the cheap
+        catalogue figures must not pay for this one.
+
+        The bound needs 12c or later, and the formatter says so by refusing a
+        pre-12c server rather than emitting the malformed ``ROWNUM`` fallback
+        this dialect's pagination mixin would append after the ``ORDER BY``.
+        The probe still answers for the capability: the question is
+        answerable on any Oracle, and it is the *bounded* spelling that has a
+        version. Read the formatter's error if that server is 11g.
+        """
+        return True
+
+    def supports_join_coverage(self) -> bool:
+        """False: the two-sided statement is not written for Oracle yet.
+
+        The engine can measure the overlap -- group both columns, intersect
+        the domains -- so this is a missing statement rather than a missing
+        capability. Answering ``True`` would promise a formatter that does
+        not exist, which is exactly the "declared but not rendered" shape the
+        roundtrip walk rejects; the probe stays ``False`` until the statement
+        is written. The measurement is a double scan of two tables, so it
+        belongs behind an explicit call and not in any automatic pass.
+        """
+        return False
 
     def get_supported_introspection_scopes(self) -> List["IntrospectionScope"]:
         from rhosocial.activerecord.backend.introspection.types import IntrospectionScope
@@ -491,6 +557,174 @@ class OracleIntrospectionMixin:
                 ),
             ),
             order_by=OrderByClause(self, [self._column("column_id")]),
+        ).to_sql()
+
+    # ------------------------------------------------------------------ #
+    # Data profiles -- what the columns hold, as the last statistics say
+    #
+    # ``ALL_TAB_COLUMNS`` keeps one row per column carrying the optimiser's
+    # own summary of the data, so the profile costs one dictionary read
+    # however large the table is. What it cannot give is min/max:
+    # ``LOW_VALUE``/``HIGH_VALUE`` are RAW in the column's internal encoding,
+    # and decoding them needs ``DBMS_STATS.CONVERT_RAW_VALUE`` -- a PL/SQL
+    # procedure, not something a SELECT can call. Those slots stay None.
+    # ------------------------------------------------------------------ #
+
+    #: The positions a per-column statistics read projects, in dictionary
+    #: order. ``data_type`` travels beside the figures because it is what
+    #: explains the one thing missing: the type the RAW extremes would have
+    #: been encoded in had they been decoded.
+    _COLUMN_STATS_PROJECTION = (
+        "owner", "table_name", "column_name", "data_type", "num_distinct",
+        "num_nulls", "sample_size", "last_analyzed", "histogram",
+    )
+
+    def format_column_data_profile_query_statement(
+        self, expr: "ColumnDataProfileQueryStatement"
+    ) -> Tuple[str, tuple]:
+        """Format the per-column profile from ``ALL_TAB_COLUMNS``.
+
+        One row per column of the table, projected from the statistics the
+        last gathering left: ``NUM_DISTINCT``, ``NUM_NULLS``, ``SAMPLE_SIZE``,
+        ``LAST_ANALYZED`` and ``HISTOGRAM``. The figures are read raw rather
+        than converted here because two of the conversions need the whole
+        row: the null *fraction* is ``NUM_NULLS / SAMPLE_SIZE``, which must
+        not divide by a zero sample and so belongs in the parser, and
+        ``NUM_DISTINCT`` means different things depending on whether the
+        histogram is ``FREQUENCY`` -- a fact carried by ``HISTOGRAM``, which
+        the parser reads.
+
+        ``ALL_TAB_COLUMNS`` rather than ``ALL_TAB_COLS`` on purpose: the
+        latter also lists hidden and internal columns, and a profile is the
+        counterpart of :meth:`format_column_info_query_statement`, which
+        reads this view. The two answers must name the same columns or a
+        caller cannot pair a declared shape with what it holds -- the mismatch
+        between them is the whole point of the family.
+
+        ``LOW_VALUE``/``HIGH_VALUE`` are deliberately not projected. They are
+        RAW: the value in Oracle's internal encoding, so projecting them would
+        put bytes where the caller expects a Python value. Decoding needs
+        ``DBMS_STATS.CONVERT_RAW_VALUE``, whose result type is the column's
+        own, which no single SELECT can call -- so the honest answer is None,
+        which the parser fills in and its docstring explains.
+
+        A column the statistics have never seen still has a row here, with
+        every statistic NULL; the profile then reports ``None`` throughout
+        rather than zeros.
+        """
+        from rhosocial.activerecord.backend.expression import (
+            Literal, OrderByClause, QueryStatement,
+        )
+
+        params = expr.get_params()
+        schema = params.get("schema") or ""
+        table_name = params.get("table_name", "")
+
+        return QueryStatement(
+            self,
+            select=[self._column(name) for name in self._COLUMN_STATS_PROJECTION],
+            from_=self._relation("all_tab_columns"),
+            where=self._where(
+                self._equals(
+                    self._column("table_name"), Literal(self, str(table_name).upper())
+                ),
+                self._equals(self._column("owner"), Literal(self, str(schema).upper())),
+            ),
+            # Declared order, so two runs of the same query agree and a caller
+            # reading the answer top to bottom sees the table's columns in the
+            # order the table declares them.
+            order_by=OrderByClause(self, [self._column("column_id")]),
+        ).to_sql()
+
+    def format_column_value_sample_query_statement(
+        self, expr: "ColumnValueSampleQueryStatement"
+    ) -> Tuple[str, tuple]:
+        """Format a most-frequent-values listing as a grouped scan.
+
+        Oracle has no kept most-common-values array -- the dictionary records
+        how many distinct values a column has, never which ones -- so the
+        listing is computed from the rows: one ``GROUP BY`` over the column
+        with ``COUNT(*)``, ordered by that count descending and bounded by
+        ``FETCH FIRST ... ROWS ONLY``. The bound is spelled through the
+        dialect's own pagination mixin, so it stays one decision rather than
+        two.
+
+        This is the expensive half of the family: it reads every row of the
+        table, where the profile behind it reads one dictionary row per
+        column. On a large table it can run for a long time, which is why the
+        two are separate probes and this one is only asked for explicitly.
+
+        ``value`` and ``count`` are the output names. NULLs group together,
+        as they do in any ``GROUP BY``, so a NULL row in the answer is a real
+        member of the column's domain -- the same shape SQLite's aggregate
+        produces, and the opposite of PostgreSQL's kept list, which never
+        contains one.
+
+        Raises:
+            UnsupportedFeatureError: the server predates 12c and therefore has
+                no ``FETCH FIRST``. The pre-12c spelling this dialect's
+                pagination mixin falls back to appends ``ROWNUM <= n`` after
+                the ``ORDER BY``, which Oracle rejects as malformed; refusing
+                here turns that into one clear error instead of bad SQL.
+        """
+        from rhosocial.activerecord.backend.dialect.exceptions import (
+            UnsupportedFeatureError,
+        )
+        from rhosocial.activerecord.backend.expression import (
+            FunctionCall, GroupByHavingClause, LimitOffsetClause,
+            OrderByClause, QueryStatement, RowCountWildcard,
+        )
+        from rhosocial.activerecord.backend.expression.objects import Table
+
+        if self.version < (12, 0, 0):
+            raise UnsupportedFeatureError(
+                self.name,
+                "FETCH FIRST ... ROWS ONLY",
+                suggestion=(
+                    f"Oracle {self.version} has no row-limiting clause; the "
+                    "value listing is bounded with FETCH FIRST, which needs "
+                    "Oracle 12c or later. Group the column and bound the "
+                    "answer yourself on this server."
+                ),
+            )
+
+        params = expr.get_params()
+        schema = params.get("schema") or ""
+        table_name = params.get("table_name", "")
+        column_name = params.get("column_name", "")
+        limit = int(params.get("limit", 100) or 100)
+
+        # The table is user data, but a table reference is an identifier and
+        # cannot travel as a bind value; the node upper-cases it the way the
+        # dictionary holds it, so ``orders`` and ``ORDERS`` ask one question.
+        source = Table(
+            self,
+            str(table_name).upper(),
+            schema_name=str(schema).upper() or None,
+        )
+        return QueryStatement(
+            self,
+            select=[
+                self._column(column_name, alias="value"),
+                FunctionCall(
+                    self, "COUNT", RowCountWildcard(self), alias="count"
+                ),
+            ],
+            from_=source,
+            group_by_having=GroupByHavingClause(
+                self, group_by=[self._column(column_name)]
+            ),
+            # Ties break by value so two runs of the same query agree; without
+            # it the listing of a column whose every value occurs once would
+            # be whatever order the scan happened to produce.
+            order_by=OrderByClause(
+                self,
+                [
+                    (FunctionCall(self, "COUNT", RowCountWildcard(self)), "desc"),
+                    (self._column(column_name), "asc"),
+                ],
+            ),
+            limit_offset=LimitOffsetClause(self, limit=limit),
         ).to_sql()
 
     def format_primary_key_query_statement(

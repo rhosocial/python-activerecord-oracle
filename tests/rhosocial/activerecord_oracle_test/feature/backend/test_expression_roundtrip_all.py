@@ -1680,19 +1680,23 @@ UNCONSTRUCTIBLE: tuple = (
 # UPPER() + LIKE. PIVOT and UNPIVOT go through this backend's own Pivot
 # and its format_pivot, so the core PivotMixin is not composed.
 LEGITIMATE_NON_RENDERS: Dict[str, tuple] = {
-    # ---- core data-profile families this dialect does not answer ----
-    #  `all_tab_cols` carries `num_distinct`, `num_nulls`, `low_value` and `high_value` -- but the latter two are RAW, needing conversion through the column's type (`DBMS_STATS.CONVERT_RAW_VALUE`). Answering from the raw form would put binary blobs in min/max. The probes answer False pending that conversion.
-    "rhosocial.activerecord.backend.expression.introspection.ColumnDataProfileQueryStatement": (
-        ProtocolNotImplementedError, 'does not implement ',
-    ),
-    "rhosocial.activerecord.backend.expression.introspection.ColumnValueSampleQueryStatement": (
-        ProtocolNotImplementedError, 'does not implement ',
-    ),
+    # ---- core join-coverage family this dialect does not answer ----
+    #  The profile and the value listing now render from `all_tab_columns`
+    #  (NUM_DISTINCT, NUM_NULLS, SAMPLE_SIZE, LAST_ANALYZED) and from a
+    #  grouped scan respectively; `low_value`/`high_value` stay None because
+    #  they are RAW and need `DBMS_STATS.CONVERT_RAW_VALUE`, a PL/SQL
+    #  procedure no SELECT can call. Join coverage is a different matter: the
+    #  engine could measure it, but the statement is not written, and it is a
+    #  double scan of both tables -- so the probe stays False rather than
+    #  promising a formatter that does not exist.
     "rhosocial.activerecord.backend.expression.introspection.JoinCoverageQueryStatement": (
         ProtocolNotImplementedError, 'does not implement ',
     ),
     # ---- core operational families this dialect does not answer ----
-    #  Oracle exposes these through GV$/V$ dynamic performance views and DBMS_METADATA, both of which name connection state rather than a schema-scoped catalogue -- a shape the dialect layer has no slot for. The probes answer False pending that decision.
+    #  Oracle exposes these through GV$/V$ dynamic performance views and
+    #  DBMS_METADATA, both of which name connection state rather than a
+    #  schema-scoped catalogue -- a shape the dialect layer has no slot for.
+    #  The probes answer False pending that decision.
     "rhosocial.activerecord.backend.expression.introspection.RuntimeMetricsQueryStatement": (
         ProtocolNotImplementedError, 'does not implement ',
     ),

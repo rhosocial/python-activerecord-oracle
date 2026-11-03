@@ -61,6 +61,7 @@ from rhosocial.activerecord.backend.introspection.types import (
     IntrospectionViewInfo,
     IntrospectionTriggerInfo,
     IntrospectionScope,
+    ColumnValueFrequency,
 )
 from rhosocial.activerecord.backend.expression.types import DataType
 from .status_introspector import (
@@ -68,6 +69,7 @@ from .status_introspector import (
     AsyncOracleStatusIntrospector,
 )
 from .types import (
+    OracleColumnDataProfile,
     OraclePackageInfo,
     OracleSequenceInfo,
     OracleSynonymInfo,
@@ -394,6 +396,127 @@ class OracleIntrospectorMixin(IntrospectorMixin):
                 )
             )
         return columns
+
+    # ------------------------------------------------------------------ #
+    # Data profiles -- what the columns hold, as the last statistics said
+    # ------------------------------------------------------------------ #
+
+    def parse_column_data_profiles(
+        self, rows: List[Dict[str, Any]], schema: str, table_name: str
+    ) -> List[Any]:
+        """Project ``ALL_TAB_COLUMNS`` statistics rows into profiles.
+
+        The runtime type is :class:`OracleColumnDataProfile` -- core's profile
+        plus the dictionary fields core has no slot for. The annotation is the
+        wide one because that class extends a core dataclass and ``List`` is
+        invariant, so naming the subclass here would narrow a slot core
+        declares as ``List[ColumnDataProfile]``.
+
+        Three things happen here that the dictionary cannot do for itself:
+
+        * ``NUM_NULLS`` becomes a *fraction* of ``SAMPLE_SIZE`` -- the base
+          the collector actually counted against. A zero sample (an analysed
+          but empty table) makes the fraction undefined, not zero, so it
+          stays ``None``.
+        * ``row_count`` is filled from ``SAMPLE_SIZE``: the row count the
+          figures were computed over, which is the only row count the
+          dictionary holds for a column. ``sample_size`` keeps the
+          dictionary's own name for the same number.
+        * ``source`` is ``ESTIMATE`` when ``LAST_ANALYZED`` records a vintage
+          and ``UNKNOWN`` when it does not. Both are estimates; the rule for
+          this family is that an estimate must be able to say when it was
+          collected, and a column that has never been analysed has no
+          vintage to give. Its statistics columns are all NULL, so the
+          profile reports ``None`` for every figure -- a column whose shape
+          is known and whose contents are not, which is a different answer
+          from "no such column" and must not be smoothed into zeros.
+
+        ``min_value``/``max_value`` are always ``None``, and it is a fact
+        about Oracle rather than about this parser. The dictionary holds the
+        extremes in ``LOW_VALUE``/``HIGH_VALUE`` as RAW, in the column's
+        internal encoding: for ``NUMBER`` that is a mantissa/exponent byte
+        string, for ``DATE`` seven bytes of century-to-second, and neither is
+        readable as it stands. Converting needs
+        ``DBMS_STATS.CONVERT_RAW_VALUE``, a PL/SQL procedure whose result type
+        is the column's own, so it cannot be called from a SELECT and would
+        need one PL/SQL round trip per column. Casting the RAW to text would
+        produce bytes a caller cannot compare, which is worse than an honest
+        ``None``; the follow-up, if there is one, is the per-column decode and
+        not a shortcut here.
+
+        ``distinct_count`` is ``NUM_DISTINCT``. How exact that is depends on
+        the histogram: under ``FREQUENCY`` every distinct value has its own
+        bucket and the count is exact, otherwise it is an estimate derived
+        from the sample. ``histogram`` carries which, rather than this parser
+        guessing at the confidence.
+        """
+        profiles: List[Any] = []
+        for row in rows or []:
+            column_name = row.get("COLUMN_NAME")
+            if not column_name:
+                # A row with no column name is not a profile of anything. It
+                # can only come from a projection that dropped the name.
+                continue
+
+            sample_size = _as_int(row.get("SAMPLE_SIZE"))
+            null_count = _as_int(row.get("NUM_NULLS"))
+            null_fraction = None
+            if null_count is not None and sample_size:
+                null_fraction = float(null_count) / float(sample_size)
+
+            collected_at = row.get("LAST_ANALYZED")
+            profiles.append(
+                OracleColumnDataProfile(
+                    schema=row.get("OWNER") or schema,
+                    table_name=row.get("TABLE_NAME") or table_name,
+                    column_name=str(column_name),
+                    null_fraction=null_fraction,
+                    distinct_count=_as_int(row.get("NUM_DISTINCT")),
+                    min_value=None,
+                    max_value=None,
+                    row_count=sample_size,
+                    source="estimate" if collected_at is not None else "unknown",
+                    collected_at=(
+                        str(collected_at) if collected_at is not None else None
+                    ),
+                    sample_size=sample_size,
+                    histogram=row.get("HISTOGRAM"),
+                    data_type=row.get("DATA_TYPE"),
+                )
+            )
+        return profiles
+
+    def parse_column_value_samples(
+        self, rows: List[Dict[str, Any]]
+    ) -> List[ColumnValueFrequency]:
+        """Project the grouped listing into value/frequency rows.
+
+        The statement is a ``GROUP BY`` over the rows, so each answer carries
+        an exact ``COUNT(*)`` and no share: ``count`` is filled and
+        ``frequency`` stays ``None``. Deriving the share needs the table's
+        row count, which this query does not carry -- a caller that wants it
+        can divide by the profile's ``row_count``, and a parser that divided
+        would have had to assume which count was the denominator.
+
+        This override exists because of the keys: Oracle's dictionary and
+        driver fold an unquoted name to upper case, so the rows arrive as
+        ``VALUE``/``COUNT`` where core's generic projection looks for
+        ``value``/``count``. A ``NULL`` value is kept -- it is the row the
+        ``GROUP BY`` produced for the nulls in the column, and a member of
+        the domain like any other.
+        """
+        found: List[ColumnValueFrequency] = []
+        for row in rows or []:
+            if "VALUE" not in row:
+                continue
+            found.append(
+                ColumnValueFrequency(
+                    value=row.get("VALUE"),
+                    count=_as_int(row.get("COUNT")),
+                    frequency=None,
+                )
+            )
+        return found
 
     def parse_indexes(
         self,
