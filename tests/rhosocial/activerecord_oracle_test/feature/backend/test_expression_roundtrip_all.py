@@ -1680,6 +1680,17 @@ UNCONSTRUCTIBLE: tuple = (
 # UPPER() + LIKE. PIVOT and UNPIVOT go through this backend's own Pivot
 # and its format_pivot, so the core PivotMixin is not composed.
 LEGITIMATE_NON_RENDERS: Dict[str, tuple] = {
+    # ---- core data-profile families this dialect does not answer ----
+    #  `all_tab_cols` carries `num_distinct`, `num_nulls`, `low_value` and `high_value` -- but the latter two are RAW, needing conversion through the column's type (`DBMS_STATS.CONVERT_RAW_VALUE`). Answering from the raw form would put binary blobs in min/max. The probes answer False pending that conversion.
+    "rhosocial.activerecord.backend.expression.introspection.ColumnDataProfileQueryStatement": (
+        ProtocolNotImplementedError, 'does not implement ',
+    ),
+    "rhosocial.activerecord.backend.expression.introspection.ColumnValueSampleQueryStatement": (
+        ProtocolNotImplementedError, 'does not implement ',
+    ),
+    "rhosocial.activerecord.backend.expression.introspection.JoinCoverageQueryStatement": (
+        ProtocolNotImplementedError, 'does not implement ',
+    ),
     # ---- core operational families this dialect does not answer ----
     #  Oracle exposes these through GV$/V$ dynamic performance views and DBMS_METADATA, both of which name connection state rather than a schema-scoped catalogue -- a shape the dialect layer has no slot for. The probes answer False pending that decision.
     "rhosocial.activerecord.backend.expression.introspection.RuntimeMetricsQueryStatement": (
