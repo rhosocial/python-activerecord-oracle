@@ -169,6 +169,87 @@ class OracleIntrospectionMixin:
         """
         return False
 
+    # The rest of core's operational and one-object families are declared
+    # gaps here, for one of two reasons. Either the answer lives in the
+    # GV$/V$ dynamic performance views -- counters about the instance this
+    # session attached to, not a schema-scoped catalogue the dictionary
+    # shape this mixin composes can name -- or it lives behind
+    # ``DBMS_METADATA``, a PL/SQL call whose result no SELECT can return.
+    # No statement for either shape exists in this dialect, so each probe
+    # answers ``False``: a caller that gates on it refuses the family before
+    # building a statement the dispatch could not render. The roundtrip
+    # suite pins every one of those statement classes as a non-render, so a
+    # probe answering ``True`` here would trade one clear refusal for a run
+    # that fails mid-query -- the defect the capability question exists to
+    # prevent. The day a statement is written, its probe flips with it; the
+    # two moves are one decision.
+
+    def supports_unused_indexes_detection(self) -> bool:
+        """False: index use is instance state, recorded in V$ views.
+
+        ``V$OBJECT_USAGE`` (and its instance-wide siblings from 19c) holds
+        whether an index has served a query *on this instance, since this
+        instance's counters were last reset* -- a live measurement, not a
+        dictionary row. The statement layer here spells dictionary reads, so
+        the family has nothing to be asked with and the probe declines it.
+        """
+        return False
+
+    def supports_table_stats(self) -> bool:
+        """False: the per-segment use counters are V$ facts, not catalogue rows.
+
+        ``V$SEGSTAT``/``V$SEGMENT_STATISTICS`` carry the counters the family
+        asks for, keyed by what the instance has observed. They are dynamic
+        performance views -- priced per read and scoped to the session's
+        view of the instance -- which is a source the dictionary-shaped
+        statement layer does not reach, so the probe stays ``False``.
+        """
+        return False
+
+    def supports_runtime_stats(self) -> bool:
+        """False: the live measurements describe the instance, via V$ views.
+
+        ``V$SYSSTAT`` and its siblings answer "how is this instance
+        behaving", which is a question about the connection's host process
+        rather than about a schema's contents. No statement in this dialect
+        spells it, so answering ``True`` would advertise a family the
+        introspector could only fail on; the probe declines instead.
+        """
+        return False
+
+    def supports_index_stats(self) -> bool:
+        """False: per-index use counters are GV$/V$ state, not the dictionary.
+
+        Same source and same reason as :meth:`supports_table_stats`: the
+        counters live in the performance views, and the schema-scoped
+        statement shape this mixin composes has no slot for them.
+        """
+        return False
+
+    def supports_object_dependencies(self) -> bool:
+        """False: the edges exist in ALL_DEPENDENCIES, the statement does not.
+
+        This one is a missing statement rather than an unreachable source --
+        ``ALL_DEPENDENCIES`` is an ordinary dictionary view a SELECT could
+        read. Until that statement is written the probe answers ``False``,
+        for the reason :meth:`supports_join_coverage` records: a ``True``
+        would promise a formatter the dispatch cannot find.
+        """
+        return False
+
+    def supports_ddl_extraction(self) -> bool:
+        """False: Oracle keeps DDL behind DBMS_METADATA, a PL/SQL call.
+
+        ``DBMS_METADATA.GET_DDL`` is a procedure whose result no SELECT can
+        return, and no dictionary view stores the text. Reassembling a
+        ``CREATE TABLE`` from the dictionary columns was rejected for the
+        reason core rejects assemblies everywhere: this engine has the real
+        statement, and an assembly that reads as authoritative is worse than
+        an honest refusal. With neither source reachable from a SELECT there
+        is nothing to format, so the probe answers ``False``.
+        """
+        return False
+
     def get_supported_introspection_scopes(self) -> List["IntrospectionScope"]:
         from rhosocial.activerecord.backend.introspection.types import IntrospectionScope
 
