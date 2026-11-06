@@ -27,7 +27,7 @@ one homogeneous answer.
 
 NAME means different things per type, and two of those meanings point in
 opposite directions: for 'triggers' it is a table, for 'views' it is the view
-itself. The rules live in ``_NAME_RULES`` and are printed by ``--help``.
+itself. The rules live in ``_NAME_RULE`` and are printed by ``--help``.
 """
 
 import argparse
@@ -117,7 +117,7 @@ INTROSPECT_TYPES = list(_TYPE_CAPABILITIES)
 #: of the pair -- because ``name`` means "the table" everywhere else in this
 #: command, and spelling the left side as a flag would make the one type whose
 #: question is about two objects read as though it took none.
-_NAME_RULES = {
+_NAME_RULE = {
     "columns": "required",
     "indexes": "required",
     "foreign-keys": "required",
@@ -166,7 +166,7 @@ def _refuse_unusable_name(args: argparse.Namespace) -> None:
     """Refuse a NAME the type cannot use instead of ignoring it."""
     if args.name is None:
         return
-    if _NAME_RULES.get(args.type) != "forbidden":
+    if _NAME_RULE.get(args.type) != "forbidden":
         return
     print(f"Error: {args.type} introspection takes no name", file=sys.stderr)
     sys.exit(2)

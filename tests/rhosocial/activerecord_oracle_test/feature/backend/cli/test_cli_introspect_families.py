@@ -904,21 +904,21 @@ class TestTheTypeSurfaceExtension:
     def test_the_type_is_offered_and_mapped(self, type_):
         assert type_ in introspect_cli.INTROSPECT_TYPES
         assert introspect_cli._TYPE_CAPABILITIES[type_] == NEW_FAMILIES[type_]
-        assert type_ in introspect_cli._NAME_RULES
+        assert type_ in introspect_cli._NAME_RULE
 
     def test_the_advertised_list_is_the_capability_table(self):
         assert list(introspect_cli._TYPE_CAPABILITIES) == introspect_cli.INTROSPECT_TYPES
 
     @pytest.mark.parametrize("type_", WHOLE_DATABASE_FAMILIES)
     def test_the_whole_schema_families_take_no_name(self, type_):
-        assert introspect_cli._NAME_RULES[type_] == "forbidden"
+        assert introspect_cli._NAME_RULE[type_] == "forbidden"
 
     @pytest.mark.parametrize("type_", ONE_TABLE_FAMILIES)
     def test_the_one_table_families_require_one(self, type_):
-        assert introspect_cli._NAME_RULES[type_] == "required"
+        assert introspect_cli._NAME_RULE[type_] == "required"
 
     def test_the_dependency_graph_takes_an_optional_one(self):
-        assert introspect_cli._NAME_RULES["dependencies"] == "optional"
+        assert introspect_cli._NAME_RULE["dependencies"] == "optional"
 
     def test_join_coverage_names_the_left_table(self):
-        assert introspect_cli._NAME_RULES["join-coverage"] == "required"
+        assert introspect_cli._NAME_RULE["join-coverage"] == "required"

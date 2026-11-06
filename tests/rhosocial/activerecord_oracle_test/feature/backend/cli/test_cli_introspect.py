@@ -390,7 +390,7 @@ class TestNameRules:
 
     def test_every_declared_type_has_a_name_rule(self):
         """A new type must say what it does with NAME, or it is not complete."""
-        assert set(cli_introspect._NAME_RULES) == set(cli_introspect.INTROSPECT_TYPES)
+        assert set(cli_introspect._NAME_RULE) == set(cli_introspect.INTROSPECT_TYPES)
 
     def test_help_states_what_name_means(self, capsys):
         with pytest.raises(SystemExit):
