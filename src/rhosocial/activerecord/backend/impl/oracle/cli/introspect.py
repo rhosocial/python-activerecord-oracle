@@ -40,11 +40,10 @@ from typing import Any, Dict, List
 from rhosocial.activerecord.backend.impl.oracle.backend import OracleBackend
 from rhosocial.activerecord.backend.impl.oracle.backend.async_backend import AsyncOracleBackend
 from rhosocial.activerecord.backend.errors import ConnectionError, QueryError
+from rhosocial.activerecord.backend.introspection.types import ProfileSource
 
 from .connection import add_connection_args, resolve_connection_config_from_args
-from .output import create_provider
-
-OUTPUT_CHOICES = ['table', 'json', 'csv', 'tsv']
+from .output import OUTPUT_CHOICES, create_provider
 
 #: CLI type -> the dialect capability switch that answers for it.
 #:
@@ -146,7 +145,6 @@ _NAME_RULE = {
 #: dialect's listing is a ``GROUP BY`` over the rows -- an exact count, paid
 #: for with a full scan -- so the label is written here, at the only layer
 #: that knows how the answer in front of the reader was produced.
-_VALUE_SAMPLE_SOURCE = "aggregate"
 
 #: Said over the value listing, on stderr so the machine formats on stdout
 #: stay parseable. The profile beside it costs one dictionary read however
@@ -155,11 +153,6 @@ _VALUE_SAMPLE_SOURCE = "aggregate"
 #: run for a long time. The rows carry ``source='aggregate'`` themselves; this
 #: is the sentence that says why the command is slow rather than leaving the
 #: wait unexplained.
-_VALUE_SAMPLE_NOTE = (
-    "Note: value samples are aggregated from the rows themselves "
-    "(source='aggregate') -- a grouped scan of the whole table, exact "
-    "and paid for in full."
-)
 
 
 def _refuse_unusable_name(args: argparse.Namespace) -> None:
@@ -457,7 +450,7 @@ def _value_sample_rows(samples: List[Any]) -> List[Dict[str, Any]]:
     for sample in samples or []:
         row = _serialize_for_output(sample)
         if isinstance(row, dict):
-            row["source"] = _VALUE_SAMPLE_SOURCE
+            row["source"] = ProfileSource.AGGREGATE.value
         rows.append(row)
     return rows
 
@@ -654,7 +647,12 @@ def _handle_introspect_sync(args, backend: OracleBackend, provider):
             # ``--limit`` to carry a number the caller asked for, so the
             # default the statement's ``FETCH FIRST`` applies is the one that
             # runs rather than a figure restated here.
-            print(_VALUE_SAMPLE_NOTE, file=sys.stderr)
+            print(
+                "Note: value samples are aggregated from the rows themselves "
+                "(source='aggregate') -- a grouped scan of the whole table, exact "
+                "and paid for in full.",
+                file=sys.stderr,
+            )
             samples = introspector.sample_column_values(args.name, args.column, schema=None)
             data = _value_sample_rows(samples)
             provider.display_results(data, title=f"Values of {args.name}.{args.column}")
@@ -877,7 +875,12 @@ async def _handle_introspect_async(args, backend: AsyncOracleBackend, provider):
                     file=sys.stderr,
                 )
                 sys.exit(1)
-            print(_VALUE_SAMPLE_NOTE, file=sys.stderr)
+            print(
+                "Note: value samples are aggregated from the rows themselves "
+                "(source='aggregate') -- a grouped scan of the whole table, exact "
+                "and paid for in full.",
+                file=sys.stderr,
+            )
             samples = await introspector.sample_column_values(args.name, args.column, schema=None)
             data = _value_sample_rows(samples)
             provider.display_results(data, title=f"Values of {args.name}.{args.column}")

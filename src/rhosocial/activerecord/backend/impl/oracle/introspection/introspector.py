@@ -62,6 +62,7 @@ from rhosocial.activerecord.backend.introspection.types import (
     IntrospectionTriggerInfo,
     IntrospectionScope,
     ColumnValueFrequency,
+    ProfileSource,
 )
 from rhosocial.activerecord.backend.expression.types import DataType
 from .status_introspector import (
@@ -494,7 +495,11 @@ class OracleIntrospectorMixin(IntrospectorMixin):
                     min_value=None,
                     max_value=None,
                     row_count=row_count,
-                    source="estimate" if collected_at is not None else "unknown",
+                    source=(
+                        ProfileSource.ESTIMATE
+                        if collected_at is not None
+                        else ProfileSource.UNKNOWN
+                    ),
                     collected_at=(
                         str(collected_at) if collected_at is not None else None
                     ),
