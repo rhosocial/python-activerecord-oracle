@@ -392,6 +392,84 @@ class TestNameRules:
         """A new type must say what it does with NAME, or it is not complete."""
         assert set(cli_introspect._NAME_RULE) == set(cli_introspect.INTROSPECT_TYPES)
 
+    def test_the_table_says_what_each_types_name_means(self):
+        """The table as data, so editing one type is a visible change.
+
+        A set nobody asserts the members of is still a set whose answers can
+        drift one at a time, which is why the contents are pinned beside the
+        set-level check above.
+        """
+        assert cli_introspect._NAME_RULE == {
+            "columns": "required",
+            "indexes": "required",
+            "foreign-keys": "required",
+            "triggers": "optional",
+            "views": "optional",
+            "sequences": "optional",
+            "synonyms": "optional",
+            "tables": "forbidden",
+            "packages": "forbidden",
+            "unused-indexes": "forbidden",
+            "table-stats": "forbidden",
+            "runtime": "forbidden",
+            "index-stats": "forbidden",
+            "dependencies": "optional",
+            "ddl": "required",
+            "column-profiles": "required",
+            "value-samples": "required",
+            "join-coverage": "required",
+            "database": "forbidden",
+        }
+
+    @pytest.mark.parametrize(
+        "itype",
+        sorted(
+            k for k, rule in cli_introspect._NAME_RULE.items() if rule == "forbidden"
+        ),
+    )
+    def test_a_refused_type_is_refused_by_the_table(self, itype, capsys):
+        """Each category, read through the one validator that reads the table.
+
+        The per-branch copies are gone, so this is the table's own behaviour
+        rather than a branch that happens to remember it.
+        """
+        with pytest.raises(SystemExit) as excinfo:
+            cli_introspect._validate_name(
+                argparse.Namespace(type=itype, name="customers")
+            )
+        assert excinfo.value.code == 2
+        assert f"Error: {itype} introspection takes no name" in capsys.readouterr().err
+
+    @pytest.mark.parametrize(
+        "itype",
+        sorted(
+            k for k, rule in cli_introspect._NAME_RULE.items() if rule == "required"
+        ),
+    )
+    def test_a_required_name_is_required_by_the_table(self, itype, capsys):
+        """A missing required NAME is an incomplete invocation, exit 1.
+
+        The noun is the type's own: NAME is the *left* table of the pair for
+        ``join-coverage`` and "the table" for the rest, which is a wording
+        choice rather than a second decision about whether it is required --
+        the rule is read from the table either way.
+        """
+        noun = "Left table name" if itype == "join-coverage" else "Table name"
+        with pytest.raises(SystemExit) as excinfo:
+            cli_introspect._validate_name(argparse.Namespace(type=itype, name=None))
+        assert excinfo.value.code == 1
+        assert f"Error: {noun} is required for '{itype}'" in capsys.readouterr().err
+
+    @pytest.mark.parametrize(
+        "itype",
+        sorted(
+            k for k, rule in cli_introspect._NAME_RULE.items() if rule == "optional"
+        ),
+    )
+    def test_an_optional_name_may_be_given_or_not(self, itype):
+        cli_introspect._validate_name(argparse.Namespace(type=itype, name=None))
+        cli_introspect._validate_name(argparse.Namespace(type=itype, name="customers"))
+
     def test_help_states_what_name_means(self, capsys):
         with pytest.raises(SystemExit):
             build_parser().parse_args(["introspect", "--help"])

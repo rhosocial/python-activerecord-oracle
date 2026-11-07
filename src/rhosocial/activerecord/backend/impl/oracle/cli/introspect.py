@@ -27,7 +27,10 @@ one homogeneous answer.
 
 NAME means different things per type, and two of those meanings point in
 opposite directions: for 'triggers' it is a table, for 'views' it is the view
-itself. The rules live in ``_NAME_RULE`` and are printed by ``--help``.
+itself. The rules live in ``_NAME_RULE`` and are applied by one validator,
+``_validate_name``, before anything connects -- the branches consume the name
+rather than re-deciding whether it was required, so a type added without a
+rule is a type nobody has decided for.
 """
 
 import argparse
@@ -116,6 +119,10 @@ INTROSPECT_TYPES = list(_TYPE_CAPABILITIES)
 #: of the pair -- because ``name`` means "the table" everywhere else in this
 #: command, and spelling the left side as a flag would make the one type whose
 #: question is about two objects read as though it took none.
+#:
+#: The order is the order ``_TYPE_CAPABILITIES`` declares and the parser and
+#: ``--help`` print, and the two tables cover the same keys: a type offered
+#: without a rule is a type whose NAME decision nobody has made.
 _NAME_RULE = {
     "columns": "required",
     "indexes": "required",
@@ -155,14 +162,35 @@ _NAME_RULE = {
 #: wait unexplained.
 
 
-def _refuse_unusable_name(args: argparse.Namespace) -> None:
-    """Refuse a NAME the type cannot use instead of ignoring it."""
-    if args.name is None:
+def _validate_name(args: argparse.Namespace) -> None:
+    """Apply the NAME rule table, once, instead of leaving it to each branch.
+
+    A ``required`` name that is missing is an incomplete invocation and leaves
+    with 1, the code a missing ``--database`` gets. A name the type has no
+    question for is a request this command declines and leaves with 2. Both
+    halves come from ``_NAME_RULE`` above: the branches used to carry the first
+    one -- fourteen spellings of "Table name is required" across the two chains
+    -- and a branch that forgot would have sent ``None`` into a call that reads
+    it as a filter over everything.
+
+    ``join-coverage`` is the one type whose NAME is the *left* table of a pair,
+    so its sentence says so rather than calling it a table. That is the wording
+    of the noun, not a second decision about whether the name is required --
+    the rule is read from the table either way.
+    """
+    rule = _NAME_RULE.get(args.type)
+    if rule is None:
         return
-    if _NAME_RULE.get(args.type) != "forbidden":
-        return
-    print(f"Error: {args.type} introspection takes no name", file=sys.stderr)
-    sys.exit(2)
+    if rule == "required" and not args.name:
+        noun = "Left table name" if args.type == "join-coverage" else "Table name"
+        print(
+            f"Error: {noun} is required for '{args.type}' introspection",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    if rule == "forbidden" and args.name is not None:
+        print(f"Error: {args.type} introspection takes no name", file=sys.stderr)
+        sys.exit(2)
 
 
 def _refuse_unused_arguments(args: argparse.Namespace) -> None:
@@ -376,7 +404,7 @@ def handle(args):
     # A NAME or a flag the type cannot use is refused before anything is
     # opened: both are argument errors, and no server could change the
     # answer to either.
-    _refuse_unusable_name(args)
+    _validate_name(args)
     _refuse_unused_arguments(args)
 
     provider = create_provider(args.output, ascii_borders=args.rich_ascii)
@@ -488,25 +516,18 @@ def _handle_introspect_sync(args, backend: OracleBackend, provider):
                 provider.display_results(data, title="Views")
 
         elif args.type == "columns":
-            if not args.name:
-                print("Error: Table name is required for 'columns' introspection", file=sys.stderr)
-                sys.exit(1)
+            # ``_validate_name`` has already refused a run without a name: it
+            # is required here, so ``args.name`` is the table to ask about.
             columns = introspector.list_columns(args.name, schema=None)
             data = _serialize_for_output(columns)
             provider.display_results(data, title=f"Columns of {args.name}")
 
         elif args.type == "indexes":
-            if not args.name:
-                print("Error: Table name is required for 'indexes' introspection", file=sys.stderr)
-                sys.exit(1)
             indexes = introspector.list_indexes(args.name, schema=None)
             data = _serialize_for_output(indexes)
             provider.display_results(data, title=f"Indexes of {args.name}")
 
         elif args.type == "foreign-keys":
-            if not args.name:
-                print("Error: Table name is required for 'foreign-keys' introspection", file=sys.stderr)
-                sys.exit(1)
             fks = introspector.list_foreign_keys(args.name, schema=None)
             data = _serialize_for_output(fks)
             provider.display_results(data, title=f"Foreign Keys of {args.name}")
@@ -598,9 +619,6 @@ def _handle_introspect_sync(args, backend: OracleBackend, provider):
         # object name, and NAME already means "the table" everywhere else.
 
         elif args.type == "ddl":
-            if not args.name:
-                print("Error: Table name is required for 'ddl' introspection", file=sys.stderr)
-                sys.exit(1)
             statement = introspector.get_ddl_statement(args.name, object_type=None, schema=None)
             if statement is None:
                 # Not "no such table": the object may exist, and Oracle
@@ -612,12 +630,6 @@ def _handle_introspect_sync(args, backend: OracleBackend, provider):
             _display_ddl(provider, statement, args)
 
         elif args.type == "column-profiles":
-            if not args.name:
-                print(
-                    "Error: Table name is required for 'column-profiles' introspection",
-                    file=sys.stderr,
-                )
-                sys.exit(1)
             # The rows carry ``source`` from the parser -- ``estimate`` with
             # the vintage in ``collected_at``, or ``unknown`` for a table
             # never analysed -- so the listing answers "how was this
@@ -627,12 +639,6 @@ def _handle_introspect_sync(args, backend: OracleBackend, provider):
             provider.display_results(data, title=f"Column profiles of {args.name}")
 
         elif args.type == "value-samples":
-            if not args.name:
-                print(
-                    "Error: Table name is required for 'value-samples' introspection",
-                    file=sys.stderr,
-                )
-                sys.exit(1)
             if not args.column:
                 print(
                     "Error: --column is required for 'value-samples' introspection",
@@ -658,12 +664,6 @@ def _handle_introspect_sync(args, backend: OracleBackend, provider):
             provider.display_results(data, title=f"Values of {args.name}.{args.column}")
 
         elif args.type == "join-coverage":
-            if not args.name:
-                print(
-                    "Error: Left table name is required for 'join-coverage' introspection",
-                    file=sys.stderr,
-                )
-                sys.exit(1)
             if not args.column:
                 print(
                     "Error: --column is required for 'join-coverage' introspection",
@@ -743,25 +743,18 @@ async def _handle_introspect_async(args, backend: AsyncOracleBackend, provider):
                 provider.display_results(data, title="Views")
 
         elif args.type == "columns":
-            if not args.name:
-                print("Error: Table name is required for 'columns' introspection", file=sys.stderr)
-                sys.exit(1)
+            # The same rule as the sync path: ``_validate_name`` has already
+            # refused a run without a name, so it is the table to ask about.
             columns = await introspector.list_columns(args.name, schema=None)
             data = _serialize_for_output(columns)
             provider.display_results(data, title=f"Columns of {args.name}")
 
         elif args.type == "indexes":
-            if not args.name:
-                print("Error: Table name is required for 'indexes' introspection", file=sys.stderr)
-                sys.exit(1)
             indexes = await introspector.list_indexes(args.name, schema=None)
             data = _serialize_for_output(indexes)
             provider.display_results(data, title=f"Indexes of {args.name}")
 
         elif args.type == "foreign-keys":
-            if not args.name:
-                print("Error: Table name is required for 'foreign-keys' introspection", file=sys.stderr)
-                sys.exit(1)
             fks = await introspector.list_foreign_keys(args.name, schema=None)
             data = _serialize_for_output(fks)
             provider.display_results(data, title=f"Foreign Keys of {args.name}")
@@ -840,9 +833,6 @@ async def _handle_introspect_async(args, backend: AsyncOracleBackend, provider):
             provider.display_results(data, title=title)
 
         elif args.type == "ddl":
-            if not args.name:
-                print("Error: Table name is required for 'ddl' introspection", file=sys.stderr)
-                sys.exit(1)
             statement = await introspector.get_ddl_statement(
                 args.name, object_type=None, schema=None
             )
@@ -852,23 +842,11 @@ async def _handle_introspect_async(args, backend: AsyncOracleBackend, provider):
             _display_ddl(provider, statement, args)
 
         elif args.type == "column-profiles":
-            if not args.name:
-                print(
-                    "Error: Table name is required for 'column-profiles' introspection",
-                    file=sys.stderr,
-                )
-                sys.exit(1)
             profiles = await introspector.list_column_data_profiles(args.name, schema=None)
             data = _serialize_for_output(profiles)
             provider.display_results(data, title=f"Column profiles of {args.name}")
 
         elif args.type == "value-samples":
-            if not args.name:
-                print(
-                    "Error: Table name is required for 'value-samples' introspection",
-                    file=sys.stderr,
-                )
-                sys.exit(1)
             if not args.column:
                 print(
                     "Error: --column is required for 'value-samples' introspection",
@@ -886,12 +864,6 @@ async def _handle_introspect_async(args, backend: AsyncOracleBackend, provider):
             provider.display_results(data, title=f"Values of {args.name}.{args.column}")
 
         elif args.type == "join-coverage":
-            if not args.name:
-                print(
-                    "Error: Left table name is required for 'join-coverage' introspection",
-                    file=sys.stderr,
-                )
-                sys.exit(1)
             if not args.column:
                 print(
                     "Error: --column is required for 'join-coverage' introspection",

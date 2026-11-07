@@ -270,7 +270,7 @@ class TestTheSchemaWideFamilies:
     def test_a_name_is_refused(self, type_, capsys):
         """A dropped NAME looks like a filter; it is refused before connecting."""
         with pytest.raises(SystemExit) as excinfo:
-            introspect_cli._refuse_unusable_name(_args(type_, "customers"))
+            introspect_cli._validate_name(_args(type_, "customers"))
 
         assert excinfo.value.code == 2
         assert "takes no name" in capsys.readouterr().err
