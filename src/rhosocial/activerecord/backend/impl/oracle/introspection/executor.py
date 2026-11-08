@@ -1,7 +1,7 @@
 # src/rhosocial/activerecord/backend/impl/oracle/introspection/executor.py
 """Oracle-specific introspector executors.
 
-The generic :class:`SyncIntrospectorExecutor` executes SQL directly via the
+The generic :class:`IntrospectorExecutor` executes SQL directly via the
 DB-API cursor.  Oracle's driver (oracledb) requires native ``:1``, ``:2``, …
 positional bind markers rather than the generic ``?`` placeholder used by the
 rest of the framework.
@@ -15,11 +15,11 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from rhosocial.activerecord.backend.introspection.executor import (
     AsyncIntrospectorExecutor,
-    SyncIntrospectorExecutor,
+    IntrospectorExecutor,
 )
 
 
-class SyncOracleIntrospectorExecutor(SyncIntrospectorExecutor):
+class OracleIntrospectorExecutor(IntrospectorExecutor):
     """Sync executor that converts ``?`` → ``:N`` for Oracle."""
 
     def execute(self, sql: str, params: Tuple = ()) -> List[Dict[str, Any]]:

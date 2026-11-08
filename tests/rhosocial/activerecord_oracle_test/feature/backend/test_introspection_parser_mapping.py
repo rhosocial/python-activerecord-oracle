@@ -22,7 +22,7 @@ import pytest
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.introspection.introspector import (
     AsyncOracleIntrospector,
-    SyncOracleIntrospector,
+    OracleIntrospector,
 )
 from rhosocial.activerecord.backend.introspection.types import TableType
 
@@ -82,9 +82,9 @@ class AsyncQuestionRecorder(QuestionRecorder):
 def make_sync(
     answers: Optional[Dict[str, List[Dict[str, Any]]]] = None,
     version: Optional[Tuple[int, ...]] = (23, 0, 0),
-) -> Tuple[SyncOracleIntrospector, QuestionRecorder]:
+) -> Tuple[OracleIntrospector, QuestionRecorder]:
     recorder = QuestionRecorder(answers)
-    return SyncOracleIntrospector(StubBackend(version=version), recorder), recorder
+    return OracleIntrospector(StubBackend(version=version), recorder), recorder
 
 
 def make_async(
@@ -462,11 +462,11 @@ class TestViewColumnsAreReported:
 
     def test_the_two_introspectors_sign_the_same_surface(self):
         """Sync and async expose ``get_view_info`` with one signature."""
-        sync_sig = inspect.signature(SyncOracleIntrospector.get_view_info)
+        sync_sig = inspect.signature(OracleIntrospector.get_view_info)
         async_sig = inspect.signature(AsyncOracleIntrospector.get_view_info)
         assert sync_sig == async_sig
         assert inspect.iscoroutinefunction(AsyncOracleIntrospector.get_view_info)
-        assert not inspect.iscoroutinefunction(SyncOracleIntrospector.get_view_info)
+        assert not inspect.iscoroutinefunction(OracleIntrospector.get_view_info)
 
 
 # --------------------------------------------------------------------- #
@@ -481,14 +481,14 @@ class TestDatabaseInfoReadsTheContract:
         to what the backend last learned from its server."""
         backend = StubBackend(version=None)
         backend._version = (21, 3, 0)
-        insp = SyncOracleIntrospector(backend, QuestionRecorder())
+        insp = OracleIntrospector(backend, QuestionRecorder())
         info = insp.parse_database_info([])
         assert info.version == "21.3.0"
         assert info.version_tuple == (21, 3, 0)
 
     def test_an_unknown_version_uses_the_unknown_convention(self):
         backend = StubBackend(version=None)
-        insp = SyncOracleIntrospector(backend, QuestionRecorder())
+        insp = OracleIntrospector(backend, QuestionRecorder())
         info = insp.parse_database_info([])
         assert info.version == "unknown"
         assert info.version_tuple == (0, 0, 0)

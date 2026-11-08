@@ -22,6 +22,8 @@ from dataclasses import FrozenInstanceError
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Tuple
 
+from decimal import Decimal
+
 import pytest
 from rhosocial.activerecord.backend.errors import DatabaseError
 from rhosocial.activerecord.backend.introspection.types import IntrospectionScope
@@ -29,7 +31,7 @@ from rhosocial.activerecord.backend.introspection.types import IntrospectionScop
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.introspection.introspector import (
     AsyncOracleIntrospector,
-    SyncOracleIntrospector,
+    OracleIntrospector,
 )
 from rhosocial.activerecord.backend.impl.oracle.introspection.types import (
     OraclePackageInfo,
@@ -123,9 +125,9 @@ PACKAGE_ROW = {
 
 def make_sync(
     rows: Optional[List[Dict[str, Any]]] = None, username: str = "ar_crm"
-) -> Tuple[SyncOracleIntrospector, RecordingExecutor]:
+) -> Tuple[OracleIntrospector, RecordingExecutor]:
     executor = RecordingExecutor(rows)
-    return SyncOracleIntrospector(StubBackend(username), executor), executor
+    return OracleIntrospector(StubBackend(username), executor), executor
 
 
 def make_async(
@@ -402,14 +404,14 @@ PARITY_METHODS = [
 class TestParity:
     @pytest.mark.parametrize("name", PARITY_METHODS)
     def test_sync_and_async_signatures_are_identical(self, name):
-        sync_sig = inspect.signature(getattr(SyncOracleIntrospector, name))
+        sync_sig = inspect.signature(getattr(OracleIntrospector, name))
         async_sig = inspect.signature(getattr(AsyncOracleIntrospector, name))
         assert sync_sig == async_sig
 
     @pytest.mark.parametrize("name", PARITY_METHODS)
     def test_the_async_half_is_actually_async(self, name):
         assert inspect.iscoroutinefunction(getattr(AsyncOracleIntrospector, name))
-        assert not inspect.iscoroutinefunction(getattr(SyncOracleIntrospector, name))
+        assert not inspect.iscoroutinefunction(getattr(OracleIntrospector, name))
 
     async def test_async_listing_caches_the_same_way(self):
         insp, executor = make_async([SEQUENCE_ROW])
@@ -717,3 +719,74 @@ class TestLiveSchemaObjects:
                 await backend.execute(drop, options=ddl)
             finally:
                 await backend.disconnect()
+
+class TestTableStorageBlockSize:
+    """The table listing multiplies blocks by the block size it reads.
+
+    ``BLOCKS`` counts the tablespace's units, and on any database created
+    with a block size other than 8 KiB the old hardcoded multiplication
+    made every reported size wrong by that ratio. The join that fixes it is
+    what these cases pin.
+    """
+
+    def test_the_probe_declares_the_family(self):
+        insp, _ = make_sync()
+        assert insp.dialect.supports_table_storage_introspection() is True
+
+    def test_blocks_are_multiplied_by_the_tablespace_block_size(self):
+        insp, _ = make_sync()
+        sql, params = insp.table_list_statement(
+            schema=None, include_system=False, include_views=True, table_type=None
+        ).to_sql()
+        squashed = "".join(sql.lower().split()).replace('"', "")
+        assert "user_tablespaces" in squashed
+        assert "block_size" in squashed
+        # The hardcoded page size is gone from the statement text.
+        assert "8192" not in squashed
+
+    def test_a_table_whose_tablespace_cannot_be_read_keeps_the_slot_none(self):
+        """A LEFT JOIN, so an unread tablespace answers null rather than
+        dropping the table or guessing 8192 back in."""
+        insp, _ = make_sync()
+        tables = insp.parse_tables(
+            [
+                {"TABLE_NAME": "EMPLOYEES", "TABLE_TYPE": "TABLE",
+                 "NUM_ROWS": 107, "DATA_LENGTH": Decimal("65536")},
+                {"TABLE_NAME": "NO_TS", "TABLE_TYPE": "TABLE", "DATA_LENGTH": None},
+            ],
+            "HR",
+        )
+        by_name = {t.name: t for t in tables}
+        assert by_name["EMPLOYEES"].size_bytes == 65536
+        assert by_name["EMPLOYEES"].row_count == 107
+        assert by_name["NO_TS"].size_bytes is None
+        for table in by_name.values():
+            assert table.data_size_bytes is None
+            assert table.index_size_bytes is None
+
+
+class TestSequenceProjection:
+    """The own class keeps the full semantics; to_core carries the minimum."""
+
+    def test_every_common_field_projects(self):
+        own = OracleSequenceInfo(
+            name="S", owner="HR", min_value=1, max_value=100, increment=2,
+            cycle=True, cache_size=20, order=True, last_number=41,
+        )
+        core = own.to_core()
+        assert core.name == "S"
+        assert core.schema == "HR"
+        assert core.minimum_value == 1
+        assert core.maximum_value == 100
+        assert core.increment == 2
+        assert core.cycle is True
+        assert core.cache_size == 20
+        assert core.last_value == 41
+
+    def test_the_view_reports_no_start_value(self):
+        """ALL_SEQUENCES keeps no START_WITH, so the minimum says so rather
+        than carrying the declaration's start under another name."""
+        core = OracleSequenceInfo(name="S", owner="HR").to_core()
+        assert core.start_value is None
+        assert core.minimum_value is None
+

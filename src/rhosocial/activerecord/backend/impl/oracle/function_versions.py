@@ -259,19 +259,28 @@ XML_FUNCTION_VERSIONS: Dict[str, Tuple[Tuple[int, int, int], Optional[Tuple[int,
     "xmlserialize": ((9, 0, 0), None),
 }
 
-# Combine all function versions
-ORACLE_FUNCTION_VERSIONS: Dict[str, Tuple[Tuple[int, int, int], Optional[Tuple[int, int, int]]]] = {}
-
-for _category in [
-    JSON_FUNCTION_VERSIONS,
-    SPATIAL_FUNCTION_VERSIONS,
-    NULL_FUNCTION_VERSIONS,
-    STRING_FUNCTION_VERSIONS,
-    DATETIME_FUNCTION_VERSIONS,
-    ANALYTIC_FUNCTION_VERSIONS,
-    CONVERSION_FUNCTION_VERSIONS,
-    AGGREGATE_FUNCTION_VERSIONS,
-    MATH_FUNCTION_VERSIONS,
-    XML_FUNCTION_VERSIONS,
-]:
-    ORACLE_FUNCTION_VERSIONS.update(_category)
+# The merged table every reader imports. It is built as a dict display at
+# import, in one statement, rather than as an empty dict filled by a loop
+# afterwards: a name that is empty until a later statement runs is not a
+# constant, and a reader that arrives between the two sees nothing.
+#
+# The ten category tables above stay separate because the grouping is their
+# point; this one is the union, and the order of the unpackings is the order
+# the categories are listed in, so the merge is deterministic. Six names
+# appear in two tables -- ``trunc``, ``extract``, ``numtodsinterval``,
+# ``numtoyminterval``, ``stddev`` and ``variance`` -- and the later table wins,
+# which is what the loop this replaces did too: the aggregate floor for
+# ``stddev`` and ``variance`` (8.0) rather than the analytic one (8.1) is the
+# value this table has always carried.
+ORACLE_FUNCTION_VERSIONS: Dict[str, Tuple[Tuple[int, int, int], Optional[Tuple[int, int, int]]]] = {
+    **JSON_FUNCTION_VERSIONS,
+    **SPATIAL_FUNCTION_VERSIONS,
+    **NULL_FUNCTION_VERSIONS,
+    **STRING_FUNCTION_VERSIONS,
+    **DATETIME_FUNCTION_VERSIONS,
+    **ANALYTIC_FUNCTION_VERSIONS,
+    **CONVERSION_FUNCTION_VERSIONS,
+    **AGGREGATE_FUNCTION_VERSIONS,
+    **MATH_FUNCTION_VERSIONS,
+    **XML_FUNCTION_VERSIONS,
+}

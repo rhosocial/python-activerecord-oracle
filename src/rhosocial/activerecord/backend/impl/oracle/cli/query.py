@@ -15,9 +15,7 @@ from rhosocial.activerecord.backend.errors import ConnectionError, QueryError
 from rhosocial.activerecord.backend.options import ExecutionOptions, StatementType
 
 from .connection import add_connection_args, resolve_connection_config_from_args
-from .output import create_provider, RICH_AVAILABLE
-
-OUTPUT_CHOICES = ['table', 'json', 'csv', 'tsv']
+from .output import OUTPUT_CHOICES, create_provider, RICH_AVAILABLE
 
 
 def create_parser(subparsers):

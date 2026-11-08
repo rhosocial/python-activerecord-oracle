@@ -11,11 +11,18 @@ being bent into a table or a "miscellaneous" dict.
 They are frozen for the same reason the extracted rows are: they describe
 a database, and a caller that edits one is editing its own copy of an
 answer. Reads are cached by the introspector, so a mutable result would
-also be a shared result.
+also be a shared result. The one exception is
+:class:`OracleColumnDataProfile`, which *extends* a core dataclass and
+therefore cannot be frozen; it says so where it is declared.
 """
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
+
+from rhosocial.activerecord.backend.introspection.types import ColumnDataProfile
+
+if TYPE_CHECKING:  # pragma: no cover
+    from rhosocial.activerecord.backend.introspection import SequenceInfo
 
 
 @dataclass(frozen=True)
@@ -57,6 +64,35 @@ class OracleSequenceInfo:
     cache_size: Optional[int] = None
     order: bool = False
     last_number: Optional[int] = None
+
+    def to_core(self) -> "SequenceInfo":
+        """The cross-dialect minimum this answer carries.
+
+        Core's ``SequenceInfo`` names the smallest shape every engine with
+        sequences answers, and this is the projection onto it: ``owner``
+        lands on ``schema``, ``min_value``/``max_value`` on
+        ``minimum_value``/``maximum_value``, ``last_number`` on
+        ``last_value`` (with the semantics its docstring warns about: the
+        *next* value the cache would hand out, not the last one used).
+        ``start_value`` is ``None`` because ``ALL_SEQUENCES`` reports no
+        START_WITH -- the declaration's start is history the view does not
+        keep -- and ``order`` stays here: it is a deployment guarantee the
+        common minimum has no field for
+        (``.claude/rules/introspection.md`` §5).
+        """
+        from rhosocial.activerecord.backend.introspection import SequenceInfo
+
+        return SequenceInfo(
+            name=self.name,
+            schema=self.owner,
+            start_value=None,
+            minimum_value=self.min_value,
+            maximum_value=self.max_value,
+            increment=self.increment,
+            cycle=self.cycle,
+            cache_size=self.cache_size,
+            last_value=self.last_number,
+        )
 
 
 @dataclass(frozen=True)
@@ -112,3 +148,53 @@ class OraclePackageInfo:
     status: str
     created_time: Optional[str] = None
     last_ddl_time: Optional[str] = None
+
+
+# Deliberately *not* frozen, unlike the three types above: it inherits core's
+# ``ColumnDataProfile``, which is a mutable dataclass, and Python refuses to
+# build a frozen dataclass on top of a non-frozen one. Consistency with the
+# backend's other value objects is worth less than the family fitting the
+# slot core reserved for it -- a caller holding ``ColumnDataProfile`` must be
+# able to treat this as one, and subclassing is how that is spelled.
+@dataclass
+class OracleColumnDataProfile(ColumnDataProfile):
+    """A column profile carrying the extra facts ``ALL_TAB_COLUMNS`` supplies.
+
+    Named fields rather than ``extra`` entries: these are Oracle's own
+    statistics columns, and a consumer that knows it asked Oracle should read
+    them off the object instead of guessing at dictionary keys.
+
+    ``sample_size`` is ``SAMPLE_SIZE``: the rows that were sampled **and were
+    not null**. Oracle counts the nulls separately in ``NUM_NULLS`` and leaves
+    them out of this figure, so it is *not* the number of rows the figures
+    describe -- the two parts added together are. Core's ``row_count`` carries
+    that total, because a profile's row count must be the population its
+    fractions were derived from; ``sample_size`` keeps the dictionary's own
+    number beside it. The distinction is worth having: a column whose
+    ``sample_size`` is 400 while ``row_count`` is 1000 is 60% null, and a
+    column whose ``sample_size`` is 1000 with the same ``row_count`` is not.
+
+    ``histogram`` is ``HISTOGRAM`` -- ``NONE``, ``FREQUENCY``,
+    ``HEIGHT BALANCED``, ``TOP-FREQUENCY`` or ``HYBRID``. It matters because
+    it decides how exact ``distinct_count`` is: under a ``FREQUENCY``
+    histogram every distinct value has a bucket of its own and ``NUM_DISTINCT``
+    is an exact count; without one it is an estimate derived from a sample.
+    Core has no slot for this, and leaving it out would make two profiles
+    with very different confidence look identical.
+
+    ``data_type`` is the declared type as the dictionary spells it
+    (``NUMBER``, ``DATE``, ``VARCHAR2``, ...). It is here for the one thing
+    this profile cannot answer: ``min_value``/``max_value`` are always
+    ``None`` on Oracle because ``LOW_VALUE``/``HIGH_VALUE`` are RAW, so a
+    reader looking for an extreme needs to know which type it would have
+    been before deciding whether to decode the RAW itself.
+    """
+
+    #: Rows sampled that were not null (``SAMPLE_SIZE``). The rows the
+    #: profile describes are this plus ``num_nulls``, which core's
+    #: ``row_count`` carries.
+    sample_size: Optional[int] = None
+    #: The histogram kind Oracle built for this column (``HISTOGRAM``).
+    histogram: Optional[str] = None
+    #: The declared type, in the dictionary's own spelling (``DATA_TYPE``).
+    data_type: Optional[str] = None

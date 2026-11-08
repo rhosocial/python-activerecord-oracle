@@ -23,11 +23,9 @@ from .connection import (
     connection_named,
     resolve_connection_config_from_args,
 )
-from .output import create_provider, RICH_AVAILABLE
+from .output import INFO_OUTPUT_CHOICES, create_provider, RICH_AVAILABLE
 
 logger = logging.getLogger(__name__)
-
-OUTPUT_CHOICES = ['table', 'json']
 
 
 def handle(args):
@@ -290,7 +288,7 @@ def create_parser(subparsers):
     parser.add_argument(
         "-o",
         "--output",
-        choices=OUTPUT_CHOICES,
+        choices=INFO_OUTPUT_CHOICES,
         default="table",
         help="Output format (default: table)",
     )

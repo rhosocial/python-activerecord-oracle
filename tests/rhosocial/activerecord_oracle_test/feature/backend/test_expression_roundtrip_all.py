@@ -109,10 +109,13 @@ from typing import Dict
 
 import pytest
 
-from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
+from rhosocial.activerecord.backend.dialect.exceptions import (ProtocolNotImplementedError, UnsupportedFeatureError)
 from rhosocial.activerecord.backend.expression.bases import BaseExpression
 from rhosocial.activerecord.backend.expression.core import Column, Literal
 from rhosocial.activerecord.backend.expression.operators import RawSQL
+from rhosocial.activerecord.backend.expression.query_sources import (
+    SetOperationKind,
+)
 from rhosocial.activerecord.backend.expression.objects import (
     Function,
     Index,
@@ -141,7 +144,10 @@ from rhosocial.activerecord.backend.expression.statements.ddl_table import (
     TableConstraint,
     TablePrimaryKeyConstraint,
 )
-from rhosocial.activerecord.backend.expression.statements.dql import QueryStatement
+from rhosocial.activerecord.backend.expression.statements.dql import (
+    QueryStatement,
+    SetOperationStatement,
+)
 from rhosocial.activerecord.backend.expression.sources import NamedRelationRef
 from rhosocial.activerecord.backend.expression.types import IntegerType
 # The round-trip harness is vendored beside this matrix (see its module
@@ -314,6 +320,20 @@ def _one_column_query(dialect):
     return QueryStatement(
         dialect, select=[Column(dialect, "id")], from_=_table_obj(dialect)
     )
+
+
+def _compound_arms(dialect):
+    """Two single-column SELECTs over two tables, no bind parameters."""
+    return [
+        QueryStatement(
+            dialect, select=[Column(dialect, "id")], from_=_table_obj(dialect)
+        ),
+        QueryStatement(
+            dialect,
+            select=[Column(dialect, "id")],
+            from_=_table_obj(dialect, "other"),
+        ),
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -581,6 +601,17 @@ def _register_core_specials():
             SetOperationKind.UNION,
             _one_column_query(d),
             _one_column_query(d),
+        ),
+    )
+
+    # The statement half of the same pair. The filler reaches ``op`` and cannot
+    # name a word form, and an empty ``parts`` renders nothing, so the matrix's
+    # own instance said nothing about the dialect. A factory makes the instance
+    # the matrix walks a real compound query whose SQL is pinned below.
+    register_special_constructor(
+        "statements.dql.SetOperationStatement",
+        lambda d: SetOperationStatement(
+            d, SetOperationKind.UNION_ALL, _compound_arms(d)
         ),
     )
 
@@ -1680,6 +1711,46 @@ UNCONSTRUCTIBLE: tuple = (
 # UPPER() + LIKE. PIVOT and UNPIVOT go through this backend's own Pivot
 # and its format_pivot, so the core PivotMixin is not composed.
 LEGITIMATE_NON_RENDERS: Dict[str, tuple] = {
+    # ---- core join-coverage family this dialect does not answer ----
+    #  The profile and the value listing now render from `all_tab_columns`
+    #  (NUM_DISTINCT, NUM_NULLS, SAMPLE_SIZE, LAST_ANALYZED) and from a
+    #  grouped scan respectively; `low_value`/`high_value` stay None because
+    #  they are RAW and need `DBMS_STATS.CONVERT_RAW_VALUE`, a PL/SQL
+    #  procedure no SELECT can call. Join coverage is a different matter: the
+    #  engine could measure it, but the statement is not written, and it is a
+    #  double scan of both tables -- so the probe stays False rather than
+    #  promising a formatter that does not exist.
+    "rhosocial.activerecord.backend.expression.introspection.JoinCoverageQueryStatement": (
+        ProtocolNotImplementedError, 'does not implement ',
+    ),
+    # ---- core operational families this dialect does not answer ----
+    #  Oracle exposes these through GV$/V$ dynamic performance views and
+    #  DBMS_METADATA, both of which name connection state rather than a
+    #  schema-scoped catalogue -- a shape the dialect layer has no slot for.
+    #  The probes answer False pending that decision.
+    "rhosocial.activerecord.backend.expression.introspection.RuntimeMetricsQueryStatement": (
+        ProtocolNotImplementedError, 'does not implement ',
+    ),
+    "rhosocial.activerecord.backend.expression.introspection.IndexUsageStatsQueryStatement": (
+        ProtocolNotImplementedError, 'does not implement ',
+    ),
+    "rhosocial.activerecord.backend.expression.introspection.ObjectDependencyQueryStatement": (
+        ProtocolNotImplementedError, 'does not implement ',
+    ),
+    "rhosocial.activerecord.backend.expression.introspection.DDLStatementQueryStatement": (
+        ProtocolNotImplementedError, 'does not implement ',
+    ),
+    # Oracle exposes index and table use through GV$/V$ dynamic performance
+    # views, which name a live instance's state rather than a schema-scoped
+    # catalogue -- a dependency the dialect layer has no slot to carry. The
+    # probes answer False, and these stay a declared gap until that decision
+    # is made.
+    "rhosocial.activerecord.backend.expression.introspection.UnusedIndexesQueryStatement": (
+        ProtocolNotImplementedError, 'does not implement ',
+    ),
+    "rhosocial.activerecord.backend.expression.introspection.TableUsageStatsQueryStatement": (
+        ProtocolNotImplementedError, 'does not implement ',
+    ),
     "rhosocial.activerecord.backend.expression.pivot.Pivot": (
         UnsupportedFeatureError, "does not support the 'format_pivot' statement"
     ),
@@ -2944,3 +3015,73 @@ class TestOracleNamespaceShape:
             kind(
                 oracle_dialect, _OBJECT, catalog_name="other", schema_name=_OWNER
             ).to_sql()
+
+
+# ---------------------------------------------------------------------------
+# The set-operation statement, rendered
+# ---------------------------------------------------------------------------
+#
+# Oracle spells a compound SELECT, so the matrix's verdict for
+# ``SetOperationStatement`` is "renders" -- and before the factory above, the
+# instance the matrix walked carried no parts, so it rendered the empty string:
+# a render that pinned nothing. These are the bytes. Two real arms joined by the
+# keyword, with the bind parameters asserted positionally, because an ordering
+# bug still renders valid SQL.
+
+
+def test_set_operation_statement_renders_the_pinned_sql(oracle_dialect):
+    """``UNION ALL`` over two arms, with Oracle's upper-cased quoted names."""
+    node = SetOperationStatement(
+        oracle_dialect,
+        SetOperationKind.UNION_ALL,
+        _compound_arms(oracle_dialect),
+    )
+
+    rendered, params = node.to_sql()
+
+    assert rendered == 'SELECT "ID" FROM "T" UNION ALL SELECT "ID" FROM "OTHER"'
+    assert params == ()
+
+
+def test_set_operation_statement_spells_the_bare_union(oracle_dialect):
+    """The word form alone decides the keyword, so ``union`` differs."""
+    node = SetOperationStatement(
+        oracle_dialect, SetOperationKind.UNION, _compound_arms(oracle_dialect)
+    )
+
+    rendered, params = node.to_sql()
+
+    assert rendered == 'SELECT "ID" FROM "T" UNION SELECT "ID" FROM "OTHER"'
+    assert params == ()
+
+
+def test_set_operation_statement_parameters_concatenate_in_part_order(
+    oracle_dialect,
+):
+    """Each arm's parameters arrive in the order the operator joins them."""
+    dialect = oracle_dialect
+    parts = [
+        QueryStatement(
+            dialect,
+            select=[Column(dialect, "id"), Literal(dialect, 1)],
+            from_=_table_obj(dialect),
+            where=ComparisonPredicate(
+                dialect, "=", Column(dialect, "id"), Literal(dialect, 5)
+            ),
+        ),
+        QueryStatement(
+            dialect,
+            select=[Column(dialect, "id"), Literal(dialect, 2)],
+            from_=_table_obj(dialect, "u"),
+        ),
+    ]
+    node = SetOperationStatement(dialect, SetOperationKind.UNION_ALL, parts)
+
+    rendered, params = node.to_sql()
+
+    assert rendered == (
+        'SELECT "ID", ? FROM "T" WHERE "ID" = ? '
+        "UNION ALL "
+        'SELECT "ID", ? FROM "U"'
+    )
+    assert params == (1, 5, 2)

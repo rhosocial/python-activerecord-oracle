@@ -15,6 +15,12 @@ import pytest
 
 from rhosocial.activerecord.backend.errors import ConnectionError, QueryError
 from rhosocial.activerecord.backend.impl.oracle.cli import introspect as cli_introspect
+from rhosocial.activerecord.backend.introspection.types import (
+    ColumnDataProfile,
+    ColumnValueFrequency,
+    DDLStatement,
+    JoinCoverage,
+)
 
 
 class RecordingProvider:
@@ -43,6 +49,52 @@ TRIGGERS = [
     {"TRIGGER_NAME": "TRG_CUSTOMERS_BI", "TABLE_NAME": "CUSTOMERS"},
     {"TRIGGER_NAME": "TRG_ORDERS_BI", "TABLE_NAME": "ORDERS"},
 ]
+
+# The nine operational and data families. Four are listings over the schema's
+# scope, one is the dependency graph, three are one-table questions and the
+# ninth measures two columns against each other. The values are the shapes
+# core hands back, so ``_serialize_for_output`` and the ``source`` column the
+# data families carry are exercised rather than bypassed.
+UNUSED_INDEXES = [{"INDEX_NAME": "SYS_C001", "TABLE_NAME": "CUSTOMERS"}]
+TABLE_USAGE_STATS = [
+    {"TABLE_NAME": "CUSTOMERS", "SEQUENTIAL_SCANS": 12, "INSERTS": 3}
+]
+RUNTIME_METRICS = [
+    {"NAME": "SESSION_LOGICAL_READS", "VALUE": 812, "SOURCE": "since startup"}
+]
+INDEX_USAGE_STATS = [{"INDEX_NAME": "SYS_C001", "TABLE_NAME": "CUSTOMERS", "SCANS": 4}]
+OBJECT_DEPENDENCIES = [
+    {"DEPENDENT": "V_CUSTOMERS", "REFERENCED": "CUSTOMERS", "KIND": "VIEW"}
+]
+DDL_STATEMENT = DDLStatement(
+    schema="AR_CRM",
+    object_type="TABLE",
+    object_name="CUSTOMERS",
+    ddl="CREATE TABLE CUSTOMERS (ID NUMBER(10) NOT NULL)",
+    native=False,
+)
+COLUMN_PROFILES = [
+    ColumnDataProfile(
+        schema="AR_CRM",
+        table_name="CUSTOMERS",
+        column_name="STATUS",
+        null_fraction=0.0,
+        distinct_count=3,
+        row_count=1000,
+        source="estimate",
+    )
+]
+COLUMN_VALUES = [ColumnValueFrequency(value="ACTIVE", count=700)]
+JOIN_COVERAGE = JoinCoverage(
+    left_schema="AR_CRM",
+    left_table="CUSTOMERS",
+    left_column="ID",
+    right_schema="AR_CRM",
+    right_table="ORDERS",
+    right_column="CUSTOMER_ID",
+    left_coverage=1.0,
+    right_coverage=0.75,
+)
 
 
 class FakeIntrospector:
@@ -110,6 +162,52 @@ class FakeIntrospector:
     def list_packages(self, owner=None):
         self.calls.append(("packages", owner))
         return [{"OBJECT_NAME": "CUSTOMERS_PKG"}]
+
+    # ---- the nine operational and data families ------------------------
+    # The four counter listings and the dependency graph answer for the
+    # connection's whole scope; ``dependencies`` may be narrowed to one
+    # object. The three one-table questions carry the table NAME through.
+
+    def list_unused_indexes(self, schema=None):
+        self.calls.append(("unused_indexes", schema))
+        return UNUSED_INDEXES
+
+    def list_table_usage_stats(self, schema=None):
+        self.calls.append(("table_usage_stats", schema))
+        return TABLE_USAGE_STATS
+
+    def list_runtime_metrics(self, schema=None):
+        self.calls.append(("runtime_metrics", schema))
+        return RUNTIME_METRICS
+
+    def list_index_usage_stats(self, schema=None):
+        self.calls.append(("index_usage_stats", schema))
+        return INDEX_USAGE_STATS
+
+    def list_object_dependencies(self, object_name=None, schema=None):
+        self.calls.append(("object_dependencies", object_name, schema))
+        return OBJECT_DEPENDENCIES
+
+    def get_ddl_statement(self, object_name, object_type=None, schema=None):
+        self.calls.append(("ddl_statement", object_name, object_type, schema))
+        return DDL_STATEMENT
+
+    def list_column_data_profiles(self, table_name, schema=None):
+        self.calls.append(("column_data_profiles", table_name, schema))
+        return COLUMN_PROFILES
+
+    def sample_column_values(self, table_name, column_name, limit=100, schema=None):
+        self.calls.append(("value_samples", table_name, column_name, limit, schema))
+        return COLUMN_VALUES
+
+    def estimate_join_coverage(
+        self, left_table, left_column, right_table, right_column, schema=None
+    ):
+        self.calls.append((
+            "join_coverage", left_table, left_column, right_table, right_column,
+            schema,
+        ))
+        return JOIN_COVERAGE
 
     def get_database_info(self):
         self.calls.append(("database",))
@@ -186,7 +284,12 @@ def patch_async_backend(monkeypatch, introspector: Any,
                          "list_triggers", "get_view_info", "list_sequences",
                          "get_sequence_info", "list_synonyms",
                          "get_synonym_info", "list_packages",
-                         "get_database_info"):
+                         "get_database_info",
+                         "list_unused_indexes", "list_table_usage_stats",
+                         "list_runtime_metrics", "list_index_usage_stats",
+                         "list_object_dependencies", "get_ddl_statement",
+                         "list_column_data_profiles", "sample_column_values",
+                         "estimate_join_coverage"):
                 fn = getattr(sync, attr)
 
                 async def call(*a: Any, _fn: Any = fn, **k: Any) -> Any:
@@ -287,7 +390,85 @@ class TestNameRules:
 
     def test_every_declared_type_has_a_name_rule(self):
         """A new type must say what it does with NAME, or it is not complete."""
-        assert set(cli_introspect._NAME_RULES) == set(cli_introspect.INTROSPECT_TYPES)
+        assert set(cli_introspect._NAME_RULE) == set(cli_introspect.INTROSPECT_TYPES)
+
+    def test_the_table_says_what_each_types_name_means(self):
+        """The table as data, so editing one type is a visible change.
+
+        A set nobody asserts the members of is still a set whose answers can
+        drift one at a time, which is why the contents are pinned beside the
+        set-level check above.
+        """
+        assert cli_introspect._NAME_RULE == {
+            "columns": "required",
+            "indexes": "required",
+            "foreign-keys": "required",
+            "triggers": "optional",
+            "views": "optional",
+            "sequences": "optional",
+            "synonyms": "optional",
+            "tables": "forbidden",
+            "packages": "forbidden",
+            "unused-indexes": "forbidden",
+            "table-stats": "forbidden",
+            "runtime": "forbidden",
+            "index-stats": "forbidden",
+            "dependencies": "optional",
+            "ddl": "required",
+            "column-profiles": "required",
+            "value-samples": "required",
+            "join-coverage": "required",
+            "database": "forbidden",
+        }
+
+    @pytest.mark.parametrize(
+        "itype",
+        sorted(
+            k for k, rule in cli_introspect._NAME_RULE.items() if rule == "forbidden"
+        ),
+    )
+    def test_a_refused_type_is_refused_by_the_table(self, itype, capsys):
+        """Each category, read through the one validator that reads the table.
+
+        The per-branch copies are gone, so this is the table's own behaviour
+        rather than a branch that happens to remember it.
+        """
+        with pytest.raises(SystemExit) as excinfo:
+            cli_introspect._validate_name(
+                argparse.Namespace(type=itype, name="customers")
+            )
+        assert excinfo.value.code == 2
+        assert f"Error: {itype} introspection takes no name" in capsys.readouterr().err
+
+    @pytest.mark.parametrize(
+        "itype",
+        sorted(
+            k for k, rule in cli_introspect._NAME_RULE.items() if rule == "required"
+        ),
+    )
+    def test_a_required_name_is_required_by_the_table(self, itype, capsys):
+        """A missing required NAME is an incomplete invocation, exit 1.
+
+        The noun is the type's own: NAME is the *left* table of the pair for
+        ``join-coverage`` and "the table" for the rest, which is a wording
+        choice rather than a second decision about whether it is required --
+        the rule is read from the table either way.
+        """
+        noun = "Left table name" if itype == "join-coverage" else "Table name"
+        with pytest.raises(SystemExit) as excinfo:
+            cli_introspect._validate_name(argparse.Namespace(type=itype, name=None))
+        assert excinfo.value.code == 1
+        assert f"Error: {noun} is required for '{itype}'" in capsys.readouterr().err
+
+    @pytest.mark.parametrize(
+        "itype",
+        sorted(
+            k for k, rule in cli_introspect._NAME_RULE.items() if rule == "optional"
+        ),
+    )
+    def test_an_optional_name_may_be_given_or_not(self, itype):
+        cli_introspect._validate_name(argparse.Namespace(type=itype, name=None))
+        cli_introspect._validate_name(argparse.Namespace(type=itype, name="customers"))
 
     def test_help_states_what_name_means(self, capsys):
         with pytest.raises(SystemExit):
@@ -544,13 +725,30 @@ class TestHandleAsyncBranches:
         ("synonyms", None, "Synonyms"),
         ("synonyms", "customers", "Synonym customers"),
         ("packages", None, "Packages"),
+        ("unused-indexes", None, "Unused Indexes"),
+        ("table-stats", None, "Table Usage Stats"),
+        ("runtime", None, "Runtime Metrics"),
+        ("index-stats", None, "Index Usage Stats"),
+        ("dependencies", None, "Object Dependencies"),
+        ("dependencies", "customers", "Dependencies of customers"),
+        ("ddl", "customers", "DDL of CUSTOMERS"),
+        ("column-profiles", "customers", "Column profiles of customers"),
+        ("value-samples", "customers", "Values of customers.status"),
+        ("join-coverage", "customers", "Join Coverage"),
     ])
     def test_async_branches(self, provider, monkeypatch, itype, name, title):
         insp = FakeIntrospector()
         patch_async_backend(monkeypatch, insp)
-        argv = ["introspect", itype, "--async"]
+        argv = ["introspect", itype, "--async", "-o", "json"]
         if name:
             argv.insert(2, name)
+        if itype == "value-samples":
+            argv += ["--column", "status"]
+        if itype == "join-coverage":
+            argv += [
+                "--column", "id", "--right-table", "orders", "--right-column",
+                "customer_id",
+            ]
         cli_introspect.handle(build_parser().parse_args(argv))
         assert [t for t, _ in provider.results][0] == title
 
@@ -594,6 +792,18 @@ class TestIntrospectTypeGates:
         "synonyms": [],
         "packages": [],
         "database": [],
+        "unused-indexes": [],
+        "table-stats": [],
+        "runtime": [],
+        "index-stats": [],
+        "dependencies": [],
+        "ddl": ["customers", "-o", "json"],
+        "column-profiles": ["customers"],
+        "value-samples": ["customers", "--column", "status"],
+        "join-coverage": [
+            "customers", "--column", "id",
+            "--right-table", "orders", "--right-column", "customer_id",
+        ],
     }
 
     def test_the_advertised_list_is_the_capability_table(self):

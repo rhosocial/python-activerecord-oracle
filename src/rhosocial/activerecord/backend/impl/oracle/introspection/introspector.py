@@ -2,7 +2,7 @@
 """
 Oracle concrete introspectors.
 
-Implements SyncAbstractIntrospector and AsyncAbstractIntrospector for Oracle
+Implements AbstractIntrospector and AsyncAbstractIntrospector for Oracle
 databases using Oracle data dictionary views for metadata queries.
 
 The introspectors are exposed via ``backend.introspector``.
@@ -20,7 +20,7 @@ Key behaviours:
   - parse_* methods are pure Python — shared by sync and async introspectors
 
 Design principle: Sync and Async are separate and cannot coexist.
-- SyncOracleIntrospector: for synchronous backends
+- OracleIntrospector: for synchronous backends
 - AsyncOracleIntrospector: for asynchronous backends
 """
 
@@ -39,12 +39,12 @@ if TYPE_CHECKING:  # pragma: no cover
 
 from rhosocial.activerecord.backend.introspection.base import (
     IntrospectorMixin,
-    SyncAbstractIntrospector,
+    AbstractIntrospector,
     AsyncAbstractIntrospector,
 )
 from rhosocial.activerecord.backend.introspection.cache import IntrospectionCache
 from rhosocial.activerecord.backend.introspection.executor import (
-    SyncIntrospectorExecutor,
+    IntrospectorExecutor,
     AsyncIntrospectorExecutor,
 )
 from rhosocial.activerecord.backend.introspection.types import (
@@ -61,13 +61,16 @@ from rhosocial.activerecord.backend.introspection.types import (
     IntrospectionViewInfo,
     IntrospectionTriggerInfo,
     IntrospectionScope,
+    ColumnValueFrequency,
+    ProfileSource,
 )
 from rhosocial.activerecord.backend.expression.types import DataType
 from .status_introspector import (
-    SyncOracleStatusIntrospector,
+    OracleStatusIntrospector,
     AsyncOracleStatusIntrospector,
 )
 from .types import (
+    OracleColumnDataProfile,
     OraclePackageInfo,
     OracleSequenceInfo,
     OracleSynonymInfo,
@@ -80,6 +83,23 @@ from .types import (
 #: rather than by overloading a scope that means something else.
 _SYNONYM_FAMILY = "oracle:synonyms"
 _PACKAGE_FAMILY = "oracle:packages"
+
+
+def _as_int(value: Any) -> Optional[int]:
+    """The byte count a ``NUMBER`` arithmetic answer carries, as an int.
+
+    Oracle answers ``BLOCKS * BLOCK_SIZE`` as a ``NUMBER``, which the
+    driver returns as a :class:`~decimal.Decimal`; ``IntrospectionTableInfo``
+    declares the slot an ``Optional[int]``. A value that cannot be read as a
+    whole number stays ``None`` -- unknown is an answer, and a size the
+    catalogue cannot express is not zero.
+    """
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 #: The object kinds the table listing can report, in core's vocabulary.
 #: The dictionary spells them for what they are -- ``ALL_TABLES`` answers
@@ -111,7 +131,7 @@ _NUMERIC_TYPES = frozenset({"NUMBER", "FLOAT"})
 class OracleIntrospectorMixin(IntrospectorMixin):
     """Mixin providing shared Oracle-specific introspection logic.
 
-    Both SyncOracleIntrospector and AsyncOracleIntrospector inherit
+    Both OracleIntrospector and AsyncOracleIntrospector inherit
     from this mixin to share:
     - Default schema handling
     - Oracle version detection
@@ -262,7 +282,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
                     table_type=_TABLE_TYPE_BY_KIND.get(kind, TableType.BASE_TABLE),
                     comment=row.get("COMMENTS"),
                     row_count=row.get("NUM_ROWS"),
-                    size_bytes=row.get("DATA_LENGTH"),
+                    size_bytes=_as_int(row.get("DATA_LENGTH")),
                     create_time=None,  # Oracle doesn't store creation time
                     update_time=str(row["LAST_ANALYZED"]) if row.get("LAST_ANALYZED") else None,
                 )
@@ -377,6 +397,150 @@ class OracleIntrospectorMixin(IntrospectorMixin):
                 )
             )
         return columns
+
+    # ------------------------------------------------------------------ #
+    # Data profiles -- what the columns hold, as the last statistics said
+    # ------------------------------------------------------------------ #
+
+    def parse_column_data_profiles(
+        self, rows: List[Dict[str, Any]], schema: str, table_name: str
+    ) -> List[Any]:
+        """Project ``ALL_TAB_COLUMNS`` statistics rows into profiles.
+
+        The runtime type is :class:`OracleColumnDataProfile` -- core's profile
+        plus the dictionary fields core has no slot for. The annotation is the
+        wide one because that class extends a core dataclass and ``List`` is
+        invariant, so naming the subclass here would narrow a slot core
+        declares as ``List[ColumnDataProfile]``.
+
+        Three things happen here that the dictionary cannot do for itself:
+
+        * ``NUM_NULLS`` becomes a *fraction*, and its denominator is
+          ``NUM_NULLS + SAMPLE_SIZE`` rather than ``SAMPLE_SIZE`` alone.
+          ``SAMPLE_SIZE`` is the number of rows the statistics were computed
+          over **that were not null**: Oracle counts the nulls separately in
+          ``NUM_NULLS`` and leaves them out of the sample size. Dividing by it
+          alone therefore reports nulls per non-null row rather than per row,
+          and a column that is 60% null over 1000 rows comes out as
+          600/400 = 1.5 -- a fraction above 1, which is the arithmetic saying
+          the denominator was the wrong population. The rows the statistics
+          actually describe are the two parts added together, so that total is
+          both the fraction's denominator and the profile's ``row_count``; the
+          two travel together, or the count would not be the one the fraction
+          was derived from. A missing ``NUM_NULLS`` or ``SAMPLE_SIZE`` leaves
+          both ``None`` -- a total needs both parts -- and a zero total (an
+          analysed but empty table) leaves the fraction undefined rather than
+          zero. ``sample_size`` still travels as its own named field, nulls
+          excluded, so a caller can see how much of the table was sampled
+          without having to un-add the total.
+        * ``source`` is ``ESTIMATE`` when ``LAST_ANALYZED`` records a vintage
+          and ``UNKNOWN`` when it does not. Both are estimates; the rule for
+          this family is that an estimate must be able to say when it was
+          collected, and a column that has never been analysed has no
+          vintage to give. Its statistics columns are all NULL, so the
+          profile reports ``None`` for every figure -- a column whose shape
+          is known and whose contents are not, which is a different answer
+          from "no such column" and must not be smoothed into zeros.
+
+        ``min_value``/``max_value`` are always ``None``, and it is a fact
+        about Oracle rather than about this parser. The dictionary holds the
+        extremes in ``LOW_VALUE``/``HIGH_VALUE`` as RAW, in the column's
+        internal encoding: for ``NUMBER`` that is a mantissa/exponent byte
+        string, for ``DATE`` seven bytes of century-to-second, and neither is
+        readable as it stands. Converting needs
+        ``DBMS_STATS.CONVERT_RAW_VALUE``, a PL/SQL procedure whose result type
+        is the column's own, so it cannot be called from a SELECT and would
+        need one PL/SQL round trip per column. Casting the RAW to text would
+        produce bytes a caller cannot compare, which is worse than an honest
+        ``None``; the follow-up, if there is one, is the per-column decode and
+        not a shortcut here.
+
+        ``distinct_count`` is ``NUM_DISTINCT`` and needs no adjustment: Oracle
+        computes it over the non-null sampled rows and reports it as a count
+        of distinct *values*, not as a share of anything. How exact that count
+        is depends on the histogram -- under ``FREQUENCY`` every distinct
+        value has its own bucket and the count is exact, otherwise it is an
+        estimate derived from the sample. ``histogram`` carries which, rather
+        than this parser guessing at the confidence.
+        """
+        profiles: List[Any] = []
+        for row in rows or []:
+            column_name = row.get("COLUMN_NAME")
+            if not column_name:
+                # A row with no column name is not a profile of anything. It
+                # can only come from a projection that dropped the name.
+                continue
+
+            sample_size = _as_int(row.get("SAMPLE_SIZE"))
+            null_count = _as_int(row.get("NUM_NULLS"))
+            # ``SAMPLE_SIZE`` is the non-null part of the rows sampled, and
+            # ``NUM_NULLS`` is the null part; adding them gives the rows the
+            # statistics describe. Either part missing means the total is
+            # unknown, and a zero total means the fraction has no denominator.
+            row_count: Optional[int] = None
+            null_fraction = None
+            if sample_size is not None and null_count is not None:
+                row_count = sample_size + null_count
+                if row_count:
+                    null_fraction = float(null_count) / float(row_count)
+
+            collected_at = row.get("LAST_ANALYZED")
+            profiles.append(
+                OracleColumnDataProfile(
+                    schema=row.get("OWNER") or schema,
+                    table_name=row.get("TABLE_NAME") or table_name,
+                    column_name=str(column_name),
+                    null_fraction=null_fraction,
+                    distinct_count=_as_int(row.get("NUM_DISTINCT")),
+                    min_value=None,
+                    max_value=None,
+                    row_count=row_count,
+                    source=(
+                        ProfileSource.ESTIMATE
+                        if collected_at is not None
+                        else ProfileSource.UNKNOWN
+                    ),
+                    collected_at=(
+                        str(collected_at) if collected_at is not None else None
+                    ),
+                    sample_size=sample_size,
+                    histogram=row.get("HISTOGRAM"),
+                    data_type=row.get("DATA_TYPE"),
+                )
+            )
+        return profiles
+
+    def parse_column_value_samples(
+        self, rows: List[Dict[str, Any]]
+    ) -> List[ColumnValueFrequency]:
+        """Project the grouped listing into value/frequency rows.
+
+        The statement is a ``GROUP BY`` over the rows, so each answer carries
+        an exact ``COUNT(*)`` and no share: ``count`` is filled and
+        ``frequency`` stays ``None``. Deriving the share needs the table's
+        row count, which this query does not carry -- a caller that wants it
+        can divide by the profile's ``row_count``, and a parser that divided
+        would have had to assume which count was the denominator.
+
+        This override exists because of the keys: Oracle's dictionary and
+        driver fold an unquoted name to upper case, so the rows arrive as
+        ``VALUE``/``COUNT`` where core's generic projection looks for
+        ``value``/``count``. A ``NULL`` value is kept -- it is the row the
+        ``GROUP BY`` produced for the nulls in the column, and a member of
+        the domain like any other.
+        """
+        found: List[ColumnValueFrequency] = []
+        for row in rows or []:
+            if "VALUE" not in row:
+                continue
+            found.append(
+                ColumnValueFrequency(
+                    value=row.get("VALUE"),
+                    count=_as_int(row.get("COUNT")),
+                    frequency=None,
+                )
+            )
+        return found
 
     def parse_indexes(
         self,
@@ -613,7 +777,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
         return packages
 
 
-class SyncOracleIntrospector(OracleIntrospectorMixin, SyncAbstractIntrospector):
+class OracleIntrospector(OracleIntrospectorMixin, AbstractIntrospector):
     """Synchronous introspector for Oracle backends.
 
     Provides introspection capabilities for Oracle databases using
@@ -623,21 +787,21 @@ class SyncOracleIntrospector(OracleIntrospectorMixin, SyncAbstractIntrospector):
     def __init__(
         self,
         backend: Any,
-        executor: SyncIntrospectorExecutor,
+        executor: IntrospectorExecutor,
         cache: Optional[IntrospectionCache] = None,
     ) -> None:
         super().__init__(backend, executor, cache)
-        self._status_instance: Optional[SyncOracleStatusIntrospector] = None
+        self._status_instance: Optional[OracleStatusIntrospector] = None
 
     # ------------------------------------------------------------------ #
     # status introspector
     # ------------------------------------------------------------------ #
 
     @property
-    def status(self) -> SyncOracleStatusIntrospector:
+    def status(self) -> OracleStatusIntrospector:
         """Oracle status introspector (lazily created)."""
         if self._status_instance is None:
-            self._status_instance = SyncOracleStatusIntrospector(self._backend)
+            self._status_instance = OracleStatusIntrospector(self._backend)
         return self._status_instance
 
     # ------------------------------------------------------------------ #
