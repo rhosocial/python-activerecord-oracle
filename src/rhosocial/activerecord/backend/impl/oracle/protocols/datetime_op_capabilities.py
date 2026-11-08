@@ -7,7 +7,7 @@ the capability contract.  Regenerate via scripts/p7_generate_protocols.py
 when mixins gain new public rendering methods.
 """
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Tuple
 
 from typing import Protocol
 
@@ -23,4 +23,6 @@ class OracleDateTimeSupport(Protocol):
     def format_datetime_subtract_expression(self, expr: 'Any') -> Tuple[str, Tuple]:
         ...  # pragma: no cover
     def format_datetime_diff_expression(self, expr: 'Any') -> Tuple[str, Tuple]:
+        ...  # pragma: no cover
+    def format_seconds_between_expression(self, expr: 'Any') -> Tuple[str, Tuple]:
         ...  # pragma: no cover

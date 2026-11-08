@@ -112,3 +112,43 @@ class OracleDateTimeMixin:
         else:
             sql = f"(MONTHS_BETWEEN({end_sql}, {start_sql}) / 12)"
         return self.apply_alias(sql, end_params + start_params, expr)
+
+    def format_seconds_between_expression(self, expr: "Any") -> Tuple[str, Tuple]:
+        """Signed, fractional seconds from ``expr.start`` to ``expr.end``.
+
+        Oracle's ``-`` is not a seconds count. Two DATE values subtract to a
+        NUMBER of days, a subtraction involving a TIMESTAMP yields an
+        INTERVAL DAY TO SECOND, and an interval cannot be multiplied into a
+        number. Both operands are therefore cast to ``TIMESTAMP(9)`` -- which
+        makes the spelling independent of the column type and keeps the
+        nanosecond place that a bare ``TIMESTAMP`` cast rounds to microseconds
+        -- and the interval is summed out of its components. ``EXTRACT(SECOND
+        FROM ...)`` answers with a fraction, and on a negative interval every
+        component carries the sign (measured on 23.26.1: ``-1.5`` seconds is
+        ``(0, 0, 0, -1.5)``; ``-2d 3h 4m 5.25s`` is ``(-2, -3, -4, -5.25)``), so
+        the sum is the signed duration.
+
+        ``end`` is written before ``start`` in each of the four component
+        extractions, so its bind parameters come first and are repeated once
+        per extraction; bind order follows the SQL, not the constructor's
+        argument order.
+
+        ``CAST`` truncates a TIMESTAMP WITH TIME ZONE to its wall-clock
+        reading rather than its instant, so a value carrying a zone is
+        compared after that truncation. This is a documented limitation of
+        the rendering, not a silent guess.
+        """
+        start_sql, start_params = expr.start.to_sql()
+        end_sql, end_params = expr.end.to_sql()
+        difference = (
+            f"(CAST({end_sql} AS TIMESTAMP(9))"
+            f" - CAST({start_sql} AS TIMESTAMP(9)))"
+        )
+        sql = (
+            f"(EXTRACT(DAY FROM {difference}) * 86400"
+            f" + EXTRACT(HOUR FROM {difference}) * 3600"
+            f" + EXTRACT(MINUTE FROM {difference}) * 60"
+            f" + EXTRACT(SECOND FROM {difference}))"
+        )
+        params = (end_params + start_params) * 4
+        return self.apply_alias(sql, params, expr)
