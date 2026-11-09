@@ -18,23 +18,30 @@ python -m rhosocial.activerecord.backend.impl.oracle introspect <TYPE> [NAME] [O
 | `columns` | table, required | `all_tab_columns` | One table's columns: name, type, nullability, default. |
 | `indexes` | table, required | `all_ind_columns`, `all_indexes` | One table's indexes, including the primary key. |
 | `foreign-keys` | table, required | `all_constraints`, `all_cons_columns` | One table's constraints and the columns each side names. |
+| `constraints` | table, required | `all_constraints`, `all_cons_columns` | The complete constraint declaration: primary keys, unique keys, checks and foreign keys, with `search_condition` and referenced constraint. |
 | `triggers` | table, optional | `all_triggers` | The triggers on one table, or every trigger in the schema. |
+| `partitions` | table, required | `all_tab_partitions`, `all_part_tables` | One table's partitions: strategy (RANGE / LIST / HASH / COMPOSITE / INTERVAL), high value, tablespace, subpartition count and block-size-derived bytes. |
 | `sequences` | sequence, optional | `all_sequences` | One owner's sequences. `last_number` is the **next cached value**, not the last one handed out — the dictionary does not record the latter. |
 | `synonyms` | synonym, optional | `all_synonyms` | The connecting user's private synonyms. The global ones live under the owner `PUBLIC` and are never mixed into a schema's list. |
 | `packages` | none | `all_objects` | PL/SQL package specifications, so a specification and its body are not counted twice. |
+| `procedures` | procedure, optional | `all_procedures`, `all_objects`, `all_arguments` | Standalone procedures, with parameters, `AUTHID`, pipelined/deterministic flags and compile status. Package subprograms belong to their package. |
+| `functions` | function, optional | `all_procedures`, `all_objects`, `all_arguments` | Standalone functions, like procedures plus the return type (argument position 0). |
+| `types` | type, optional | `all_types`, `all_coll_types`, `all_type_attrs` | Object types with their attributes, nested table types and VARRAYs. |
 | `database` | none | `v$nls_parameters`, `v$version` | Server version and the NLS settings this session uses. |
 
-`NAME` is a **table** for `columns`, `indexes`, `foreign-keys` and `triggers`,
-and an **object** for `views`, `sequences` and `synonyms`. The two readings
-point in opposite directions — `triggers users` asks for the triggers *on*
-users, while `views users` asks for the view *called* users — so:
+`NAME` is a **table** for `columns`, `indexes`, `foreign-keys`,
+`constraints`, `partitions` and `triggers`, and an **object** for `views`,
+`sequences`, `synonyms`, `procedures`, `functions` and `types`. The two
+readings point in opposite directions — `triggers users` asks for the triggers
+*on* users, while `views users` asks for the view *called* users — so:
 
-*   `columns`, `indexes` and `foreign-keys` require a table name;
+*   `columns`, `indexes`, `foreign-keys`, `constraints` and `partitions`
+    require a table name;
 *   `triggers` takes an optional table name and lists that table's triggers
     without one;
-*   `views`, `sequences` and `synonyms` take an optional object name and
-    answer with that one object, columns included for a view. A named object
-    that does not exist exits 1;
+*   `views`, `sequences`, `synonyms`, `procedures`, `functions` and `types`
+    take an optional object name and answer with that one object, columns
+    included for a view. A named object that does not exist exits 1;
 *   `tables`, `packages` and `database` take no name. Passing one is refused
     with exit 2 rather than ignored: a dropped name reads as a filter that
     matched everything. `packages` has no single-object answer to give, and
@@ -87,20 +94,25 @@ cannot use).
 ## Examples
 
 ```bash
-# The three schema-object families Oracle has that the core catalogue does not
+# The schema-object families the core catalogue does not have
 python -m rhosocial.activerecord.backend.impl.oracle introspect sequences
 python -m rhosocial.activerecord.backend.impl.oracle introspect synonyms
 python -m rhosocial.activerecord.backend.impl.oracle introspect packages
+python -m rhosocial.activerecord.backend.impl.oracle introspect procedures
+python -m rhosocial.activerecord.backend.impl.oracle introspect functions
+python -m rhosocial.activerecord.backend.impl.oracle introspect types
 
-# One sequence by name, and one view with its columns
+# One sequence by name, one function, and one view with its columns
 python -m rhosocial.activerecord.backend.impl.oracle introspect sequences orders_seq
+python -m rhosocial.activerecord.backend.impl.oracle introspect functions calculate_tax
 python -m rhosocial.activerecord.backend.impl.oracle introspect views active_users
 
 # The triggers on one table (NAME is the table), or every trigger in the schema
 python -m rhosocial.activerecord.backend.impl.oracle introspect triggers orders
 python -m rhosocial.activerecord.backend.impl.oracle introspect triggers
 
-# A table's columns, indexes and foreign keys, which need the table name
+# A table's columns, indexes, constraints and partitions, which need the table name
 python -m rhosocial.activerecord.backend.impl.oracle introspect columns orders -o json
-python -m rhosocial.activerecord.backend.impl.oracle introspect foreign-keys orders
+python -m rhosocial.activerecord.backend.impl.oracle introspect constraints orders
+python -m rhosocial.activerecord.backend.impl.oracle introspect partitions orders
 ```

@@ -36,12 +36,16 @@ if TYPE_CHECKING:
         TriggerListQueryStatement,
     )
     from ...expression.introspection import (
+        OracleConstraintListQueryStatement,
         OraclePackageListQueryStatement,
+        OraclePartitionListQueryStatement,
         OraclePrimaryKeyQueryStatement,
+        OracleRoutineListQueryStatement,
         OracleSequenceInfoQueryStatement,
         OracleSequenceListQueryStatement,
         OracleSynonymInfoQueryStatement,
         OracleSynonymListQueryStatement,
+        OracleTypeListQueryStatement,
     )
 
 _SYSTEM_OWNERS = (
@@ -87,6 +91,28 @@ class OracleIntrospectionMixin:
         return True
 
     def supports_trigger_introspection(self) -> bool:
+        return True
+
+    def supports_type_introspection(self) -> bool:
+        """Oracle answers for named types from ``ALL_TYPES``/``ALL_COLL_TYPES``.
+
+        Object types, nested table types and VARRAYs are dictionary objects
+        in their own right, so this is a real family rather than a projection
+        of columns. Attributes come from ``ALL_TYPE_ATTRS`` and the compile
+        status from ``ALL_OBJECTS``; the same view pair answers every
+        supported version.
+        """
+        return True
+
+    def supports_constraint_introspection(self) -> bool:
+        """Oracle answers for constraints from ``ALL_CONSTRAINTS``.
+
+        Primary keys, unique keys, check constraints and foreign keys are one
+        declaration family in this engine. The index and foreign-key
+        families stay separate: an index answers how a key is enforced and a
+        foreign key answers its referenced detail, while this family answers
+        the constraint itself.
+        """
         return True
 
     def supports_table_storage_introspection(self) -> bool:
@@ -1245,4 +1271,570 @@ class OracleIntrospectionMixin:
                 ),
             ),
             order_by=OrderByClause(self, [self._column("object_name")]),
+        ).to_sql()
+
+    # ------------------------------------------------------------------ #
+    # Partitions -- how a table is physically divided
+    #
+    # The partition rows and the strategy that produced them live in two
+    # views: ``ALL_TAB_PARTITIONS`` has one row per partition, and
+    # ``ALL_PART_TABLES`` has one row per table carrying the strategy, the
+    # subpartitioning type and the interval expression. Joining them on
+    # owner and table name is what turns "a partition exists" into "a RANGE
+    # partition of an INTERVAL table exists".
+    # ------------------------------------------------------------------ #
+
+    def format_partition_list_query_statement(
+        self, expr: "OraclePartitionListQueryStatement"
+    ) -> Tuple[str, tuple]:
+        """The partitions of one table, in declaration order.
+
+        The block size is taken from the tablespace's own ``BLOCK_SIZE``,
+        the same read the table listing makes and for the same reason:
+        ``BLOCKS`` is the tablespace's unit, not a byte count. A partition
+        whose tablespace the session cannot see keeps ``SIZE_BYTES`` null
+        rather than an assumed 8 KiB multiplication.
+
+        ``ALL_PART_TABLES.INTERVAL`` exists from 11.1 on, so it is projected
+        only on a server that has it. The strategy is still answered on
+        older servers; only the interval expression is skipped.
+        """
+        from rhosocial.activerecord.backend.expression import (
+            ArithmeticOperation, JoinClause, JoinType, Literal, OrderByClause,
+            QueryStatement,
+        )
+
+        params = expr.get_params()
+        table_name = params.get("table_name", "")
+        schema = params.get("schema", "")
+
+        partitions = JoinClause(
+            self,
+            left_table=self._relation("all_tab_partitions", "p"),
+            right_table=self._relation("all_part_tables", "pt"),
+            join_type=JoinType.JOIN,
+            condition=self._all_of(
+                self._equals(
+                    self._column("table_owner", "p"), self._column("owner", "pt")
+                ),
+                self._equals(
+                    self._column("table_name", "p"), self._column("table_name", "pt")
+                ),
+            ),
+        )
+        with_block_size = JoinClause(
+            self,
+            left_table=partitions,
+            right_table=self._relation("user_tablespaces", "ts"),
+            join_type=JoinType.LEFT,
+            condition=self._equals(
+                self._column("tablespace_name", "p"),
+                self._column("tablespace_name", "ts"),
+            ),
+        )
+
+        projection = [
+            self._column("table_owner", "p", "OWNER"),
+            self._column("table_name", "p", "TABLE_NAME"),
+            self._column("partition_name", "p", "PARTITION_NAME"),
+            self._column("partition_position", "p", "PARTITION_POSITION"),
+            self._column("high_value", "p", "HIGH_VALUE"),
+            self._column("high_value_length", "p", "HIGH_VALUE_LENGTH"),
+            self._column("tablespace_name", "p", "TABLESPACE_NAME"),
+            self._column("subpartition_count", "p", "SUBPARTITION_COUNT"),
+            self._column("num_rows", "p", "NUM_ROWS"),
+            ArithmeticOperation(
+                self,
+                "mul",
+                self._column("blocks", "p"),
+                self._column("block_size", "ts"),
+            ).as_("SIZE_BYTES"),
+            self._column("partitioning_type", "pt", "PARTITIONING_TYPE"),
+            self._column("subpartitioning_type", "pt", "SUBPARTITIONING_TYPE"),
+            self._column("partition_count", "pt", "PARTITION_COUNT"),
+            self._column("def_subpartition_count", "pt", "DEF_SUBPARTITION_COUNT"),
+            self._column("compression", "p", "COMPRESSION"),
+            self._column("segment_created", "p", "SEGMENT_CREATED"),
+            self._column("read_only", "p", "READ_ONLY"),
+        ]
+        if self.version_at_least((11, 1, 0)):
+            projection.append(self._column("interval", "pt", "INTERVAL"))
+
+        return QueryStatement(
+            self,
+            select=projection,
+            from_=with_block_size,
+            where=self._where(
+                self._equals(
+                    self._column("table_owner", "p"),
+                    Literal(self, str(schema).upper()),
+                ),
+                self._equals(
+                    self._column("table_name", "p"),
+                    Literal(self, str(table_name).upper()),
+                ),
+            ),
+            order_by=OrderByClause(self, [self._column("partition_position", "p")]),
+        ).to_sql()
+
+    # ------------------------------------------------------------------ #
+    # Standalone procedures and functions
+    #
+    # A routine is three facts in three views: its properties in
+    # ``ALL_PROCEDURES``, its compile state in ``ALL_OBJECTS``, and its
+    # signature in ``ALL_ARGUMENTS``. Filtering ``PROCEDURE_NAME`` to null
+    # keeps packaged subprograms out -- they belong to their package -- and a
+    # ``LEFT`` join keeps a routine with no arguments, which
+    # ``ALL_ARGUMENTS`` omits from 12.1.0.2 on.
+    # ------------------------------------------------------------------ #
+
+    def _routine_query(self, expr: "OracleRoutineListQueryStatement", table_name: Optional[str]):
+        """The one statement shape behind the procedures and functions reads.
+
+        Both families ask the same three-relation question; only the
+        ``OBJECT_TYPE`` literal and the optional name narrowing differ. The
+        kind is a fact about what is being asked for, so it rides the tree
+        as an inline literal and never as a bind value.
+        """
+        from rhosocial.activerecord.backend.expression import (
+            IsNullPredicate, JoinClause, JoinType, Literal, OrderByClause,
+            QueryStatement,
+        )
+
+        params = expr.get_params()
+        owner = params.get("owner") or ""
+        routine_kind = str(params.get("routine_kind") or "").upper()
+
+        with_object = JoinClause(
+            self,
+            left_table=self._relation("all_procedures", "p"),
+            right_table=self._relation("all_objects", "o"),
+            join_type=JoinType.JOIN,
+            condition=self._all_of(
+                self._equals(
+                    self._column("object_id", "p"), self._column("object_id", "o")
+                ),
+                self._equals(self._column("owner", "p"), self._column("owner", "o")),
+            ),
+        )
+        with_arguments = JoinClause(
+            self,
+            left_table=with_object,
+            right_table=self._relation("all_arguments", "a"),
+            join_type=JoinType.LEFT,
+            condition=self._all_of(
+                self._equals(self._column("owner", "p"), self._column("owner", "a")),
+                self._equals(
+                    self._column("object_id", "p"), self._column("object_id", "a")
+                ),
+                IsNullPredicate(self, self._column("package_name", "a")),
+            ),
+        )
+
+        projections = [
+            self._column("owner", "p", "OWNER"),
+            self._column("object_name", "p", "OBJECT_NAME"),
+            self._column("object_type", "p", "OBJECT_TYPE"),
+            self._column("object_id", "p", "OBJECT_ID"),
+            self._column("subprogram_id", "p", "SUBPROGRAM_ID"),
+            self._column("overload", "p", "OVERLOAD"),
+            self._column("aggregate", "p", "AGGREGATE"),
+            self._column("pipelined", "p", "PIPELINED"),
+            self._column("parallel", "p", "PARALLEL"),
+            self._column("interface", "p", "INTERFACE"),
+            self._column("deterministic", "p", "DETERMINISTIC"),
+            self._column("authid", "p", "AUTHID"),
+            self._column("result_cache", "p", "RESULT_CACHE"),
+            self._column("impltypename", "p", "IMPL_TYPE_NAME"),
+            self._column("polymorphic", "p", "POLYMORPHIC"),
+            self._column("status", "o", "STATUS"),
+            self._column("created", "o", "CREATED"),
+            self._column("last_ddl_time", "o", "LAST_DDL_TIME"),
+            self._column("position", "a", "POSITION"),
+            self._column("data_level", "a", "DATA_LEVEL"),
+            self._column("argument_name", "a", "ARGUMENT_NAME"),
+            self._column("data_type", "a", "DATA_TYPE"),
+            self._column("in_out", "a", "IN_OUT"),
+            self._column("defaulted", "a", "DEFAULTED"),
+            self._column("default_value", "a", "DEFAULT_VALUE"),
+            self._column("type_owner", "a", "TYPE_OWNER"),
+            self._column("type_name", "a", "TYPE_NAME"),
+            self._column("data_precision", "a", "DATA_PRECISION"),
+            self._column("data_scale", "a", "DATA_SCALE"),
+            self._column("char_length", "a", "CHAR_LENGTH"),
+        ]
+
+        name_predicate = None
+        if table_name:
+            name_predicate = self._equals(
+                self._column("object_name", "p"),
+                Literal(self, str(table_name).upper()),
+            )
+
+        return QueryStatement(
+            self,
+            select=projections,
+            from_=with_arguments,
+            where=self._where(
+                self._equals(self._column("owner", "p"), Literal(self, owner)),
+                self._equals(
+                    self._column("object_type", "p"),
+                    Literal(self, routine_kind, inline=True),
+                ),
+                IsNullPredicate(self, self._column("procedure_name", "p")),
+                name_predicate,
+            ),
+            order_by=OrderByClause(
+                self,
+                [
+                    self._column("object_name", "p"),
+                    self._column("subprogram_id", "p"),
+                    self._column("position", "a"),
+                ],
+            ),
+        ).to_sql()
+
+    def format_routine_list_query_statement(
+        self, expr: "OracleRoutineListQueryStatement"
+    ) -> Tuple[str, tuple]:
+        """The standalone procedures or functions one owner has.
+
+        See :meth:`_routine_query` for the three-relation shape. This method
+        is the family entry point the dispatch resolves, so the statement
+        class names it rather than an internal helper.
+        """
+        return self._routine_query(expr, None)
+
+    # ------------------------------------------------------------------ #
+    # Constraints -- the declaration, beside the index and foreign-key
+    # families rather than in place of them
+    # ------------------------------------------------------------------ #
+
+    def format_constraint_list_query_statement(
+        self, expr: "OracleConstraintListQueryStatement"
+    ) -> Tuple[str, tuple]:
+        """The constraints of one table, in name and column order.
+
+        The declaration is one row in ``ALL_CONSTRAINTS``; the columns are
+        rows in ``ALL_CONS_COLUMNS``. They are joined on the constraint name
+        *and* the owner, because a same-named constraint in another schema
+        must not contribute a column. The join is a ``LEFT`` one: a check
+        constraint normally names no column, and dropping it for that would
+        make a table's check constraints invisible.
+
+        ``SEARCH_CONDITION`` is a ``LONG`` column, so it is projected but
+        never compared, grouped or ordered in SQL: its text answers the
+        check constraint, and the parser reads it as the value it is.
+        """
+        from rhosocial.activerecord.backend.expression import (
+            JoinClause, JoinType, Literal, OrderByClause, QueryStatement,
+        )
+
+        params = expr.get_params()
+        table_name = params.get("table_name", "")
+        schema = params.get("schema", "")
+
+        constraint_columns = JoinClause(
+            self,
+            left_table=self._relation("all_constraints", "cons"),
+            right_table=self._relation("all_cons_columns", "cols"),
+            join_type=JoinType.LEFT,
+            condition=self._all_of(
+                self._equals(
+                    self._column("constraint_name", "cons"),
+                    self._column("constraint_name", "cols"),
+                ),
+                self._equals(
+                    self._column("owner", "cons"), self._column("owner", "cols")
+                ),
+            ),
+        )
+
+        return QueryStatement(
+            self,
+            select=[
+                self._column("owner", "cons", "OWNER"),
+                self._column("table_name", "cons", "TABLE_NAME"),
+                self._column("constraint_name", "cons", "CONSTRAINT_NAME"),
+                self._column("constraint_type", "cons", "CONSTRAINT_TYPE"),
+                self._column("status", "cons", "STATUS"),
+                self._column("validated", "cons", "VALIDATED"),
+                self._column("generated", "cons", "GENERATED"),
+                self._column("deferrable", "cons", "DEFERRABLE"),
+                self._column("deferred", "cons", "DEFERRED"),
+                self._column("rely", "cons", "RELY"),
+                self._column("bad", "cons", "BAD"),
+                self._column("search_condition", "cons", "SEARCH_CONDITION"),
+                self._column("index_name", "cons", "INDEX_NAME"),
+                self._column("r_owner", "cons", "REFERENCED_OWNER"),
+                self._column(
+                    "r_constraint_name", "cons", "REFERENCED_CONSTRAINT_NAME"
+                ),
+                self._column("delete_rule", "cons", "DELETE_RULE"),
+                self._column("last_change", "cons", "LAST_CHANGE"),
+                self._column("invalid", "cons", "INVALID"),
+                self._column("view_related", "cons", "VIEW_RELATED"),
+                self._column("column_name", "cols", "COLUMN_NAME"),
+                self._column("position", "cols", "COLUMN_POSITION"),
+            ],
+            from_=constraint_columns,
+            where=self._where(
+                self._equals(
+                    self._column("owner", "cons"),
+                    Literal(self, str(schema).upper()),
+                ),
+                self._equals(
+                    self._column("table_name", "cons"),
+                    Literal(self, str(table_name).upper()),
+                ),
+            ),
+            order_by=OrderByClause(
+                self,
+                [
+                    self._column("constraint_name", "cons"),
+                    self._column("position", "cols"),
+                ],
+            ),
+        ).to_sql()
+
+    # ------------------------------------------------------------------ #
+    # Types -- object types, nested tables and VARRAYs
+    #
+    # Oracle keeps the two halves in two views: object types in ALL_TYPES
+    # with their attributes in ALL_TYPE_ATTRS, named collections (nested
+    # tables and VARRAYs) in ALL_COLL_TYPES. A collection type may also be
+    # present in ALL_TYPES, so the object side subtracts the collection
+    # names -- one type must not be reported twice. The compile status and
+    # timestamps come from ALL_OBJECTS on both sides.
+    # ------------------------------------------------------------------ #
+
+    def _collection_type_names(self, owner: str):
+        """A subquery of the collection type names one owner has.
+
+        Used by the object side of the type listing to subtract the
+        collections: a nested table is a type and a collection at once,
+        and reporting it on both sides of the ``UNION ALL`` would count
+        it twice. The owner travels as a bind, so the subtraction is
+        narrowed by the same schema as the outer read.
+        """
+        from rhosocial.activerecord.backend.expression import (
+            Literal, QueryStatement, Subquery,
+        )
+
+        return Subquery(
+            self,
+            QueryStatement(
+                self,
+                select=[self._column("type_name", "c")],
+                from_=self._relation("all_coll_types", "c"),
+                where=self._where(
+                    self._equals(self._column("owner", "c"), Literal(self, owner))
+                ),
+            ),
+        )
+
+    def format_type_list_query_statement(
+        self, expr: "OracleTypeListQueryStatement"
+    ) -> Tuple[str, tuple]:
+        """The named types one owner has, object types and collections alike.
+
+        The object side projects the object-type facts and the attribute
+        rows; the collection side projects the collection facts and carries
+        no attributes. Every side names the same aliases in the same order,
+        which is what makes the compound query legal and the outer projection
+        able to address them by name.
+        """
+        from rhosocial.activerecord.backend.expression import (
+            InPredicate, JoinClause, JoinType, Literal, LogicalPredicate,
+            OrderByClause, QueryStatement, SetOperation, Subquery,
+        )
+        from rhosocial.activerecord.backend.expression.query_sources import (
+            SetOperationKind,
+        )
+        from rhosocial.activerecord.backend.expression.types import (
+            DecimalType, VarCharType,
+        )
+
+        params = expr.get_params()
+        owner = params.get("owner") or ""
+
+        with_object = JoinClause(
+            self,
+            left_table=self._relation("all_types", "t"),
+            right_table=self._relation("all_objects", "o"),
+            join_type=JoinType.LEFT,
+            condition=self._all_of(
+                self._equals(self._column("owner", "t"), self._column("owner", "o")),
+                self._equals(
+                    self._column("type_name", "t"), self._column("object_name", "o")
+                ),
+                self._equals(
+                    self._column("object_type", "o"),
+                    Literal(self, "TYPE", inline=True),
+                ),
+            ),
+        )
+        with_attributes = JoinClause(
+            self,
+            left_table=with_object,
+            right_table=self._relation("all_type_attrs", "a"),
+            join_type=JoinType.LEFT,
+            condition=self._all_of(
+                self._equals(self._column("owner", "t"), self._column("owner", "a")),
+                self._equals(
+                    self._column("type_name", "t"), self._column("type_name", "a")
+                ),
+            ),
+        )
+
+        object_side = (
+            [
+                self._column("owner", "t", "OWNER"),
+                self._column("type_name", "t", "TYPE_NAME"),
+                self._column("typecode", "t", "TYPECODE"),
+                self._column("attributes", "t", "ATTRIBUTES"),
+                self._column("methods", "t", "METHODS"),
+                self._column("predefined", "t", "PREDEFINED"),
+                self._column("incomplete", "t", "INCOMPLETE"),
+                self._column("final", "t", "FINAL"),
+                self._column("instantiable", "t", "INSTANTIABLE"),
+                self._column("supertype_owner", "t", "SUPERTYPE_OWNER"),
+                self._column("supertype_name", "t", "SUPERTYPE_NAME"),
+                self._constant(None, "COLL_TYPE", VarCharType(self, 128)),
+                self._constant(None, "ELEM_TYPE_MOD", VarCharType(self, 7)),
+                self._constant(None, "ELEM_TYPE_OWNER", VarCharType(self, 128)),
+                self._constant(None, "ELEM_TYPE_NAME", VarCharType(self, 128)),
+                self._constant(None, "ELEM_LENGTH", DecimalType(self)),
+                self._constant(None, "ELEM_PRECISION", DecimalType(self)),
+                self._constant(None, "ELEM_SCALE", DecimalType(self)),
+                self._constant(None, "ELEM_CHARSET", VarCharType(self, 44)),
+                self._constant(None, "UPPER_BOUND", DecimalType(self)),
+                self._column("status", "o", "STATUS"),
+                self._column("created", "o", "CREATED"),
+                self._column("last_ddl_time", "o", "LAST_DDL_TIME"),
+                self._column("attr_name", "a", "ATTR_NAME"),
+                self._column("attr_type_mod", "a", "ATTR_TYPE_MOD"),
+                self._column("attr_type_owner", "a", "ATTR_TYPE_OWNER"),
+                self._column("attr_type_name", "a", "ATTR_TYPE_NAME"),
+                self._column("length", "a", "ATTR_LENGTH"),
+                self._column("precision", "a", "ATTR_PRECISION"),
+                self._column("scale", "a", "ATTR_SCALE"),
+                self._column("character_set_name", "a", "ATTR_CHARSET"),
+                self._column("attr_no", "a", "ATTR_NO"),
+                self._column("inherited", "a", "ATTR_INHERITED"),
+                self._column("char_used", "a", "ATTR_CHAR_USED"),
+            ],
+            with_attributes,
+            self._where(
+                self._equals(self._column("owner", "t"), Literal(self, owner)),
+                LogicalPredicate(
+                    self,
+                    "NOT",
+                    InPredicate(
+                        self,
+                        self._column("type_name", "t"),
+                        self._collection_type_names(owner),
+                    ),
+                ),
+            ),
+        )
+
+        collection_object = JoinClause(
+            self,
+            left_table=self._relation("all_coll_types", "c"),
+            right_table=self._relation("all_objects", "o"),
+            join_type=JoinType.LEFT,
+            condition=self._all_of(
+                self._equals(self._column("owner", "c"), self._column("owner", "o")),
+                self._equals(
+                    self._column("type_name", "c"), self._column("object_name", "o")
+                ),
+                self._equals(
+                    self._column("object_type", "o"),
+                    Literal(self, "TYPE", inline=True),
+                ),
+            ),
+        )
+
+        collection_side = (
+            [
+                self._column("owner", "c", "OWNER"),
+                self._column("type_name", "c", "TYPE_NAME"),
+                self._constant("COLLECTION", "TYPECODE", VarCharType(self, 128)),
+                self._constant(None, "ATTRIBUTES", DecimalType(self)),
+                self._constant(None, "METHODS", DecimalType(self)),
+                self._constant("NO", "PREDEFINED", VarCharType(self, 3)),
+                self._constant(None, "INCOMPLETE", VarCharType(self, 3)),
+                self._constant(None, "FINAL", VarCharType(self, 3)),
+                self._constant(None, "INSTANTIABLE", VarCharType(self, 3)),
+                self._constant(None, "SUPERTYPE_OWNER", VarCharType(self, 128)),
+                self._constant(None, "SUPERTYPE_NAME", VarCharType(self, 128)),
+                self._column("coll_type", "c", "COLL_TYPE"),
+                self._column("elem_type_mod", "c", "ELEM_TYPE_MOD"),
+                self._column("elem_type_owner", "c", "ELEM_TYPE_OWNER"),
+                self._column("elem_type_name", "c", "ELEM_TYPE_NAME"),
+                self._column("length", "c", "ELEM_LENGTH"),
+                self._column("precision", "c", "ELEM_PRECISION"),
+                self._column("scale", "c", "ELEM_SCALE"),
+                self._column("character_set_name", "c", "ELEM_CHARSET"),
+                self._column("upper_bound", "c", "UPPER_BOUND"),
+                self._column("status", "o", "STATUS"),
+                self._column("created", "o", "CREATED"),
+                self._column("last_ddl_time", "o", "LAST_DDL_TIME"),
+                self._constant(None, "ATTR_NAME", VarCharType(self, 128)),
+                self._constant(None, "ATTR_TYPE_MOD", VarCharType(self, 7)),
+                self._constant(None, "ATTR_TYPE_OWNER", VarCharType(self, 128)),
+                self._constant(None, "ATTR_TYPE_NAME", VarCharType(self, 128)),
+                self._constant(None, "ATTR_LENGTH", DecimalType(self)),
+                self._constant(None, "ATTR_PRECISION", DecimalType(self)),
+                self._constant(None, "ATTR_SCALE", DecimalType(self)),
+                self._constant(None, "ATTR_CHARSET", VarCharType(self, 44)),
+                self._constant(None, "ATTR_NO", DecimalType(self)),
+                self._constant(None, "ATTR_INHERITED", VarCharType(self, 3)),
+                self._constant(None, "ATTR_CHAR_USED", VarCharType(self, 1)),
+            ],
+            collection_object,
+            self._where(
+                self._equals(self._column("owner", "c"), Literal(self, owner))
+            ),
+        )
+
+        object_query = QueryStatement(
+            self,
+            select=object_side[0],
+            from_=object_side[1],
+            where=object_side[2],
+        )
+        collection_query = QueryStatement(
+            self,
+            select=collection_side[0],
+            from_=collection_side[1],
+            where=collection_side[2],
+        )
+        compound = SetOperation(
+            self,
+            op=SetOperationKind.UNION_ALL,
+            left=object_query,
+            right=collection_query,
+        )
+
+        projected_aliases = (
+            "OWNER", "TYPE_NAME", "TYPECODE", "ATTRIBUTES", "METHODS",
+            "PREDEFINED", "INCOMPLETE", "FINAL", "INSTANTIABLE",
+            "SUPERTYPE_OWNER", "SUPERTYPE_NAME", "COLL_TYPE", "ELEM_TYPE_MOD",
+            "ELEM_TYPE_OWNER", "ELEM_TYPE_NAME", "ELEM_LENGTH",
+            "ELEM_PRECISION", "ELEM_SCALE", "ELEM_CHARSET", "UPPER_BOUND",
+            "STATUS", "CREATED", "LAST_DDL_TIME", "ATTR_NAME",
+            "ATTR_TYPE_MOD", "ATTR_TYPE_OWNER", "ATTR_TYPE_NAME", "ATTR_LENGTH",
+            "ATTR_PRECISION", "ATTR_SCALE", "ATTR_CHARSET", "ATTR_NO",
+            "ATTR_INHERITED", "ATTR_CHAR_USED",
+        )
+        return QueryStatement(
+            self,
+            select=[self._column(alias) for alias in projected_aliases],
+            from_=Subquery(self, compound, alias="TYPE_LIST"),
+            order_by=OrderByClause(
+                self,
+                [self._column("TYPE_NAME"), self._column("ATTR_NO")],
+            ),
         ).to_sql()
