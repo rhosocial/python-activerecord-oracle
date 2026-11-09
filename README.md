@@ -215,7 +215,9 @@ PYTHONPATH=tests .venv3.14-ubuntu26.04/bin/pytest \
 
 ## Documentation
 
-This repository has no `docs/` tree. Backend notes live in
+Backend notes live in [docs/](docs/), including
+[partitioning and partition maintenance](docs/partition.md) and
+[introspection](docs/introspection.md). Architecture and testing notes stay in
 [.claude/architecture.md](.claude/architecture.md) and
 [.claude/testing.md](.claude/testing.md); core library documentation is at
 [python-activerecord/docs](https://github.com/rhosocial/python-activerecord/tree/main/docs).

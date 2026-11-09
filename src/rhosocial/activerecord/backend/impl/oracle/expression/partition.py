@@ -199,13 +199,39 @@ class OraclePartitionDefinition(PartitionDefinition):
 
     For HASH / composite HASH subpartitioning: neither ``less_than`` nor
     ``in_values`` is required; explicit ``subpartition_definitions`` may
-    be provided to override the template.
+    be provided to override the template. When the table declares
+    ``SUBPARTITION BY HASH``, ``subpartitions_count`` overrides the default
+    number of hash subpartitions for this partition only.
 
     Raises:
-        ValueError: if both ``less_than`` and ``in_values`` are provided.
+        ValueError: if both ``less_than`` and ``in_values`` are provided, or
+            if ``subpartitions_count`` and ``subpartition_definitions`` are
+            both provided, or if ``subpartitions_count`` is not positive.
+        TypeError: if ``subpartitions_count`` is not an ``int``.
     """
 
     subpartition_definitions: Optional[Sequence[OracleSubpartitionDefinition]] = None
+    subpartitions_count: Optional[int] = None
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if self.subpartitions_count is not None:
+            if isinstance(self.subpartitions_count, bool) or not isinstance(
+                self.subpartitions_count, int
+            ):
+                raise TypeError(
+                    "subpartitions_count must be an int, "
+                    f"got {type(self.subpartitions_count).__name__}"
+                )
+            if self.subpartitions_count <= 0:
+                raise ValueError(
+                    "subpartitions_count must be a positive integer, "
+                    f"got {self.subpartitions_count}"
+                )
+            if self.subpartition_definitions:
+                raise ValueError(
+                    "subpartitions_count and subpartition_definitions are mutually exclusive"
+                )
 
 
 # ---------------------------------------------------------------------------
@@ -216,15 +242,24 @@ class OraclePartitionDefinition(PartitionDefinition):
 class OracleSubpartitionClause(BaseExpression):
     """Oracle ``SUBPARTITION BY {RANGE|LIST|HASH}(...)`` template clause.
 
-    Appears after ``PARTITION BY ...`` in composite partitioning. For
-    HASH subpartitioning, ``count`` renders ``SUBPARTITIONS N``; for
-    RANGE / LIST subpartitioning, individual subpartition definitions
-    are declared per-partition via
-    :class:`OraclePartitionDefinition.subpartition_definitions`.
+    Appears after ``PARTITION BY ...`` in composite partitioning. It is the
+    table-level subpartition strategy: every top-level partition shares it,
+    and a partition may override only its subpartition definitions or count,
+    never the strategy.
+
+    For HASH subpartitioning, ``count`` renders ``SUBPARTITIONS N``; for
+    RANGE / LIST subpartitioning, individual subpartition definitions are
+    declared per-partition via
+    :class:`OraclePartitionDefinition.subpartition_definitions`. ``templates``
+    renders ``SUBPARTITION TEMPLATE (...)`` so new top-level partitions inherit
+    the same subpartition names and boundaries.
 
     Raises:
         TypeError: if ``strategy`` is not an :class:`OracleSubpartitionStrategy`.
-        ValueError: if ``count`` is provided but is not a positive integer.
+        ValueError: if ``count`` is provided but is not a positive integer, or
+            if ``count`` and ``templates`` are both provided. Oracle rejects
+            ``SUBPARTITIONS n`` next to ``SUBPARTITION TEMPLATE`` (ORA-00922);
+            a hash template states its count by listing its definitions.
     """
 
     def __init__(
@@ -246,6 +281,11 @@ class OracleSubpartitionClause(BaseExpression):
                 )
             if count <= 0:
                 raise ValueError(f"count must be a positive integer, got {count}")
+            if templates:
+                raise ValueError(
+                    "count and templates are mutually exclusive: Oracle renders "
+                    "SUBPARTITIONS n and SUBPARTITION TEMPLATE differently"
+                )
         self.strategy = strategy
         self.keys = list(keys) if keys else []
         self.count = count

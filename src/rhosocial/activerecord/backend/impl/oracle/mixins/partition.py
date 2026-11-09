@@ -369,12 +369,25 @@ class OraclePartitionMixin:
             sql = f"SUBPARTITION BY HASH ({key_sql})"
             if expr.count is not None:
                 sql = f"{sql} SUBPARTITIONS {expr.count}"
+            if expr.templates:
+                template_parts = [
+                    self.format_subpartition_definition(template)[0]
+                    for template in expr.templates
+                ]
+                sql = f"{sql} SUBPARTITION TEMPLATE ({', '.join(template_parts)})"
             return f" {sql}", ()
-        # RANGE / LIST subpartition template: only the BY clause is emitted
-        # here; individual subpartition definitions are emitted per-partition
-        # in format_partition_definition.
+        # RANGE / LIST subpartition template: the BY clause names the
+        # table-level strategy; a template may fix the subpartition names and
+        # boundaries for every partition. Per-partition definitions still
+        # override the template in format_partition_definition.
         key_sql, _ = self.format_partition_keys(expr.keys) if expr.keys else ("", ())
         sql = f"SUBPARTITION BY {strategy} ({key_sql})"
+        if expr.templates:
+            template_parts = [
+                self.format_subpartition_definition(template)[0]
+                for template in expr.templates
+            ]
+            sql = f"{sql} SUBPARTITION TEMPLATE ({', '.join(template_parts)})"
         return f" {sql}", ()
 
     # ------------------------------------------------------------------
@@ -444,6 +457,8 @@ class OraclePartitionMixin:
         parts: List[str] = [f"PARTITION {name_sql}"]
         if body is not None:
             parts.append(body)
+        if definition.subpartitions_count is not None:
+            parts.append(f"SUBPARTITIONS {definition.subpartitions_count}")
         if definition.subpartition_definitions:
             sub_parts = [
                 self.format_subpartition_definition(d)[0] for d in definition.subpartition_definitions
