@@ -18,7 +18,6 @@ from rhosocial.activerecord.backend.impl.oracle.cli import introspect as cli_int
 from rhosocial.activerecord.backend.introspection.types import (
     ColumnDataProfile,
     ColumnValueFrequency,
-    DDLStatement,
     JoinCoverage,
 )
 
@@ -66,13 +65,6 @@ INDEX_USAGE_STATS = [{"INDEX_NAME": "SYS_C001", "TABLE_NAME": "CUSTOMERS", "SCAN
 OBJECT_DEPENDENCIES = [
     {"DEPENDENT": "V_CUSTOMERS", "REFERENCED": "CUSTOMERS", "KIND": "VIEW"}
 ]
-DDL_STATEMENT = DDLStatement(
-    schema="AR_CRM",
-    object_type="TABLE",
-    object_name="CUSTOMERS",
-    ddl="CREATE TABLE CUSTOMERS (ID NUMBER(10) NOT NULL)",
-    native=False,
-)
 COLUMN_PROFILES = [
     ColumnDataProfile(
         schema="AR_CRM",
@@ -226,10 +218,6 @@ class FakeIntrospector:
         self.calls.append(("object_dependencies", object_name, schema))
         return OBJECT_DEPENDENCIES
 
-    def get_ddl_statement(self, object_name, object_type=None, schema=None):
-        self.calls.append(("ddl_statement", object_name, object_type, schema))
-        return DDL_STATEMENT
-
     def list_column_data_profiles(self, table_name, schema=None):
         self.calls.append(("column_data_profiles", table_name, schema))
         return COLUMN_PROFILES
@@ -329,7 +317,7 @@ def patch_async_backend(monkeypatch, introspector: Any,
                          "get_database_info",
                          "list_unused_indexes", "list_table_usage_stats",
                          "list_runtime_metrics", "list_index_usage_stats",
-                         "list_object_dependencies", "get_ddl_statement",
+                         "list_object_dependencies",
                          "list_column_data_profiles", "sample_column_values",
                          "estimate_join_coverage"):
                 fn = getattr(sync, attr)
@@ -421,6 +409,18 @@ class TestIntrospectParserContract:
         with pytest.raises(SystemExit):
             build_parser().parse_args(["introspect", "grants"])
 
+    def test_ddl_is_rejected_as_an_unknown_choice(self, capsys):
+        """DDL extraction is permanently unanswerable, so ``ddl`` is not a type.
+
+        The parser refuses the word before anything connects, with the same
+        exit code argparse gives any other invalid choice.
+        """
+        with pytest.raises(SystemExit) as excinfo:
+            build_parser().parse_args(["introspect", "ddl", "customers"])
+        assert excinfo.value.code == 2
+        assert "invalid choice" in capsys.readouterr().err
+        assert "ddl" not in cli_introspect.INTROSPECT_TYPES
+
     def test_connection_defaults_flow_through(self):
         args = build_parser().parse_args([
             "introspect", "tables", "--host", "h", "--port", "1234",
@@ -464,7 +464,6 @@ class TestNameRules:
             "runtime": "forbidden",
             "index-stats": "forbidden",
             "dependencies": "optional",
-            "ddl": "required",
             "column-profiles": "required",
             "value-samples": "required",
             "join-coverage": "required",
@@ -789,7 +788,6 @@ class TestHandleAsyncBranches:
         ("index-stats", None, "Index Usage Stats"),
         ("dependencies", None, "Object Dependencies"),
         ("dependencies", "customers", "Dependencies of customers"),
-        ("ddl", "customers", "DDL of CUSTOMERS"),
         ("column-profiles", "customers", "Column profiles of customers"),
         ("value-samples", "customers", "Values of customers.status"),
         ("join-coverage", "customers", "Join Coverage"),
@@ -860,7 +858,6 @@ class TestIntrospectTypeGates:
         "runtime": [],
         "index-stats": [],
         "dependencies": [],
-        "ddl": ["customers", "-o", "json"],
         "column-profiles": ["customers"],
         "value-samples": ["customers", "--column", "status"],
         "join-coverage": [

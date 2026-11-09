@@ -196,7 +196,7 @@ The one `V$` read the catalogue layer does perform is `get_database_info()`'s fo
 
 **Dependencies.** This one is a missing statement rather than an unreachable source: `ALL_DEPENDENCIES` is an ordinary dictionary view a `SELECT` could read, and the engine records real edges there. Until the statement is written the probe answers `False`, because a `True` would promise a formatter the dispatch cannot find. Writing it flips the probe; the two moves are one decision.
 
-**DDL.** `DBMS_METADATA.GET_DDL` is a procedure whose result no `SELECT` can return, and no dictionary view stores the text. Reassembling a `CREATE TABLE` from dictionary columns was rejected: this engine has the real statement, and an assembly that reads as authoritative is worse than an honest refusal. With neither source reachable from a `SELECT`, there is nothing to format.
+**DDL.** `DBMS_METADATA.GET_DDL` is a procedure whose result no `SELECT` can return, and no dictionary view stores the text. Reassembling a `CREATE TABLE` from dictionary columns was rejected: this engine has the real statement, and an assembly that reads as authoritative is worse than an honest refusal. With neither source reachable from a `SELECT`, there is nothing to format. This backend therefore does not offer DDL extraction: the CLI has no `ddl` type, the backend DDL formatter is kept for a future real implementation, and `supports_ddl_extraction()` answers `False`.
 
 **Join coverage.** The engine can measure the overlap — group both columns, intersect the domains — so this too is a missing statement rather than a missing capability. It is a double scan of two tables, which is why it belongs behind an explicit call rather than in any automatic pass. Until it exists, `estimate_join_coverage()` is not offered.
 
@@ -234,7 +234,6 @@ python -m rhosocial.activerecord.backend.impl.oracle introspect value-samples or
 
 # The families this backend declines -- refused, not answered with an empty list
 python -m rhosocial.activerecord.backend.impl.oracle introspect unused-indexes
-python -m rhosocial.activerecord.backend.impl.oracle introspect ddl orders
 python -m rhosocial.activerecord.backend.impl.oracle introspect join-coverage orders \
   --column customer_id --right-table customers --right-column id
 ```
@@ -262,10 +261,9 @@ Connection settings come from flags or from the environment: `ORACLE_HOST`, `ORA
 | `runtime` | Live runtime measurements | not accepted |
 | `index-stats` | Per-index use counters | not accepted |
 | `dependencies` | The object dependency graph | optional (object) |
-| `ddl` | The text that recreates one table | required (table) |
 | `join-coverage` | Overlap of two columns' value domains | required (left table) |
 
-Nineteen types, and the advertised list is derived from the same mapping that gates each type on its switch, so a family cannot be offered by the CLI and forgotten by the probe.
+Eighteen types, and the advertised list is derived from the same mapping that gates each type on its switch, so a family cannot be offered by the CLI and forgotten by the probe. DDL extraction is not a type: its switch is permanently `False`, so the CLI omits it rather than offering an entry every run would refuse.
 
 NAME means different things per type, and two of those meanings point in opposite directions: for `triggers` it is a table, for `views` it is the view itself. The rules live in one table and are applied by one validator before anything connects. A `required` name that is missing is an incomplete invocation (exit 1); a name a type has no question for is a request the command declines (exit 2), never a dropped argument.
 
@@ -275,4 +273,4 @@ A type whose switch answers `False` on the *connected* server is refused with ex
 
 ### Output Formats
 
-`-o` selects `table` (default), `json`, `csv` or `tsv`; `--rich-ascii` switches the table borders to ASCII. The `table` format is the human one; the other three are for parsers. The command keeps a text-first display path for the `ddl` type, where an answer is a block rather than a row — but the capability gate refuses that run before it is reached, so no CLI run on this server prints it.
+`-o` selects `table` (default), `json`, `csv` or `tsv`; `--rich-ascii` switches the table borders to ASCII. The `table` format is the human one; the other three are for parsers.

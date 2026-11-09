@@ -11,10 +11,12 @@ The operational and data families the core introspector answers are offered
 too: a type is advertised exactly when a dialect capability switch answers
 for it, and the switch is read against the connected server, so a family
 Oracle cannot answer *here* is refused rather than run and answered with an
-empty listing. That refusal is most of the nine: on today's servers only the
+empty listing. That refusal is most of the eight: on today's servers only the
 two data families pass the gate -- column profiles read ``ALL_TAB_COLUMNS``
-and the value listing is a grouped scan -- while the other seven are declared
-gaps the roundtrip suite pins, and are refused with exit 2.
+and the value listing is a grouped scan -- while the other six are declared
+gaps the roundtrip suite pins, and are refused with exit 2. DDL extraction is
+not offered as a type at all: its switch answers ``False`` permanently, so an
+entry would be refused on every server.
 
 The two data families are also why ``source`` is a visible column in their
 output. Oracle is the only engine whose profile is an *estimate* (the
@@ -65,7 +67,7 @@ from .output import OUTPUT_CHOICES, create_provider
 #: than growing a second spelling for the same capability.
 #:
 #: The operational and data families the core introspector answers are gated
-#: through their switches the same way. Seven of the nine probes answer False
+#: through their switches the same way. Six of the eight probes answer False
 #: on every Oracle today -- the statements would have to read GV$/V$
 #: performance views or call DBMS_METADATA, and the dialect layer has no slot
 #: for either (the roundtrip suite pins each as a declared gap) -- so those
@@ -74,6 +76,8 @@ from .output import OUTPUT_CHOICES, create_provider
 #: *differently*: the profile is an estimate read from ``ALL_TAB_COLUMNS``,
 #: the value listing a grouped scan of the rows. That difference is a column
 #: in the output, not a comment -- see ``_value_sample_rows``.
+#: DDL extraction is not in the table: its switch is permanently False, so a
+#: ``ddl`` type would be an entry no server could ever satisfy.
 _TYPE_CAPABILITIES = {
     "tables": "supports_table_introspection",
     "views": "supports_view_introspection",
@@ -94,7 +98,6 @@ _TYPE_CAPABILITIES = {
     "runtime": "supports_runtime_stats",
     "index-stats": "supports_index_stats",
     "dependencies": "supports_object_dependencies",
-    "ddl": "supports_ddl_extraction",
     "column-profiles": "supports_column_data_profile",
     "value-samples": "supports_column_value_sample",
     "join-coverage": "supports_join_coverage",
@@ -118,10 +121,10 @@ INTROSPECT_TYPES = list(_TYPE_CAPABILITIES)
 #: for either is refused, never dropped -- a dropped name looks like a filter
 #: that matched everything.
 #:
-#: Of the nine operational and data families, the four counter listings answer
+#: Of the eight operational and data families, the four counter listings answer
 #: for the whole schema (a name is refused, same as ``tables``);
 #: ``dependencies`` takes an optional one that narrows the graph to one
-#: object's edges; and ``ddl``, ``column-profiles`` and ``value-samples`` are
+#: object's edges; and ``column-profiles`` and ``value-samples`` are
 #: one-table questions (required), with ``value-samples`` naming its column on
 #: ``--column``. ``join-coverage`` is required too -- NAME is the *left* table
 #: of the pair -- because ``name`` means "the table" everywhere else in this
@@ -151,7 +154,6 @@ _NAME_RULE = {
     "runtime": "forbidden",
     "index-stats": "forbidden",
     "dependencies": "optional",
-    "ddl": "required",
     "column-profiles": "required",
     "value-samples": "required",
     "join-coverage": "required",
@@ -317,9 +319,6 @@ def create_parser(subparsers):
   %(prog)s dependencies
   %(prog)s dependencies customers
 
-  # The DDL that recreates one table
-  %(prog)s ddl customers
-
   # Data profiles. The profile reads ALL_TAB_COLUMNS -- an estimate of the
   # last statistics gathering, vintage in collected_at. The value listing
   # scans the rows -- exact, and paid for with a full scan. Each row says
@@ -336,7 +335,7 @@ def create_parser(subparsers):
 What NAME means depends on the type:
 
   columns NAME, indexes NAME, foreign-keys NAME, constraints NAME,
-  partitions NAME, ddl NAME, column-profiles NAME, value-samples NAME
+  partitions NAME, column-profiles NAME, value-samples NAME
                         NAME is the table whose sub-objects to list or
                         profile (required)
   join-coverage NAME    NAME is the left table of the pair (required);
@@ -471,22 +470,6 @@ def _serialize_for_output(obj: Any) -> Any:
     if isinstance(obj, (str, int, float, bool)):
         return obj
     return str(obj)
-
-
-def _display_ddl(provider, statement, args) -> None:
-    """Show a DDL statement in the form that stays readable.
-
-    A ``CREATE TABLE`` is text: a one-row table folds it into a cell that
-    wraps at the terminal width and interleaves with the other columns. Table
-    output therefore prints the statement itself, while the structured
-    formats keep the whole row so JSON and CSV still carry ``object_type``
-    and ``native`` beside the text.
-    """
-    if args.output == "table":
-        print(statement.ddl or "")
-        return
-    data = _serialize_for_output([statement])
-    provider.display_results(data, title=f"DDL of {statement.object_name}")
 
 
 def _value_sample_rows(samples: List[Any]) -> List[Dict[str, Any]]:
@@ -696,21 +679,10 @@ def _handle_introspect_sync(args, backend: OracleBackend, provider):
             provider.display_results(data, title=title)
 
         # ---- the one-object families --------------------------------------
-        # The DDL that recreates one object, and the profiles of one table or
-        # one column of it: NAME is the table, and the column travels on its
-        # own flag -- ``value-samples customers.email`` would read as a dotted
-        # object name, and NAME already means "the table" everywhere else.
-
-        elif args.type == "ddl":
-            statement = introspector.get_ddl_statement(args.name, object_type=None, schema=None)
-            if statement is None:
-                # Not "no such table": the object may exist, and Oracle
-                # answering with no text rather than an assembled fragment
-                # that would read as authoritative is a different answer.
-                # This exits without printing an empty row.
-                print(f"Error: no DDL available for '{args.name}'", file=sys.stderr)
-                sys.exit(1)
-            _display_ddl(provider, statement, args)
+        # The profiles of one table or one column of it: NAME is the table,
+        # and the column travels on its own flag -- ``value-samples
+        # customers.email`` would read as a dotted object name, and NAME
+        # already means "the table" everywhere else.
 
         elif args.type == "column-profiles":
             # The rows carry ``source`` from the parser -- ``estimate`` with
@@ -966,15 +938,6 @@ async def _handle_introspect_async(args, backend: AsyncOracleBackend, provider):
             data = _serialize_for_output(dependencies)
             title = f"Dependencies of {args.name}" if args.name else "Object Dependencies"
             provider.display_results(data, title=title)
-
-        elif args.type == "ddl":
-            statement = await introspector.get_ddl_statement(
-                args.name, object_type=None, schema=None
-            )
-            if statement is None:
-                print(f"Error: no DDL available for '{args.name}'", file=sys.stderr)
-                sys.exit(1)
-            _display_ddl(provider, statement, args)
 
         elif args.type == "column-profiles":
             profiles = await introspector.list_column_data_profiles(args.name, schema=None)
