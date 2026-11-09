@@ -18,7 +18,6 @@ from rhosocial.activerecord.backend.impl.oracle.cli import introspect as cli_int
 from rhosocial.activerecord.backend.introspection.types import (
     ColumnDataProfile,
     ColumnValueFrequency,
-    DDLStatement,
     JoinCoverage,
 )
 
@@ -66,13 +65,6 @@ INDEX_USAGE_STATS = [{"INDEX_NAME": "SYS_C001", "TABLE_NAME": "CUSTOMERS", "SCAN
 OBJECT_DEPENDENCIES = [
     {"DEPENDENT": "V_CUSTOMERS", "REFERENCED": "CUSTOMERS", "KIND": "VIEW"}
 ]
-DDL_STATEMENT = DDLStatement(
-    schema="AR_CRM",
-    object_type="TABLE",
-    object_name="CUSTOMERS",
-    ddl="CREATE TABLE CUSTOMERS (ID NUMBER(10) NOT NULL)",
-    native=False,
-)
 COLUMN_PROFILES = [
     ColumnDataProfile(
         schema="AR_CRM",
@@ -163,6 +155,44 @@ class FakeIntrospector:
         self.calls.append(("packages", owner))
         return [{"OBJECT_NAME": "CUSTOMERS_PKG"}]
 
+    def list_partitions(self, table_name, schema=None):
+        self.calls.append(("partitions", table_name, schema))
+        return [{"TABLE_NAME": table_name, "PARTITION_NAME": "P1"}]
+
+    def list_constraints(self, table_name, schema=None):
+        self.calls.append(("constraints", table_name, schema))
+        return [{"TABLE_NAME": table_name, "CONSTRAINT_NAME": "PK_CUSTOMERS"}]
+
+    def list_procedures(self, owner=None):
+        self.calls.append(("procedures", owner))
+        return [{"OBJECT_NAME": "CALCULATE_TAX"}]
+
+    def get_procedure_info(self, name, owner=None):
+        self.calls.append(("procedure_info", name, owner))
+        if not self.object_exists:
+            return None
+        return {"OBJECT_NAME": name, "OBJECT_TYPE": "PROCEDURE"}
+
+    def list_functions(self, owner=None):
+        self.calls.append(("functions", owner))
+        return [{"OBJECT_NAME": "CALCULATE_TOTAL"}]
+
+    def get_function_info(self, name, owner=None):
+        self.calls.append(("function_info", name, owner))
+        if not self.object_exists:
+            return None
+        return {"OBJECT_NAME": name, "OBJECT_TYPE": "FUNCTION"}
+
+    def list_types(self, owner=None):
+        self.calls.append(("types", owner))
+        return [{"TYPE_NAME": "ADDRESS_T"}]
+
+    def get_type_info(self, name, owner=None):
+        self.calls.append(("type_info", name, owner))
+        if not self.object_exists:
+            return None
+        return {"TYPE_NAME": name, "TYPECODE": "OBJECT"}
+
     # ---- the nine operational and data families ------------------------
     # The four counter listings and the dependency graph answer for the
     # connection's whole scope; ``dependencies`` may be narrowed to one
@@ -187,10 +217,6 @@ class FakeIntrospector:
     def list_object_dependencies(self, object_name=None, schema=None):
         self.calls.append(("object_dependencies", object_name, schema))
         return OBJECT_DEPENDENCIES
-
-    def get_ddl_statement(self, object_name, object_type=None, schema=None):
-        self.calls.append(("ddl_statement", object_name, object_type, schema))
-        return DDL_STATEMENT
 
     def list_column_data_profiles(self, table_name, schema=None):
         self.calls.append(("column_data_profiles", table_name, schema))
@@ -284,10 +310,14 @@ def patch_async_backend(monkeypatch, introspector: Any,
                          "list_triggers", "get_view_info", "list_sequences",
                          "get_sequence_info", "list_synonyms",
                          "get_synonym_info", "list_packages",
+                         "list_partitions", "list_constraints",
+                         "list_procedures", "get_procedure_info",
+                         "list_functions", "get_function_info",
+                         "list_types", "get_type_info",
                          "get_database_info",
                          "list_unused_indexes", "list_table_usage_stats",
                          "list_runtime_metrics", "list_index_usage_stats",
-                         "list_object_dependencies", "get_ddl_statement",
+                         "list_object_dependencies",
                          "list_column_data_profiles", "sample_column_values",
                          "estimate_join_coverage"):
                 fn = getattr(sync, attr)
@@ -365,7 +395,10 @@ class TestIntrospectParserContract:
         assert "sequences" in cli_introspect.INTROSPECT_TYPES
 
     def test_schema_object_types_are_oracle_specific(self):
-        for itype in ("sequences", "synonyms", "packages"):
+        for itype in (
+            "sequences", "synonyms", "packages", "partitions",
+            "procedures", "functions", "types", "constraints",
+        ):
             assert itype in cli_introspect.INTROSPECT_TYPES
 
     def test_triggers_is_a_declared_type(self):
@@ -375,6 +408,18 @@ class TestIntrospectParserContract:
     def test_invalid_type_rejected(self):
         with pytest.raises(SystemExit):
             build_parser().parse_args(["introspect", "grants"])
+
+    def test_ddl_is_rejected_as_an_unknown_choice(self, capsys):
+        """DDL extraction is permanently unanswerable, so ``ddl`` is not a type.
+
+        The parser refuses the word before anything connects, with the same
+        exit code argparse gives any other invalid choice.
+        """
+        with pytest.raises(SystemExit) as excinfo:
+            build_parser().parse_args(["introspect", "ddl", "customers"])
+        assert excinfo.value.code == 2
+        assert "invalid choice" in capsys.readouterr().err
+        assert "ddl" not in cli_introspect.INTROSPECT_TYPES
 
     def test_connection_defaults_flow_through(self):
         args = build_parser().parse_args([
@@ -403,10 +448,15 @@ class TestNameRules:
             "columns": "required",
             "indexes": "required",
             "foreign-keys": "required",
+            "constraints": "required",
             "triggers": "optional",
+            "partitions": "required",
             "views": "optional",
             "sequences": "optional",
             "synonyms": "optional",
+            "procedures": "optional",
+            "functions": "optional",
+            "types": "optional",
             "tables": "forbidden",
             "packages": "forbidden",
             "unused-indexes": "forbidden",
@@ -414,7 +464,6 @@ class TestNameRules:
             "runtime": "forbidden",
             "index-stats": "forbidden",
             "dependencies": "optional",
-            "ddl": "required",
             "column-profiles": "required",
             "value-samples": "required",
             "join-coverage": "required",
@@ -718,6 +767,8 @@ class TestHandleAsyncBranches:
         ("columns", "customers", "Columns of customers"),
         ("indexes", "customers", "Indexes of customers"),
         ("foreign-keys", "orders", "Foreign Keys of orders"),
+        ("constraints", "orders", "Constraints of orders"),
+        ("partitions", "orders", "Partitions of orders"),
         ("triggers", None, "Triggers"),
         ("triggers", "customers", "Triggers"),
         ("sequences", None, "Sequences"),
@@ -725,13 +776,18 @@ class TestHandleAsyncBranches:
         ("synonyms", None, "Synonyms"),
         ("synonyms", "customers", "Synonym customers"),
         ("packages", None, "Packages"),
+        ("procedures", None, "Procedures"),
+        ("procedures", "calculate_tax", "Procedure calculate_tax"),
+        ("functions", None, "Functions"),
+        ("functions", "calculate_total", "Function calculate_total"),
+        ("types", None, "Types"),
+        ("types", "address_t", "Type address_t"),
         ("unused-indexes", None, "Unused Indexes"),
         ("table-stats", None, "Table Usage Stats"),
         ("runtime", None, "Runtime Metrics"),
         ("index-stats", None, "Index Usage Stats"),
         ("dependencies", None, "Object Dependencies"),
         ("dependencies", "customers", "Dependencies of customers"),
-        ("ddl", "customers", "DDL of CUSTOMERS"),
         ("column-profiles", "customers", "Column profiles of customers"),
         ("value-samples", "customers", "Values of customers.status"),
         ("join-coverage", "customers", "Join Coverage"),
@@ -787,17 +843,21 @@ class TestIntrospectTypeGates:
         "columns": ["customers"],
         "indexes": ["customers"],
         "foreign-keys": ["orders"],
+        "constraints": ["orders"],
         "triggers": ["customers"],
+        "partitions": ["orders"],
         "sequences": [],
         "synonyms": [],
         "packages": [],
+        "procedures": [],
+        "functions": [],
+        "types": [],
         "database": [],
         "unused-indexes": [],
         "table-stats": [],
         "runtime": [],
         "index-stats": [],
         "dependencies": [],
-        "ddl": ["customers", "-o", "json"],
         "column-profiles": ["customers"],
         "value-samples": ["customers", "--column", "status"],
         "join-coverage": [

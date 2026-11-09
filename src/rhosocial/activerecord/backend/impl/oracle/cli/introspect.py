@@ -1,8 +1,9 @@
 # src/rhosocial/activerecord/backend/impl/oracle/cli/introspect.py
 """introspect subcommand - Database introspection.
 
-Oracle introspect includes the schema-object types 'sequences', 'synonyms'
-and 'packages' in addition to the standard types, and 'triggers' from the
+Oracle introspect includes the schema-object types 'sequences', 'synonyms',
+'packages', 'partitions', 'procedures', 'functions', 'types' and
+'constraints' in addition to the standard types, and 'triggers' from the
 standard set -- a family the dialect has always declared and the command
 line could not ask for.
 
@@ -10,10 +11,12 @@ The operational and data families the core introspector answers are offered
 too: a type is advertised exactly when a dialect capability switch answers
 for it, and the switch is read against the connected server, so a family
 Oracle cannot answer *here* is refused rather than run and answered with an
-empty listing. That refusal is most of the nine: on today's servers only the
+empty listing. That refusal is most of the eight: on today's servers only the
 two data families pass the gate -- column profiles read ``ALL_TAB_COLUMNS``
-and the value listing is a grouped scan -- while the other seven are declared
-gaps the roundtrip suite pins, and are refused with exit 2.
+and the value listing is a grouped scan -- while the other six are declared
+gaps the roundtrip suite pins, and are refused with exit 2. DDL extraction is
+not offered as a type at all: its switch answers ``False`` permanently, so an
+entry would be refused on every server.
 
 The two data families are also why ``source`` is a visible column in their
 output. Oracle is the only engine whose profile is an *estimate* (the
@@ -59,10 +62,12 @@ from .output import OUTPUT_CHOICES, create_provider
 #: ``supports_trigger_introspection`` is the entry this backend declared while
 #: ``triggers`` was missing from the CLI: the dialect already answered for it,
 #: and the whole chain ``format_trigger_list_query_statement`` ->
-#: ``parse_triggers`` was wired, so only the word was absent.
+#: ``parse_triggers`` was wired, so only the word was absent. ``partitions``
+#: reuses the existing ``supports_partition_metadata_introspection`` rather
+#: than growing a second spelling for the same capability.
 #:
 #: The operational and data families the core introspector answers are gated
-#: through their switches the same way. Seven of the nine probes answer False
+#: through their switches the same way. Six of the eight probes answer False
 #: on every Oracle today -- the statements would have to read GV$/V$
 #: performance views or call DBMS_METADATA, and the dialect layer has no slot
 #: for either (the roundtrip suite pins each as a declared gap) -- so those
@@ -71,22 +76,28 @@ from .output import OUTPUT_CHOICES, create_provider
 #: *differently*: the profile is an estimate read from ``ALL_TAB_COLUMNS``,
 #: the value listing a grouped scan of the rows. That difference is a column
 #: in the output, not a comment -- see ``_value_sample_rows``.
+#: DDL extraction is not in the table: its switch is permanently False, so a
+#: ``ddl`` type would be an entry no server could ever satisfy.
 _TYPE_CAPABILITIES = {
     "tables": "supports_table_introspection",
     "views": "supports_view_introspection",
     "columns": "supports_column_introspection",
     "indexes": "supports_index_introspection",
     "foreign-keys": "supports_foreign_key_introspection",
+    "constraints": "supports_constraint_introspection",
     "triggers": "supports_trigger_introspection",
+    "partitions": "supports_partition_metadata_introspection",
     "sequences": "supports_sequence_introspection",
     "synonyms": "supports_synonym_introspection",
     "packages": "supports_package_introspection",
+    "procedures": "supports_procedure_introspection",
+    "functions": "supports_function_introspection",
+    "types": "supports_type_introspection",
     "unused-indexes": "supports_unused_indexes_detection",
     "table-stats": "supports_table_stats",
     "runtime": "supports_runtime_stats",
     "index-stats": "supports_index_stats",
     "dependencies": "supports_object_dependencies",
-    "ddl": "supports_ddl_extraction",
     "column-profiles": "supports_column_data_profile",
     "value-samples": "supports_column_value_sample",
     "join-coverage": "supports_join_coverage",
@@ -110,10 +121,10 @@ INTROSPECT_TYPES = list(_TYPE_CAPABILITIES)
 #: for either is refused, never dropped -- a dropped name looks like a filter
 #: that matched everything.
 #:
-#: Of the nine operational and data families, the four counter listings answer
+#: Of the eight operational and data families, the four counter listings answer
 #: for the whole schema (a name is refused, same as ``tables``);
 #: ``dependencies`` takes an optional one that narrows the graph to one
-#: object's edges; and ``ddl``, ``column-profiles`` and ``value-samples`` are
+#: object's edges; and ``column-profiles`` and ``value-samples`` are
 #: one-table questions (required), with ``value-samples`` naming its column on
 #: ``--column``. ``join-coverage`` is required too -- NAME is the *left* table
 #: of the pair -- because ``name`` means "the table" everywhere else in this
@@ -127,10 +138,15 @@ _NAME_RULE = {
     "columns": "required",
     "indexes": "required",
     "foreign-keys": "required",
+    "constraints": "required",
     "triggers": "optional",
+    "partitions": "required",
     "views": "optional",
     "sequences": "optional",
     "synonyms": "optional",
+    "procedures": "optional",
+    "functions": "optional",
+    "types": "optional",
     "tables": "forbidden",
     "packages": "forbidden",
     "unused-indexes": "forbidden",
@@ -138,7 +154,6 @@ _NAME_RULE = {
     "runtime": "forbidden",
     "index-stats": "forbidden",
     "dependencies": "optional",
-    "ddl": "required",
     "column-profiles": "required",
     "value-samples": "required",
     "join-coverage": "required",
@@ -281,6 +296,17 @@ def create_parser(subparsers):
   # List PL/SQL packages with their compile status
   %(prog)s packages
 
+  # List the partitions of one table, with strategy, bounds and tablespace
+  %(prog)s partitions orders
+
+  # List constraints, standalone procedures, functions and named types
+  %(prog)s constraints orders
+  %(prog)s procedures
+  %(prog)s procedures calculate_tax
+  %(prog)s functions
+  %(prog)s types
+  %(prog)s types address_t
+
   # Operational readings, each refused (exit 2) on a server whose dialect
   # cannot answer it -- on Oracle today that is all four, until the
   # performance-view statements are written:
@@ -292,9 +318,6 @@ def create_parser(subparsers):
   # The dependency graph, or one object's dependants
   %(prog)s dependencies
   %(prog)s dependencies customers
-
-  # The DDL that recreates one table
-  %(prog)s ddl customers
 
   # Data profiles. The profile reads ALL_TAB_COLUMNS -- an estimate of the
   # last statistics gathering, vintage in collected_at. The value listing
@@ -311,8 +334,8 @@ def create_parser(subparsers):
 
 What NAME means depends on the type:
 
-  columns NAME, indexes NAME, foreign-keys NAME, ddl NAME,
-  column-profiles NAME, value-samples NAME
+  columns NAME, indexes NAME, foreign-keys NAME, constraints NAME,
+  partitions NAME, column-profiles NAME, value-samples NAME
                         NAME is the table whose sub-objects to list or
                         profile (required)
   join-coverage NAME    NAME is the left table of the pair (required);
@@ -323,6 +346,12 @@ What NAME means depends on the type:
   views [NAME]          NAME is the view to describe (optional)
   sequences [NAME]      NAME is the sequence to describe (optional)
   synonyms [NAME]       NAME is the synonym to describe (optional)
+  procedures [NAME]     NAME is the standalone procedure to describe
+                        (optional); package subprograms are not in this
+                        family
+  functions [NAME]      NAME is the standalone function to describe
+                        (optional)
+  types [NAME]          NAME is the named type to describe (optional)
   dependencies [NAME]   NAME narrows the graph to one object's edges
                         (optional); omit it for the whole graph
   tables, packages, database, unused-indexes, table-stats, runtime,
@@ -443,22 +472,6 @@ def _serialize_for_output(obj: Any) -> Any:
     return str(obj)
 
 
-def _display_ddl(provider, statement, args) -> None:
-    """Show a DDL statement in the form that stays readable.
-
-    A ``CREATE TABLE`` is text: a one-row table folds it into a cell that
-    wraps at the terminal width and interleaves with the other columns. Table
-    output therefore prints the statement itself, while the structured
-    formats keep the whole row so JSON and CSV still carry ``object_type``
-    and ``native`` beside the text.
-    """
-    if args.output == "table":
-        print(statement.ddl or "")
-        return
-    data = _serialize_for_output([statement])
-    provider.display_results(data, title=f"DDL of {statement.object_name}")
-
-
 def _value_sample_rows(samples: List[Any]) -> List[Dict[str, Any]]:
     """The value listing as rows, each carrying how it was produced.
 
@@ -574,6 +587,59 @@ def _handle_introspect_sync(args, backend: OracleBackend, provider):
             data = _serialize_for_output(packages)
             provider.display_results(data, title="Packages")
 
+        elif args.type == "partitions":
+            # NAME is the table, as it is for columns/indexes/constraints.
+            partitions = introspector.list_partitions(args.name, schema=None)
+            data = _serialize_for_output(partitions)
+            provider.display_results(data, title=f"Partitions of {args.name}")
+
+        elif args.type == "constraints":
+            constraints = introspector.list_constraints(args.name, schema=None)
+            data = _serialize_for_output(constraints)
+            provider.display_results(data, title=f"Constraints of {args.name}")
+
+        elif args.type == "procedures":
+            if args.name:
+                procedure = introspector.get_procedure_info(args.name, owner=None)
+                if procedure is None:
+                    print(f"Error: Procedure '{args.name}' not found", file=sys.stderr)
+                    sys.exit(1)
+                provider.display_results(
+                    _serialize_for_output([procedure]), title=f"Procedure {args.name}"
+                )
+            else:
+                procedures = introspector.list_procedures(owner=None)
+                data = _serialize_for_output(procedures)
+                provider.display_results(data, title="Procedures")
+
+        elif args.type == "functions":
+            if args.name:
+                function = introspector.get_function_info(args.name, owner=None)
+                if function is None:
+                    print(f"Error: Function '{args.name}' not found", file=sys.stderr)
+                    sys.exit(1)
+                provider.display_results(
+                    _serialize_for_output([function]), title=f"Function {args.name}"
+                )
+            else:
+                functions = introspector.list_functions(owner=None)
+                data = _serialize_for_output(functions)
+                provider.display_results(data, title="Functions")
+
+        elif args.type == "types":
+            if args.name:
+                type_info = introspector.get_type_info(args.name, owner=None)
+                if type_info is None:
+                    print(f"Error: Type '{args.name}' not found", file=sys.stderr)
+                    sys.exit(1)
+                provider.display_results(
+                    _serialize_for_output([type_info]), title=f"Type {args.name}"
+                )
+            else:
+                types = introspector.list_types(owner=None)
+                data = _serialize_for_output(types)
+                provider.display_results(data, title="Types")
+
         # ---- the operational families -------------------------------------
         # These read the statistics collector or the performance views rather
         # than the catalog, so each is a listing of the whole connection's
@@ -613,21 +679,10 @@ def _handle_introspect_sync(args, backend: OracleBackend, provider):
             provider.display_results(data, title=title)
 
         # ---- the one-object families --------------------------------------
-        # The DDL that recreates one object, and the profiles of one table or
-        # one column of it: NAME is the table, and the column travels on its
-        # own flag -- ``value-samples customers.email`` would read as a dotted
-        # object name, and NAME already means "the table" everywhere else.
-
-        elif args.type == "ddl":
-            statement = introspector.get_ddl_statement(args.name, object_type=None, schema=None)
-            if statement is None:
-                # Not "no such table": the object may exist, and Oracle
-                # answering with no text rather than an assembled fragment
-                # that would read as authoritative is a different answer.
-                # This exits without printing an empty row.
-                print(f"Error: no DDL available for '{args.name}'", file=sys.stderr)
-                sys.exit(1)
-            _display_ddl(provider, statement, args)
+        # The profiles of one table or one column of it: NAME is the table,
+        # and the column travels on its own flag -- ``value-samples
+        # customers.email`` would read as a dotted object name, and NAME
+        # already means "the table" everywhere else.
 
         elif args.type == "column-profiles":
             # The rows carry ``source`` from the parser -- ``estimate`` with
@@ -798,6 +853,58 @@ async def _handle_introspect_async(args, backend: AsyncOracleBackend, provider):
             data = _serialize_for_output(packages)
             provider.display_results(data, title="Packages")
 
+        elif args.type == "partitions":
+            partitions = await introspector.list_partitions(args.name, schema=None)
+            data = _serialize_for_output(partitions)
+            provider.display_results(data, title=f"Partitions of {args.name}")
+
+        elif args.type == "constraints":
+            constraints = await introspector.list_constraints(args.name, schema=None)
+            data = _serialize_for_output(constraints)
+            provider.display_results(data, title=f"Constraints of {args.name}")
+
+        elif args.type == "procedures":
+            if args.name:
+                procedure = await introspector.get_procedure_info(args.name, owner=None)
+                if procedure is None:
+                    print(f"Error: Procedure '{args.name}' not found", file=sys.stderr)
+                    sys.exit(1)
+                provider.display_results(
+                    _serialize_for_output([procedure]), title=f"Procedure {args.name}"
+                )
+            else:
+                procedures = await introspector.list_procedures(owner=None)
+                data = _serialize_for_output(procedures)
+                provider.display_results(data, title="Procedures")
+
+        elif args.type == "functions":
+            if args.name:
+                function = await introspector.get_function_info(args.name, owner=None)
+                if function is None:
+                    print(f"Error: Function '{args.name}' not found", file=sys.stderr)
+                    sys.exit(1)
+                provider.display_results(
+                    _serialize_for_output([function]), title=f"Function {args.name}"
+                )
+            else:
+                functions = await introspector.list_functions(owner=None)
+                data = _serialize_for_output(functions)
+                provider.display_results(data, title="Functions")
+
+        elif args.type == "types":
+            if args.name:
+                type_info = await introspector.get_type_info(args.name, owner=None)
+                if type_info is None:
+                    print(f"Error: Type '{args.name}' not found", file=sys.stderr)
+                    sys.exit(1)
+                provider.display_results(
+                    _serialize_for_output([type_info]), title=f"Type {args.name}"
+                )
+            else:
+                types = await introspector.list_types(owner=None)
+                data = _serialize_for_output(types)
+                provider.display_results(data, title="Types")
+
         # The async twins of the nine branches above: same method, same
         # argument and same title, awaited. They are written out rather than
         # shared with the sync chain because the executor is the only thing
@@ -831,15 +938,6 @@ async def _handle_introspect_async(args, backend: AsyncOracleBackend, provider):
             data = _serialize_for_output(dependencies)
             title = f"Dependencies of {args.name}" if args.name else "Object Dependencies"
             provider.display_results(data, title=title)
-
-        elif args.type == "ddl":
-            statement = await introspector.get_ddl_statement(
-                args.name, object_type=None, schema=None
-            )
-            if statement is None:
-                print(f"Error: no DDL available for '{args.name}'", file=sys.stderr)
-                sys.exit(1)
-            _display_ddl(provider, statement, args)
 
         elif args.type == "column-profiles":
             profiles = await introspector.list_column_data_profiles(args.name, schema=None)

@@ -33,6 +33,27 @@ class OracleRoutineMixin:
         only, so a package and its body are not counted twice."""
         return True
 
+    def supports_procedure_introspection(self) -> bool:
+        """Oracle answers for standalone procedures from ``ALL_PROCEDURES``.
+
+        The properties (``AUTHID``, ``PIPELINED``, ``DETERMINISTIC``,
+        ``AGGREGATE``, ``PARALLEL``, ``RESULT_CACHE``) live in
+        ``ALL_PROCEDURES``, the compile state in ``ALL_OBJECTS`` and the
+        signature in ``ALL_ARGUMENTS``; the family joins the three. A package
+        subprogram belongs to its package, so only ``PROCEDURE_NAME IS NULL``
+        rows are this family's.
+        """
+        return True
+
+    def supports_function_introspection(self) -> bool:
+        """Oracle answers for standalone functions from ``ALL_PROCEDURES``.
+
+        The same three-relation question as procedures, narrowed to
+        ``OBJECT_TYPE='FUNCTION'``. The return value is ``ALL_ARGUMENTS``
+        position 0, so the signature carries it.
+        """
+        return True
+
     def supports_create_procedure(self) -> bool:
         return True
 

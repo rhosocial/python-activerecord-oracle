@@ -29,12 +29,16 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..expression.introspection import (
+        OracleConstraintListQueryStatement,
         OraclePackageListQueryStatement,
+        OraclePartitionListQueryStatement,
         OraclePrimaryKeyQueryStatement,
+        OracleRoutineListQueryStatement,
         OracleSequenceInfoQueryStatement,
         OracleSequenceListQueryStatement,
         OracleSynonymInfoQueryStatement,
         OracleSynonymListQueryStatement,
+        OracleTypeListQueryStatement,
     )
 
 from rhosocial.activerecord.backend.introspection.base import (
@@ -71,18 +75,33 @@ from .status_introspector import (
 )
 from .types import (
     OracleColumnDataProfile,
+    OracleConstraintInfo,
     OraclePackageInfo,
+    OraclePartitionInfo,
+    OraclePartitionStrategy,
+    OracleRoutineInfo,
+    OracleRoutineParameter,
     OracleSequenceInfo,
     OracleSynonymInfo,
+    OracleTypeAttributeInfo,
+    OracleTypeInfo,
 )
 
 #: Cache namespaces for the schema-object families core has no scope for.
-#: Sequences have ``IntrospectionScope.SEQUENCE`` of their own; synonyms and
-#: packages are schema-level objects, so they share
+#: Sequences have ``IntrospectionScope.SEQUENCE`` of their own; synonyms,
+#: packages, routines and types are schema-level objects, so they share
 #: ``IntrospectionScope.SCHEMA`` and are told apart by these ``extra`` values
 #: rather than by overloading a scope that means something else.
 _SYNONYM_FAMILY = "oracle:synonyms"
 _PACKAGE_FAMILY = "oracle:packages"
+_PROCEDURE_FAMILY = "oracle:procedures"
+_FUNCTION_FAMILY = "oracle:functions"
+_TYPE_FAMILY = "oracle:types"
+#: Partitions and constraints belong to a table, so they share
+#: ``IntrospectionScope.TABLE`` with the table's own entry and are told apart
+#: by these ``extra`` values.
+_PARTITION_FAMILY = "partitions"
+_CONSTRAINT_FAMILY = "oracle:constraints"
 
 
 def _as_int(value: Any) -> Optional[int]:
@@ -100,6 +119,51 @@ def _as_int(value: Any) -> Optional[int]:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _as_bool(value: Any) -> bool:
+    """Whether a ``'YES'``/``'NO'`` or ``'Y'``/``'N'`` dictionary flag is set.
+
+    Oracle spells its flags both ways: the object views use ``YES``/``NO``,
+    ``ALL_ARGUMENTS.DEFAULTED`` uses ``Y``/``N``. Both are read here so a
+    caller does not have to know which view an answer came from. ``None`` --
+    the absence of a row, as in the ``LEFT`` half of a join -- is a false
+    flag, which is why this answers ``False`` rather than ``None``.
+    """
+    if value is None:
+        return False
+    return str(value).strip().upper() in ("YES", "Y")
+
+
+def _as_date_text(value: Any) -> Optional[str]:
+    """A dictionary timestamp as text, or ``None`` when the view has none.
+
+    The objects in this module render their timestamps as strings so the
+    value survives JSON/CSV rendering unchanged; the driver's ``datetime``
+    would otherwise be re-encoded by each output format.
+    """
+    return str(value) if value is not None else None
+
+
+def _word_is(value: Any, word: str) -> bool:
+    """Whether a dictionary column carries *word* as a set flag.
+
+    Oracle spells some flags ``YES`` (``PREDEFINED``, ``INHERITED``) and
+    others by repeating the flag's own name (``RELY``, ``BAD``), so a single
+    ``YES`` test cannot read both. The comparison is on the whole word: a
+    NULL flag means "not set" and is ``False``.
+    """
+    return value is not None and str(value).strip().upper() == word.upper()
+
+
+def _bool_or_none(value: Any) -> Optional[bool]:
+    """``_as_bool`` for a flag whose absence is meaningful rather than false.
+
+    ``ALL_TYPES.FINAL`` and ``INSTANTIABLE`` are absent for a collection
+    type, where the question does not apply; answering ``False`` there would
+    claim the type is non-final. ``None`` keeps the three states distinct.
+    """
+    return None if value is None else _as_bool(value)
 
 #: The object kinds the table listing can report, in core's vocabulary.
 #: The dictionary spells them for what they are -- ``ALL_TABLES`` answers
@@ -158,6 +222,12 @@ class OracleIntrospectorMixin(IntrospectorMixin):
         if owner is None:
             return self.default_schema
         return owner.upper()
+
+    def _normalise_schema(self, schema: Optional[str]) -> str:
+        """Fold an optional table schema the same way :meth:`_normalise_owner` does."""
+        if schema is None:
+            return self.default_schema
+        return schema.upper()
 
     def _get_version(self) -> Optional[Tuple[int, ...]]:
         """Return the Oracle server version tuple from the backend, or ``None``.
@@ -228,6 +298,42 @@ class OracleIntrospectorMixin(IntrospectorMixin):
         from ..expression.introspection import OraclePackageListQueryStatement
 
         return OraclePackageListQueryStatement(self.dialect, owner=owner.upper())
+
+    def partition_list_statement(
+        self, *, table_name: str, schema: str
+    ) -> "OraclePartitionListQueryStatement":
+        """Return the statement that lists one table's partitions."""
+        from ..expression.introspection import OraclePartitionListQueryStatement
+
+        return OraclePartitionListQueryStatement(
+            self.dialect, table_name=table_name, schema=schema
+        )
+
+    def routine_list_statement(
+        self, *, owner: str, routine_kind: str
+    ) -> "OracleRoutineListQueryStatement":
+        """Return the statement that lists one owner's standalone routines."""
+        from ..expression.introspection import OracleRoutineListQueryStatement
+
+        return OracleRoutineListQueryStatement(
+            self.dialect, owner=owner.upper(), routine_kind=routine_kind.upper()
+        )
+
+    def type_list_statement(self, *, owner: str) -> "OracleTypeListQueryStatement":
+        """Return the statement that lists one owner's named types."""
+        from ..expression.introspection import OracleTypeListQueryStatement
+
+        return OracleTypeListQueryStatement(self.dialect, owner=owner.upper())
+
+    def constraint_list_statement(
+        self, *, table_name: str, schema: str
+    ) -> "OracleConstraintListQueryStatement":
+        """Return the statement that lists one table's constraints."""
+        from ..expression.introspection import OracleConstraintListQueryStatement
+
+        return OracleConstraintListQueryStatement(
+            self.dialect, table_name=table_name, schema=schema
+        )
 
 
     # ------------------------------------------------------------------ #
@@ -387,7 +493,7 @@ class OracleIntrospectorMixin(IntrospectorMixin):
                     default_value=row.get("DATA_DEFAULT"),
                     is_primary_key=col_name in pk_set,
                     is_unique=False,  # Determined separately
-                    is_auto_increment=row.get("IDENTITY_COLUMN") == "YES",
+                    is_auto_increment=_as_bool(row.get("IDENTITY_COLUMN")),
                     comment=None,  # Oracle column comments require separate query
                     character_maximum_length=character_maximum_length,
                     numeric_precision=numeric_precision,
@@ -776,6 +882,411 @@ class OracleIntrospectorMixin(IntrospectorMixin):
             )
         return packages
 
+    # ------------------------------------------------------------------ #
+    # Parse methods -- partitions, routines, types, constraints
+    # ------------------------------------------------------------------ #
+
+    def _declared_data_type(
+        self,
+        base: Optional[str],
+        precision: Any = None,
+        scale: Any = None,
+        char_length: Any = None,
+    ) -> Optional[str]:
+        """The declared spelling of a type, with its width folded in.
+
+        ``DATA_PRECISION``/``DATA_SCALE`` describe numbers and
+        ``CHAR_LENGTH`` character types; the same three readings apply to a
+        routine argument and a type attribute. A width the dictionary did
+        not report stays out rather than being invented.
+        """
+        if not base:
+            return None
+        declared = str(base)
+        upper = declared.upper()
+        if upper in _NUMERIC_TYPES and precision is not None:
+            if scale is not None and scale > 0:
+                return f"{declared}({precision},{scale})"
+            return f"{declared}({precision})"
+        if upper in _CHARACTER_TYPES and char_length:
+            return f"{declared}({char_length})"
+        return declared
+
+    def _partition_strategy(
+        self, row: Dict[str, Any]
+    ) -> OraclePartitionStrategy:
+        """Derive the strategy Oracle stores across two columns.
+
+        ``ALL_PART_TABLES`` names the top level in ``PARTITIONING_TYPE`` and
+        the second level in ``SUBPARTITIONING_TYPE``; an interval table is
+        RANGE with an ``INTERVAL`` expression. A table that is both
+        subpartitioned and interval-partitioned answers ``COMPOSITE`` -- its
+        declared structure -- and keeps the interval expression in its own
+        field. ``SUBPARTITIONING_TYPE`` spells "not subpartitioned" as
+        ``NONE`` rather than as ``NULL``, so that word is the absence it is.
+        """
+        raw = str(row.get("PARTITIONING_TYPE") or "").upper()
+        sub = str(row.get("SUBPARTITIONING_TYPE") or "").upper()
+        interval = row.get("INTERVAL")
+        # ``SUBPARTITIONING_TYPE`` is the word ``NONE`` for a table that is
+        # not subpartitioned, not NULL, so "a subpartitioning type exists"
+        # has to exclude that word.
+        if sub and sub != "NONE":
+            return OraclePartitionStrategy.COMPOSITE
+        if raw == "INTERVAL" or interval:
+            return OraclePartitionStrategy.INTERVAL
+        try:
+            return OraclePartitionStrategy(raw)
+        except ValueError:
+            return OraclePartitionStrategy.UNKNOWN
+
+    def parse_partitions(
+        self,
+        rows: List[Dict[str, Any]],
+        table_name: str = "",
+        schema: str = "",
+    ) -> List[OraclePartitionInfo]:
+        """Turn ``ALL_TAB_PARTITIONS`` rows into partition value objects."""
+        partitions = []
+        for row in rows or []:
+            partition_name = row.get("PARTITION_NAME")
+            if not partition_name:
+                continue
+            partitions.append(
+                OraclePartitionInfo(
+                    owner=row.get("OWNER") or schema,
+                    table_name=row.get("TABLE_NAME") or table_name,
+                    partition_name=str(partition_name),
+                    strategy=self._partition_strategy(row),
+                    partition_position=_as_int(row.get("PARTITION_POSITION")),
+                    high_value=row.get("HIGH_VALUE"),
+                    high_value_length=_as_int(row.get("HIGH_VALUE_LENGTH")),
+                    tablespace_name=row.get("TABLESPACE_NAME"),
+                    subpartition_count=_as_int(row.get("SUBPARTITION_COUNT")),
+                    subpartition_strategy=(
+                        str(row.get("SUBPARTITIONING_TYPE")).upper()
+                        if str(row.get("SUBPARTITIONING_TYPE") or "").upper() != "NONE"
+                        else None
+                    ),
+                    interval=row.get("INTERVAL"),
+                    row_count=_as_int(row.get("NUM_ROWS")),
+                    size_bytes=_as_int(row.get("SIZE_BYTES")),
+                    compression=row.get("COMPRESSION"),
+                    segment_created=row.get("SEGMENT_CREATED"),
+                    read_only=row.get("READ_ONLY"),
+                    extra={
+                        "partition_type": row.get("PARTITIONING_TYPE"),
+                        "partition_count": _as_int(row.get("PARTITION_COUNT")),
+                        "def_subpartition_count": _as_int(
+                            row.get("DEF_SUBPARTITION_COUNT")
+                        ),
+                    },
+                )
+            )
+        return partitions
+
+    def parse_routines(self, rows: List[Dict[str, Any]]) -> List[OracleRoutineInfo]:
+        """Turn joined ``ALL_PROCEDURES``/``ALL_ARGUMENTS`` rows into routines.
+
+        The rows arrive one per argument, so they are grouped on the object
+        and subprogram identifiers. Position 0 is a function's return
+        value; every other position is a parameter. A routine with no
+        arguments arrives as one row with every argument column null, which
+        is why that row still creates the routine.
+        """
+        entries: Dict[Tuple[Any, Any, Any, Any], Dict[str, Any]] = {}
+        order: List[Tuple[Any, Any, Any, Any]] = []
+        for row in rows or []:
+            owner = row.get("OWNER") or ""
+            name = row.get("OBJECT_NAME") or ""
+            key = (
+                owner,
+                name,
+                row.get("OBJECT_ID"),
+                row.get("SUBPROGRAM_ID"),
+            )
+            if key not in entries:
+                entries[key] = {
+                    "owner": owner,
+                    "name": name,
+                    "kind": str(row.get("OBJECT_TYPE") or "").upper(),
+                    "object_id": _as_int(row.get("OBJECT_ID")),
+                    "subprogram_id": _as_int(row.get("SUBPROGRAM_ID")),
+                    "status": row.get("STATUS"),
+                    "authid": row.get("AUTHID"),
+                    "deterministic": _as_bool(row.get("DETERMINISTIC")),
+                    "pipelined": _as_bool(row.get("PIPELINED")),
+                    "aggregate": _as_bool(row.get("AGGREGATE")),
+                    "parallel": _as_bool(row.get("PARALLEL")),
+                    "result_cache": _as_bool(row.get("RESULT_CACHE")),
+                    "interface": row.get("INTERFACE"),
+                    "impl_type_name": row.get("IMPL_TYPE_NAME"),
+                    "polymorphic": row.get("POLYMORPHIC"),
+                    "overload": row.get("OVERLOAD"),
+                    "parameters": [],
+                    "return_type": None,
+                    "created_time": _as_date_text(row.get("CREATED")),
+                    "last_ddl_time": _as_date_text(row.get("LAST_DDL_TIME")),
+                }
+                order.append(key)
+
+            entry = entries[key]
+            position = _as_int(row.get("POSITION"))
+            if position is None:
+                # A routine with no arguments: ALL_ARGUMENTS omitted it from
+                # 12.1.0.2 on, and the LEFT join's missing side is all null.
+                continue
+            data_level = _as_int(row.get("DATA_LEVEL"))
+            if data_level not in (None, 0):
+                # Before 18c a composite argument arrived as one row per
+                # nested component. Only the top-level row is the parameter;
+                # the nested rows describe its type and would duplicate it.
+                continue
+            data_type = self._declared_data_type(
+                row.get("DATA_TYPE"),
+                row.get("DATA_PRECISION"),
+                row.get("DATA_SCALE"),
+                row.get("CHAR_LENGTH"),
+            )
+            if position == 0:
+                entry["return_type"] = data_type
+                continue
+            entry["parameters"].append(
+                OracleRoutineParameter(
+                    name=row.get("ARGUMENT_NAME"),
+                    position=position,
+                    data_type=data_type,
+                    mode=row.get("IN_OUT"),
+                    defaulted=_as_bool(row.get("DEFAULTED")),
+                    default_value=row.get("DEFAULT_VALUE"),
+                    type_owner=row.get("TYPE_OWNER"),
+                    type_name=row.get("TYPE_NAME"),
+                    precision=_as_int(row.get("DATA_PRECISION")),
+                    scale=_as_int(row.get("DATA_SCALE")),
+                    char_length=_as_int(row.get("CHAR_LENGTH")),
+                )
+            )
+
+        return [
+            OracleRoutineInfo(
+                owner=entry["owner"],
+                name=entry["name"],
+                kind=entry["kind"],
+                object_id=entry["object_id"],
+                subprogram_id=entry["subprogram_id"],
+                status=entry["status"],
+                authid=entry["authid"],
+                deterministic=entry["deterministic"],
+                pipelined=entry["pipelined"],
+                aggregate=entry["aggregate"],
+                parallel=entry["parallel"],
+                result_cache=entry["result_cache"],
+                interface=entry["interface"],
+                impl_type_name=entry["impl_type_name"],
+                polymorphic=entry["polymorphic"],
+                overload=entry["overload"],
+                parameters=entry["parameters"],
+                return_type=entry["return_type"],
+                comment=None,
+                created_time=entry["created_time"],
+                last_ddl_time=entry["last_ddl_time"],
+            )
+            for entry in (entries[key] for key in order)
+        ]
+
+    def _type_kind(self, row: Dict[str, Any]) -> str:
+        """The kind of named type, from the two dictionaries that describe it.
+
+        ``COLL_TYPE`` answers for a collection (``TABLE`` for a nested table,
+        ``VARYING ARRAY`` for a VARRAY); ``TYPECODE`` answers for an object
+        type. A collection type that appears in both views is named by its
+        collection shape, which is the more specific fact.
+        """
+        collection_type = str(row.get("COLL_TYPE") or "").upper()
+        type_code = str(row.get("TYPECODE") or "").upper()
+        if collection_type.startswith("VARYING ARRAY"):
+            return "VARRAY"
+        if "TABLE" in collection_type:
+            return "NESTED TABLE"
+        if collection_type:
+            return "COLLECTION"
+        return type_code or "UNKNOWN"
+
+    def parse_types(self, rows: List[Dict[str, Any]]) -> List[OracleTypeInfo]:
+        """Turn the unioned type rows into named type value objects.
+
+        The union returns one row per object-type attribute and one row per
+        collection, so the rows are grouped on the owner and type name and
+        the attributes appended in dictionary order. A collection carries no
+        attribute rows and so keeps an empty attribute list.
+        """
+        entries: Dict[Tuple[str, str], Dict[str, Any]] = {}
+        order: List[Tuple[str, str]] = []
+        for row in rows or []:
+            owner = row.get("OWNER") or ""
+            name = row.get("TYPE_NAME") or ""
+            key = (owner, name)
+            if key not in entries:
+                entries[key] = {
+                    "owner": owner,
+                    "name": name,
+                    "kind": self._type_kind(row),
+                    "type_code": row.get("TYPECODE"),
+                    "attributes_count": _as_int(row.get("ATTRIBUTES")),
+                    "methods_count": _as_int(row.get("METHODS")),
+                    "predefined": _as_bool(row.get("PREDEFINED")),
+                    "incomplete": _as_bool(row.get("INCOMPLETE")),
+                    "final": _bool_or_none(row.get("FINAL")),
+                    "instantiable": _bool_or_none(row.get("INSTANTIABLE")),
+                    "supertype_owner": row.get("SUPERTYPE_OWNER"),
+                    "supertype_name": row.get("SUPERTYPE_NAME"),
+                    "collection_type": row.get("COLL_TYPE"),
+                    "element_type": row.get("ELEM_TYPE_NAME"),
+                    "element_type_owner": row.get("ELEM_TYPE_OWNER"),
+                    "element_type_length": _as_int(row.get("ELEM_LENGTH")),
+                    "element_type_precision": _as_int(row.get("ELEM_PRECISION")),
+                    "element_type_scale": _as_int(row.get("ELEM_SCALE")),
+                    "element_type_charset": row.get("ELEM_CHARSET"),
+                    "upper_bound": _as_int(row.get("UPPER_BOUND")),
+                    "status": row.get("STATUS"),
+                    "created_time": _as_date_text(row.get("CREATED")),
+                    "last_ddl_time": _as_date_text(row.get("LAST_DDL_TIME")),
+                    "attributes": [],
+                }
+                order.append(key)
+
+            attribute_name = row.get("ATTR_NAME")
+            if attribute_name:
+                entries[key]["attributes"].append(
+                    OracleTypeAttributeInfo(
+                        name=str(attribute_name),
+                        data_type=self._declared_data_type(
+                            row.get("ATTR_TYPE_NAME"),
+                            row.get("ATTR_PRECISION"),
+                            row.get("ATTR_SCALE"),
+                            row.get("ATTR_LENGTH"),
+                        ),
+                        type_owner=row.get("ATTR_TYPE_OWNER"),
+                        type_mod=row.get("ATTR_TYPE_MOD"),
+                        length=_as_int(row.get("ATTR_LENGTH")),
+                        precision=_as_int(row.get("ATTR_PRECISION")),
+                        scale=_as_int(row.get("ATTR_SCALE")),
+                        charset=row.get("ATTR_CHARSET"),
+                        position=_as_int(row.get("ATTR_NO")),
+                        inherited=_as_bool(row.get("ATTR_INHERITED")),
+                        char_used=row.get("ATTR_CHAR_USED"),
+                    )
+                )
+
+        return [
+            OracleTypeInfo(
+                owner=entry["owner"],
+                name=entry["name"],
+                kind=entry["kind"],
+                type_code=entry["type_code"],
+                attributes_count=entry["attributes_count"],
+                methods_count=entry["methods_count"],
+                predefined=entry["predefined"],
+                incomplete=entry["incomplete"],
+                final=entry["final"],
+                instantiable=entry["instantiable"],
+                supertype_owner=entry["supertype_owner"],
+                supertype_name=entry["supertype_name"],
+                collection_type=entry["collection_type"],
+                element_type=entry["element_type"],
+                element_type_owner=entry["element_type_owner"],
+                element_type_length=entry["element_type_length"],
+                element_type_precision=entry["element_type_precision"],
+                element_type_scale=entry["element_type_scale"],
+                element_type_charset=entry["element_type_charset"],
+                upper_bound=entry["upper_bound"],
+                status=entry["status"],
+                created_time=entry["created_time"],
+                last_ddl_time=entry["last_ddl_time"],
+                attributes=entry["attributes"],
+            )
+            for entry in (entries[key] for key in order)
+        ]
+
+    def parse_constraints(
+        self,
+        rows: List[Dict[str, Any]],
+        table_name: str = "",
+        schema: str = "",
+    ) -> List[OracleConstraintInfo]:
+        """Turn joined ``ALL_CONSTRAINTS``/``ALL_CONS_COLUMNS`` rows into values.
+
+        One constraint is one declaration plus its column rows, so the rows
+        are grouped on the constraint name. A check constraint normally has
+        no column rows and keeps an empty column list; ``SEARCH_CONDITION``
+        carries its expression.
+        """
+        entries: Dict[str, Dict[str, Any]] = {}
+        order: List[str] = []
+        for row in rows or []:
+            name = row.get("CONSTRAINT_NAME")
+            if not name:
+                continue
+            key = str(name)
+            if key not in entries:
+                entries[key] = {
+                    "owner": row.get("OWNER") or schema,
+                    "table_name": row.get("TABLE_NAME") or table_name,
+                    "name": key,
+                    "constraint_type": row.get("CONSTRAINT_TYPE") or "",
+                    "status": row.get("STATUS"),
+                    "validated": row.get("VALIDATED"),
+                    "generated": row.get("GENERATED"),
+                    "deferrable": row.get("DEFERRABLE"),
+                    "deferred": row.get("DEFERRED"),
+                    "rely": _word_is(row.get("RELY"), "RELY"),
+                    "bad": _word_is(row.get("BAD"), "BAD"),
+                    "columns": [],
+                    "search_condition": row.get("SEARCH_CONDITION"),
+                    "index_name": row.get("INDEX_NAME"),
+                    "referenced_owner": row.get("REFERENCED_OWNER"),
+                    "referenced_constraint_name": row.get(
+                        "REFERENCED_CONSTRAINT_NAME"
+                    ),
+                    "delete_rule": row.get("DELETE_RULE"),
+                    "extra": {
+                        "last_change": _as_date_text(row.get("LAST_CHANGE")),
+                        "invalid": row.get("INVALID"),
+                        "view_related": row.get("VIEW_RELATED"),
+                    },
+                }
+                order.append(key)
+
+            column_name = row.get("COLUMN_NAME")
+            if column_name:
+                entries[key]["columns"].append(str(column_name))
+
+        return [
+            OracleConstraintInfo(
+                owner=entry["owner"],
+                table_name=entry["table_name"],
+                name=entry["name"],
+                constraint_type=entry["constraint_type"],
+                status=entry["status"],
+                validated=entry["validated"],
+                generated=entry["generated"],
+                deferrable=entry["deferrable"],
+                deferred=entry["deferred"],
+                rely=entry["rely"],
+                bad=entry["bad"],
+                columns=entry["columns"],
+                search_condition=entry["search_condition"],
+                index_name=entry["index_name"],
+                referenced_owner=entry["referenced_owner"],
+                referenced_constraint_name=entry[
+                    "referenced_constraint_name"
+                ],
+                delete_rule=entry["delete_rule"],
+                extra=entry["extra"],
+            )
+            for entry in (entries[key] for key in order)
+        ]
+
 
 class OracleIntrospector(OracleIntrospectorMixin, AbstractIntrospector):
     """Synchronous introspector for Oracle backends.
@@ -1056,6 +1567,207 @@ class OracleIntrospector(OracleIntrospectorMixin, AbstractIntrospector):
         self._cache.set(key, packages)
         return packages
 
+    # ------------------------------------------------------------------ #
+    # Table physical shape and declaration: partitions and constraints
+    # ------------------------------------------------------------------ #
+
+    def list_partitions(
+        self, table_name: str, schema: Optional[str] = None
+    ) -> List[OraclePartitionInfo]:
+        """Return the partitions of *table_name*, in declaration order.
+
+        Args:
+            table_name: The partitioned table.
+            schema: Oracle schema (owner) of that table. ``None`` means the
+                connected user's schema.
+
+        Returns:
+            The partitions. A table that is not partitioned answers an empty
+            list -- "no partitions" is a fact, not a capability gap.
+        """
+        target_schema = self._normalise_schema(schema)
+        key = self._cache.key(
+            IntrospectionScope.TABLE,
+            str(table_name).upper(),
+            schema=target_schema,
+            extra=_PARTITION_FAMILY,
+        )
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        sql, params = self.partition_list_statement(
+            table_name=table_name, schema=target_schema
+        ).to_sql()
+        partitions = self.parse_partitions(
+            self._executor.execute(sql, params), str(table_name).upper(), target_schema
+        )
+
+        self._cache.set(key, partitions)
+        return partitions
+
+    def list_constraints(
+        self, table_name: str, schema: Optional[str] = None
+    ) -> List[OracleConstraintInfo]:
+        """Return the constraints declared on *table_name*.
+
+        Args:
+            table_name: The constrained table.
+            schema: Oracle schema (owner) of that table. ``None`` means the
+                connected user's schema.
+
+        Returns:
+            The constraints, ordered by name and column position. Primary
+            keys, unique keys, check constraints and foreign keys all
+            appear; the index and foreign-key families remain separate
+            answers about the same declarations.
+        """
+        target_schema = self._normalise_schema(schema)
+        key = self._cache.key(
+            IntrospectionScope.TABLE,
+            str(table_name).upper(),
+            schema=target_schema,
+            extra=_CONSTRAINT_FAMILY,
+        )
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        sql, params = self.constraint_list_statement(
+            table_name=table_name, schema=target_schema
+        ).to_sql()
+        constraints = self.parse_constraints(
+            self._executor.execute(sql, params), str(table_name).upper(), target_schema
+        )
+
+        self._cache.set(key, constraints)
+        return constraints
+
+    # ------------------------------------------------------------------ #
+    # Routines: standalone procedures and functions
+    # ------------------------------------------------------------------ #
+
+    def list_procedures(
+        self, owner: Optional[str] = None
+    ) -> List[OracleRoutineInfo]:
+        """Return the standalone procedures owned by *owner*.
+
+        Package subprograms are not included: a package's procedures belong
+        to the package, and the package family already lists it. The
+        parameters and return value travel with each procedure.
+        """
+        target_owner = self._normalise_owner(owner)
+        key = self._cache.key(
+            IntrospectionScope.SCHEMA, schema=target_owner, extra=_PROCEDURE_FAMILY
+        )
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        sql, params = self.routine_list_statement(
+            owner=target_owner, routine_kind="PROCEDURE"
+        ).to_sql()
+        procedures = self.parse_routines(self._executor.execute(sql, params))
+
+        self._cache.set(key, procedures)
+        return procedures
+
+    def get_procedure_info(
+        self, name: str, owner: Optional[str] = None
+    ) -> Optional[OracleRoutineInfo]:
+        """Return one standalone procedure by name, or ``None``.
+
+        The lookup reads the cached listing, so a caller that names several
+        procedures asks once. An overloaded routine is returned as the first
+        overload in subprogram order; use :meth:`list_procedures` to see
+        every overload of a name.
+        """
+        target_owner = self._normalise_owner(owner)
+        wanted = name.upper()
+        for procedure in self.list_procedures(target_owner):
+            if procedure.name == wanted:
+                return procedure
+        return None
+
+    def list_functions(self, owner: Optional[str] = None) -> List[OracleRoutineInfo]:
+        """Return the standalone functions owned by *owner*.
+
+        The parameters and the return value (``ALL_ARGUMENTS`` position 0)
+        travel with each function; packaged functions are excluded for the
+        same reason packaged procedures are.
+        """
+        target_owner = self._normalise_owner(owner)
+        key = self._cache.key(
+            IntrospectionScope.SCHEMA, schema=target_owner, extra=_FUNCTION_FAMILY
+        )
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        sql, params = self.routine_list_statement(
+            owner=target_owner, routine_kind="FUNCTION"
+        ).to_sql()
+        functions = self.parse_routines(self._executor.execute(sql, params))
+
+        self._cache.set(key, functions)
+        return functions
+
+    def get_function_info(
+        self, name: str, owner: Optional[str] = None
+    ) -> Optional[OracleRoutineInfo]:
+        """Return one standalone function by name, or ``None``.
+
+        The same cached-listing lookup as :meth:`get_procedure_info`, and
+        the same answer for an overloaded name: the first overload.
+        """
+        target_owner = self._normalise_owner(owner)
+        wanted = name.upper()
+        for function in self.list_functions(target_owner):
+            if function.name == wanted:
+                return function
+        return None
+
+    # ------------------------------------------------------------------ #
+    # Types: object types, nested tables and VARRAYs
+    # ------------------------------------------------------------------ #
+
+    def list_types(self, owner: Optional[str] = None) -> List[OracleTypeInfo]:
+        """Return the named types owned by *owner*.
+
+        Object types, nested table types and VARRAYs appear together, with
+        the object type's attributes carried in declared order. A collection
+        reports its element type and (for a VARRAY) its upper bound.
+        """
+        target_owner = self._normalise_owner(owner)
+        key = self._cache.key(
+            IntrospectionScope.SCHEMA, schema=target_owner, extra=_TYPE_FAMILY
+        )
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        sql, params = self.type_list_statement(owner=target_owner).to_sql()
+        types = self.parse_types(self._executor.execute(sql, params))
+
+        self._cache.set(key, types)
+        return types
+
+    def get_type_info(
+        self, name: str, owner: Optional[str] = None
+    ) -> Optional[OracleTypeInfo]:
+        """Return one named type by name, or ``None``.
+
+        Types are few per schema and the listing carries the attributes, so
+        the lookup reads the cached listing rather than asking a second
+        question narrowed by name.
+        """
+        target_owner = self._normalise_owner(owner)
+        wanted = name.upper()
+        for type_info in self.list_types(target_owner):
+            if type_info.name == wanted:
+                return type_info
+        return None
+
 
 class AsyncOracleIntrospector(OracleIntrospectorMixin, AsyncAbstractIntrospector):
     """Asynchronous introspector for Oracle backends.
@@ -1270,3 +1982,161 @@ class AsyncOracleIntrospector(OracleIntrospectorMixin, AsyncAbstractIntrospector
 
         self._cache.set(key, packages)
         return packages
+
+    # ------------------------------------------------------------------ #
+    # Table physical shape and declaration: partitions and constraints
+    #
+    # Same names and signatures as the sync class, awaited. See the sync
+    # implementation for what each answer carries.
+    # ------------------------------------------------------------------ #
+
+    async def list_partitions(
+        self, table_name: str, schema: Optional[str] = None
+    ) -> List[OraclePartitionInfo]:
+        """Return the partitions of *table_name*, in declaration order."""
+        target_schema = self._normalise_schema(schema)
+        key = self._cache.key(
+            IntrospectionScope.TABLE,
+            str(table_name).upper(),
+            schema=target_schema,
+            extra=_PARTITION_FAMILY,
+        )
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        sql, params = self.partition_list_statement(
+            table_name=table_name, schema=target_schema
+        ).to_sql()
+        partitions = self.parse_partitions(
+            await self._executor.execute(sql, params),
+            str(table_name).upper(),
+            target_schema,
+        )
+
+        self._cache.set(key, partitions)
+        return partitions
+
+    async def list_constraints(
+        self, table_name: str, schema: Optional[str] = None
+    ) -> List[OracleConstraintInfo]:
+        """Return the constraints declared on *table_name*."""
+        target_schema = self._normalise_schema(schema)
+        key = self._cache.key(
+            IntrospectionScope.TABLE,
+            str(table_name).upper(),
+            schema=target_schema,
+            extra=_CONSTRAINT_FAMILY,
+        )
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        sql, params = self.constraint_list_statement(
+            table_name=table_name, schema=target_schema
+        ).to_sql()
+        constraints = self.parse_constraints(
+            await self._executor.execute(sql, params),
+            str(table_name).upper(),
+            target_schema,
+        )
+
+        self._cache.set(key, constraints)
+        return constraints
+
+    # ------------------------------------------------------------------ #
+    # Routines: standalone procedures and functions
+    # ------------------------------------------------------------------ #
+
+    async def list_procedures(
+        self, owner: Optional[str] = None
+    ) -> List[OracleRoutineInfo]:
+        """Return the standalone procedures owned by *owner*."""
+        target_owner = self._normalise_owner(owner)
+        key = self._cache.key(
+            IntrospectionScope.SCHEMA, schema=target_owner, extra=_PROCEDURE_FAMILY
+        )
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        sql, params = self.routine_list_statement(
+            owner=target_owner, routine_kind="PROCEDURE"
+        ).to_sql()
+        procedures = self.parse_routines(await self._executor.execute(sql, params))
+
+        self._cache.set(key, procedures)
+        return procedures
+
+    async def get_procedure_info(
+        self, name: str, owner: Optional[str] = None
+    ) -> Optional[OracleRoutineInfo]:
+        """Return one standalone procedure by name, or ``None``."""
+        target_owner = self._normalise_owner(owner)
+        wanted = name.upper()
+        for procedure in await self.list_procedures(target_owner):
+            if procedure.name == wanted:
+                return procedure
+        return None
+
+    async def list_functions(
+        self, owner: Optional[str] = None
+    ) -> List[OracleRoutineInfo]:
+        """Return the standalone functions owned by *owner*."""
+        target_owner = self._normalise_owner(owner)
+        key = self._cache.key(
+            IntrospectionScope.SCHEMA, schema=target_owner, extra=_FUNCTION_FAMILY
+        )
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        sql, params = self.routine_list_statement(
+            owner=target_owner, routine_kind="FUNCTION"
+        ).to_sql()
+        functions = self.parse_routines(await self._executor.execute(sql, params))
+
+        self._cache.set(key, functions)
+        return functions
+
+    async def get_function_info(
+        self, name: str, owner: Optional[str] = None
+    ) -> Optional[OracleRoutineInfo]:
+        """Return one standalone function by name, or ``None``."""
+        target_owner = self._normalise_owner(owner)
+        wanted = name.upper()
+        for function in await self.list_functions(target_owner):
+            if function.name == wanted:
+                return function
+        return None
+
+    # ------------------------------------------------------------------ #
+    # Types: object types, nested tables and VARRAYs
+    # ------------------------------------------------------------------ #
+
+    async def list_types(self, owner: Optional[str] = None) -> List[OracleTypeInfo]:
+        """Return the named types owned by *owner*."""
+        target_owner = self._normalise_owner(owner)
+        key = self._cache.key(
+            IntrospectionScope.SCHEMA, schema=target_owner, extra=_TYPE_FAMILY
+        )
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        sql, params = self.type_list_statement(owner=target_owner).to_sql()
+        types = self.parse_types(await self._executor.execute(sql, params))
+
+        self._cache.set(key, types)
+        return types
+
+    async def get_type_info(
+        self, name: str, owner: Optional[str] = None
+    ) -> Optional[OracleTypeInfo]:
+        """Return one named type by name, or ``None``."""
+        target_owner = self._normalise_owner(owner)
+        wanted = name.upper()
+        for type_info in await self.list_types(target_owner):
+            if type_info.name == wanted:
+                return type_info
+        return None

@@ -1,5 +1,5 @@
 # tests/rhosocial/activerecord_oracle_test/feature/backend/cli/test_cli_introspect_families.py
-"""The nine families, as the CLI asks for them -- and mostly refuses.
+"""The eight families, as the CLI asks for them -- and mostly refuses.
 
 No server is needed here. What is checked is the wiring the CLI owns: that
 each type reaches its introspector method, that NAME and the type-specific
@@ -7,19 +7,23 @@ flags arrive as arguments rather than being parsed and dropped, that a family
 the connected server refuses is refused, and that the two data families carry
 the ``source`` column that tells one from the other.
 
-Seven of the nine are declared gaps on Oracle today -- the statements would
-have to read GV$/V$ performance views or call ``DBMS_METADATA``, and each is
-pinned as a non-render by the roundtrip suite -- so their probes answer
-``False`` and the CLI refuses them. Two consequences shape this file. The
-wiring tests run those branches behind a dialect that *answers* for the one
-switch under test, because a run against the real dialect never reaches the
-branch. The refusal tests use the real ``OracleDialect``, because the promise
-under test is Oracle's own: a probe that drifted to ``True`` while its
-statement was still unwritten would turn a clean refusal into a run that fails
-mid-query, which is the exact defect that cost MySQL a red CI row on 5.6. The
-two the dialect can answer -- the estimate profile and the aggregate value
-listing -- are asserted to pass that same gate, so the gate is shown to be
-read rather than uniformly refused.
+Six of the eight are declared gaps on Oracle today -- the statements would
+have to read GV$/V$ performance views, and each is pinned as a non-render by
+the roundtrip suite -- so their probes answer ``False`` and the CLI refuses
+them. Two consequences shape this file. The wiring tests run those branches
+behind a dialect that *answers* for the one switch under test, because a run
+against the real dialect never reaches the branch. The refusal tests use the
+real ``OracleDialect``, because the promise under test is Oracle's own: a
+probe that drifted to ``True`` while its statement was still unwritten would
+turn a clean refusal into a run that fails mid-query, which is the exact
+defect that cost MySQL a red CI row on 5.6. The two the dialect can answer --
+the estimate profile and the aggregate value listing -- are asserted to pass
+that same gate, so the gate is shown to be read rather than uniformly
+refused.
+
+DDL extraction is not among the eight: its switch is permanently ``False``,
+so the CLI offers no ``ddl`` type at all rather than an entry every run
+refuses.
 """
 
 import argparse
@@ -34,18 +38,16 @@ from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.introspection.types import (
     ColumnDataProfile,
     ColumnValueFrequency,
-    DDLStatement,
     JoinCoverage,
 )
 
-#: The nine families this change wires, and the switch that gates each.
+#: The eight families this change wires, and the switch that gates each.
 NEW_FAMILIES = {
     "unused-indexes": "supports_unused_indexes_detection",
     "table-stats": "supports_table_stats",
     "runtime": "supports_runtime_stats",
     "index-stats": "supports_index_stats",
     "dependencies": "supports_object_dependencies",
-    "ddl": "supports_ddl_extraction",
     "column-profiles": "supports_column_data_profile",
     "value-samples": "supports_column_value_sample",
     "join-coverage": "supports_join_coverage",
@@ -59,8 +61,8 @@ WHOLE_DATABASE_FAMILIES = (
     "index-stats",
 )
 
-#: The three one-table questions: NAME is required and is the table.
-ONE_TABLE_FAMILIES = ("ddl", "column-profiles", "value-samples")
+#: The two one-table questions: NAME is required and is the table.
+ONE_TABLE_FAMILIES = ("column-profiles", "value-samples")
 
 #: The two families this dialect can actually answer on a live server. The
 #: profile is an estimate read from ``ALL_TAB_COLUMNS``; the value listing is
@@ -68,7 +70,7 @@ ONE_TABLE_FAMILIES = ("ddl", "column-profiles", "value-samples")
 ANSWERABLE_FAMILIES = ("column-profiles", "value-samples")
 
 #: A server modern enough for every statement this dialect has. None of the
-#: nine probes reads a version floor here -- the one that does on MySQL is
+#: eight probes reads a version floor here -- the one that does on MySQL is
 #: that dialect's own business -- so the value only has to be unambiguous.
 STUB_SERVER_VERSION = (21, 0, 0)
 
@@ -76,7 +78,7 @@ STUB_SERVER_VERSION = (21, 0, 0)
 def _answer_dialect(switch: str) -> Any:
     """A dialect that answers for exactly one switch, and for nothing else.
 
-    The real Oracle dialect refuses seven of the nine today, so a test that
+    The real Oracle dialect refuses six of the eight today, so a test that
     wants to reach one of those branches has to say something about the
     server. Saying yes to the one switch under test says as little as possible
     and names it: the refusal is tested separately, against the real thing.
@@ -219,16 +221,6 @@ def _profile() -> ColumnDataProfile:
     )
 
 
-def _statement() -> DDLStatement:
-    return DDLStatement(
-        schema="AR_CRM",
-        object_type="TABLE",
-        object_name="CUSTOMERS",
-        ddl="CREATE TABLE CUSTOMERS (ID NUMBER(10) NOT NULL)",
-        native=False,
-    )
-
-
 def _coverage() -> JoinCoverage:
     return JoinCoverage(
         left_schema="AR_CRM",
@@ -315,46 +307,6 @@ class TestTheDependenciesBranch:
         assert introspector.calls == [
             ("list_object_dependencies", (), {"object_name": None, "schema": None})
         ]
-
-
-class TestTheDdlBranch:
-    """The schema object, not a name, is what a caller parses."""
-
-    def test_the_table_is_asked_for_by_name(self, monkeypatch):
-        introspector = _RecordingIntrospector({"get_ddl_statement": _statement()})
-
-        _run_sync(
-            monkeypatch,
-            introspector,
-            _args("ddl", "customers"),
-            dialect=_answer_dialect(NEW_FAMILIES["ddl"]),
-        )
-
-        assert introspector.calls == [
-            ("get_ddl_statement", ("customers",), {"object_type": None, "schema": None})
-        ]
-
-    def test_no_ddl_is_an_error_not_an_empty_listing(self, monkeypatch, capsys):
-        """The object may exist and the engine still have no text for it.
-
-        Printing an empty row would read as a DDL statement that says nothing;
-        the answer is "no DDL available", and it exits rather than filling a
-        table with a null.
-        """
-        introspector = _RecordingIntrospector({"get_ddl_statement": None})
-
-        with pytest.raises(SystemExit) as excinfo:
-            _run_sync(
-                monkeypatch,
-                introspector,
-                _args("ddl", "customers"),
-                dialect=_answer_dialect(NEW_FAMILIES["ddl"]),
-            )
-
-        assert excinfo.value.code == 1
-        err = capsys.readouterr().err
-        assert "no DDL available" in err
-        assert "customers" in err
 
 
 class TestTheColumnProfilesBranch:
@@ -621,7 +573,7 @@ class TestTheArgumentRules:
     """A flag the chosen type does not read is refused, not dropped."""
 
     @pytest.mark.parametrize(
-        "type_", ["tables", "columns", "dependencies", "ddl", "column-profiles"]
+        "type_", ["tables", "columns", "dependencies", "column-profiles"]
     )
     def test_a_flag_the_type_does_not_read_is_refused(self, type_, capsys):
         with pytest.raises(SystemExit) as excinfo:
@@ -663,7 +615,6 @@ class TestTheArgumentRules:
     @pytest.mark.parametrize(
         "type_, dialect",
         [
-            ("ddl", "ddl"),
             ("column-profiles", "column-profiles"),
             ("value-samples", "value-samples"),
             ("join-coverage", "join-coverage"),
@@ -689,7 +640,7 @@ class TestTheCapabilityGate:
     """The gate is read against the connected dialect, and it is read here.
 
     These use the real ``OracleDialect`` rather than a stub, because the
-    promise under test is Oracle's own: seven of the nine answer ``False``
+    promise under test is Oracle's own: six of the eight answer ``False``
     today, so the CLI must refuse them rather than run them into a formatter
     that does not exist. A probe that drifted to ``True`` while its statement
     was still unwritten would produce exactly the red CI row MySQL got on 5.6.
@@ -714,7 +665,7 @@ class TestTheCapabilityGate:
             assert excinfo.value.code == 2
             assert "not supported by this server" in capsys.readouterr().err
 
-    #: The seven declared gaps, with the arguments that would otherwise reach
+    #: The six declared gaps, with the arguments that would otherwise reach
     #: their branch. ``name`` is given where the family requires it and omitted
     #: where a name would be refused for an unrelated reason.
     REFUSED_FAMILIES = {
@@ -723,7 +674,6 @@ class TestTheCapabilityGate:
         "runtime": {},
         "index-stats": {},
         "dependencies": {"name": "customers"},
-        "ddl": {"name": "customers"},
         "join-coverage": {
             "name": "orders",
             "column": "customer_id",
@@ -811,13 +761,6 @@ class TestTheAsyncPath:
                 {},
                 {"list_object_dependencies": []},
                 ((), {"object_name": None, "schema": None}),
-            ),
-            (
-                "ddl",
-                "get_ddl_statement",
-                {"name": "customers"},
-                {"get_ddl_statement": _statement()},
-                (("customers",), {"object_type": None, "schema": None}),
             ),
             (
                 "column-profiles",

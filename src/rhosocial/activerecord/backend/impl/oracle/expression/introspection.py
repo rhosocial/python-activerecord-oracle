@@ -2,7 +2,7 @@
 """Oracle schema-object queries the core catalog does not model.
 
 Tables, columns, indexes, foreign keys, views and triggers are shared by every
-engine, so core states their questions. Four families are Oracle's own and
+engine, so core states their questions. The families here are Oracle's own and
 have no core object:
 
 * **primary keys** -- the key is a constraint, so the columns come from
@@ -13,7 +13,14 @@ have no core object:
 * **synonyms** -- ``ALL_SYNONYMS``, which mixes private and ``PUBLIC`` rows in
   one view;
 * **packages** -- ``ALL_OBJECTS`` filtered to ``OBJECT_TYPE='PACKAGE'``, which
-  picks the specification and not the body.
+  picks the specification and not the body;
+* **partitions** -- ``ALL_TAB_PARTITIONS`` joined to ``ALL_PART_TABLES`` for
+  the strategy, the subpartitioning type and the interval expression;
+* **standalone procedures and functions** -- ``ALL_PROCEDURES`` joined to
+  ``ALL_OBJECTS`` and ``ALL_ARGUMENTS`` for the signature;
+* **types** -- ``ALL_TYPES`` and ``ALL_COLL_TYPES`` joined to
+  ``ALL_OBJECTS`` and ``ALL_TYPE_ATTRS`` for the declared shape;
+* **constraints** -- ``ALL_CONSTRAINTS`` joined to ``ALL_CONS_COLUMNS``.
 
 Each question here is an expression statement rendered by the dialect, in the
 house style of this package: the tree states the projection, the filter and
@@ -39,12 +46,16 @@ if TYPE_CHECKING:
     from rhosocial.activerecord.backend.dialect.base import SQLDialectBase
 
 __all__ = [
+    "OracleConstraintListQueryStatement",
     "OraclePackageListQueryStatement",
+    "OraclePartitionListQueryStatement",
     "OraclePrimaryKeyQueryStatement",
+    "OracleRoutineListQueryStatement",
     "OracleSequenceInfoQueryStatement",
     "OracleSequenceListQueryStatement",
     "OracleSynonymInfoQueryStatement",
     "OracleSynonymListQueryStatement",
+    "OracleTypeListQueryStatement",
 ]
 
 
@@ -216,3 +227,128 @@ class OraclePackageListQueryStatement(IntrospectionExpression):
     def format_method(self) -> str:
         """The dialect formatting method that renders this expression."""
         return "format_package_list_query_statement"
+
+
+class OraclePartitionListQueryStatement(IntrospectionExpression):
+    """The partitions of one table, in declaration order.
+
+    The partition rows live in ``ALL_TAB_PARTITIONS``; the strategy, the
+    subpartitioning type and the interval expression live in
+    ``ALL_PART_TABLES``, which is joined on the owner and table name. The
+    tablespace's block size is read rather than assumed, so
+    ``SIZE_BYTES`` is the partition's real footprint on a database whose
+    block size is not 8 KiB.
+    """
+
+    def __init__(
+        self,
+        dialect: "SQLDialectBase",
+        *,
+        table_name: str,
+        schema: str,
+    ):
+        """
+        Args:
+            dialect: The SQL dialect to use for formatting.
+            table_name: The partitioned table.
+            schema: The owner of that table.
+        """
+        super().__init__(dialect, schema=schema)
+        self.table_name: str = table_name
+
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_partition_list_query_statement"
+
+
+class OracleRoutineListQueryStatement(IntrospectionExpression):
+    """The standalone procedures or functions one owner has.
+
+    ``routine_kind`` is ``PROCEDURE`` or ``FUNCTION``. ``ALL_PROCEDURES``
+    carries one row per routine property set, ``ALL_OBJECTS`` the compile
+    status and timestamps, and ``ALL_ARGUMENTS`` the signature. The
+    packaged subprograms are excluded by filtering ``PROCEDURE_NAME`` to
+    null; they belong to their package, not to this family.
+    """
+
+    def __init__(
+        self,
+        dialect: "SQLDialectBase",
+        *,
+        owner: str,
+        routine_kind: str,
+    ):
+        """
+        Args:
+            dialect: The SQL dialect to use for formatting.
+            owner: The schema whose routines are wanted.
+            routine_kind: ``PROCEDURE`` or ``FUNCTION``.
+        """
+        super().__init__(dialect, schema=owner)
+        self.owner: str = owner
+        self.routine_kind: str = str(routine_kind).upper()
+
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_routine_list_query_statement"
+
+
+class OracleTypeListQueryStatement(IntrospectionExpression):
+    """The named types one owner has.
+
+    Object types come from ``ALL_TYPES`` and named collections (nested
+    tables and VARRAYs) from ``ALL_COLL_TYPES``. The two are a ``UNION ALL``
+    because a collection type may appear in both views, and the object side
+    subtracts the collection names so one type is reported once.
+    """
+
+    def __init__(
+        self,
+        dialect: "SQLDialectBase",
+        *,
+        owner: str,
+    ):
+        """
+        Args:
+            dialect: The SQL dialect to use for formatting.
+            owner: The schema whose types are wanted.
+        """
+        super().__init__(dialect, schema=owner)
+        self.owner: str = owner
+
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_type_list_query_statement"
+
+
+class OracleConstraintListQueryStatement(IntrospectionExpression):
+    """The constraints of one table, in name and column order.
+
+    ``ALL_CONSTRAINTS`` holds the declaration; ``ALL_CONS_COLUMNS`` holds
+    the columns, joined on the constraint name and owner so a same-named
+    constraint in another schema cannot contribute a column.
+    """
+
+    def __init__(
+        self,
+        dialect: "SQLDialectBase",
+        *,
+        table_name: str,
+        schema: str,
+    ):
+        """
+        Args:
+            dialect: The SQL dialect to use for formatting.
+            table_name: The constrained table.
+            schema: The owner of that table.
+        """
+        super().__init__(dialect, schema=schema)
+        self.table_name: str = table_name
+
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_constraint_list_query_statement"
