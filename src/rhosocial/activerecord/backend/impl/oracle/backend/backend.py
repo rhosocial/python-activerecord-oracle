@@ -30,7 +30,17 @@ from rhosocial.activerecord.backend.errors import (
 )
 from rhosocial.activerecord.backend.result import QueryResult
 from rhosocial.activerecord.backend.options import ExecutionOptions
+from rhosocial.activerecord.backend.schema import StatementType
+from rhosocial.activerecord.backend.base.execution_logging import (
+    log_batch_start,
+    log_batch_summary,
+    log_execution_error,
+    log_execution_start,
+    log_execution_summary,
+)
+from rhosocial.activerecord.backend.base.operations import execution_log_context
 from rhosocial.activerecord.backend.introspection.backend_mixin import IntrospectorBackendMixin
+from rhosocial.activerecord.logging.redaction import unwrap_sensitive
 from ..config import OracleConnectionConfig
 from ..dialect import OracleDialect
 from ..transaction import OracleTransactionManager
@@ -187,7 +197,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
             )
             self._register_oracle_adapters()
             self.log(
-                logging.INFO if actual_version is not None else logging.ERROR,
+                logging.INFO if actual_version is not None else logging.WARNING,
                 f"Adapted to Oracle server version {actual_version}"
                 if actual_version is not None
                 else (
@@ -230,10 +240,13 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
 
         if isinstance(error, OracleIntegrityError):
             if "ORA-00001" in error_msg:  # Unique constraint violation
-                self.log(logging.ERROR, f"Unique constraint violation: {error_msg}")
+                self.log(logging.DEBUG, f"Unique constraint violation (will re-raise): {error_msg}")
                 raise IntegrityError(f"Unique constraint violation: {error_msg}")
             elif "ORA-01400" in error_msg:  # NOT NULL constraint violation (INSERT/UPDATE)
-                self.log(logging.ERROR, f"Not-null constraint violation: {error_msg}")
+                self.log(
+                    logging.DEBUG,
+                    f"Not-null constraint violation (will re-raise): {error_msg}",
+                )
                 # Normalize to include the cross-backend keyword phrase so that
                 # tests and callers that pattern-match the message (e.g. the
                 # testsuite's type_adapter tests probing for "cannot be null"
@@ -242,30 +255,33 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
                 # and Oracle.
                 raise IntegrityError(f"cannot be null: {error_msg}")
             elif "ORA-02291" in error_msg:  # Foreign key constraint violation
-                self.log(logging.ERROR, f"Foreign key constraint violation: {error_msg}")
+                self.log(
+                    logging.DEBUG,
+                    f"Foreign key constraint violation (will re-raise): {error_msg}",
+                )
                 raise IntegrityError(f"Foreign key constraint violation: {error_msg}")
             elif "ORA-02292" in error_msg:  # Child record found
-                self.log(logging.ERROR, f"Child record exists: {error_msg}")
+                self.log(logging.DEBUG, f"Child record exists (will re-raise): {error_msg}")
                 raise IntegrityError(f"Child record exists: {error_msg}")
-            self.log(logging.ERROR, f"Integrity error: {error_msg}")
+            self.log(logging.DEBUG, f"Integrity error (will re-raise): {error_msg}")
             raise IntegrityError(error_msg)
         elif isinstance(error, OracleDatabaseError):
             if "ORA-00060" in error_msg:  # Deadlock detected
-                self.log(logging.ERROR, f"Deadlock error: {error_msg}")
+                self.log(logging.DEBUG, f"Deadlock error (will re-raise): {error_msg}")
                 raise DeadlockError(error_msg)
             elif "ORA-04020" in error_msg:  # Self-deadlock
-                self.log(logging.ERROR, f"Self-deadlock error: {error_msg}")
+                self.log(logging.DEBUG, f"Self-deadlock error (will re-raise): {error_msg}")
                 raise DeadlockError(error_msg)
-            self.log(logging.ERROR, f"Database error: {error_msg}")
+            self.log(logging.DEBUG, f"Database error (will re-raise): {error_msg}")
             raise DatabaseError(error_msg)
         elif isinstance(error, OracleOperationalError):
-            self.log(logging.ERROR, f"Operational error: {error_msg}")
+            self.log(logging.DEBUG, f"Operational error (will re-raise): {error_msg}")
             raise OperationalError(error_msg)
         elif isinstance(error, OracleError):
-            self.log(logging.ERROR, f"Oracle error: {error_msg}")
+            self.log(logging.DEBUG, f"Oracle error (will re-raise): {error_msg}")
             raise DatabaseError(error_msg)
         else:
-            self.log(logging.ERROR, f"Unexpected error: {error_msg}")
+            self.log(logging.DEBUG, f"Unexpected error (will re-raise): {error_msg}")
             raise error
 
     def connect(self):
@@ -341,7 +357,10 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
                 f"Connected to Oracle database: {dsn}"
             )
         except OracleError as e:
-            self.log(logging.ERROR, f"Failed to connect to Oracle database: {str(e)}")
+            self.log(
+                logging.DEBUG,
+                f"Failed to connect to Oracle database (will re-raise): {str(e)}",
+            )
             raise ConnectionError(f"Failed to connect to Oracle: {str(e)}") from e
 
     def disconnect(self):
@@ -532,6 +551,9 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         if options is None:
             options = ExecutionOptions(stmt_type=StatementType.DDL)
 
+        params = unwrap_sensitive(params)
+        log_execution_start(self, sql, params, options)
+
         cursor = None
         start_time = datetime.datetime.now()
 
@@ -540,11 +562,6 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
 
             # Convert ? placeholders to Oracle :N format at the final step
             oracle_sql, oracle_params = self._convert_placeholders_to_oracle(sql, params)
-
-            if getattr(self.config, 'log_queries', False):
-                self.log(logging.DEBUG, f"Executing: {oracle_sql}")
-                if oracle_params:
-                    self.log(logging.DEBUG, f"Parameters: {oracle_params}")
 
             if oracle_params:
                 self._set_input_sizes_for_params(cursor, oracle_params)
@@ -611,16 +628,15 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
             finally:
                 self._current_column_types = None
 
+            log_execution_summary(
+                self, options.stmt_type, sql, cursor, data, duration, options
+            )
+
             result = QueryResult(
                 affected_rows=cursor.rowcount,
                 data=data,
                 duration=duration,
                 last_insert_id=None  # Oracle uses sequences, not auto-increment
-            )
-
-            self.log(
-                logging.INFO,
-                f"Query executed, affected {cursor.rowcount} rows, duration={duration:.3f}s"
             )
 
             # Apply auto-commit semantics consistent with the core
@@ -634,31 +650,41 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
 
             return result
 
-        except OracleIntegrityError as e:
-            self.log(logging.ERROR, f"Integrity error: {str(e)}")
-            error_msg = str(e)
-            if "ORA-01400" in error_msg:
-                raise IntegrityError(f"cannot be null: {error_msg}") from e
-            raise IntegrityError(error_msg) from e
-        except OracleDatabaseError as e:
-            error_msg = str(e)
-            if "ORA-00060" in error_msg:
-                raise DeadlockError(error_msg) from e
-            raise DatabaseError(error_msg) from e
-        except OracleOperationalError as e:
-            raise OperationalError(str(e)) from e
-        except OracleError as e:
-            self.log(logging.ERROR, f"Oracle error: {str(e)}")
-            raise DatabaseError(str(e)) from e
         except Exception as e:
-            self.log(logging.ERROR, f"Unexpected error: {str(e)}")
+            log_execution_error(self, e, options)
+            if isinstance(e, OracleIntegrityError):
+                error_msg = str(e)
+                if "ORA-01400" in error_msg:
+                    raise IntegrityError(f"cannot be null: {error_msg}") from e
+                raise IntegrityError(error_msg) from e
+            if isinstance(e, OracleDatabaseError):
+                error_msg = str(e)
+                if "ORA-00060" in error_msg:
+                    raise DeadlockError(error_msg) from e
+                raise DatabaseError(error_msg) from e
+            if isinstance(e, OracleOperationalError):
+                raise OperationalError(str(e)) from e
+            if isinstance(e, OracleError):
+                raise DatabaseError(str(e)) from e
             raise QueryError(str(e)) from e
         finally:
             if cursor:
                 cursor.close()
 
-    def execute_many(self, sql: str, params_list: List[Tuple]) -> QueryResult:
+    def execute_many(
+        self,
+        sql: str,
+        params_list: List[Tuple],
+        *,
+        options: Optional[ExecutionOptions] = None,
+    ) -> QueryResult:
         """Execute the same SQL statement multiple times with different parameters."""
+        if options is None:
+            options = ExecutionOptions(stmt_type=StatementType.DML)
+
+        params_list = [unwrap_sensitive(params) for params in params_list]
+        log_batch_start(self, sql, params_list, options)
+
         if not self._connection:
             self.connect()
 
@@ -678,22 +704,21 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
 
             duration = (datetime.datetime.now() - start_time).total_seconds()
 
-            result = QueryResult(
+            log_batch_summary(
+                self, sql, params_list, affected_rows, duration, options
+            )
+
+            return QueryResult(
                 affected_rows=affected_rows,
                 data=None,
                 duration=duration
             )
 
-            self.log(
-                logging.INFO,
-                f"Batch operation completed, affected {affected_rows} rows, duration={duration:.3f}s"
-            )
-
-            return result
-
-        except OracleError as e:
-            self.log(logging.ERROR, f"Oracle error in batch: {str(e)}")
-            raise DatabaseError(str(e)) from e
+        except Exception as e:
+            log_execution_error(self, e, options)
+            if isinstance(e, OracleError):
+                raise DatabaseError(str(e)) from e
+            raise
         finally:
             if cursor:
                 cursor.close()
@@ -771,7 +796,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
             return base
         except Exception as e:
             self.log(
-                logging.ERROR,
+                logging.WARNING,
                 f"Could not determine the Oracle server version: {e}. The "
                 f"version is left UNKNOWN rather than assumed: every "
                 f"version-gated feature in this backend will now refuse "
@@ -971,7 +996,6 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         statements have their trailing ``;`` stripped to meet oracledb's
         single-statement requirement.
         """
-        self.log(logging.INFO, "Executing SQL script.")
         start_time = datetime.datetime.now()
 
         if not self._connection:
@@ -988,10 +1012,14 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
                     cursor.execute(stmt)
 
             duration = (datetime.datetime.now() - start_time).total_seconds()
-            self.log(logging.INFO, f"SQL script executed successfully, duration={duration:.3f}s")
+            self.log(
+                logging.INFO,
+                f"SQL script executed, statements={len(statements)}, "
+                f"duration_ms={duration * 1000:.2f}",
+            )
 
         except OracleError as e:
-            self.log(logging.ERROR, f"Error executing SQL script: {str(e)}")
+            log_execution_error(self, e, None)
             raise DatabaseError(str(e)) from e
         finally:
             if cursor:
@@ -1015,6 +1043,14 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
             returning_sql = self._identifier_list(options.returning_columns)
             into_placeholders = ", ".join([self.dialect.p()] * len(options.returning_columns))
             sql = f"{sql} RETURNING {returning_sql} INTO {into_placeholders}"
+
+        exec_options = ExecutionOptions(
+            stmt_type=StatementType.DML,
+            column_adapters=options.column_adapters,
+            column_mapping=options.column_mapping,
+            log_context=execution_log_context(options, "bulk_insert"),
+        )
+        log_batch_start(self, sql, options.rows, exec_options)
 
         cursor = None
         start_time = datetime.datetime.now()
@@ -1066,6 +1102,9 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
                     returned_data.append(row_data)
 
             duration = (datetime.datetime.now() - start_time).total_seconds()
+            log_batch_summary(
+                self, sql, options.rows, affected_rows, duration, exec_options
+            )
 
             if options.auto_commit:
                 self._handle_auto_commit_if_needed()
@@ -1077,22 +1116,23 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
                 last_insert_id=None,
             )
 
-        except OracleIntegrityError as e:
-            self.log(logging.ERROR, f"Integrity error in bulk insert: {str(e)}")
-            error_msg = str(e)
-            if "ORA-01400" in error_msg:
-                raise IntegrityError(f"cannot be null: {error_msg}") from e
-            raise IntegrityError(error_msg) from e
-        except OracleDatabaseError as e:
-            error_msg = str(e)
-            if "ORA-00060" in error_msg:
-                raise DeadlockError(error_msg) from e
-            raise DatabaseError(error_msg) from e
-        except OracleOperationalError as e:
-            raise OperationalError(str(e)) from e
-        except OracleError as e:
-            self.log(logging.ERROR, f"Oracle error in bulk insert: {str(e)}")
-            raise DatabaseError(str(e)) from e
+        except Exception as e:
+            log_execution_error(self, e, exec_options)
+            if isinstance(e, OracleIntegrityError):
+                error_msg = str(e)
+                if "ORA-01400" in error_msg:
+                    raise IntegrityError(f"cannot be null: {error_msg}") from e
+                raise IntegrityError(error_msg) from e
+            if isinstance(e, OracleDatabaseError):
+                error_msg = str(e)
+                if "ORA-00060" in error_msg:
+                    raise DeadlockError(error_msg) from e
+                raise DatabaseError(error_msg) from e
+            if isinstance(e, OracleOperationalError):
+                raise OperationalError(str(e)) from e
+            if isinstance(e, OracleError):
+                raise DatabaseError(str(e)) from e
+            raise
         finally:
             if cursor:
                 cursor.close()
@@ -1151,6 +1191,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
             stmt_type=StatementType.DML,
             column_adapters=options.column_adapters,
             column_mapping=options.column_mapping,
+            log_context=execution_log_context(options, "insert"),
         )
 
         # Handle RETURNING INTO clause
@@ -1175,6 +1216,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
                     sql, params, options.returning_columns,
                     options.column_adapters, options.column_mapping,
                     is_insert=True,
+                    options=exec_options,
                 )
             finally:
                 self._current_returning_table = None
@@ -1229,6 +1271,13 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
 
         sql, params = update_expr.to_sql()
 
+        exec_options = ExecutionOptions(
+            stmt_type=StatementType.DML,
+            column_adapters=options.column_adapters,
+            column_mapping=options.column_mapping,
+            log_context=execution_log_context(options, "update"),
+        )
+
         # Handle RETURNING INTO clause
         if options.returning_columns:
             self._current_returning_table = (
@@ -1239,16 +1288,12 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
                     sql, params, options.returning_columns,
                     options.column_adapters, options.column_mapping,
                     is_insert=False,
+                    options=exec_options,
                 )
             finally:
                 self._current_returning_table = None
 
         # Standard execution without RETURNING
-        exec_options = ExecutionOptions(
-            stmt_type=StatementType.DML,
-            column_adapters=options.column_adapters,
-            column_mapping=options.column_mapping,
-        )
         result = self.execute(sql, params, options=exec_options)
 
         if options.auto_commit:
@@ -1289,6 +1334,13 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
 
         sql, params = delete_expr.to_sql()
 
+        exec_options = ExecutionOptions(
+            stmt_type=StatementType.DML,
+            column_adapters=options.column_adapters,
+            column_mapping=options.column_mapping,
+            log_context=execution_log_context(options, "delete"),
+        )
+
         # Handle RETURNING INTO clause
         if options.returning_columns:
             self._current_returning_table = (
@@ -1299,16 +1351,12 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
                     sql, params, options.returning_columns,
                     options.column_adapters, options.column_mapping,
                     is_insert=False,
+                    options=exec_options,
                 )
             finally:
                 self._current_returning_table = None
 
         # Standard execution without RETURNING
-        exec_options = ExecutionOptions(
-            stmt_type=StatementType.DML,
-            column_adapters=options.column_adapters,
-            column_mapping=options.column_mapping,
-        )
         result = self.execute(sql, params, options=exec_options)
 
         if options.auto_commit:
@@ -1318,7 +1366,9 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
 
     def _execute_with_returning_into(self, sql: str, params: tuple, returning_columns: list,
                                        column_adapters=None, column_mapping=None,
-                                       is_insert: bool = False) -> 'QueryResult':
+                                       is_insert: bool = False,
+                                       options: Optional[ExecutionOptions] = None,
+                                       ) -> 'QueryResult':
         """
         Execute INSERT/UPDATE/DELETE with RETURNING INTO clause using Oracle's output variables.
 
@@ -1340,6 +1390,9 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
                 goes undetected.
         """
         from rhosocial.activerecord.backend.result import QueryResult
+
+        params = unwrap_sensitive(params)
+        log_execution_start(self, sql, params, options)
 
         if not self._connection:
             self.connect()
@@ -1370,9 +1423,6 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
             # Convert ? placeholders to Oracle :N format
             oracle_sql, _ = self._convert_placeholders_to_oracle(sql, converted_params)
 
-            if getattr(self.config, 'log_queries', False):
-                self.log(logging.DEBUG, f"RETURNING INTO SQL: {oracle_sql}")
-
             # Create output variables for each returning column
             out_vars = []
             exec_params = list(converted_params) if converted_params else []
@@ -1396,13 +1446,6 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
                 out_vars.append(out_var)
                 exec_params.append(out_var)
 
-            if getattr(self.config, 'log_queries', False):
-                self.log(
-                    logging.DEBUG,
-                    f"RETURNING INTO params: {len(exec_params)} "
-                    f"({len(converted_params) if converted_params else 0} input + {len(out_vars)} output)"
-                )
-
             # Execute the SQL with input params and output variables
             self._set_input_sizes_for_params(cursor, exec_params)
             cursor.execute(oracle_sql, exec_params)
@@ -1425,6 +1468,12 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
                 row_data[col_key] = value
             data = [row_data]
 
+            summary_data = data if (cursor.rowcount > 0 or is_insert) else None
+            stmt_type = options.stmt_type if options is not None else StatementType.DML
+            log_execution_summary(
+                self, stmt_type, sql, cursor, summary_data, duration, options
+            )
+
             result = QueryResult(
                 affected_rows=cursor.rowcount if cursor.rowcount > 0 or not is_insert else 1,
                 data=data,
@@ -1432,7 +1481,6 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
                 last_insert_id=None
             )
 
-            self.log(logging.INFO, f"RETURNING INTO executed, duration={duration:.3f}s")
             # Auto-commit DML when not in an enclosing transaction.  Without
             # this, Oracle (which has autocommit disabled by default in the
             # thin driver) would silently hold the row change in the session
@@ -1441,9 +1489,11 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
             self._handle_auto_commit_if_needed()
             return result
 
-        except OracleError as e:
-            self.log(logging.ERROR, f"Error executing RETURNING INTO: {str(e)}")
-            raise DatabaseError(str(e)) from e
+        except Exception as e:
+            log_execution_error(self, e, options)
+            if isinstance(e, OracleError):
+                raise DatabaseError(str(e)) from e
+            raise
         finally:
             if cursor:
                 cursor.close()

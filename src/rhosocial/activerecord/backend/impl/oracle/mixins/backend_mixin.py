@@ -200,11 +200,12 @@ class OracleBackendMixin:
         else:
             return f"Oracle {version[0]}.{version[1]}.{version[2]}"
 
-    def log(self, level: int, message: str) -> None:
-        if hasattr(self, '_logger') and self._logger:
-            self._logger.log(level, message)
-        else:
-            print(f"[{logging.getLevelName(level)}] {message}")
+    # ``log`` is intentionally not overridden here: the backend inherits
+    # ``BackendLoggingMixin.log``, which resolves the library logger name
+    # (``rhosocial.activerecord.backend.oracle``), honors the logging config
+    # and accepts the structured ``extra`` payload the core execution helpers
+    # pass. The previous override dropped ``extra`` and fell back to printing
+    # to stdout when no instance logger was set.
 
     @property
     def dialect(self):

@@ -12,10 +12,10 @@ release it never learned which features exist.
 import argparse
 import inspect
 import json
-import logging
 from typing import Any, Dict, List, Optional, Tuple
 
 from rhosocial.activerecord.backend.dialect.exceptions import DialectNotAdaptedException
+from rhosocial.activerecord.logging.defaults import get_logger
 
 from .connection import (
     add_connection_args,
@@ -25,7 +25,7 @@ from .connection import (
 )
 from .output import INFO_OUTPUT_CHOICES, create_provider, RICH_AVAILABLE
 
-logger = logging.getLogger(__name__)
+logger = get_logger("rhosocial.activerecord.backend.oracle")
 
 
 def handle(args):
