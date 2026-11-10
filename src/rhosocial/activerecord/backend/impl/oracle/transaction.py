@@ -28,7 +28,7 @@ class OracleTransactionManager(OracleTransactionMixin, TransactionManager):
         connection = self._backend._connection if hasattr(self._backend, '_connection') else None
         if not connection:
             error_msg = "No valid connection for transaction"
-            self.log(logging.ERROR, error_msg)
+            self.log(logging.DEBUG, f"{error_msg} (will re-raise)")
             raise TransactionError(error_msg)
         return connection
 
@@ -61,7 +61,7 @@ class OracleTransactionManager(OracleTransactionMixin, TransactionManager):
             self.log(logging.DEBUG, f"Started Oracle transaction with isolation level {isolation_str}, mode {mode_str}")
         except Exception as e:
             error_msg = f"Failed to begin transaction: {str(e)}"
-            self.log(logging.ERROR, error_msg)
+            self.log(logging.DEBUG, f"{error_msg} (will re-raise)")
             raise TransactionError(error_msg) from e
 
     def _do_commit(self) -> None:
@@ -74,7 +74,7 @@ class OracleTransactionManager(OracleTransactionMixin, TransactionManager):
             self.log(logging.DEBUG, "Committed Oracle transaction")
         except Exception as e:
             error_msg = f"Failed to commit transaction: {str(e)}"
-            self.log(logging.ERROR, error_msg)
+            self.log(logging.DEBUG, f"{error_msg} (will re-raise)")
             raise TransactionError(error_msg) from e
 
     def _do_rollback(self) -> None:
@@ -87,7 +87,7 @@ class OracleTransactionManager(OracleTransactionMixin, TransactionManager):
             self.log(logging.DEBUG, "Rolled back Oracle transaction")
         except Exception as e:
             error_msg = f"Failed to rollback transaction: {str(e)}"
-            self.log(logging.ERROR, error_msg)
+            self.log(logging.DEBUG, f"{error_msg} (will re-raise)")
             raise TransactionError(error_msg) from e
 
     def _do_create_savepoint(self, name: str) -> None:
@@ -101,7 +101,7 @@ class OracleTransactionManager(OracleTransactionMixin, TransactionManager):
             self.log(logging.DEBUG, f"Created savepoint: {name}")
         except Exception as e:
             error_msg = f"Failed to create savepoint {name}: {str(e)}"
-            self.log(logging.ERROR, error_msg)
+            self.log(logging.DEBUG, f"{error_msg} (will re-raise)")
             raise TransactionError(error_msg) from e
 
     def _do_release_savepoint(self, name: str) -> None:
@@ -121,7 +121,7 @@ class OracleTransactionManager(OracleTransactionMixin, TransactionManager):
             self.log(logging.DEBUG, f"Rolled back to savepoint: {name}")
         except Exception as e:
             error_msg = f"Failed to rollback to savepoint {name}: {str(e)}"
-            self.log(logging.ERROR, error_msg)
+            self.log(logging.DEBUG, f"{error_msg} (will re-raise)")
             raise TransactionError(error_msg) from e
 
     def supports_savepoint(self) -> bool:

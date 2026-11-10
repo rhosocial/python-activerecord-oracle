@@ -200,11 +200,12 @@ class OracleBackendMixin:
         else:
             return f"Oracle {version[0]}.{version[1]}.{version[2]}"
 
-    def log(self, level: int, message: str) -> None:
-        if hasattr(self, '_logger') and self._logger:
-            self._logger.log(level, message)
-        else:
-            print(f"[{logging.getLevelName(level)}] {message}")
+    # ``log`` is intentionally not overridden here: the backend inherits
+    # ``BackendLoggingMixin.log``, which resolves the library logger name
+    # (``rhosocial.activerecord.backend.oracle``), honors the logging config
+    # and accepts the structured ``extra`` payload the core execution helpers
+    # pass. The previous override dropped ``extra`` and fell back to printing
+    # to stdout when no instance logger was set.
 
     @property
     def dialect(self):
@@ -262,6 +263,8 @@ class OracleBackendMixin:
         if isinstance(error, OracleIntegrityError):
             raise IntegrityError(error_msg) from error
         elif isinstance(error, OracleDatabaseError):
+            if "ORA-01400" in error_msg or "ORA-01407" in error_msg:
+                raise IntegrityError(f"cannot be null: {error_msg}") from error
             if "deadlock" in error_msg.lower():
                 raise DeadlockError(error_msg) from error
             raise DatabaseError(error_msg) from error

@@ -28,7 +28,7 @@ class AsyncOracleTransactionManager(OracleTransactionMixin, AsyncTransactionMana
         """Ensure connection is ready for async transaction operations."""
         if not self._connection:
             error_msg = "No valid connection for transaction"
-            self.log(logging.ERROR, error_msg)
+            self.log(logging.DEBUG, f"{error_msg} (will re-raise)")
             raise TransactionError(error_msg)
 
     async def _do_begin(self) -> None:
@@ -60,7 +60,7 @@ class AsyncOracleTransactionManager(OracleTransactionMixin, AsyncTransactionMana
             self.log(logging.DEBUG, f"Started async Oracle transaction with isolation level {isolation_str}, mode {mode_str}")
         except Exception as e:
             error_msg = f"Failed to begin async transaction: {str(e)}"
-            self.log(logging.ERROR, error_msg)
+            self.log(logging.DEBUG, f"{error_msg} (will re-raise)")
             raise TransactionError(error_msg) from e
 
     async def _do_commit(self) -> None:
@@ -73,7 +73,7 @@ class AsyncOracleTransactionManager(OracleTransactionMixin, AsyncTransactionMana
             self.log(logging.DEBUG, "Committed async Oracle transaction")
         except Exception as e:
             error_msg = f"Failed to commit async transaction: {str(e)}"
-            self.log(logging.ERROR, error_msg)
+            self.log(logging.DEBUG, f"{error_msg} (will re-raise)")
             raise TransactionError(error_msg) from e
 
     async def _do_rollback(self) -> None:
@@ -86,7 +86,7 @@ class AsyncOracleTransactionManager(OracleTransactionMixin, AsyncTransactionMana
             self.log(logging.DEBUG, "Rolled back async Oracle transaction")
         except Exception as e:
             error_msg = f"Failed to rollback async transaction: {str(e)}"
-            self.log(logging.ERROR, error_msg)
+            self.log(logging.DEBUG, f"{error_msg} (will re-raise)")
             raise TransactionError(error_msg) from e
 
     async def _do_create_savepoint(self, name: str) -> None:
@@ -100,7 +100,7 @@ class AsyncOracleTransactionManager(OracleTransactionMixin, AsyncTransactionMana
             self.log(logging.DEBUG, f"Created savepoint (async): {name}")
         except Exception as e:
             error_msg = f"Failed to create savepoint {name}: {str(e)}"
-            self.log(logging.ERROR, error_msg)
+            self.log(logging.DEBUG, f"{error_msg} (will re-raise)")
             raise TransactionError(error_msg) from e
 
     async def _do_release_savepoint(self, name: str) -> None:
@@ -118,7 +118,7 @@ class AsyncOracleTransactionManager(OracleTransactionMixin, AsyncTransactionMana
             self.log(logging.DEBUG, f"Rolled back to savepoint (async): {name}")
         except Exception as e:
             error_msg = f"Failed to rollback to savepoint {name}: {str(e)}"
-            self.log(logging.ERROR, error_msg)
+            self.log(logging.DEBUG, f"{error_msg} (will re-raise)")
             raise TransactionError(error_msg) from e
 
     def supports_savepoint(self) -> bool:
