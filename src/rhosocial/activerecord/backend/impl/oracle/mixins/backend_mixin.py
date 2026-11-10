@@ -263,6 +263,8 @@ class OracleBackendMixin:
         if isinstance(error, OracleIntegrityError):
             raise IntegrityError(error_msg) from error
         elif isinstance(error, OracleDatabaseError):
+            if "ORA-01400" in error_msg or "ORA-01407" in error_msg:
+                raise IntegrityError(f"cannot be null: {error_msg}") from error
             if "deadlock" in error_msg.lower():
                 raise DeadlockError(error_msg) from error
             raise DatabaseError(error_msg) from error

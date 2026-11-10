@@ -205,7 +205,7 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             if "ORA-00001" in error_msg:  # Unique constraint violation
                 self.log(logging.DEBUG, f"Unique constraint violation (will re-raise): {error_msg}")
                 raise IntegrityError(f"Unique constraint violation: {error_msg}")
-            elif "ORA-01400" in error_msg:  # NOT NULL constraint violation (INSERT/UPDATE)
+            elif "ORA-01400" in error_msg or "ORA-01407" in error_msg:  # NOT NULL constraint violation (INSERT/UPDATE)
                 self.log(
                     logging.DEBUG,
                     f"Not-null constraint violation (will re-raise): {error_msg}",
@@ -229,6 +229,9 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             self.log(logging.DEBUG, f"Integrity error (will re-raise): {error_msg}")
             raise IntegrityError(error_msg)
         elif isinstance(error, OracleDatabaseError):
+            if "ORA-01400" in error_msg or "ORA-01407" in error_msg:
+                self.log(logging.DEBUG, f"Not-null constraint violation (will re-raise): {error_msg}")
+                raise IntegrityError(f"cannot be null: {error_msg}")
             if "ORA-00060" in error_msg:  # Deadlock detected
                 self.log(logging.DEBUG, f"Deadlock error (will re-raise): {error_msg}")
                 raise DeadlockError(error_msg)
@@ -610,6 +613,8 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
                 raise IntegrityError(error_msg) from e
             if isinstance(e, OracleDatabaseError):
                 error_msg = str(e)
+                if "ORA-01400" in error_msg or "ORA-01407" in error_msg:
+                    raise IntegrityError(f"cannot be null: {error_msg}") from e
                 if "ORA-00060" in error_msg:
                     raise DeadlockError(error_msg) from e
                 raise DatabaseError(error_msg) from e
@@ -928,6 +933,8 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
                 raise IntegrityError(error_msg) from e
             if isinstance(e, OracleDatabaseError):
                 error_msg = str(e)
+                if "ORA-01400" in error_msg or "ORA-01407" in error_msg:
+                    raise IntegrityError(f"cannot be null: {error_msg}") from e
                 if "ORA-00060" in error_msg:
                     raise DeadlockError(error_msg) from e
                 raise DatabaseError(error_msg) from e
