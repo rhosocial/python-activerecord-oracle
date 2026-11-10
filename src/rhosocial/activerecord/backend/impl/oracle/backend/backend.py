@@ -796,7 +796,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
             return base
         except Exception as e:
             self.log(
-                logging.WARNING,
+                logging.ERROR,
                 f"Could not determine the Oracle server version: {e}. The "
                 f"version is left UNKNOWN rather than assumed: every "
                 f"version-gated feature in this backend will now refuse "
