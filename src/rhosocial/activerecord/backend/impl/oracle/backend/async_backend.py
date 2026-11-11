@@ -10,22 +10,10 @@ import logging
 from typing import List, Optional, Tuple
 
 import oracledb
-from oracledb.exceptions import (
-    DatabaseError as OracleDatabaseError,
-    Error as OracleError,
-    IntegrityError as OracleIntegrityError,
-    OperationalError as OracleOperationalError,
-)
+from oracledb.exceptions import Error as OracleError
 
 from rhosocial.activerecord.backend.base import AsyncStorageBackend
-from rhosocial.activerecord.backend.errors import (
-    ConnectionError,
-    DatabaseError,
-    DeadlockError,
-    IntegrityError,
-    OperationalError,
-    QueryError,
-)
+from rhosocial.activerecord.backend.errors import ConnectionError, QueryError
 from rhosocial.activerecord.backend.result import QueryResult
 from rhosocial.activerecord.backend.options import ExecutionOptions
 from rhosocial.activerecord.backend.schema import StatementType
@@ -41,6 +29,7 @@ from rhosocial.activerecord.backend.introspection.backend_mixin import Introspec
 from rhosocial.activerecord.logging.redaction import unwrap_sensitive
 from ..config import OracleConnectionConfig
 from ..dialect import OracleDialect
+from ..error_mapping import map_oracle_error
 from ..async_transaction import AsyncOracleTransactionManager
 from ..mixins import OracleBackendMixin
 from ..version import (
@@ -52,7 +41,7 @@ from ..version import (
     ru_from_version_full,
     select_version_row,
 )
-from .backend import OracleBackend, _is_numeric_python_type
+from .backend import OracleBackend
 
 
 class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStorageBackend):
@@ -198,57 +187,19 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             )
 
     def _handle_error(self, error: Exception) -> None:
-        """Handle Oracle-specific errors."""
-        error_msg = str(error)
+        """Handle Oracle-specific errors.
 
-        if isinstance(error, OracleIntegrityError):
-            if "ORA-00001" in error_msg:  # Unique constraint violation
-                self.log(logging.DEBUG, f"Unique constraint violation (will re-raise): {error_msg}")
-                raise IntegrityError(f"Unique constraint violation: {error_msg}")
-            elif "ORA-01400" in error_msg or "ORA-01407" in error_msg:  # NOT NULL constraint violation (INSERT/UPDATE)
-                self.log(
-                    logging.DEBUG,
-                    f"Not-null constraint violation (will re-raise): {error_msg}",
-                )
-                # Normalize so cross-backend pattern-matching of the message
-                # (e.g. testsuite's "cannot be null" / "NOT NULL constraint
-                # failed" probes) matches on Oracle too.
-                raise IntegrityError(f"cannot be null: {error_msg}")
-            elif "ORA-02291" in error_msg:  # Foreign key constraint violation
-                self.log(
-                    logging.DEBUG,
-                    f"Foreign key constraint violation (will re-raise): {error_msg}",
-                )
-                raise IntegrityError(f"Foreign key constraint violation: {error_msg}")
-            elif "ORA-02292" in error_msg:  # Child record found
-                self.log(
-                    logging.DEBUG,
-                    f"Child record exists (will re-raise): {error_msg}",
-                )
-                raise IntegrityError(f"Child record exists: {error_msg}")
-            self.log(logging.DEBUG, f"Integrity error (will re-raise): {error_msg}")
-            raise IntegrityError(error_msg)
-        elif isinstance(error, OracleDatabaseError):
-            if "ORA-01400" in error_msg or "ORA-01407" in error_msg:
-                self.log(logging.DEBUG, f"Not-null constraint violation (will re-raise): {error_msg}")
-                raise IntegrityError(f"cannot be null: {error_msg}")
-            if "ORA-00060" in error_msg:  # Deadlock detected
-                self.log(logging.DEBUG, f"Deadlock error (will re-raise): {error_msg}")
-                raise DeadlockError(error_msg)
-            elif "ORA-04020" in error_msg:  # Self-deadlock
-                self.log(logging.DEBUG, f"Self-deadlock error (will re-raise): {error_msg}")
-                raise DeadlockError(error_msg)
-            self.log(logging.DEBUG, f"Database error (will re-raise): {error_msg}")
-            raise DatabaseError(error_msg)
-        elif isinstance(error, OracleOperationalError):
-            self.log(logging.DEBUG, f"Operational error (will re-raise): {error_msg}")
-            raise OperationalError(error_msg)
-        elif isinstance(error, OracleError):
-            self.log(logging.DEBUG, f"Oracle error (will re-raise): {error_msg}")
-            raise DatabaseError(error_msg)
-        else:
+        Recognition order follows the error taxonomy contract: the ORA number
+        (structured on the exception or parsed from the message), then the
+        driver exception class, then message text. See ``error_mapping.py``.
+        """
+        error_msg = str(error)
+        mapping = map_oracle_error(error)
+        if mapping is None:
             self.log(logging.DEBUG, f"Unexpected error (will re-raise): {error_msg}")
             raise error
+        self.log(logging.DEBUG, f"{mapping.log_label} (will re-raise): {error_msg}")
+        raise mapping.error from error
 
     async def connect(self):
         """Establish async connection to Oracle database.
@@ -606,22 +557,8 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
 
         except Exception as e:
             log_execution_error(self, e, options)
-            if isinstance(e, OracleIntegrityError):
-                error_msg = str(e)
-                if "ORA-01400" in error_msg:
-                    raise IntegrityError(f"cannot be null: {error_msg}") from e
-                raise IntegrityError(error_msg) from e
-            if isinstance(e, OracleDatabaseError):
-                error_msg = str(e)
-                if "ORA-01400" in error_msg or "ORA-01407" in error_msg:
-                    raise IntegrityError(f"cannot be null: {error_msg}") from e
-                if "ORA-00060" in error_msg:
-                    raise DeadlockError(error_msg) from e
-                raise DatabaseError(error_msg) from e
-            if isinstance(e, OracleOperationalError):
-                raise OperationalError(str(e)) from e
             if isinstance(e, OracleError):
-                raise DatabaseError(str(e)) from e
+                self._handle_error(e)
             raise QueryError(str(e)) from e
         finally:
             if cursor:
@@ -673,7 +610,7 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         except Exception as e:
             log_execution_error(self, e, options)
             if isinstance(e, OracleError):
-                raise DatabaseError(str(e)) from e
+                self._handle_error(e)
             raise
         finally:
             if cursor:
@@ -829,7 +766,7 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
 
         except OracleError as e:
             log_execution_error(self, e, None)
-            raise DatabaseError(str(e)) from e
+            self._handle_error(e)
         finally:
             if cursor:
                 cursor.close()
@@ -926,22 +863,8 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
 
         except Exception as e:
             log_execution_error(self, e, exec_options)
-            if isinstance(e, OracleIntegrityError):
-                error_msg = str(e)
-                if "ORA-01400" in error_msg:
-                    raise IntegrityError(f"cannot be null: {error_msg}") from e
-                raise IntegrityError(error_msg) from e
-            if isinstance(e, OracleDatabaseError):
-                error_msg = str(e)
-                if "ORA-01400" in error_msg or "ORA-01407" in error_msg:
-                    raise IntegrityError(f"cannot be null: {error_msg}") from e
-                if "ORA-00060" in error_msg:
-                    raise DeadlockError(error_msg) from e
-                raise DatabaseError(error_msg) from e
-            if isinstance(e, OracleOperationalError):
-                raise OperationalError(str(e)) from e
             if isinstance(e, OracleError):
-                raise DatabaseError(str(e)) from e
+                self._handle_error(e)
             raise
         finally:
             if cursor:
@@ -1328,7 +1251,7 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         except Exception as e:
             log_execution_error(self, e, options)
             if isinstance(e, OracleError):
-                raise DatabaseError(str(e)) from e
+                self._handle_error(e)
             raise
         finally:
             if cursor:
@@ -1386,7 +1309,7 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         try:
             cur = self._connection.cursor()
             try:
-                p = self.dialect.get_parameter_placeholder()
+                self.dialect.get_parameter_placeholder()
                 if key[0]:
                     await cur.execute(
                         "SELECT DATA_TYPE FROM ALL_TAB_COLUMNS "
