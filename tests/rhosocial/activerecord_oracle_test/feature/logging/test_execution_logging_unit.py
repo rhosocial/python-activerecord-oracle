@@ -30,7 +30,6 @@ from rhosocial.activerecord.backend.errors import (
     DeadlockError,
     IntegrityError,
     OperationalError,
-    QueryError,
     TransactionError,
 )
 from rhosocial.activerecord.backend.expression import Column, Literal
@@ -311,7 +310,7 @@ _EXECUTE_ERROR_CASES = [
     ),
     pytest.param(
         RuntimeError("driver exploded"),
-        QueryError,
+        RuntimeError,
         "driver exploded",
         id="unexpected-error",
     ),

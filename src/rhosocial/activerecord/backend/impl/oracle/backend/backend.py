@@ -15,7 +15,12 @@ import oracledb
 from oracledb.exceptions import Error as OracleError
 
 from rhosocial.activerecord.backend.base import StorageBackend
-from rhosocial.activerecord.backend.errors import ConnectionError, QueryError
+from rhosocial.activerecord.backend.errors import (
+    ConnectionError,
+    DatabaseError,
+    QueryError,
+    TransactionError,
+)
 from rhosocial.activerecord.backend.result import QueryResult
 from rhosocial.activerecord.backend.options import ExecutionOptions
 from rhosocial.activerecord.backend.schema import StatementType
@@ -212,24 +217,20 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         """Get the transaction manager."""
         return self._transaction_manager
 
-    def _handle_auto_commit(self) -> None:
-        """Commit operations outside explicit transactions."""
-        try:
-            if not self._connection:
-                return
-            if not self._transaction_manager or not self._transaction_manager.is_active:
-                self._connection.commit()
-                self.log(logging.DEBUG, "Auto-committed operation (not in active transaction)")
-        except Exception as e:
-            self.log(logging.WARNING, f"Failed to auto-commit: {str(e)}")
-
     def _handle_error(self, error: Exception) -> None:
         """Handle Oracle-specific errors.
 
         Recognition order follows the error taxonomy contract: the ORA number
         (structured on the exception or parsed from the message), then the
         driver exception class, then message text. See ``error_mapping.py``.
+
+        Framework errors are never translated here: they are contract
+        outcomes, not driver failures, so the first line re-raises them
+        unchanged. This keeps the hook safe for legacy callers that dispatch
+        every exception through it.
         """
+        if isinstance(error, DatabaseError):
+            raise error
         error_msg = str(error)
         mapping = map_oracle_error(error)
         if mapping is None:
@@ -335,6 +336,24 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
             except OracleError as e:
                 self.log(logging.WARNING, f"Error during disconnection (ignored): {str(e)}")
 
+    def _close_cursor_quietly(self, cursor) -> None:
+        """Close a cursor without letting a close failure mask the real error.
+
+        Cursors are closed from ``finally`` blocks, so an exception raised by
+        ``close()`` would replace the exception the caller is about to see.
+        Closing is therefore best-effort: a failure is logged at DEBUG and
+        never re-raised.
+        """
+        if cursor is None:
+            return
+        try:
+            cursor.close()
+        except Exception as exc:
+            self.log(
+                logging.DEBUG,
+                f"Cursor close failed (original error unaffected): {exc}",
+            )
+
     def _handle_auto_commit(self) -> None:
         """Issue an explicit COMMIT on the connection when not in a transaction.
 
@@ -343,15 +362,19 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         session's transaction and are rolled back the moment the connection
         is closed (e.g. when a Worker process exits).  Issuing ``COMMIT``
         here mirrors the auto-commit contract used by other backends.
+
+        A failed commit is *not* swallowed: the DML has already run and the
+        result is about to be returned, so a caller that saw success while the
+        commit failed would lose the change when the connection closed. The
+        failure is raised as :class:`TransactionError` with the driver error as
+        its cause.
         """
-        if self._connection is not None:
-            try:
-                self._connection.commit()
-            except Exception:
-                # Best-effort: never raise out of an implicit auto-commit
-                # hook.  Errors should propagate through the normal execute
-                # path instead.
-                pass
+        if self._connection is None:
+            return
+        try:
+            self._connection.commit()
+        except Exception as exc:
+            raise TransactionError(f"Auto-commit failed: {exc}") from exc
 
     def _get_cursor(self):
         """Get a database cursor, ensuring connection is active."""
@@ -606,12 +629,17 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
 
         except Exception as e:
             log_execution_error(self, e, options)
+            # Framework errors are contract outcomes and pass through
+            # unchanged; only genuine driver failures are translated.
+            if isinstance(e, DatabaseError):
+                raise
             if isinstance(e, OracleError):
                 self._handle_error(e)
-            raise QueryError(str(e)) from e
+            # Unknown non-driver errors are not suitable for QueryError:
+            # rewriting them would mislabel the phase that actually failed.
+            raise
         finally:
-            if cursor:
-                cursor.close()
+            self._close_cursor_quietly(cursor)
 
     def execute_many(
         self,
@@ -650,6 +678,11 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
                 self, sql, params_list, affected_rows, duration, options
             )
 
+            # Same auto-commit contract as ``execute``: a batch that ran
+            # outside an explicit transaction must be committed before the
+            # result is returned, or it is lost when the connection closes.
+            self._handle_auto_commit_if_needed()
+
             return QueryResult(
                 affected_rows=affected_rows,
                 data=None,
@@ -658,12 +691,13 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
 
         except Exception as e:
             log_execution_error(self, e, options)
+            if isinstance(e, DatabaseError):
+                raise
             if isinstance(e, OracleError):
                 self._handle_error(e)
             raise
         finally:
-            if cursor:
-                cursor.close()
+            self._close_cursor_quietly(cursor)
 
     def get_cached_server_version(self) -> Optional[Tuple[int, int, int]]:
         """The version this backend already knows, without a round trip.
@@ -752,8 +786,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
             self._ru_version = None
             return None
         finally:
-            if cursor:
-                cursor.close()
+            self._close_cursor_quietly(cursor)
 
     def get_server_version_full(self) -> Optional[Tuple[int, ...]]:
         """Return the full Oracle version, including the RU when available.
@@ -964,8 +997,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
             log_execution_error(self, e, None)
             self._handle_error(e)
         finally:
-            if cursor:
-                cursor.close()
+            self._close_cursor_quietly(cursor)
 
     def bulk_insert(self, options) -> 'QueryResult':
         """Insert multiple rows using Oracle-compatible single-row statements."""
@@ -1060,12 +1092,13 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
 
         except Exception as e:
             log_execution_error(self, e, exec_options)
+            if isinstance(e, DatabaseError):
+                raise
             if isinstance(e, OracleError):
                 self._handle_error(e)
             raise
         finally:
-            if cursor:
-                cursor.close()
+            self._close_cursor_quietly(cursor)
 
     def insert(self, options) -> 'QueryResult':
         """
@@ -1421,12 +1454,13 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
 
         except Exception as e:
             log_execution_error(self, e, options)
+            if isinstance(e, DatabaseError):
+                raise
             if isinstance(e, OracleError):
                 self._handle_error(e)
             raise
         finally:
-            if cursor:
-                cursor.close()
+            self._close_cursor_quietly(cursor)
 
     def _make_out_var_for_column(self, cursor, column_name: str):
         """Create an Oracle ``cursor.var`` of the proper DB_TYPE for ``column_name``.
