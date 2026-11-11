@@ -12,8 +12,6 @@ from rhosocial.activerecord.model import ActiveRecord, AsyncActiveRecord
 from rhosocial.activerecord.backend.impl.oracle.backend import OracleBackend
 from rhosocial.activerecord.backend.impl.oracle.backend.async_backend import AsyncOracleBackend
 from rhosocial.activerecord.connection.pool import BackendPool, AsyncBackendPool, PoolConfig
-from rhosocial.activerecord.backend.options import ExecutionOptions
-from rhosocial.activerecord.backend.schema import StatementType
 
 from rhosocial.activerecord.testsuite.feature.basic.connection.interfaces import IBasicConnectionProvider
 from .scenarios import get_scenario, get_enabled_scenarios
@@ -38,7 +36,10 @@ _CREATE_TABLE_SQL = """
 class SyncTestUser(ActiveRecord):
     """Sync test user model for connection pool tests."""
 
-    __table_name__ = "test_users"
+    @classmethod
+    def table_name(cls):
+        return "test_users"
+
     id: Optional[int] = None
     name: str
     email: str
@@ -47,7 +48,10 @@ class SyncTestUser(ActiveRecord):
 class AsyncTestUser(AsyncActiveRecord):
     """Async test user model for connection pool tests."""
 
-    __table_name__ = "test_users"
+    @classmethod
+    def table_name(cls):
+        return "test_users"
+
     id: Optional[int] = None
     name: str
     email: str

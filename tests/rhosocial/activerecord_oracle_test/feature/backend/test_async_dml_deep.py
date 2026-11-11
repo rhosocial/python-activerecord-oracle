@@ -26,8 +26,14 @@ BATCH_TABLE = "AR_CRM.ASYNC_BATCH"
 
 
 class AsyncCustomer(AsyncActiveRecord):
-    __table_name__ = "customers"
-    __schema_name__ = "ar_crm"
+    @classmethod
+    def table_name(cls):
+        return "customers"
+
+    @classmethod
+    def schema_name(cls):
+        return "ar_crm"
+
     c: ClassVar[FieldProxy] = FieldProxy()
 
     id: Optional[int] = None
