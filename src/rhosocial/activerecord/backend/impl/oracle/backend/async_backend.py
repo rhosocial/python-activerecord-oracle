@@ -10,21 +10,14 @@ import logging
 from typing import List, Optional, Tuple
 
 import oracledb
-from oracledb.exceptions import (
-    DatabaseError as OracleDatabaseError,
-    Error as OracleError,
-    IntegrityError as OracleIntegrityError,
-    OperationalError as OracleOperationalError,
-)
+from oracledb.exceptions import Error as OracleError
 
 from rhosocial.activerecord.backend.base import AsyncStorageBackend
 from rhosocial.activerecord.backend.errors import (
     ConnectionError,
     DatabaseError,
-    DeadlockError,
-    IntegrityError,
-    OperationalError,
     QueryError,
+    TransactionError,
 )
 from rhosocial.activerecord.backend.result import QueryResult
 from rhosocial.activerecord.backend.options import ExecutionOptions
@@ -41,6 +34,7 @@ from rhosocial.activerecord.backend.introspection.backend_mixin import Introspec
 from rhosocial.activerecord.logging.redaction import unwrap_sensitive
 from ..config import OracleConnectionConfig
 from ..dialect import OracleDialect
+from ..error_mapping import map_oracle_error
 from ..async_transaction import AsyncOracleTransactionManager
 from ..mixins import OracleBackendMixin
 from ..version import (
@@ -52,7 +46,7 @@ from ..version import (
     ru_from_version_full,
     select_version_row,
 )
-from .backend import OracleBackend, _is_numeric_python_type
+from .backend import OracleBackend
 
 
 class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStorageBackend):
@@ -139,17 +133,6 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             )
         return self._dialect
 
-    async def _handle_auto_commit(self) -> None:
-        """Commit operations outside explicit transactions."""
-        try:
-            if not self._connection:
-                return
-            if not self._transaction_manager or not self._transaction_manager.is_active:
-                await self._connection.commit()
-                self.log(logging.DEBUG, "Auto-committed operation (not in active transaction)")
-        except Exception as e:
-            self.log(logging.WARNING, f"Failed to auto-commit: {str(e)}")
-
     async def introspect_and_adapt(self) -> None:
         """Introspect backend and adapt to actual server capabilities."""
         if not self._connection:
@@ -198,57 +181,26 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             )
 
     def _handle_error(self, error: Exception) -> None:
-        """Handle Oracle-specific errors."""
-        error_msg = str(error)
+        """Handle Oracle-specific errors.
 
-        if isinstance(error, OracleIntegrityError):
-            if "ORA-00001" in error_msg:  # Unique constraint violation
-                self.log(logging.DEBUG, f"Unique constraint violation (will re-raise): {error_msg}")
-                raise IntegrityError(f"Unique constraint violation: {error_msg}")
-            elif "ORA-01400" in error_msg or "ORA-01407" in error_msg:  # NOT NULL constraint violation (INSERT/UPDATE)
-                self.log(
-                    logging.DEBUG,
-                    f"Not-null constraint violation (will re-raise): {error_msg}",
-                )
-                # Normalize so cross-backend pattern-matching of the message
-                # (e.g. testsuite's "cannot be null" / "NOT NULL constraint
-                # failed" probes) matches on Oracle too.
-                raise IntegrityError(f"cannot be null: {error_msg}")
-            elif "ORA-02291" in error_msg:  # Foreign key constraint violation
-                self.log(
-                    logging.DEBUG,
-                    f"Foreign key constraint violation (will re-raise): {error_msg}",
-                )
-                raise IntegrityError(f"Foreign key constraint violation: {error_msg}")
-            elif "ORA-02292" in error_msg:  # Child record found
-                self.log(
-                    logging.DEBUG,
-                    f"Child record exists (will re-raise): {error_msg}",
-                )
-                raise IntegrityError(f"Child record exists: {error_msg}")
-            self.log(logging.DEBUG, f"Integrity error (will re-raise): {error_msg}")
-            raise IntegrityError(error_msg)
-        elif isinstance(error, OracleDatabaseError):
-            if "ORA-01400" in error_msg or "ORA-01407" in error_msg:
-                self.log(logging.DEBUG, f"Not-null constraint violation (will re-raise): {error_msg}")
-                raise IntegrityError(f"cannot be null: {error_msg}")
-            if "ORA-00060" in error_msg:  # Deadlock detected
-                self.log(logging.DEBUG, f"Deadlock error (will re-raise): {error_msg}")
-                raise DeadlockError(error_msg)
-            elif "ORA-04020" in error_msg:  # Self-deadlock
-                self.log(logging.DEBUG, f"Self-deadlock error (will re-raise): {error_msg}")
-                raise DeadlockError(error_msg)
-            self.log(logging.DEBUG, f"Database error (will re-raise): {error_msg}")
-            raise DatabaseError(error_msg)
-        elif isinstance(error, OracleOperationalError):
-            self.log(logging.DEBUG, f"Operational error (will re-raise): {error_msg}")
-            raise OperationalError(error_msg)
-        elif isinstance(error, OracleError):
-            self.log(logging.DEBUG, f"Oracle error (will re-raise): {error_msg}")
-            raise DatabaseError(error_msg)
-        else:
+        Recognition order follows the error taxonomy contract: the ORA number
+        (structured on the exception or parsed from the message), then the
+        driver exception class, then message text. See ``error_mapping.py``.
+
+        Framework errors are never translated here: they are contract
+        outcomes, not driver failures, so the first line re-raises them
+        unchanged. This keeps the hook safe for legacy callers that dispatch
+        every exception through it.
+        """
+        if isinstance(error, DatabaseError):
+            raise error
+        error_msg = str(error)
+        mapping = map_oracle_error(error)
+        if mapping is None:
             self.log(logging.DEBUG, f"Unexpected error (will re-raise): {error_msg}")
             raise error
+        self.log(logging.DEBUG, f"{mapping.log_label} (will re-raise): {error_msg}")
+        raise mapping.error from error
 
     async def connect(self):
         """Establish async connection to Oracle database.
@@ -327,18 +279,41 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             except OracleError as e:
                 self.log(logging.WARNING, f"Error during disconnection (ignored): {str(e)}")
 
+    async def _close_cursor_quietly(self, cursor) -> None:
+        """Close a cursor without letting a close failure mask the real error.
+
+        Cursors are closed from ``finally`` blocks, so an exception raised by
+        ``close()`` would replace the exception the caller is about to see.
+        Closing is therefore best-effort: a failure is logged at DEBUG and
+        never re-raised.
+        """
+        if cursor is None:
+            return
+        try:
+            cursor.close()
+        except Exception as exc:
+            self.log(
+                logging.DEBUG,
+                f"Cursor close failed (original error unaffected): {exc}",
+            )
+
     async def _handle_auto_commit(self) -> None:
         """Issue an explicit COMMIT on the connection when not in a transaction.
 
         Mirror of the sync ``_handle_auto_commit``.  Without this, the
         worker pool tests would silently roll back any DML they perform
         when the worker's connection is closed at shutdown.
+
+        A failed commit is *not* swallowed: raising :class:`TransactionError`
+        with the driver error as its cause is what stops a caller from
+        believing a write succeeded when it was never persisted.
         """
-        if self._connection is not None:
-            try:
-                await self._connection.commit()
-            except Exception:
-                pass
+        if self._connection is None:
+            return
+        try:
+            await self._connection.commit()
+        except Exception as exc:
+            raise TransactionError(f"Auto-commit failed: {exc}") from exc
 
     async def _get_cursor(self):
         """Get an async database cursor."""
@@ -606,26 +581,17 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
 
         except Exception as e:
             log_execution_error(self, e, options)
-            if isinstance(e, OracleIntegrityError):
-                error_msg = str(e)
-                if "ORA-01400" in error_msg:
-                    raise IntegrityError(f"cannot be null: {error_msg}") from e
-                raise IntegrityError(error_msg) from e
-            if isinstance(e, OracleDatabaseError):
-                error_msg = str(e)
-                if "ORA-01400" in error_msg or "ORA-01407" in error_msg:
-                    raise IntegrityError(f"cannot be null: {error_msg}") from e
-                if "ORA-00060" in error_msg:
-                    raise DeadlockError(error_msg) from e
-                raise DatabaseError(error_msg) from e
-            if isinstance(e, OracleOperationalError):
-                raise OperationalError(str(e)) from e
+            # Framework errors are contract outcomes and pass through
+            # unchanged; only genuine driver failures are translated.
+            if isinstance(e, DatabaseError):
+                raise
             if isinstance(e, OracleError):
-                raise DatabaseError(str(e)) from e
-            raise QueryError(str(e)) from e
+                self._handle_error(e)
+            # Unknown non-driver errors are not suitable for QueryError:
+            # rewriting them would mislabel the phase that actually failed.
+            raise
         finally:
-            if cursor:
-                cursor.close()
+            await self._close_cursor_quietly(cursor)
 
     async def execute_many(
         self,
@@ -664,6 +630,9 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
                 self, sql, params_list, affected_rows, duration, options
             )
 
+            # Same auto-commit contract as ``execute`` (see the sync twin).
+            await self._handle_auto_commit_if_needed()
+
             return QueryResult(
                 affected_rows=affected_rows,
                 data=None,
@@ -672,12 +641,13 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
 
         except Exception as e:
             log_execution_error(self, e, options)
+            if isinstance(e, DatabaseError):
+                raise
             if isinstance(e, OracleError):
-                raise DatabaseError(str(e)) from e
+                self._handle_error(e)
             raise
         finally:
-            if cursor:
-                cursor.close()
+            await self._close_cursor_quietly(cursor)
 
     def get_cached_server_version(self) -> Optional[Tuple[int, int, int]]:
         """The version this backend already knows, without a round trip.
@@ -756,8 +726,7 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             self._ru_version = None
             return None
         finally:
-            if cursor:
-                cursor.close()
+            await self._close_cursor_quietly(cursor)
 
     async def get_server_version_full(self) -> Optional[Tuple[int, ...]]:
         """Return the full Oracle version, including the RU when available.
@@ -829,10 +798,9 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
 
         except OracleError as e:
             log_execution_error(self, e, None)
-            raise DatabaseError(str(e)) from e
+            self._handle_error(e)
         finally:
-            if cursor:
-                cursor.close()
+            await self._close_cursor_quietly(cursor)
 
     async def bulk_insert(self, options) -> 'QueryResult':
         """Insert multiple rows using Oracle-compatible single-row statements."""
@@ -926,26 +894,13 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
 
         except Exception as e:
             log_execution_error(self, e, exec_options)
-            if isinstance(e, OracleIntegrityError):
-                error_msg = str(e)
-                if "ORA-01400" in error_msg:
-                    raise IntegrityError(f"cannot be null: {error_msg}") from e
-                raise IntegrityError(error_msg) from e
-            if isinstance(e, OracleDatabaseError):
-                error_msg = str(e)
-                if "ORA-01400" in error_msg or "ORA-01407" in error_msg:
-                    raise IntegrityError(f"cannot be null: {error_msg}") from e
-                if "ORA-00060" in error_msg:
-                    raise DeadlockError(error_msg) from e
-                raise DatabaseError(error_msg) from e
-            if isinstance(e, OracleOperationalError):
-                raise OperationalError(str(e)) from e
+            if isinstance(e, DatabaseError):
+                raise
             if isinstance(e, OracleError):
-                raise DatabaseError(str(e)) from e
+                self._handle_error(e)
             raise
         finally:
-            if cursor:
-                cursor.close()
+            await self._close_cursor_quietly(cursor)
 
     async def _write_long_string_lobs_after_insert(
         self, table: str, pk_value, data: dict, column_mapping: Optional[dict]
@@ -979,7 +934,7 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
                     lob = lob[0]
                 await lob.write(value)
         finally:
-            cursor.close()
+            await self._close_cursor_quietly(cursor)
 
     async def insert(self, options) -> 'QueryResult':
         """
@@ -1327,12 +1282,13 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
 
         except Exception as e:
             log_execution_error(self, e, options)
+            if isinstance(e, DatabaseError):
+                raise
             if isinstance(e, OracleError):
-                raise DatabaseError(str(e)) from e
+                self._handle_error(e)
             raise
         finally:
-            if cursor:
-                cursor.close()
+            await self._close_cursor_quietly(cursor)
 
     async def _make_out_var_for_column_async(self, cursor, column_name: str):
         """Async version of :meth:`OracleBackend._make_out_var_for_column`.
@@ -1386,7 +1342,7 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         try:
             cur = self._connection.cursor()
             try:
-                p = self.dialect.get_parameter_placeholder()
+                self.dialect.get_parameter_placeholder()
                 if key[0]:
                     await cur.execute(
                         "SELECT DATA_TYPE FROM ALL_TAB_COLUMNS "

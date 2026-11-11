@@ -30,7 +30,6 @@ from rhosocial.activerecord.backend.errors import (
     DeadlockError,
     IntegrityError,
     OperationalError,
-    QueryError,
     TransactionError,
 )
 from rhosocial.activerecord.backend.expression import Column, Literal
@@ -311,7 +310,7 @@ _EXECUTE_ERROR_CASES = [
     ),
     pytest.param(
         RuntimeError("driver exploded"),
-        QueryError,
+        RuntimeError,
         "driver exploded",
         id="unexpected-error",
     ),
@@ -687,20 +686,14 @@ class TestExecutionLogging:
         with pytest.raises(TransactionError, match="No valid connection"):
             manager._ensure_connection_ready()
 
-    def test_operational_error_branch_is_reachable(self, monkeypatch, caplog):
-        """A driver OperationalError hits its dedicated operational branch.
+    def test_operational_error_branch_is_reachable(self, caplog):
+        """A driver OperationalError maps to OperationalError on every path.
 
-        ``oracledb.OperationalError`` subclasses ``DatabaseError``, so the
-        DatabaseError check must be narrowed to let the operational branch run.
-        This is exactly the shape the branch was written for.
+        ORA-12541 (no listener) is a transient network failure, so the error
+        taxonomy maps it to OperationalError rather than the generic
+        DatabaseError fallback, even though ``oracledb.OperationalError``
+        subclasses ``oracledb.DatabaseError``.
         """
-        from rhosocial.activerecord.backend.impl.oracle.backend import backend as backend_module
-
-        monkeypatch.setattr(
-            backend_module,
-            "OracleDatabaseError",
-            type("_NotDatabaseError", (Exception,), {}),
-        )
         backend, _ = make_sync_backend()
         with caplog.at_level(logging.DEBUG, logger=LOGGER_NAME):
             with pytest.raises(OperationalError, match="ORA-12541"):
@@ -1086,17 +1079,8 @@ class TestAsyncExecutionLogging:
             await manager._ensure_connection_ready()
 
     @pytest.mark.asyncio
-    async def test_operational_error_branch_is_reachable(self, monkeypatch, caplog):
-        """Async execution hits the operational-error branch too."""
-        from rhosocial.activerecord.backend.impl.oracle.backend import (
-            async_backend as async_module,
-        )
-
-        monkeypatch.setattr(
-            async_module,
-            "OracleDatabaseError",
-            type("_NotDatabaseError", (Exception,), {}),
-        )
+    async def test_operational_error_branch_is_reachable(self, caplog):
+        """ORA-12541 maps to OperationalError on every async execution path."""
         backend, _ = make_async_backend()
         with caplog.at_level(logging.DEBUG, logger=LOGGER_NAME):
             with pytest.raises(OperationalError, match="ORA-12541"):
