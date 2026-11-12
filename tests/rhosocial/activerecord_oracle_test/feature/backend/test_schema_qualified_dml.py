@@ -13,7 +13,6 @@ from typing import ClassVar, Optional
 from rhosocial.activerecord.base.field_proxy import FieldProxy
 from rhosocial.activerecord.backend.options import ExecutionOptions
 from rhosocial.activerecord.backend.schema import StatementType
-from typing import Optional
 
 from rhosocial.activerecord.model import ActiveRecord
 from rhosocial.activerecord.backend.errors import DatabaseError
@@ -28,8 +27,14 @@ SCHEMA_USER_PASSWORD = "Rh0social#2026"
 
 
 class SchemaCustomer(ActiveRecord):
-    __table_name__ = "customers"
-    __schema_name__ = "ar_crm"
+    @classmethod
+    def table_name(cls):
+        return "customers"
+
+    @classmethod
+    def schema_name(cls):
+        return "ar_crm"
+
     c: ClassVar[FieldProxy] = FieldProxy()
 
     id: Optional[int] = None
@@ -37,8 +42,14 @@ class SchemaCustomer(ActiveRecord):
 
 
 class SchemaOrder(ActiveRecord):
-    __table_name__ = "orders"
-    __schema_name__ = "ar_shop"
+    @classmethod
+    def table_name(cls):
+        return "orders"
+
+    @classmethod
+    def schema_name(cls):
+        return "ar_shop"
+
     c: ClassVar[FieldProxy] = FieldProxy()
 
     id: Optional[int] = None
@@ -161,8 +172,14 @@ async def test_async_insert_is_scoped(provisioned):
     from rhosocial.activerecord.model import AsyncActiveRecord
 
     class AsyncSchemaCustomer(AsyncActiveRecord):
-        __table_name__ = "customers"
-        __schema_name__ = "ar_crm"
+        @classmethod
+        def table_name(cls):
+            return "customers"
+
+        @classmethod
+        def schema_name(cls):
+            return "ar_crm"
+
         c: ClassVar[FieldProxy] = FieldProxy()
 
         id: _Optional[int] = None

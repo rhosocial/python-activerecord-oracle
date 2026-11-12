@@ -1,0 +1,618 @@
+{
+  "entries": {
+    "0ca045747bf0d070": 1,
+    "0d15642818e247d6": 1,
+    "0d2fde28039bddab": 4,
+    "10dd081c19b9ad50": 1,
+    "110bece17006543d": 1,
+    "136c12ef6a762823": 1,
+    "171ec88723cbfb17": 2,
+    "1aa5e7be7eda00fb": 1,
+    "2599c2d7a5e6a437": 1,
+    "30f104c03fdc5af1": 3,
+    "38f003578c1ce4e0": 1,
+    "3b22f5789f4d5a8c": 1,
+    "3ecf0364411b56e5": 1,
+    "41619161a5b02dfc": 1,
+    "42aa838a058a3304": 2,
+    "460b0e45cc5589b0": 1,
+    "46ae24f0ee9e5724": 1,
+    "47d07919ea64851e": 1,
+    "4a69402b3ae2aceb": 1,
+    "4c9de7db636ea2cf": 1,
+    "4f4ae7d9445321ee": 1,
+    "51047621986ac2a1": 1,
+    "53dde7be4512717e": 3,
+    "553144c02041e54f": 1,
+    "554aadc1e8ebc637": 1,
+    "562e58512a4186bc": 2,
+    "5928312313cab20f": 1,
+    "5dc4a48b6cca6ad3": 1,
+    "5f2c6969efc172cf": 2,
+    "61a6c9897c85466e": 1,
+    "62117bc2979b65f9": 1,
+    "66984a3917f127f2": 1,
+    "6aae0e726d5aa404": 2,
+    "6c21898825dba34b": 1,
+    "736cd45766598cb0": 2,
+    "73c51d301fa1a572": 1,
+    "7467d4f03ac56b7f": 1,
+    "7847f487f20f17c0": 1,
+    "81738bddbf039488": 3,
+    "891f1ab7d153770b": 1,
+    "8c5a6fc3dfb2a602": 3,
+    "8e1eb04bf40ece26": 1,
+    "9224152bf2f52544": 1,
+    "96069c6dbc748b9a": 1,
+    "971fcdbfd85b0898": 1,
+    "988953ec10a4a018": 1,
+    "9ff31c7c9315b9e3": 1,
+    "a01e086e1d838394": 1,
+    "a1645a256f65c3a2": 1,
+    "a43968cf9670bbc6": 3,
+    "a459ebdeb70cf5d3": 1,
+    "a6a4477fff0d9725": 1,
+    "a92ff37d36c7a1e1": 1,
+    "acbd9d8f93bd81e1": 1,
+    "ad429e67038e1517": 1,
+    "ae7ebdbc8e0aea2f": 1,
+    "b2fc245e62979f30": 1,
+    "b8d365752d668d04": 1,
+    "bc58ab3116be6c28": 1,
+    "bcc7ffb4387e6b9b": 1,
+    "bce7adfd9ae4c224": 1,
+    "bd355b4169fbc56b": 1,
+    "bdd9cf88b2bab7a7": 1,
+    "c0d394e63a112f83": 1,
+    "c731e548772596bf": 1,
+    "ca5e1c0253dd25d6": 1,
+    "d3a0c262fd804f7c": 1,
+    "dc1d39b02f7cf638": 1,
+    "ddf5f7808c9315ce": 1,
+    "ded0bc21d5e88e85": 1,
+    "e1e8e9779ce70297": 2,
+    "e2b46b86e3815627": 1,
+    "e7aae44edc900f1b": 1,
+    "e837d0b25c178e49": 1,
+    "ea41b5d4c14aeddc": 2,
+    "ec9a920e3859418a": 1,
+    "edda16146ce999a2": 1,
+    "ee91f1ec1b1fc22c": 4,
+    "eeecbbfed5839023": 1,
+    "fb176c0bc4f1de1e": 2,
+    "fe27078242ac7a9e": 1
+  },
+  "findings": [
+    {
+      "found": "invisible: Optional[bool]",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/expression/column.py",
+      "rule": "ED-10.2"
+    },
+    {
+      "found": "invisible: Optional[bool]",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/expression/column.py",
+      "rule": "ED-10.2"
+    },
+    {
+      "found": "final: Optional[bool]",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/expression/ddl/type.py",
+      "rule": "ED-10.2"
+    },
+    {
+      "found": "instantiable: Optional[bool]",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/expression/ddl/type.py",
+      "rule": "ED-10.2"
+    },
+    {
+      "found": "persistable: Optional[bool]",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/expression/ddl/type.py",
+      "rule": "ED-10.2"
+    },
+    {
+      "found": "not_final: Optional[bool]",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/expression/ddl/type.py",
+      "rule": "ED-10.2"
+    },
+    {
+      "found": "not_instantiable: Optional[bool]",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/expression/ddl/type.py",
+      "rule": "ED-10.2"
+    },
+    {
+      "found": "not_persistable: Optional[bool]",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/expression/ddl/type.py",
+      "rule": "ED-10.2"
+    },
+    {
+      "found": "final: Optional[bool]",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/expression/ddl/type.py",
+      "rule": "ED-10.2"
+    },
+    {
+      "found": "instantiable: Optional[bool]",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/expression/ddl/type.py",
+      "rule": "ED-10.2"
+    },
+    {
+      "found": "persistable: Optional[bool]",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/expression/ddl/type.py",
+      "rule": "ED-10.2"
+    },
+    {
+      "found": "not_final: Optional[bool]",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/expression/ddl/type.py",
+      "rule": "ED-10.2"
+    },
+    {
+      "found": "not_instantiable: Optional[bool]",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/expression/ddl/type.py",
+      "rule": "ED-10.2"
+    },
+    {
+      "found": "not_persistable: Optional[bool]",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/expression/ddl/type.py",
+      "rule": "ED-10.2"
+    },
+    {
+      "found": "persistable: Optional[bool]",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/expression/ddl/type.py",
+      "rule": "ED-10.2"
+    },
+    {
+      "found": "not_persistable: Optional[bool]",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/expression/ddl/type.py",
+      "rule": "ED-10.2"
+    },
+    {
+      "found": "persistable: Optional[bool]",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/expression/ddl/type.py",
+      "rule": "ED-10.2"
+    },
+    {
+      "found": "not_persistable: Optional[bool]",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/expression/ddl/type.py",
+      "rule": "ED-10.2"
+    },
+    {
+      "found": "final: Optional[bool]",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/expression/ddl/type.py",
+      "rule": "ED-10.2"
+    },
+    {
+      "found": "is_final: Optional[bool]",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/expression/ddl/type.py",
+      "rule": "ED-10.2"
+    },
+    {
+      "found": "not_final: Optional[bool]",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/expression/ddl/type.py",
+      "rule": "ED-10.2"
+    },
+    {
+      "found": "instantiable: Optional[bool]",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/expression/ddl/type.py",
+      "rule": "ED-10.2"
+    },
+    {
+      "found": "is_instantiable: Optional[bool]",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/expression/ddl/type.py",
+      "rule": "ED-10.2"
+    },
+    {
+      "found": "not_instantiable: Optional[bool]",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/expression/ddl/type.py",
+      "rule": "ED-10.2"
+    },
+    {
+      "found": "atomic_refresh: Optional[bool]",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/expression/materialized_view.py",
+      "rule": "ED-10.2"
+    },
+    {
+      "found": "out_of_place: Optional[bool]",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/expression/materialized_view.py",
+      "rule": "ED-10.2"
+    },
+    {
+      "found": "nested: Optional[bool]",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/expression/materialized_view.py",
+      "rule": "ED-10.2"
+    },
+    {
+      "found": "refresh_after_errors: Optional[bool]",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/expression/materialized_view.py",
+      "rule": "ED-10.2"
+    },
+    {
+      "found": "push_deferred_rpc: Optional[bool]",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/expression/materialized_view.py",
+      "rule": "ED-10.2"
+    },
+    {
+      "found": "getattr(action, \"if_not_exists\", None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/column.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(action, \"if_exists\", None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/column.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(action, \"cascade\", False)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/column.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, \"column\", None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/comment.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr.object_type, \"value\", expr.object_type)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/comment.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, \"table_options\", None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/ddl.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(table_options, \"comment\", None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/ddl.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, \"table_options\", None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/ddl.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(to, \"tablespace\", None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/ddl.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(col_def, \"comment\", None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/ddl.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(t_const, \"match_type\", None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/ddl.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(t_const, \"deferrable\", False)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/ddl.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(t_const, \"not_deferrable\", False)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/ddl.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(t_const, \"initially_deferred\", False)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/ddl.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(t_const, \"initially_immediate\", False)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/ddl.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(t_const, \"enforced\", False)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/ddl.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(t_const, \"not_enforced\", False)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/ddl.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, \"purge\", False)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/ddl_table_op.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, \"resolved_persistable\", None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/ddl_type.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, 'definition_kind', type(expr).__name__)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/ddl_type.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr.definition, \"force\", False)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/ddl_type.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr.definition, \"editionable\", False)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/ddl_type.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr.definition, \"noneditionable\", False)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/ddl_type.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, 'action_kind', type(expr).__name__)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/ddl_type.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, 'action_kind', type(expr).__name__)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/ddl_type.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, \"force\", False)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/ddl_type.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(conflict_clause, \"action\", None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/dml.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, \"from_\", None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/expression.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(from_, \"alias\", None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/expression.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(from_, \"name\", None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/expression.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, \"func_name\", \"\")",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/functions.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, \"is_distinct\", False)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/functions.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, \"_oracle_within_group\", None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/functions.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, \"_oracle_on_overflow\", None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/functions.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, \"is_distinct\", False)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/functions.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, \"_oracle_within_group\", None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/functions.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, \"_oracle_returning_type\", None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/functions.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, \"_oracle_json_table_columns\", None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/functions.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, \"if_not_exists\", False)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/materialized_view.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, \"build_mode\", None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/materialized_view.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, \"with_data\", False)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/materialized_view.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, \"no_data\", False)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/materialized_view.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, \"refresh_method\", None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/materialized_view.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, \"refresh_trigger\", None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/materialized_view.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, \"enable_query_rewrite\", False)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/materialized_view.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, \"disable_query_rewrite\", False)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/materialized_view.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, \"if_exists\", False)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/materialized_view.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, \"preserve_table\", False)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/materialized_view.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, \"cascade\", False)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/materialized_view.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, \"restrict\", False)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/materialized_view.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, \"view\", None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/materialized_view.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, 'view', None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/materialized_view.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, \"concurrent\", False)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/materialized_view.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, \"with_data\", False)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/materialized_view.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, \"no_data\", False)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/materialized_view.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, \"method\", None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/materialized_view.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(clause, \"with_ties\", False)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/pagination.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(clause, \"with_ties\", False)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/pagination.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, \"if_not_exists\", False)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/sequence.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, \"owned_by\", None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/sequence.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, \"if_exists\", False)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/sequence.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(trigger_expr, 'timing', None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/trigger.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(trigger_expr, 'events', None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/trigger.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(trigger_expr, 'update_columns', None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/trigger.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(trigger_expr, 'level', None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/trigger.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(trigger_expr, 'referencing', None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/trigger.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(trigger_expr, 'condition', None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/trigger.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(trigger_expr, 'body', None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/trigger.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(trigger_expr, 'function', None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/trigger.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(trigger_expr, 'function', None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/trigger.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(drop_expr, 'if_exists', False)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/trigger.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(data_type, 'precision', None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/types.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(data_type, 'precision', None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/types.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(data_type, 'precision', None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/types.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, 'vector1', None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/vector.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, 'vector2', None)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/vector.py",
+      "rule": "ED-11.2"
+    },
+    {
+      "found": "getattr(expr, 'metric', metric)",
+      "path": "src/rhosocial/activerecord/backend/impl/oracle/mixins/vector.py",
+      "rule": "ED-11.2"
+    }
+  ],
+  "format": 1
+}

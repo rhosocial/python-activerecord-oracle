@@ -46,8 +46,14 @@ SCHEMA_USER_PASSWORD = "Rh0social#2026"
 
 
 class DeepCustomer(ActiveRecord):
-    __table_name__ = "customers"
-    __schema_name__ = "ar_crm"
+    @classmethod
+    def table_name(cls):
+        return "customers"
+
+    @classmethod
+    def schema_name(cls):
+        return "ar_crm"
+
     c: ClassVar[FieldProxy] = FieldProxy()
 
     id: Optional[int] = None
@@ -1009,8 +1015,8 @@ class TestDialectCarriesTheServersOwnVersion:
             )
             backend.introspect_and_adapt()
             assert full is not None, (
-                f"oracle_26ai reports no VERSION_FULL, so the release-update "
-                f"number that tells 23ai from 26ai cannot be demonstrated"
+                "oracle_26ai reports no VERSION_FULL, so the release-update "
+                "number that tells 23ai from 26ai cannot be demonstrated"
             )
             # Both true at once, and neither read from the other: the product
             # name says 26 while the version says 23.
