@@ -8,7 +8,7 @@ from contextlib import redirect_stderr, redirect_stdout
 import pytest
 
 from rhosocial.activerecord.backend.impl.oracle.__main__ import main
-from providers.scenarios import get_scenario_raw
+from support.oracle import get_scenario_raw
 
 import socket
 COMMANDS = [

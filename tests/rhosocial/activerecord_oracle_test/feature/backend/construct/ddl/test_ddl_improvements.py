@@ -1,0 +1,123 @@
+# tests/rhosocial/activerecord_oracle_test/feature/backend/construct/ddl/test_ddl_improvements.py
+"""Tests for Oracle DDL improvements: capability gating, UnsupportedFeatureError."""
+import pytest
+from unittest.mock import patch
+
+from rhosocial.activerecord.backend.expression import (
+    Column,
+    CreateTableStatement,
+    CreateViewStatement,
+    QueryStatement,
+)
+from rhosocial.activerecord.backend.expression.objects import Table, View
+from rhosocial.activerecord.backend.expression.statements import ViewOptions, ViewCheckOption
+from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
+from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
+
+
+class TestTableCapabilityGating:
+    def test_table_declaration_defaults_are_absent(self):
+        dialect = OracleDialect(version=(19, 0, 0))
+        expression = CreateTableStatement(
+            dialect, Table(dialect, "plain_table_defaults"), []
+        )
+
+        assert expression.inherits == []
+        assert expression.tablespace is None
+
+    def test_table_inherits_declaration_is_propagated_and_fails_fast(self):
+        dialect = OracleDialect(version=(19, 0, 0))
+        expression = CreateTableStatement(
+            dialect,
+            Table(dialect, "inheriting_table"),
+            [],
+            inherits=["parent_a", "parent_b"],
+        )
+
+        assert expression.inherits == ["parent_a", "parent_b"]
+        assert dialect.supports_table_inheritance() is False
+        with pytest.raises(UnsupportedFeatureError, match="INHERITS"):
+            expression.to_sql()
+
+    def test_table_tablespace_declaration_is_propagated_and_rendered(self):
+        dialect = OracleDialect(version=(19, 0, 0))
+        expression = CreateTableStatement(
+            dialect,
+            Table(dialect, "tablespaced_table"),
+            [],
+            tablespace="ts_data",
+        )
+
+        assert expression.tablespace == "ts_data"
+        assert dialect.supports_tablespace_option() is True
+        sql, params = expression.to_sql()
+        assert 'TABLESPACE "TS_DATA"' in sql
+        assert params == ()
+
+
+class TestViewCapabilityGating:
+    """Tests for Oracle VIEW DDL capability gating."""
+
+    def test_create_view_check_option_gated(self):
+        """WITH CHECK OPTION must fail fast when the capability is off."""
+        dialect = OracleDialect()
+        query = QueryStatement(
+            dialect, select=[Column(dialect, "id")], from_=Table(dialect, "t")
+        )
+        expr = CreateViewStatement(
+            dialect,
+            view=View(dialect, "v"),
+            query=query,
+            options=ViewOptions(check_option=ViewCheckOption.CASCADED),
+        )
+        with patch.object(type(dialect), "supports_view_check_option", return_value=False):
+            with pytest.raises(UnsupportedFeatureError, match="CHECK OPTION"):
+                expr.to_sql()
+
+    def test_create_or_replace_view_supported(self):
+        """Oracle supports CREATE OR REPLACE VIEW."""
+        dialect = OracleDialect()
+        assert dialect.supports_create_or_replace_view() is True
+
+    def test_drop_view_if_exists_not_supported(self):
+        """Oracle does not support DROP VIEW IF EXISTS."""
+        dialect = OracleDialect()
+        assert dialect.supports_if_exists_view() is False
+
+    def test_materialized_view_supported(self):
+        """Oracle supports materialized views."""
+        dialect = OracleDialect()
+        assert dialect.supports_materialized_view() is True
+
+
+class TestColumnCapabilityGating:
+    """Tests for Oracle COLUMN DDL capability gating."""
+
+    def test_foreign_key_on_delete_supported(self):
+        """Oracle supports FK ON DELETE."""
+        dialect = OracleDialect()
+        assert dialect.supports_foreign_key_on_delete() is True
+
+    def test_foreign_key_on_update_not_supported(self):
+        """Oracle does not support FK ON UPDATE."""
+        dialect = OracleDialect()
+        assert dialect.supports_foreign_key_on_update() is False
+
+    def test_check_constraint_supported(self):
+        """Oracle supports CHECK constraints."""
+        dialect = OracleDialect()
+        assert dialect.supports_check_constraint() is True
+
+
+class TestSchemaCapabilityGating:
+    """Tests for Oracle SCHEMA DDL capability gating."""
+
+    def test_create_schema_not_supported(self):
+        """Oracle does not support CREATE SCHEMA (uses users)."""
+        dialect = OracleDialect()
+        assert dialect.supports_create_schema() is False
+
+    def test_drop_schema_not_supported(self):
+        """Oracle does not support DROP SCHEMA."""
+        dialect = OracleDialect()
+        assert dialect.supports_drop_schema() is False

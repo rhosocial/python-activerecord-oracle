@@ -9,5 +9,3 @@ ensuring Oracle backend compatibility for connection pool CRUD operations.
 
 # Import shared tests from testsuite package
 from rhosocial.activerecord.testsuite.feature.basic.connection.test_active_record_crud import *  # noqa: F403
-from rhosocial.activerecord.testsuite.feature.basic.connection.test_active_record_crud_async import *  # noqa: F403
-

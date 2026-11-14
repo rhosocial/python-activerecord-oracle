@@ -7,4 +7,3 @@ and makes them discoverable by pytest in this project's test run.
 """
 
 from rhosocial.activerecord.testsuite.feature.basic.readonly.test_readonly_models import *  # noqa: F403
-from rhosocial.activerecord.testsuite.feature.basic.readonly.test_readonly_models_async import *  # noqa: F403

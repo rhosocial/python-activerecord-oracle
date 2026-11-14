@@ -1278,6 +1278,10 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
                 last_insert_id=None
             )
 
+            # RETURNING INTO bypasses execute(), so nothing has committed the
+            # DML.  Mirror the sync helper and the core async contract: commit
+            # when no explicit transaction encloses the statement.
+            await self._handle_auto_commit_if_needed()
             return result
 
         except Exception as e:
