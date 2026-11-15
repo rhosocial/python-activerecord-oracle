@@ -39,6 +39,14 @@ SERVER_ONLY_KEYS = ("database", "enabled")
 #: test must never share: two directories would then write into one schema.
 SCHEMA_PASSWORD = "OraclePool1"
 
+#: Name the shared capability probe may use without a directory schema.
+#: Oracle has no database separate from the schema user; the probe therefore
+#: runs as the scenario's own administrative user (a database it must never
+#: clear).  ``make_config`` returns the scenario's server config unchanged for
+#: this value, so version-gated capability markers see an adapted dialect
+#: instead of falling back to an unversioned one.
+MAINTENANCE_DATABASE = "__maintenance__"
+
 DDL_OPTIONS = ExecutionOptions(stmt_type=StatementType.DDL)
 
 #: Dropping a user that does not exist raises ORA-01918; that is the expected
@@ -83,13 +91,21 @@ class OracleScenario:
     server: Dict[str, Any]
     backend_class: Any = OracleBackend
     async_backend_class: Any = AsyncOracleBackend
+    maintenance_database: str = MAINTENANCE_DATABASE
 
     def server_config(self) -> OracleConnectionConfig:
         """Return the scenario's own (administrative) configuration."""
         return OracleConnectionConfig(**self.server)
 
     def make_config(self, database: str) -> OracleConnectionConfig:
-        """Return the configuration that connects as ``database``'s schema user."""
+        """Return the configuration that connects as ``database``'s schema user.
+
+        The shared capability probe uses :data:`MAINTENANCE_DATABASE` to adapt
+        a dialect without a directory schema; that name resolves to the
+        scenario's administrative connection instead of a schema user.
+        """
+        if database == self.maintenance_database:
+            return self.server_config()
         return replace(
             self.server_config(),
             database=database,

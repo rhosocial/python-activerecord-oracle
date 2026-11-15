@@ -443,15 +443,15 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         """
         Convert non-basic types to Oracle-compatible values.
 
-        oracledb thin mode only supports basic Python types (str, int, float, bytes, None)
-        for bind parameters. Types like time, dict, list, UUID, Decimal must be serialized
-        to strings or converted to compatible types.
+        ``datetime`` is bound as-is: oracledb binds a Python ``datetime`` to
+        ``DATE``, ``TIMESTAMP`` and ``TIMESTAMP WITH TIME ZONE`` natively,
+        truncating microseconds for ``DATE`` and keeping them (and the UTC
+        offset) for the timestamp types.  Formatting it to text instead broke
+        ``DATE`` columns (ORA-01830: ``DATE`` has no fractional seconds) and
+        dropped the UTC offset of ``TIMESTAMP WITH TIME ZONE`` binds.
 
-        Args:
-            params: Original parameter tuple
-
-        Returns:
-            Tuple with converted values suitable for oracledb binding
+        Types like time, dict, list, UUID and Decimal must still be serialized
+        to driver-compatible values (Oracle has no ``TIME`` column type).
         """
         from datetime import datetime, time
         from decimal import Decimal
@@ -464,7 +464,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
                 if isinstance(param, bool):
                     converted.append(1 if param else 0)
                 elif isinstance(param, datetime):
-                    converted.append(param.strftime('%Y-%m-%d %H:%M:%S.%f'))
+                    converted.append(param)
                 elif isinstance(param, time):
                     converted.append(param.strftime('%H:%M:%S'))
                 elif isinstance(param, (dict, list)):

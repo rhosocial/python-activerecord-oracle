@@ -4,7 +4,7 @@
 import logging
 from datetime import date, datetime, time
 from decimal import Decimal
-from typing import Dict, Optional, Tuple, Type
+from typing import Dict, List, Optional, Tuple, Type
 from uuid import UUID
 
 from rhosocial.activerecord.backend.type_adapter import SQLTypeAdapter
@@ -92,6 +92,11 @@ class OracleBackendMixin:
             OracleXMLAdapter,
             OracleSDOGeometryAdapter,
             OracleVectorAdapter,
+            OracleNeutralGeometryAdapter,
+            OracleNeutralVectorAdapter,
+            OracleNeutralBitStringAdapter,
+            OracleNeutralRangeAdapter,
+            OracleNeutralMacAddressAdapter,
         )
 
         self._default_suggestions_cache = None
@@ -134,17 +139,67 @@ class OracleBackendMixin:
                 for db_type in db_types:
                     self.adapter_registry.register(adapter, py_type, db_type, allow_override=True)
 
+        # Neutral value adapters are keyed by the core neutral Python types
+        # (Geometry, Vector, ...), so they cannot collide with the backend
+        # wrapper adapters above.  They are value-level adapters only: a VECTOR
+        # column still exists solely on 23ai, and a native SDO_GEOMETRY bind
+        # still needs connection-side support (see neutral_adapters.py).
+        neutral = [
+            OracleNeutralGeometryAdapter(),
+            OracleNeutralVectorAdapter(),
+            OracleNeutralBitStringAdapter(),
+            OracleNeutralRangeAdapter(),
+            OracleNeutralMacAddressAdapter(),
+        ]
+        for adapter in neutral:
+            for py_type, db_types in adapter.supported_types.items():
+                for db_type in db_types:
+                    self.adapter_registry.register(adapter, py_type, db_type, allow_override=True)
+
         self.log(logging.DEBUG, "Registered Oracle-specific type adapters.")
 
+    def get_type_adapters(self) -> List[SQLTypeAdapter]:
+        """Return the adapter instances this backend provides.
+
+        This is a plain inventory: it says which adapters exist for this backend.
+        It carries no suggestion/default/priority semantics; the caller decides.
+
+        The inventory is deduplicated by adapter class (module + qualname) and
+        sorted by ``(module, qualname)``, so the order is deterministic and a
+        fresh list is returned on every call.
+        """
+        adapters: List[SQLTypeAdapter] = list(self.adapter_registry.get_all_adapters().values())
+
+        unique: Dict[Tuple[str, str], SQLTypeAdapter] = {}
+        for adapter in adapters:
+            adapter_class = type(adapter)
+            unique.setdefault((adapter_class.__module__, adapter_class.__qualname__), adapter)
+
+        return [unique[key] for key in sorted(unique)]
+
     def get_default_adapter_suggestions(self) -> Dict[Type, Tuple[SQLTypeAdapter, Type]]:
+        """Provides default type adapter suggestions for Oracle.
+
+        The framework defaults (:meth:`TypeAdaptionMixin.get_default_adapter_suggestions`)
+        are the base; Oracle merges its own pairs on top, including the neutral
+        families it carries as ``VARCHAR2``/``CLOB`` text.
+        """
         if hasattr(self, '_default_suggestions_cache') and self._default_suggestions_cache is not None:
             return self._default_suggestions_cache
 
-        suggestions: Dict[Type, Tuple[SQLTypeAdapter, Type]] = {}
+        from rhosocial.activerecord.backend.adapters.bitstring import BitString
+        from rhosocial.activerecord.backend.adapters.geometry import Geometry
+        from rhosocial.activerecord.backend.adapters.network import MacAddress
+        from rhosocial.activerecord.backend.adapters.range import Multirange, Range
+        from rhosocial.activerecord.backend.adapters.vector import Vector
+        from rhosocial.activerecord.backend.base.type_adaption import (
+            merge_adapter_suggestions,
+        )
+
+        base = super().get_default_adapter_suggestions()
 
         type_mappings = [
             (bool, int),
-            (str, str),
             (datetime, str),
             (date, str),
             (time, str),
@@ -153,17 +208,33 @@ class OracleBackendMixin:
             (dict, str),
             (list, str),
             (bytes, bytes),
-            (UUID, bytes),
+            # Generic UUID columns are the conventional hyphenated text; RAW(16)
+            # storage is selected per column with ``storage_format='bytes'``,
+            # not as a default for every UUID field.
+            (UUID, str),
+            # ``str`` is intentionally absent: the driver binds text as-is, and
+            # the core ``str`` semantics are pass-through.  ``OracleStringAdapter``
+            # stays registered for models that declare it explicitly (its
+            # NULL -> '' behaviour is an opt-in Oracle-specific policy; making it
+            # the default would turn a genuine NULL of an ``Optional[str]``
+            # field into '' on read).
+            # Neutral families: Oracle carries them as text (the native
+            # SDO_GEOMETRY / VECTOR / RAW forms are backend-specific topics).
+            (Geometry, str),
+            (Vector, str),
+            (BitString, str),
+            (Range, str),
+            (Multirange, str),
+            (MacAddress, str),
         ]
 
+        suggestions = merge_adapter_suggestions(base, type_mappings, self.adapter_registry)
         for py_type, db_type in type_mappings:
-            adapter = self.adapter_registry.get_adapter(py_type, db_type)
-            if adapter:
-                suggestions[py_type] = (adapter, db_type)
-            else:
+            if py_type not in suggestions:
                 self.log(
                     logging.DEBUG,
-                    f"No adapter found for ({py_type.__name__}, {db_type.__name__}).",
+                    f"No adapter found for ({py_type.__name__}, {db_type.__name__}). "
+                    "Suggestion will not be provided for this type.",
                 )
 
         self._default_suggestions_cache = suggestions
