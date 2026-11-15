@@ -108,6 +108,7 @@ from rhosocial.activerecord.backend.expression.types import (
     BlobType,
     DoubleType,
     FloatType,
+    LENGTH_PARAMETERS,
     TextType,
     TimestampTzType,
     VarBinaryType,
@@ -257,7 +258,7 @@ class OracleRawType(VarBinaryType):
     # ``RAW(n)`` is bounded and the bound is the declaration; two RAW columns
     #     of different widths are different columns.
 
-    PARAMETERS = ("length",)
+    PARAMETERS = LENGTH_PARAMETERS
 
     name = "oracle_raw"
 
