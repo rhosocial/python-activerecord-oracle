@@ -136,6 +136,7 @@ ORACLE_PROTOCOLS = [
     # listing both would parametrize the same protocol twice. The alias itself
     # is asserted in test_ddl_type_support_is_an_alias_of_data_type_support.
     dialect_protocols.DataTypeSupport,
+    dialect_protocols.DatabaseAssignedColumnSupport,
     dialect_protocols.DropIndexSupport,
     dialect_protocols.DropSchemaSupport,
     dialect_protocols.DropSequenceSupport,

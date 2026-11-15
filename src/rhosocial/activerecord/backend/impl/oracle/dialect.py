@@ -520,3 +520,12 @@ class OracleDialect(
         )
 
         return OracleSchemaDiffer()
+
+    def supports_database_assigned_integer_column(self) -> bool:
+        """Oracle assigns the value through its identity column.
+
+        Delegates to :meth:`supports_identity_column`: ``GENERATED ... AS
+        IDENTITY`` exists from 12c onward, which is the mechanism the dialect
+        renders.
+        """
+        return self.supports_identity_column()
