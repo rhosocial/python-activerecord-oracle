@@ -450,12 +450,27 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         return final_results
 
     def _set_input_sizes_for_params(self, cursor, params) -> None:
+        """Declare the bind type a value needs, where the default would lose it.
+
+        Same contract as the synchronous method: a long string is bound as
+        CLOB, a naive ``datetime`` as ``TIMESTAMP`` (the default is ``DATE``,
+        which drops microseconds), and an aware one as
+        ``TIMESTAMP WITH TIME ZONE`` so its offset is carried.
+        """
         if not params:
             return
-        sizes = [
-            oracledb.DB_TYPE_CLOB if isinstance(param, str) and len(param.encode('utf-8')) > 4000 else None
-            for param in params
-        ]
+        sizes = []
+        for param in params:
+            if isinstance(param, datetime.datetime):
+                sizes.append(
+                    oracledb.DB_TYPE_TIMESTAMP_TZ
+                    if param.tzinfo is not None
+                    else oracledb.DB_TYPE_TIMESTAMP
+                )
+            elif isinstance(param, str) and len(param.encode("utf-8")) > 4000:
+                sizes.append(oracledb.DB_TYPE_CLOB)
+            else:
+                sizes.append(None)
         if any(size is not None for size in sizes):
             cursor.setinputsizes(*sizes)
 

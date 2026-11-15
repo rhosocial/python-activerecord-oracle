@@ -497,12 +497,34 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         return super().adapt_row_types(row_dict, column_adapters)
 
     def _set_input_sizes_for_params(self, cursor, params) -> None:
+        """Declare the bind type a value needs, where the default would lose it.
+
+        Two values need one:
+
+        * a long string is bound as CLOB, so it is not truncated at the driver's
+          4000-byte inline limit;
+        * a ``datetime`` is bound as ``TIMESTAMP`` -- left to the default the
+          driver sends a ``DATE``, which Oracle stores with whole seconds and
+          silently drops the microseconds (measured: a bound ``datetime`` with
+          ````.123456`` reads back without it, while the same instant inserted
+          through ``TO_TIMESTAMP`` keeps it). An aware value is bound as
+          ``TIMESTAMP WITH TIME ZONE`` so its offset is carried rather than
+          converted to the session's.
+        """
         if not params:
             return
-        sizes = [
-            oracledb.DB_TYPE_CLOB if isinstance(param, str) and len(param.encode('utf-8')) > 4000 else None
-            for param in params
-        ]
+        sizes = []
+        for param in params:
+            if isinstance(param, datetime.datetime):
+                sizes.append(
+                    oracledb.DB_TYPE_TIMESTAMP_TZ
+                    if param.tzinfo is not None
+                    else oracledb.DB_TYPE_TIMESTAMP
+                )
+            elif isinstance(param, str) and len(param.encode("utf-8")) > 4000:
+                sizes.append(oracledb.DB_TYPE_CLOB)
+            else:
+                sizes.append(None)
         if any(size is not None for size in sizes):
             cursor.setinputsizes(*sizes)
 
