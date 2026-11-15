@@ -8,7 +8,7 @@ plain function: no fixtures, no global connection state.
 
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Sequence, Tuple
 
 from rhosocial.activerecord.backend.options import ExecutionOptions
 from rhosocial.activerecord.backend.schema import StatementType
@@ -37,7 +37,6 @@ def table_statements() -> Dict[str, str]:
 
 
 TABLE_STATEMENTS = table_statements()
-TABLE_NAMES = tuple(TABLE_STATEMENTS)
 
 
 def fetch(backend, sql: str, params: Sequence[Any] = ()) -> List[Dict[str, Any]]:
@@ -62,21 +61,25 @@ def existing_tables(backend) -> set:
     return {row["table_name"] for row in rows}
 
 
-def ensure_tables(backend, tables: Optional[Sequence[str]] = None) -> None:
-    """Create the native-type tables that are missing in this schema."""
-    wanted = tuple(tables) if tables is not None else TABLE_NAMES
+def ensure_tables(backend, tables: Sequence[str]) -> None:
+    """Create the named native-type tables that are missing in this schema.
+
+    The caller names every table it needs.  There is deliberately no
+    "create all" default: a table family the connected server cannot
+    represent would otherwise abort an unrelated test's setup with
+    ``ORA-00902: invalid datatype``.
+    """
     existing = existing_tables(backend)
-    for name in wanted:
+    for name in tables:
         if name.upper() in existing:
             continue
         backend.execute(TABLE_STATEMENTS[name], (), options=DDL)
 
 
-def clear_rows(backend, tables: Optional[Sequence[str]] = None) -> None:
-    """Delete every row from the native-type tables that exist."""
-    wanted = tuple(tables) if tables is not None else TABLE_NAMES
+def clear_rows(backend, tables: Sequence[str]) -> None:
+    """Delete every row from the named native-type tables that exist."""
     existing = existing_tables(backend)
-    for name in wanted:
+    for name in tables:
         if name.upper() not in existing:
             continue
         backend.execute(f"DELETE FROM {name}", (), options=DML)

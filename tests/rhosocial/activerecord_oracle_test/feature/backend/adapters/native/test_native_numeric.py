@@ -21,6 +21,10 @@ from rhosocial.activerecord.backend.impl.oracle.adapters import OracleDecimalAda
 import native_models as models
 from native_support import execute, fetch_one
 
+#: The native tables this module uses.  ``native_db`` creates only these, so
+#: a server without ``JSON``/``BOOLEAN``/``VECTOR`` still runs this module.
+TABLES = ("native_numeric",)
+
 
 def _raw_number(backend, row_id):
     return fetch_one(
