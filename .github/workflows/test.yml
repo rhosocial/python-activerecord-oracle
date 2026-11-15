@@ -79,7 +79,7 @@ jobs:
 
       - name: Ensure PDB service registered with listener
         run: |
-          docker exec ${{ job.services.oracle.id }} sqlplus -L / as sysdba <<EOF
+          docker exec -i ${{ job.services.oracle.id }} sqlplus -L / as sysdba <<EOF
           alter system set local_listener='(ADDRESS=(PROTOCOL=TCP)(HOST=0.0.0.0)(PORT=1521))' scope=both;
           -- Boost connection capacity so long-running pytest runs do not
           -- exhaust the dispatcher / session pool (ORA-12516 / DPY-6005).
@@ -98,7 +98,7 @@ jobs:
           # the boosted limits apply before the test run starts.
           docker restart ${{ job.services.oracle.id }}
           sleep 30
-          docker exec ${{ job.services.oracle.id }} sqlplus -L / as sysdba <<EOF
+          docker exec -i ${{ job.services.oracle.id }} sqlplus -L / as sysdba <<EOF
           alter system set dispatchers='(PROTOCOL=TCP)(DISPATCHERS=4)' scope=both;
           alter system register;
           exit;
@@ -207,7 +207,7 @@ jobs:
 
       - name: Ensure PDB service registered with listener
         run: |
-          docker exec ${{ job.services.oracle.id }} sqlplus -L / as sysdba <<EOF
+          docker exec -i ${{ job.services.oracle.id }} sqlplus -L / as sysdba <<EOF
           alter system set local_listener='(ADDRESS=(PROTOCOL=TCP)(HOST=0.0.0.0)(PORT=1521))' scope=both;
           -- Boost connection capacity so long-running pytest runs do not
           -- exhaust the dispatcher / session pool (ORA-12516 / DPY-6005).
@@ -226,7 +226,7 @@ jobs:
           # the boosted limits apply before the test run starts.
           docker restart ${{ job.services.oracle.id }}
           sleep 30
-          docker exec ${{ job.services.oracle.id }} sqlplus -L / as sysdba <<EOF
+          docker exec -i ${{ job.services.oracle.id }} sqlplus -L / as sysdba <<EOF
           alter system set dispatchers='(PROTOCOL=TCP)(DISPATCHERS=4)' scope=both;
           alter system register;
           exit;
@@ -335,7 +335,7 @@ jobs:
 
       - name: Ensure PDB service registered with listener
         run: |
-          docker exec ${{ job.services.oracle.id }} sqlplus -L / as sysdba <<EOF
+          docker exec -i ${{ job.services.oracle.id }} sqlplus -L / as sysdba <<EOF
           -- Boost connection capacity so long-running pytest runs do not
           -- exhaust the dispatcher / session pool (ORA-12516 / DPY-6005).
           -- The default gvenzl/oracle-free:23-slim image ships with a
@@ -353,7 +353,7 @@ jobs:
           # so the boosted limits apply before the test run starts.
           docker restart ${{ job.services.oracle.id }}
           sleep 30
-          docker exec ${{ job.services.oracle.id }} sqlplus -L / as sysdba <<EOF
+          docker exec -i ${{ job.services.oracle.id }} sqlplus -L / as sysdba <<EOF
           alter system set dispatchers='(PROTOCOL=TCP)(DISPATCHERS=4)' scope=both;
           alter system register;
           exit;
@@ -471,7 +471,7 @@ jobs:
 
       - name: Ensure PDB service registered with listener
         run: |
-          docker exec ${{ job.services.oracle.id }} sqlplus -L / as sysdba <<EOF
+          docker exec -i ${{ job.services.oracle.id }} sqlplus -L / as sysdba <<EOF
           -- Boost connection capacity so long-running pytest runs do not
           -- exhaust the dispatcher / session pool (ORA-12516 / DPY-6005).
           -- The default gvenzl/oracle-free:23-slim image ships with a
@@ -489,7 +489,7 @@ jobs:
           # so the boosted limits apply before the test run starts.
           docker restart ${{ job.services.oracle.id }}
           sleep 30
-          docker exec ${{ job.services.oracle.id }} sqlplus -L / as sysdba <<EOF
+          docker exec -i ${{ job.services.oracle.id }} sqlplus -L / as sysdba <<EOF
           alter system set dispatchers='(PROTOCOL=TCP)(DISPATCHERS=4)' scope=both;
           alter system register;
           exit;
