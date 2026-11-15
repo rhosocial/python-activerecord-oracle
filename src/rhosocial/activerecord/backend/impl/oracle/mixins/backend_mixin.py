@@ -212,12 +212,14 @@ class OracleBackendMixin:
             # storage is selected per column with ``storage_format='bytes'``,
             # not as a default for every UUID field.
             (UUID, str),
-            # ``str`` is intentionally absent: the driver binds text as-is, and
-            # the core ``str`` semantics are pass-through.  ``OracleStringAdapter``
-            # stays registered for models that declare it explicitly (its
-            # NULL -> '' behaviour is an opt-in Oracle-specific policy; making it
-            # the default would turn a genuine NULL of an ``Optional[str]``
-            # field into '' on read).
+            # ``str`` is absent from the core table because a driver that
+            # round-trips text needs no adapter.  Oracle's does not: it stores
+            # ``''`` as ``NULL``, so a non-Optional ``str`` field that was written
+            # as ``''`` reads back as ``None`` and the model rejects it.  The
+            # adapter restores ``''`` for those fields and leaves ``Optional[str]``
+            # NULLs alone; the model's declared annotation reaches it through
+            # ``original_type``, which is what tells the two apart.
+            (str, str),
             # Neutral families: Oracle carries them as text (the native
             # SDO_GEOMETRY / VECTOR / RAW forms are backend-specific topics).
             (Geometry, str),
