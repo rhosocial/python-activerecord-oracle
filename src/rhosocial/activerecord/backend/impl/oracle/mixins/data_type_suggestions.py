@@ -55,6 +55,7 @@ from rhosocial.activerecord.backend.expression.types import (
     DateType,
     DecimalType,
     DoubleType,
+    IntervalType,
     IntegerType,
     TextType,
     TimeType,
@@ -85,11 +86,10 @@ ORACLE_DATA_TYPE_SUGGESTIONS: Dict[Any, Optional[Any]] = {
     datetime.time: TimeType(),
     # Milliseconds, the framework's timestamp default, and ``TIMESTAMP(3)`` here.
     datetime.datetime: TimestampType(precision=3),
-    # ``INTERVAL DAY TO SECOND`` is native, but the framework has no interval
-    # column operations and this backend's adapter writes the interval's text;
-    # text is the carrier a bare field round-trips through. A field that wants
-    # the native column declares ``IntervalType`` with ``UseSqlType``.
-    datetime.timedelta: TextType(),
+    # ``INTERVAL DAY TO SECOND`` is native and renders here; the adapter writes
+    # its text form, and this is the declaration a bare duration gets. (MySQL
+    # and MariaDB have no interval type and name a text carrier instead.)
+    datetime.timedelta: IntervalType(),
     # ``RAW(16)``: the RFC 4122 bytes, and ``OracleRawType``'s default width.
     uuid.UUID: OracleRawType(),
     # A document has no dimension-free column: ``JSON`` exists from 21c only
