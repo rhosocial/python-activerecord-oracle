@@ -601,3 +601,143 @@ class TestMacAddressRefusals:
         adapter = OracleNeutralMacAddressAdapter()
         with pytest.raises(TypeConversionError, match="must decode from text or bytes"):
             adapter.from_database(42, MacAddress)
+
+
+# ---------------------------------------------------------------------------
+# SDO decoding: the shapes the numeric rules refuse.
+# ---------------------------------------------------------------------------
+
+
+def _sdo(**overrides):
+    """A minimally valid SDO_GEOMETRY mapping, with the test's own fields."""
+    base = {"SDO_GTYPE": 2001, "SDO_SRID": None, "SDO_POINT": None,
+            "SDO_ELEM_INFO": None, "SDO_ORDINATES": None}
+    base.update(overrides)
+    return base
+
+
+class TestSdoDecodingRefusals:
+    def test_an_odd_ordinate_count_is_refused(self):
+        adapter = OracleNeutralGeometryAdapter()
+        with pytest.raises(TypeConversionError, match="whole number of"):
+            adapter.from_database(
+                _sdo(SDO_GTYPE=2002, SDO_ORDINATES=[0, 0, 1]), Geometry
+            )
+
+    def test_elem_info_must_be_triples(self):
+        adapter = OracleNeutralGeometryAdapter()
+        with pytest.raises(TypeConversionError, match="non-empty array of triples"):
+            adapter.from_database(
+                _sdo(SDO_GTYPE=2003, SDO_ELEM_INFO=[1, 1003], SDO_ORDINATES=[0, 0, 0, 1]), Geometry
+            )
+
+    def test_an_offset_outside_the_ordinates_is_refused(self):
+        """A later element's offset that lands before the current one is a
+        broken SDO_ELEM_INFO, not an empty slice."""
+        adapter = OracleNeutralGeometryAdapter()
+        with pytest.raises(TypeConversionError, match="points outside SDO_ORDINATES"):
+            adapter.from_database(
+                _sdo(SDO_GTYPE=2003, SDO_ELEM_INFO=[5, 1003, 1, 2, 1003, 1],
+                     SDO_ORDINATES=[0, 0, 0, 1, 1, 1, 0, 0]), Geometry
+            )
+
+    def test_an_open_ring_is_refused(self):
+        adapter = OracleNeutralGeometryAdapter()
+        with pytest.raises(TypeConversionError, match="ring is not closed"):
+            adapter.from_database(
+                _sdo(SDO_GTYPE=2003, SDO_ELEM_INFO=[1, 1003, 1],
+                     SDO_ORDINATES=[0, 0, 0, 1, 1, 1, 1, 0]), Geometry
+            )
+
+    def test_a_multipolygon_interior_needs_an_exterior_first(self):
+        adapter = OracleNeutralGeometryAdapter()
+        with pytest.raises(TypeConversionError, match="interior SDO ring appears without an exterior"):
+            adapter.from_database(
+                _sdo(SDO_GTYPE=2007, SDO_ELEM_INFO=[1, 2003, 1],
+                     SDO_ORDINATES=[0, 0, 0, 1, 1, 1, 0, 0]), Geometry
+            )
+
+    def test_a_collection_interior_needs_an_exterior_first(self):
+        adapter = OracleNeutralGeometryAdapter()
+        with pytest.raises(TypeConversionError, match="interior SDO ring appears without an exterior"):
+            adapter.from_database(
+                _sdo(SDO_GTYPE=2004, SDO_ELEM_INFO=[1, 2003, 1],
+                     SDO_ORDINATES=[0, 0, 0, 1, 1, 1, 0, 0]), Geometry
+            )
+
+    def test_a_point_with_z_is_not_2d(self):
+        adapter = OracleNeutralGeometryAdapter()
+        with pytest.raises(TypeConversionError, match="found a Z ordinate"):
+            adapter.from_database(_sdo(SDO_POINT={"X": 1.0, "Y": 2.0, "Z": 3.0}), Geometry)
+
+    def test_an_sdo_point_is_only_valid_for_a_point(self):
+        adapter = OracleNeutralGeometryAdapter()
+        with pytest.raises(TypeConversionError, match="only valid for point geometries"):
+            adapter.from_database(
+                _sdo(SDO_GTYPE=2002, SDO_POINT={"X": 1.0, "Y": 2.0}), Geometry
+            )
+
+    def test_a_point_without_coordinates_or_ordinates_is_refused(self):
+        adapter = OracleNeutralGeometryAdapter()
+        with pytest.raises(TypeConversionError, match="neither an SDO_POINT nor SDO_ORDINATES"):
+            adapter.from_database(_sdo(SDO_GTYPE=2002, SDO_ORDINATES=[]), Geometry)
+
+    def test_a_point_sdo_must_hold_exactly_one_pair(self):
+        adapter = OracleNeutralGeometryAdapter()
+        with pytest.raises(TypeConversionError, match="exactly one ordinate pair"):
+            adapter.from_database(
+                _sdo(SDO_GTYPE=2001, SDO_ORDINATES=[0, 0, 1, 1]), Geometry
+            )
+
+    def test_the_constructor_text_is_only_for_point_line_and_polygon(self):
+        adapter = OracleNeutralGeometryAdapter()
+        with pytest.raises(TypeConversionError, match="only available for Point, LineString"):
+            adapter.to_database(
+                GeometryCollection((Point(1, 2),)), str, {"format": "sdo_constructor"}
+            )
+
+    def test_the_constructor_text_covers_line_and_polygon(self):
+        adapter = OracleNeutralGeometryAdapter()
+
+        line = adapter.to_database(
+            LineString(((0, 0), (1, 1))), str, {"format": "sdo_constructor"}
+        )
+        assert line.startswith("SDO_GEOMETRY(") and "SDO_ORDINATE_ARRAY(" in line
+
+        polygon = adapter.to_database(
+            Polygon((((0, 0), (4, 0), (4, 4), (0, 0)),)), str, {"format": "sdo_constructor"}
+        )
+        assert polygon.startswith("SDO_GEOMETRY(")
+
+    def test_a_multipolygon_element_must_be_a_ring(self):
+        adapter = OracleNeutralGeometryAdapter()
+        with pytest.raises(TypeConversionError, match="unsupported SDO multipolygon element type"):
+            adapter.from_database(
+                _sdo(SDO_GTYPE=2007, SDO_ELEM_INFO=[1, 1, 1],
+                     SDO_ORDINATES=[0, 0]), Geometry
+            )
+
+    def test_a_collection_point_element_must_hold_one_pair(self):
+        adapter = OracleNeutralGeometryAdapter()
+        with pytest.raises(TypeConversionError, match="exactly one ordinate pair"):
+            adapter.from_database(
+                _sdo(SDO_GTYPE=2004, SDO_ELEM_INFO=[1, 1, 1],
+                     SDO_ORDINATES=[0, 0, 1, 1]), Geometry
+            )
+
+    def test_a_geometry_value_that_is_not_bytes_is_refused(self):
+        adapter = OracleNeutralBitStringAdapter()
+        with pytest.raises(TypeConversionError, match="expected RAW/BLOB bytes"):
+            adapter.from_database(1.5, BitString)
+
+    def test_a_mapping_without_a_target_type_decodes_by_its_shape(self):
+        """A caller that passes no neutral target gets the shape the JSON has:
+        an object is a range, an array is a multirange."""
+        adapter = OracleNeutralRangeAdapter()
+
+        range_payload = {"lower": 1, "upper": 2, "bounds": "[)", "empty": False,
+                         "element_type": "int"}
+        assert adapter.from_database(range_payload, str) == Range(1, 2, "[)")
+
+        multirange_payload = [range_payload]
+        assert adapter.from_database(multirange_payload, str) == Multirange((Range(1, 2, "[)"),))
