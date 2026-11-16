@@ -59,10 +59,20 @@ from rhosocial.activerecord.backend.expression.types import (
     IntegerType,
     TextType,
     TimeType,
+    XmlType,
     TimestampType,
     VarCharType,
 )
 from rhosocial.activerecord.backend.impl.oracle.expression.types import OracleRawType
+from rhosocial.activerecord.backend.impl.oracle.type_values import (
+    IntervalDayToSecond,
+    IntervalYearToMonth,
+    OracleRowID,
+    OracleURowID,
+    OracleVector,
+    OracleXMLType,
+    SDOGeometry,
+)
 
 #: Oracle's suggested declaration per framework-modelled Python type.
 ORACLE_DATA_TYPE_SUGGESTIONS: Dict[Any, Optional[Any]] = {
@@ -121,11 +131,38 @@ ORACLE_DATA_TYPE_SUGGESTIONS: Dict[Any, Optional[Any]] = {
 }
 
 
+#: Declarations for Oracle's **own** value classes -- the types the
+#: framework does not model. An identifier has no length of its own here, so
+#: the text forms are the carriers; ``INTERVAL DAY TO SECOND`` and ``XMLTYPE``
+#: are native and get their declaration.
+ORACLE_EXTRA_DATA_TYPE_SUGGESTIONS: Dict[Any, Optional[Any]] = {
+    IntervalDayToSecond: IntervalType(),
+    # ``INTERVAL YEAR TO MONTH`` has no core DataType; its literal is the
+    # carrier this adapter writes.
+    IntervalYearToMonth: TextType(),
+    OracleRowID: VarCharType(length=18),
+    OracleURowID: VarCharType(length=4000),
+    OracleXMLType: XmlType(),
+    # SDO_GEOMETRY and VECTOR need a column-level shape/dimension; the
+    # adapters write text, which is the carrier a bare field round-trips.
+    SDOGeometry: TextType(),
+    OracleVector: TextType(),
+}
+
+
 class OracleDataTypeSuggestionsMixin:
     """Oracle's answer to "what declaration does a bare field get here"."""
 
     def suggested_data_types(self) -> Dict[Any, Optional[Any]]:
-        return dict(ORACLE_DATA_TYPE_SUGGESTIONS)
+        table = dict(ORACLE_DATA_TYPE_SUGGESTIONS)
+        return table
+
+    def suggested_extra_data_types(self) -> Dict[Any, Optional[Any]]:
+        return dict(ORACLE_EXTRA_DATA_TYPE_SUGGESTIONS)
 
 
-__all__ = ["ORACLE_DATA_TYPE_SUGGESTIONS", "OracleDataTypeSuggestionsMixin"]
+__all__ = [
+    "ORACLE_DATA_TYPE_SUGGESTIONS",
+    "ORACLE_EXTRA_DATA_TYPE_SUGGESTIONS",
+    "OracleDataTypeSuggestionsMixin",
+]
