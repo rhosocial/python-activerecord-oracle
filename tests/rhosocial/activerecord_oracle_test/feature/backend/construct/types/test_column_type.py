@@ -25,14 +25,29 @@ from rhosocial.activerecord.backend.dialect.protocols import ColumnTypeSupport
 from rhosocial.activerecord.backend.expression.column_types import (
     ArrayColumn,
     BinaryColumn,
+    BitStringColumn,
     BooleanColumn,
     ColumnBase,
+    GeometryColumn,
     IntegerColumn,
+    IntervalColumn,
     JSONColumn,
+    MacAddressColumn,
+    MultirangeColumn,
     NumericColumn,
+    RangeColumn,
     StringColumn,
     TimestampColumn,
     UUIDColumn,
+    VectorColumn,
+)
+from rhosocial.activerecord.backend.adapters import (
+    BitString,
+    Geometry,
+    MacAddress,
+    Multirange,
+    Range,
+    Vector,
 )
 from rhosocial.activerecord.base.field_proxy import ColumnTypeResolutionError
 from rhosocial.activerecord.base.fields import UseColumnType
@@ -151,12 +166,24 @@ class TestBaselineEntries:
         assert dialect.suggested_column_types()[annotation] is expected
         assert resolve_column_class(dialect, annotation) is expected
 
-    def test_datetime_timedelta_is_numeric(self, dialect):
-        # Core has no interval column class; Oracle *does* have native INTERVAL
-        # DAY TO SECOND at the DDL layer. So this answer is limited by the
-        # framework, not by Oracle -- which is why it is recorded as
-        # NumericColumn rather than as None.
-        assert dialect.suggested_column_types()[datetime.timedelta] is NumericColumn
+    def test_datetime_timedelta_is_an_interval(self, dialect):
+        # Oracle has native INTERVAL DAY TO SECOND at the DDL layer, and core
+        # now has the class that names the value. `IntervalColumn` promises no
+        # arithmetic, so it is honest on both sides; Oracle's own interval
+        # operations belong to an Oracle-named subclass.
+        assert dialect.suggested_column_types()[datetime.timedelta] is IntervalColumn
+
+    def test_the_complex_families_answer_the_core_classes(self, dialect):
+        table = dialect.suggested_column_types()
+        for entry, klass in (
+            (Geometry, GeometryColumn),
+            (Vector, VectorColumn),
+            (BitString, BitStringColumn),
+            (Range, RangeColumn),
+            (Multirange, MultirangeColumn),
+            (MacAddress, MacAddressColumn),
+        ):
+            assert table[entry] is klass
 
     def test_the_numeric_family_is_one_class(self, dialect):
         # OracleBinaryFloatType / OracleBinaryDoubleType are DataType facts (a

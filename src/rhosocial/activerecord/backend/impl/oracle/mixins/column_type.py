@@ -18,7 +18,7 @@ not in operations.
 
 Nothing here answers ``None``
 -----------------------------
-All eighteen of the common Python types get a column class on every Oracle
+All twenty-four of the framework's Python types get a column class on every Oracle
 release this backend targets, including 18c. That is a measured claim rather
 than an optimistic one: the release whose storage genuinely lacks something is
 18c's JSON -- there is no ``JSON`` type before 21c and the value goes in a
@@ -42,17 +42,32 @@ import enum
 import uuid
 from typing import Any, Dict, Type
 
+from rhosocial.activerecord.backend.adapters import (
+    BitString,
+    Geometry,
+    MacAddress,
+    Multirange,
+    Range,
+    Vector,
+)
 from rhosocial.activerecord.backend.dialect.mixins import ColumnTypeMixin
 from rhosocial.activerecord.backend.expression.column_types import (
     BinaryColumn,
+    BitStringColumn,
     BooleanColumn,
     ColumnBase,
+    GeometryColumn,
     IntegerColumn,
+    IntervalColumn,
     JSONColumn,
+    MacAddressColumn,
+    MultirangeColumn,
     NumericColumn,
+    RangeColumn,
     StringColumn,
     TimestampColumn,
     UUIDColumn,
+    VectorColumn,
 )
 
 #: Oracle's full table: ``{common Python type: ColumnBase subclass}``.
@@ -91,18 +106,13 @@ from rhosocial.activerecord.backend.expression.column_types import (
 #:     below it. The class does not change, the storage does.
 #:
 #: ``datetime.timedelta``
-#:     :class:`~...expression.column_types.NumericColumn` -- **core has no
-#:     interval column class**, and this entry is limited by that rather than
-#:     by Oracle. Oracle has had ``INTERVAL DAY TO SECOND`` natively since 8i
-#:     and this backend renders it at the DDL layer without complaint
+#:     :class:`~...expression.column_types.IntervalColumn`. Oracle has had
+#:     ``INTERVAL DAY TO SECOND`` natively since 8i and this backend renders
+#:     it at the DDL layer
 #:     (:meth:`~...types.OracleTypeSupportMixin.format_data_type_interval`);
-#:     what is missing is the column class that would carry the interval
-#:     operations. So this is a core gap recorded in a backend table, and it
-#:     is listed in appendix D of the investigation as one of the classes
-#:     this backend has storage for and core has no wrapper for. It is
-#:     deliberately **not** answered ``None``: a numeric answer is what every
-#:     backend gives today, and refusing it would break every ``timedelta``
-#:     field on Oracle rather than describe the gap.
+#:     the class names the value and promises no arithmetic, so the column
+#:     answer is now as native as the storage. Oracle's own interval
+#:     operations belong to an Oracle-named subclass.
 #:
 #: ``datetime.date`` / ``datetime.time``
 #:     :class:`~...expression.column_types.TimestampColumn`, and this one is
@@ -140,7 +150,7 @@ ORACLE_COLUMN_TYPES: Dict[Any, Type[ColumnBase]] = {
     datetime.date: TimestampColumn,
     datetime.time: TimestampColumn,
     datetime.datetime: TimestampColumn,
-    datetime.timedelta: NumericColumn,
+    datetime.timedelta: IntervalColumn,
     uuid.UUID: UUIDColumn,
     dict: JSONColumn,
     # Oracle has no array column type in any release, so the four sequence
@@ -150,11 +160,24 @@ ORACLE_COLUMN_TYPES: Dict[Any, Type[ColumnBase]] = {
     set: JSONColumn,
     frozenset: JSONColumn,
     enum.Enum: StringColumn,
+    # -- Complex families ------------------------------------------------
+    # Their core classes promise only the surface every column has -- alias,
+    # null tests, casting and collation -- because no distance, containment,
+    # overlap, bitwise or similarity operation is spelled the same way on
+    # every backend. Richer family operations belong to a Oracle-named
+    # subclass in this backend's extra table. Storage is answered in the
+    # data-type suggestion module.
+    Geometry: GeometryColumn,
+    Vector: VectorColumn,
+    BitString: BitStringColumn,
+    Range: RangeColumn,
+    Multirange: MultirangeColumn,
+    MacAddress: MacAddressColumn,
 }
 
 
 class OracleColumnTypeMixin(ColumnTypeMixin):
-    """Oracle's 18-entry column-type table.
+    """Oracle's 24-entry column-type table.
 
     The table does not vary by version, which is a finding rather than a
     shortcut: on Oracle the version-dependent part of this protocol is *not*
