@@ -90,6 +90,7 @@ class OracleBackendMixin:
             OracleRowIDAdapter,
             OracleUUIDAdapter,
             OracleXMLAdapter,
+            OracleEnumAdapter,
             OracleSDOGeometryAdapter,
             OracleVectorAdapter,
             OracleNeutralGeometryAdapter,
@@ -113,6 +114,12 @@ class OracleBackendMixin:
             OracleIntervalAdapter(),
             OracleRowIDAdapter(),
             OracleUUIDAdapter(),
+            # Enums have no native Oracle type, so this adapter is the
+            # backend's own answer for the core ``Enum`` concept (VARCHAR2 with
+            # a CHECK constraint; member *name* by default). It overrides the
+            # core generic enum adapter, which is what a backend-named
+            # implementation is for.
+            OracleEnumAdapter(),
         ]
 
         version = getattr(self, '_version', None)
