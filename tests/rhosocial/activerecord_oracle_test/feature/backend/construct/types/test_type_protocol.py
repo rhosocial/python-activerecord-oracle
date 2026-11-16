@@ -4,7 +4,7 @@
 Covers:
 - format_data_type_* / supports_data_type_* 1:1 correspondence
 - supports_data_types() includes oracle_* and core types
-- suggested_data_types() class types, disjoint keys
+- substitute_data_types() class types, disjoint keys
 - dialect_options forwarding and equality
 - Precision validation (NUMBER, FLOAT, TIMESTAMP)
 """
@@ -191,32 +191,32 @@ class TestSupportsDataTypes:
                            "format_data_type_varbinary")
 
 
-# --- W3: suggested_data_types() ---
+# --- W3: substitute_data_types() ---
 
 class TestSuggestedDataTypes:
     def test_returns_dict(self, dialect):
-        result = dialect.suggested_data_types()
+        result = dialect.substitute_data_types()
         assert isinstance(result, dict)
 
     def test_keys_disjoint_from_supported(self, dialect):
         supported_keys = set(dialect.supports_data_types().keys())
-        suggested_keys = set(dialect.suggested_data_types().keys())
+        suggested_keys = set(dialect.substitute_data_types().keys())
         overlap = supported_keys & suggested_keys
         assert not overlap, f"overlap between supported and suggested: {overlap}"
 
     def test_values_are_classes(self, dialect):
-        for name, cls in dialect.suggested_data_types().items():
+        for name, cls in dialect.substitute_data_types().items():
             assert isinstance(cls, type), f"{name}: value is not a class"
 
     def test_values_are_data_type_subclasses(self, dialect):
-        for name, cls in dialect.suggested_data_types().items():
+        for name, cls in dialect.substitute_data_types().items():
             assert issubclass(cls, DataType), f"{name}: {cls} is not a DataType"
 
     def test_substitutes_are_themselves_rendered(self, dialect):
         """Suggesting a class this dialect cannot write would trade a clear
         "not supported" for one whose advice does not work."""
         supported = dialect.supports_data_types()
-        for name, cls in dialect.suggested_data_types().items():
+        for name, cls in dialect.substitute_data_types().items():
             assert cls.name in supported, (
                 f"suggested[{name!r}] = {cls.__name__}, whose name "
                 f"{cls.name!r} this dialect does not render"
@@ -232,7 +232,7 @@ class TestSuggestedDataTypes:
         assert "OracleRawType" in str(excinfo.value)
 
     def test_array_is_a_named_oracle_type_not_a_serialised_list(self, dialect):
-        assert dialect.suggested_data_types()["array"] is CustomType
+        assert dialect.substitute_data_types()["array"] is CustomType
 
     def test_binary_is_a_bounded_raw_not_a_blob(self, dialect):
         """``binary`` is fixed-length, so its substitute must be the *bounded*
@@ -245,7 +245,7 @@ class TestSuggestedDataTypes:
         ``VARCHAR2``" and it does not pad. ``BLOB`` would be further away
         still, because it also drops the declared bound.
         """
-        assert dialect.suggested_data_types()["binary"] is OracleRawType
+        assert dialect.substitute_data_types()["binary"] is OracleRawType
 
     @pytest.mark.parametrize("width", [1, 8, 16, 32, 64, 2000])
     def test_binary_renders_the_width_the_caller_declared(self, dialect, width):
@@ -272,14 +272,14 @@ class TestSuggestedDataTypes:
 
         https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/Data-Types.html
         """
-        assert dialect.suggested_data_types()["varbinary"] is BlobType
+        assert dialect.substitute_data_types()["varbinary"] is BlobType
         assert dialect.format_data_type(
-            dialect.suggested_data_types()["varbinary"](dialect))[0] == "BLOB"
+            dialect.substitute_data_types()["varbinary"](dialect))[0] == "BLOB"
 
     def test_the_two_byte_string_concepts_land_on_different_types(self, dialect):
         """``binary`` is bounded and ``varbinary`` is not; one substitute for
         both made them indistinguishable and gave the unbounded one a ceiling."""
-        sub = dialect.suggested_data_types()
+        sub = dialect.substitute_data_types()
         assert sub["binary"] is not sub["varbinary"]
         assert sub["varbinary"] is not OracleRawType
 
@@ -289,7 +289,7 @@ class TestSuggestedDataTypes:
         and a declared ``blob`` and an introspected ``BLOB`` are the same object.
         A substitute class that rendered the same SQL under a second name would
         have made every ``blob`` column look changed."""
-        assert dialect.suggested_data_types()["varbinary"](dialect) == \
+        assert dialect.substitute_data_types()["varbinary"](dialect) == \
             dialect.parse_type("BLOB")
 
     def test_uuid_is_raw_16(self, dialect):
@@ -298,7 +298,7 @@ class TestSuggestedDataTypes:
         version 4 variant 1 UUID as a ``RAW(16)`` value". So the substitute is
         ``RAW(16)``, the width this backend already stores the 16 RFC 4122 bytes
         in."""
-        assert dialect.suggested_data_types()["uuid"] is OracleRawType
+        assert dialect.substitute_data_types()["uuid"] is OracleRawType
 
     def test_the_uuid_substitute_renders_16_bytes_with_no_arguments(self, dialect):
         """The defect this replaces: the substitute used to render ``RAW(2000)``
@@ -309,7 +309,7 @@ class TestSuggestedDataTypes:
 
         https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/uuid.html
         """
-        substitute = dialect.suggested_data_types()["uuid"]
+        substitute = dialect.substitute_data_types()["uuid"]
         assert dialect.format_data_type(substitute(dialect))[0] == "RAW(16)"
 
     def test_the_uuid_substitute_still_takes_an_explicit_width(self, dialect):
@@ -323,13 +323,13 @@ class TestSuggestedDataTypes:
         """One width, one answer: the Python-type route and the substitution
         route must not drift apart."""
         import uuid as _uuid
-        suggested = dialect.suggested_data_types()["uuid"]
+        suggested = dialect.substitute_data_types()["uuid"]
         assert dialect.format_data_type(
             dialect.suggest_column_type(_uuid.UUID)
         )[0] == dialect.format_data_type(suggested(dialect))[0] == "RAW(16)"
 
     def test_enum_is_varchar(self, dialect):
-        assert dialect.suggested_data_types()["enum"] is VarCharType
+        assert dialect.substitute_data_types()["enum"] is VarCharType
 
 
 # --- unsigned is a field, so it must be honoured or refused ---
@@ -1078,7 +1078,7 @@ class TestWhatOracleSuppliesForAnUndeclaredParameter:
 class TestOracleHasNoUUIDType:
     """A wrong statement about a vendor is worse than a missing one, because
     it gets relied upon. An earlier revision of this backend's
-    ``suggested_data_types()`` docstring said "Oracle added a native ``UUID``
+    ``substitute_data_types()`` docstring said "Oracle added a native ``UUID``
     data type only in 23ai". That was false: 23ai added the ``UUID()``
     *function*, and Oracle has no ``UUID`` data type through 26ai. What the
     backend needs from these tests is not that the sentence is gone but that
@@ -1086,10 +1086,10 @@ class TestOracleHasNoUUIDType:
 
     def test_the_uuid_substitute_is_not_a_native_uuid_type(self, dialect):
         """Oracle's substitute is ``RAW``, never a word Oracle does not have."""
-        assert dialect.suggested_data_types()["uuid"].name == "oracle_raw"
+        assert dialect.substitute_data_types()["uuid"].name == "oracle_raw"
         assert "uuid" not in dialect.supports_data_types()
 
-    def test_uuid_comes_from_suggested_data_types_not_a_formatter(self, dialect):
+    def test_uuid_comes_from_substitute_data_types_not_a_formatter(self, dialect):
         """No ``format_data_type_uuid``: writing it would emit DDL Oracle's
         grammar cannot parse."""
         assert not hasattr(dialect, "format_data_type_uuid")
@@ -1113,7 +1113,7 @@ class TestCoreConceptsAreDeclared:
                         "rhosocial.activerecord.backend.expression.types"):
                 core_classes.append(klass)
         rendered = set(dialect.supports_data_types())
-        suggested = set(dialect.suggested_data_types())
+        suggested = set(dialect.substitute_data_types())
         undeclared = sorted(
             c.name for c in core_classes
             if c.name not in rendered and c.name not in suggested
@@ -1124,12 +1124,12 @@ class TestCoreConceptsAreDeclared:
         """Oracle has a native XML type, so it renders the XML concept rather
         than substituting text for it."""
         assert "xml" in dialect.supports_data_types()
-        assert "xml" not in dialect.suggested_data_types()
+        assert "xml" not in dialect.substitute_data_types()
         assert dialect.format_data_type(XmlType(dialect))[0] == "XMLTYPE"
 
     def test_interval_is_rendered_not_substituted(self, dialect):
         assert "interval" in dialect.supports_data_types()
-        assert "interval" not in dialect.suggested_data_types()
+        assert "interval" not in dialect.substitute_data_types()
         assert dialect.format_data_type(
             IntervalType(dialect, fields="YEAR TO MONTH"))[0] == "INTERVAL YEAR TO MONTH"
 

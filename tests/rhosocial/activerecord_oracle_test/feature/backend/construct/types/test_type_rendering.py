@@ -284,7 +284,7 @@ class TestOracleCharIsFixedLength:
 
 class TestBlobIsTheCoreConcept:
     """``BLOB`` is the word ``format_data_type_blob`` writes, so core
-    ``BlobType`` is what ``parse_type`` returns and what ``suggested_data_types``
+    ``BlobType`` is what ``parse_type`` returns and what ``substitute_data_types``
     names for ``varbinary``. The ``OracleBlobType`` that used to sit between them
     rendered identical SQL under a prefixed name — and a prefixed name with
     nothing behind it is the same defect this file's other deletions removed."""
@@ -405,7 +405,7 @@ class TestIntervalAndCustomConcepts:
         """Oracle has both interval types natively, so an INTERVAL column must
         not round-trip as CLOB."""
         assert "interval" in dialect.supports_data_types()
-        assert "interval" not in dialect.suggested_data_types()
+        assert "interval" not in dialect.substitute_data_types()
 
     @pytest.mark.parametrize("fields,expected", [
         ("YEAR TO MONTH", "INTERVAL YEAR TO MONTH"),

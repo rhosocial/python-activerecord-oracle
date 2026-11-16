@@ -540,7 +540,7 @@ class TestLiveRawRoundTrip:
             "BLOB_HOLDERS", schema="AR_SHOP"
         )
         small = next(c for c in columns if c.name == "SMALL")
-        assert small.parsed_data_type == dialect.suggested_data_types()["uuid"](
+        assert small.parsed_data_type == dialect.substitute_data_types()["uuid"](
             dialect)
 
     def test_a_declared_column_equals_the_introspected_one_for_the_core_types(self, provisioned):

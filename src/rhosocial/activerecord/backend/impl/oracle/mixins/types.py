@@ -11,7 +11,7 @@ Two halves of one contract, both keyed on ``DataType.name``:
   has no name for, and it only holds when the formatter writes a word no core
   formatter here writes — see the class docstring;
 * **stance** — ``supports_data_type_<name>`` for each of those, plus
-  ``suggested_data_types()`` for the core concepts Oracle stores some other
+  ``substitute_data_types()`` for the core concepts Oracle stores some other
   way. Nothing is left undeclared: a concept this dialect cannot spell still
   names its substitute, because "unsupported" on its own tells the caller
   nothing they can act on.
@@ -231,7 +231,7 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
 
     # --- Core type formatters (render standard types to Oracle SQL) ---
 
-    def suggested_data_types(self) -> Dict[str, type]:
+    def substitute_data_types(self) -> Dict[str, type]:
         """Core concepts Oracle stores some other way.
 
         Oracle renders most core concepts natively — ``NUMBER`` for the
@@ -1798,7 +1798,7 @@ class OracleTypeSuggestionMixin:
     MySQL/MariaDB ``BINARY(16)``. That is also
     :attr:`OracleRawType.DEFAULT_LENGTH`, so the same answer comes back
     whether a caller spells the length out or not, and it is what
-    ``suggested_data_types()`` gives for the generic ``UUIDType``.
+    ``substitute_data_types()`` gives for the generic ``UUIDType``.
     https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/uuid.html
 
     ``dict``/``list`` are version-gated: native JSON requires Oracle 21c+

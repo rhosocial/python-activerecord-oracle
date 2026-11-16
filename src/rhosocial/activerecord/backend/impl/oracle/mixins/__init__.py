@@ -16,6 +16,7 @@ from .database_link import OracleDatabaseLinkMixin
 from .datetime_op import OracleDateTimeMixin
 from .ddl import OracleDDLMixin
 from .ddl_type import OracleTypeDDLMixin
+from .data_type_suggestions import OracleDataTypeSuggestionsMixin
 from .dml import OracleDMLOperationMixin
 from .expression import OracleExpressionMixin
 from .features import OracleFeaturesMixin
@@ -58,6 +59,7 @@ __all__ = [
     "OracleDateTimeMixin",
     "OracleDDLMixin",
     "OracleTypeDDLMixin",
+    "OracleDataTypeSuggestionsMixin",
     "OracleExpressionMixin",
     "OracleFeaturesMixin",
     "OracleFunctionFormatMixin",

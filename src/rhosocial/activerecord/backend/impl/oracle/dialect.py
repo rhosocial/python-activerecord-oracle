@@ -119,6 +119,7 @@ from .mixins import (
     OracleCollationMixin,
     OracleColumnTypeMixin,
     OracleCommentMixin,
+    OracleDataTypeSuggestionsMixin,
     OracleDatabaseLinkMixin,
     OracleDateTimeMixin,
     OracleDDLMixin,
@@ -240,6 +241,10 @@ class OracleDialect(
     OracleTransactionMixin,
     OracleTriggerMixin,
     OracleTruncateMixin,
+    # Suggested data types: the DDL half of the same answer. Ahead of the
+    # mixin that withholds the table (``OracleTypeSupportMixin`` inherits the
+    # core default, which raises), so this dialect's answers win.
+    OracleDataTypeSuggestionsMixin,
     OracleTypeSupportMixin,
     OracleTypeSuggestionMixin,
     OracleVectorMixin,
