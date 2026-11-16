@@ -69,6 +69,22 @@ from rhosocial.activerecord.backend.expression.column_types import (
     UUIDColumn,
     VectorColumn,
 )
+from ..column_types import (
+    OracleIntervalColumn,
+    OracleRowIdColumn,
+    OracleSdoGeometryColumn,
+    OracleVectorColumn,
+    OracleXmlColumn,
+)
+from ..type_values import (
+    IntervalDayToSecond,
+    IntervalYearToMonth,
+    OracleRowID,
+    OracleURowID,
+    OracleVector,
+    OracleXMLType,
+    SDOGeometry,
+)
 
 #: Oracle's full table: ``{common Python type: ColumnBase subclass}``.
 #:
@@ -176,6 +192,24 @@ ORACLE_COLUMN_TYPES: Dict[Any, Type[ColumnBase]] = {
 }
 
 
+#: Oracle's own value classes -> the column class a bare field gets.
+#:
+#: The protocol's second table, and the backend-owned half: a Python type this
+#: server models and the framework does not. The keys mirror
+#: ``ORACLE_EXTRA_DATA_TYPE_SUGGESTIONS``. ``OracleVector`` exists on 23ai and
+#: later only; the mixin removes it on older servers, exactly as the adapter is
+#: registered only there.
+ORACLE_EXTRA_COLUMN_TYPES: Dict[Any, Type[ColumnBase]] = {
+    IntervalDayToSecond: OracleIntervalColumn,
+    IntervalYearToMonth: OracleIntervalColumn,
+    OracleRowID: OracleRowIdColumn,
+    OracleURowID: OracleRowIdColumn,
+    OracleXMLType: OracleXmlColumn,
+    SDOGeometry: OracleSdoGeometryColumn,
+    OracleVector: OracleVectorColumn,
+}
+
+
 class OracleColumnTypeMixin(ColumnTypeMixin):
     """Oracle's 24-entry column-type table.
 
@@ -201,5 +235,24 @@ class OracleColumnTypeMixin(ColumnTypeMixin):
         """
         return dict(ORACLE_COLUMN_TYPES)
 
+    def suggested_extra_column_types(self) -> Dict[Any, Type[ColumnBase]]:
+        """This server's own value classes -> their column classes.
 
-__all__ = ["ORACLE_COLUMN_TYPES", "OracleColumnTypeMixin"]
+        A field annotated with an Oracle value class (``SDOGeometry``,
+        ``OracleXMLType``, ``OracleRowID`` ...) resolves without a declaration.
+        ``OracleVector`` is gated on 23ai exactly as its adapter is: below that
+        server there is no value class to carry, so the entry is absent rather
+        than pointing at a class for a type the server does not have.
+        """
+        table = dict(ORACLE_EXTRA_COLUMN_TYPES)
+        version = self.version_or_none
+        if version is None or tuple(version) < (23, 0, 0):
+            table.pop(OracleVector, None)
+        return table
+
+
+__all__ = [
+    "ORACLE_COLUMN_TYPES",
+    "ORACLE_EXTRA_COLUMN_TYPES",
+    "OracleColumnTypeMixin",
+]

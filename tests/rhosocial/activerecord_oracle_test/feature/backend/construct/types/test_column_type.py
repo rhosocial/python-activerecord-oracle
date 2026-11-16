@@ -252,3 +252,113 @@ class TestResolution:
         dialect = OracleDialect()
         assert resolve_column_class(dialect, dict) is JSONColumn
         assert resolve_column_class(dialect, bool) is BooleanColumn
+
+# ---------------------------------------------------------------------------
+# Oracle's own value classes: the extra table and its column classes
+# ---------------------------------------------------------------------------
+
+
+class TestExtraColumnTypes:
+    """Every value class Oracle models has a column class a bare field gets."""
+
+    def test_the_extra_table_mirrors_the_value_classes(self):
+        from rhosocial.activerecord.backend.impl.oracle.mixins.column_type import (
+            ORACLE_EXTRA_COLUMN_TYPES,
+        )
+        from rhosocial.activerecord.backend.impl.oracle.type_values import (
+            IntervalDayToSecond,
+            IntervalYearToMonth,
+            OracleRowID,
+            OracleURowID,
+            OracleVector,
+            OracleXMLType,
+            SDOGeometry,
+        )
+
+        assert set(ORACLE_EXTRA_COLUMN_TYPES) == {
+            IntervalDayToSecond,
+            IntervalYearToMonth,
+            OracleRowID,
+            OracleURowID,
+            OracleXMLType,
+            SDOGeometry,
+            OracleVector,
+        }
+
+    def test_every_extra_answer_is_a_column_class(self):
+        for version in (ORACLE_18C, ORACLE_21C, ORACLE_23AI):
+            extra = OracleDialect(version=version).suggested_extra_column_types()
+            for entry, column_class in extra.items():
+                assert isinstance(column_class, type), entry
+                assert issubclass(column_class, ColumnBase), entry
+
+    def test_every_extra_class_builds_and_renders(self):
+        from rhosocial.activerecord.backend.expression.column_types import ColumnBase
+
+        dialect = OracleDialect(version=ORACLE_23AI)
+        for column_class in dialect.suggested_extra_column_types().values():
+            column = column_class(dialect, "c")
+            assert isinstance(column, ColumnBase)
+            # Oracle folds unquoted identifiers to upper case.
+            assert column.to_sql() == ('"C"', ())
+
+    def test_the_extra_table_does_not_overlap_the_common_one(self):
+        dialect = OracleDialect(version=ORACLE_23AI)
+        assert set(dialect.suggested_column_types()) & set(
+            dialect.suggested_extra_column_types()
+        ) == set()
+
+    def test_vector_is_gated_on_23ai_like_its_adapter(self):
+        from rhosocial.activerecord.backend.impl.oracle.type_values import OracleVector
+
+        assert OracleVector in OracleDialect(version=ORACLE_23AI).suggested_extra_column_types()
+        assert OracleVector not in OracleDialect(version=ORACLE_21C).suggested_extra_column_types()
+        # No version at all: the adapter is not registered either, so the entry
+        # is absent rather than naming a class for a type the server may not
+        # have.
+        assert OracleVector not in OracleDialect().suggested_extra_column_types()
+
+    def test_an_oracle_value_class_resolves_without_a_declaration(self, dialect):
+        from rhosocial.activerecord.backend.expression.column_types import (
+            GeometryColumn,
+            XMLColumn,
+        )
+        from rhosocial.activerecord.backend.impl.oracle.column_types import (
+            OracleIntervalColumn,
+            OracleRowIdColumn,
+            OracleSdoGeometryColumn,
+            OracleXmlColumn,
+        )
+        from rhosocial.activerecord.backend.impl.oracle.type_values import (
+            IntervalDayToSecond,
+            OracleRowID,
+            OracleXMLType,
+            SDOGeometry,
+        )
+
+        assert resolve_column_class(dialect, SDOGeometry) is OracleSdoGeometryColumn
+        assert resolve_column_class(dialect, IntervalDayToSecond) is OracleIntervalColumn
+        assert resolve_column_class(dialect, OracleRowID) is OracleRowIdColumn
+        assert resolve_column_class(dialect, OracleXMLType) is OracleXmlColumn
+        # The names inherit the core floor they belong to.
+        assert issubclass(OracleSdoGeometryColumn, GeometryColumn)
+        assert issubclass(OracleXmlColumn, XMLColumn)
+
+    def test_use_column_type_selects_the_named_class(self, dialect):
+        from rhosocial.activerecord.backend.impl.oracle.column_types import (
+            OracleSdoGeometryColumn,
+            OracleVectorColumn,
+        )
+        from rhosocial.activerecord.backend.impl.oracle.type_values import (
+            OracleVector,
+            SDOGeometry,
+        )
+
+        assert (
+            resolve_column_class(dialect, SDOGeometry, UseColumnType(OracleSdoGeometryColumn))
+            is OracleSdoGeometryColumn
+        )
+        assert (
+            resolve_column_class(dialect, OracleVector, UseColumnType(OracleVectorColumn))
+            is OracleVectorColumn
+        )
