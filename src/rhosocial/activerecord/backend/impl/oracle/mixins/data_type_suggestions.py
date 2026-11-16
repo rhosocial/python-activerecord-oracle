@@ -158,7 +158,15 @@ class OracleDataTypeSuggestionsMixin:
         return table
 
     def suggested_extra_data_types(self) -> Dict[Any, Optional[Any]]:
-        return dict(ORACLE_EXTRA_DATA_TYPE_SUGGESTIONS)
+        table = dict(ORACLE_EXTRA_DATA_TYPE_SUGGESTIONS)
+        # `VECTOR` exists on 23ai and later only, and the adapter that carries
+        # the value is registered on the same condition. An unadapted dialect,
+        # or one on an older server, therefore has no adapter for it -- and a
+        # suggestion without an adapter builds a column nothing can write.
+        version = self.version_or_none
+        if version is None or tuple(version) < (23, 0, 0):
+            table.pop(OracleVector, None)
+        return table
 
 
 __all__ = [

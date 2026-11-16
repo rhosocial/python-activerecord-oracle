@@ -66,3 +66,21 @@ class TestGetTypeAdapters:
         suggestions = backend.get_default_adapter_suggestions()
         assert isinstance(suggestions, dict)
         assert suggestions
+
+def test_every_extra_value_class_has_an_adapter(backend):
+    """An extra suggestion is only usable if the value can also be adapted.
+
+    The suggestion table says what column a bare field is declared as; the
+    adapter registry says whether that field can be written and read back. An
+    entry without an adapter would build a column nothing can carry a value
+    into, which is worse than refusing the type outright.
+    """
+    extras = backend.dialect.suggested_extra_data_types()
+    registered = {py for (py, _db) in backend.adapter_registry.get_all_adapters()}
+
+    missing = [entry.__name__ for entry in extras if entry not in registered]
+    assert missing == [], (
+        f"{type(backend).__name__} suggests a declaration for {missing} but has no "
+        f"adapter registered for those value classes"
+    )
+
