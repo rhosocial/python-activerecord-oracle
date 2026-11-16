@@ -465,3 +465,139 @@ class TestMacAddressAdapter:
             adapter.from_database("08:00:2b:01:02", MacAddress)
         with pytest.raises(TypeConversionError):
             adapter.to_database(MacAddress.parse("08:00:2b:01:02:03"), int)
+
+# ---------------------------------------------------------------------------
+# Remaining branches: the refusals and pass-throughs the suites above do not
+# reach. Each is a value the adapter must reject, or an already-neutral value
+# it must hand back untouched.
+# ---------------------------------------------------------------------------
+
+
+class TestGeometryRefusals:
+    def test_an_unknown_output_format_is_named(self):
+        adapter = OracleNeutralGeometryAdapter()
+        with pytest.raises(TypeConversionError, match="unknown geometry output format"):
+            adapter.to_database(Point(1, 2), str, {"format": "bogus"})
+
+    def test_a_concrete_geometry_is_carried_through_on_read(self):
+        adapter = OracleNeutralGeometryAdapter()
+        value = Point(1, 2)
+        assert adapter.from_database(value, Geometry) is value
+
+    def test_a_plain_mapping_is_not_a_geometry_wire_value(self):
+        adapter = OracleNeutralGeometryAdapter()
+        with pytest.raises(TypeConversionError, match="must use SDO_"):
+            adapter.from_database({"type": "Point", "coordinates": [1, 2]}, Geometry)
+
+    def test_a_non_geometry_value_is_refused(self):
+        adapter = OracleNeutralGeometryAdapter()
+        with pytest.raises(TypeConversionError, match="must decode from WKT/EWKT text"):
+            adapter.from_database(42, Geometry)
+
+    def test_an_sdo_without_both_coordinates_is_wrapped_on_write(self):
+        adapter = OracleNeutralGeometryAdapter()
+        with pytest.raises(TypeConversionError, match="X/Y coordinates"):
+            adapter.to_database({"SDO_GTYPE": 2001, "SDO_POINT": {"X": 1.0}}, str)
+
+
+class TestVectorRefusals:
+    def test_the_wire_form_is_text_only(self):
+        adapter = OracleNeutralVectorAdapter()
+        with pytest.raises(TypeConversionError, match="target_type must be str"):
+            adapter.to_database(Vector((1.0,)), bytes)
+
+    def test_a_neutral_vector_is_carried_through_on_read(self):
+        adapter = OracleNeutralVectorAdapter()
+        value = Vector((1.0, 2.0))
+        assert adapter.from_database(value, Vector) is value
+
+    def test_bytes_and_mappings_are_not_vector_wire_forms(self):
+        adapter = OracleNeutralVectorAdapter()
+        for value in (b"[1.0]", {"values": [1.0]}):
+            with pytest.raises(TypeConversionError, match="must decode from text"):
+                adapter.from_database(value, Vector)
+
+    def test_a_non_iterable_is_refused(self):
+        adapter = OracleNeutralVectorAdapter()
+        with pytest.raises(TypeConversionError, match="must decode from text"):
+            adapter.from_database(42, Vector)
+
+
+class TestBitStringRefusals:
+    def test_a_neutral_bit_string_is_carried_through_on_read(self):
+        adapter = OracleNeutralBitStringAdapter()
+        value = BitString.from_bits("1010")
+        assert adapter.from_database(value, BitString) is value
+
+    def test_an_unterminated_literal_is_refused(self):
+        adapter = OracleNeutralBitStringAdapter()
+        with pytest.raises(TypeConversionError, match="unterminated"):
+            adapter.from_database("B'1010", BitString)
+
+    def test_a_literal_may_only_hold_binary_digits(self):
+        adapter = OracleNeutralBitStringAdapter()
+        with pytest.raises(TypeConversionError, match="may only contain"):
+            adapter.from_database("B'10x1'", BitString)
+
+    def test_a_short_literal_is_padded_to_the_declared_length(self):
+        adapter = OracleNeutralBitStringAdapter()
+        bits = adapter.from_database("B'101'", BitString, {"bit_length": 8})
+        assert bits.to_bits() == "10100000"
+
+    def test_a_literal_longer_than_the_declaration_is_refused(self):
+        adapter = OracleNeutralBitStringAdapter()
+        with pytest.raises(TypeConversionError, match="more than the declared"):
+            adapter.from_database("B'1010'", BitString, {"bit_length": 3})
+
+    def test_a_declared_length_must_be_a_positive_integer(self):
+        adapter = OracleNeutralBitStringAdapter()
+        with pytest.raises(TypeConversionError, match=r"must be int, got bool"):
+            adapter.from_database("B'1010'", BitString, {"length": True})
+        with pytest.raises(TypeConversionError, match="must be at least 1"):
+            adapter.from_database("B'1010'", BitString, {"length": 0})
+
+
+class TestRangeRefusals:
+    def test_a_neutral_range_is_carried_through_on_read(self):
+        adapter = OracleNeutralRangeAdapter()
+        value = Range(1, 2, "[)")
+        assert adapter.from_database(value, Range) is value
+
+    def test_bytes_json_is_read(self):
+        adapter = OracleNeutralRangeAdapter()
+        payload = b'{"lower": 1, "upper": 2, "bounds": "[)", "empty": false, "element_type": "int"}'
+        assert adapter.from_database(payload, Range) == Range(1, 2, "[)")
+
+    def test_invalid_json_bytes_are_named(self):
+        adapter = OracleNeutralRangeAdapter()
+        with pytest.raises(TypeConversionError, match="invalid range JSON bytes"):
+            adapter.from_database(b"not json", Range)
+
+    def test_a_scalar_is_not_a_range_wire_value(self):
+        adapter = OracleNeutralRangeAdapter()
+        with pytest.raises(TypeConversionError, match="must decode from JSON text"):
+            adapter.from_database(42, Range)
+
+    def test_a_json_object_cannot_be_a_multirange(self):
+        adapter = OracleNeutralRangeAdapter()
+        payload = {"lower": 1, "upper": 2, "bounds": "[)", "empty": False, "element_type": "int"}
+        with pytest.raises(TypeConversionError, match="represents a range, not a multirange"):
+            adapter.from_database(payload, Multirange)
+
+    def test_a_json_array_cannot_be_a_range(self):
+        adapter = OracleNeutralRangeAdapter()
+        payload = [{"lower": 1, "upper": 2, "bounds": "[)", "empty": False, "element_type": "int"}]
+        with pytest.raises(TypeConversionError, match="represents a multirange, not a range"):
+            adapter.from_database(payload, Range)
+
+
+class TestMacAddressRefusals:
+    def test_a_neutral_mac_is_carried_through_on_read(self):
+        adapter = OracleNeutralMacAddressAdapter()
+        value = MacAddress.parse("08:00:2b:01:02:03")
+        assert adapter.from_database(value, MacAddress) is value
+
+    def test_a_non_mac_value_is_refused(self):
+        adapter = OracleNeutralMacAddressAdapter()
+        with pytest.raises(TypeConversionError, match="must decode from text or bytes"):
+            adapter.from_database(42, MacAddress)
