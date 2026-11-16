@@ -253,6 +253,7 @@ class TestResolution:
         assert resolve_column_class(dialect, dict) is JSONColumn
         assert resolve_column_class(dialect, bool) is BooleanColumn
 
+
 # ---------------------------------------------------------------------------
 # Oracle's own value classes: the extra table and its column classes
 # ---------------------------------------------------------------------------
@@ -304,9 +305,10 @@ class TestExtraColumnTypes:
 
     def test_the_extra_table_does_not_overlap_the_common_one(self):
         dialect = OracleDialect(version=ORACLE_23AI)
-        assert set(dialect.suggested_column_types()) & set(
-            dialect.suggested_extra_column_types()
-        ) == set()
+        assert (
+            set(dialect.suggested_column_types()) & set(dialect.suggested_extra_column_types())
+            == set()
+        )
 
     def test_vector_is_gated_on_23ai_like_its_adapter(self):
         from rhosocial.activerecord.backend.impl.oracle.type_values import OracleVector
@@ -362,3 +364,60 @@ class TestExtraColumnTypes:
             resolve_column_class(dialect, OracleVector, UseColumnType(OracleVectorColumn))
             is OracleVectorColumn
         )
+
+
+# ---------------------------------------------------------------------------
+# Oracle's own column classes: the SDO operations
+# ---------------------------------------------------------------------------
+
+
+class TestSdoColumnOperations:
+    def test_distance_to(self, dialect):
+        from rhosocial.activerecord.backend.impl.oracle.column_types import (
+            OracleSdoGeometryColumn,
+        )
+
+        column = OracleSdoGeometryColumn(dialect, "g")
+        sql, params = column.distance_to(column).to_sql()
+        assert sql == 'SDO_GEOM.SDO_DISTANCE("G", "G", ?)'
+        assert params == (0.005,)
+
+    @pytest.mark.parametrize(
+        "method, name, call_param",
+        [
+            ("within_distance", "SDO_WITHIN_DISTANCE", "distance=5"),
+            ("contains", "SDO_CONTAINS", None),
+            ("inside", "SDO_INSIDE", None),
+            ("relate", "SDO_RELATE", "mask=ANYINTERACT"),
+        ],
+    )
+    def test_spatial_predicates(self, dialect, method, name, call_param):
+        from rhosocial.activerecord.backend.impl.oracle.column_types import (
+            OracleSdoGeometryColumn,
+        )
+
+        column = OracleSdoGeometryColumn(dialect, "g")
+        args = (column, 5) if method == "within_distance" else (column,)
+        sql, params = getattr(column, method)(*args).to_sql()
+        expected = f'{name}("G", "G"' + (", ?" if call_param else "") + ") = ?"
+        assert sql == expected
+        assert params[-1] == "TRUE"
+        if call_param:
+            assert params[0] == call_param
+
+    @pytest.mark.parametrize(
+        "method", ["distance_to", "within_distance", "contains", "inside", "relate"]
+    )
+    def test_ops_fail_without_the_capability(self, dialect, method, monkeypatch):
+        from rhosocial.activerecord.backend.dialect.exceptions import (
+            UnsupportedFeatureError,
+        )
+        from rhosocial.activerecord.backend.impl.oracle.column_types import (
+            OracleSdoGeometryColumn,
+        )
+
+        monkeypatch.setattr(dialect, "supports_spatial_type", lambda: False)
+        column = OracleSdoGeometryColumn(dialect, "g")
+        args = (column, 5) if method == "within_distance" else (column,)
+        with pytest.raises(UnsupportedFeatureError, match="supports_spatial_type"):
+            getattr(column, method)(*args)

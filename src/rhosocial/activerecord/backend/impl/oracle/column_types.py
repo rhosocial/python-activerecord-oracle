@@ -24,6 +24,9 @@ value class they answer for, so a field annotated with one of Oracle's own
 value types resolves without a declaration.
 """
 
+from typing import TYPE_CHECKING
+
+from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 from rhosocial.activerecord.backend.expression.column_types import (
     ColumnBase,
     GeometryColumn,
@@ -31,6 +34,20 @@ from rhosocial.activerecord.backend.expression.column_types import (
     VectorColumn,
     XMLColumn,
 )
+
+if TYPE_CHECKING:  # pragma: no cover
+    from rhosocial.activerecord.backend.expression.bases import BaseExpression
+
+
+def _require(dialect, switch: str) -> None:
+    """Fail loudly, and by name, when the server does not answer a capability."""
+    answer = getattr(dialect, switch, None)
+    if answer is None or not answer():
+        raise UnsupportedFeatureError(
+            type(dialect).__name__,
+            switch,
+            f"this operation needs the {switch}() capability",
+        )
 
 
 class OracleSdoGeometryColumn(GeometryColumn):
@@ -40,6 +57,41 @@ class OracleSdoGeometryColumn(GeometryColumn):
     operator family belong here; the core class states only the shared column
     surface until they are measured.
     """
+
+    def distance_to(self, other) -> "BaseExpression":
+        """``SDO_GEOM.SDO_DISTANCE(col, other)``."""
+        _require(self._dialect, "supports_spatial_type")
+        from .functions.spatial import sdo_geom_distance
+
+        return sdo_geom_distance(self._dialect, self, other)
+
+    def within_distance(self, other, distance: float) -> "BaseExpression":
+        """``SDO_WITHIN_DISTANCE(col, other, distance=...)`` as a predicate."""
+        _require(self._dialect, "supports_spatial_type")
+        from .functions.spatial import sdo_within_distance
+
+        return sdo_within_distance(self._dialect, self, other, distance)
+
+    def contains(self, other) -> "BaseExpression":
+        """``SDO_CONTAINS(col, other)`` as a predicate."""
+        _require(self._dialect, "supports_spatial_type")
+        from .functions.spatial import sdo_contains
+
+        return sdo_contains(self._dialect, self, other)
+
+    def inside(self, other) -> "BaseExpression":
+        """``SDO_INSIDE(col, other)`` as a predicate."""
+        _require(self._dialect, "supports_spatial_type")
+        from .functions.spatial import sdo_inside
+
+        return sdo_inside(self._dialect, self, other)
+
+    def relate(self, other, mask: str = "ANYINTERACT") -> "BaseExpression":
+        """``SDO_RELATE(col, other, mask=...)`` as a predicate."""
+        _require(self._dialect, "supports_spatial_type")
+        from .functions.spatial import sdo_relate
+
+        return sdo_relate(self._dialect, self, other, mask)
 
 
 class OracleVectorColumn(VectorColumn):
