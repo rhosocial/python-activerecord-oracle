@@ -418,6 +418,30 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         finally:
             pass
 
+    async def _coerce_datetime_for_text_columns(self, options) -> dict:
+        """Serialize ``datetime`` values whose target column is a text carrier.
+
+        Async mirror of :meth:`OracleBackend._coerce_datetime_for_text_columns`:
+        a datetime field declared as ``TextType()`` lands in a CLOB, which
+        cannot accept a native TIMESTAMP bind (ORA-00932). Native timestamp
+        columns are left alone.
+        """
+        data = options.data
+        datetime_keys = [
+            key
+            for key, value in data.items()
+            if isinstance(value, datetime.datetime) and not hasattr(value, "to_sql")
+        ]
+        if not datetime_keys:
+            return data
+        table = f"{options.schema_name}.{options.table}" if options.schema_name else options.table
+        coerced = dict(data)
+        for key in datetime_keys:
+            declared = await self._lookup_oracle_data_type_async(table, str(key)) or ""
+            if any(carrier in declared for carrier in ("CLOB", "VARCHAR", "NVARCHAR", "LONG")):
+                coerced[key] = data[key].isoformat()
+        return coerced
+
     async def _process_result_set(
         self, cursor, is_select, column_adapters=None, column_mapping=None
     ):
@@ -965,9 +989,12 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         from rhosocial.activerecord.backend.expression import Column as ExprColumn
         from rhosocial.activerecord.backend.options import ExecutionOptions, StatementType
 
-        # Process values - wrap in Literal if not already an expression
+        # Process values - wrap in Literal if not already an expression.
+        # Datetimes bound to a text-carrier column are serialized first so a
+        # native TIMESTAMP bind never reaches a CLOB (ORA-00932).
+        data = await self._coerce_datetime_for_text_columns(options)
         processed_values = []
-        for v in options.data.values():
+        for v in data.values():
             if is_sql_expression(v):
                 processed_values.append(v)
             else:
@@ -1062,9 +1089,11 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         from rhosocial.activerecord.backend.expression import Column as ExprColumn
         from rhosocial.activerecord.backend.options import ExecutionOptions, StatementType
 
-        # Process assignments
+        # Process assignments. Datetimes bound to a text-carrier column are
+        # serialized first so a native TIMESTAMP bind never reaches a CLOB.
+        data = await self._coerce_datetime_for_text_columns(options)
         assignments = {}
-        for k, v in options.data.items():
+        for k, v in data.items():
             if is_sql_expression(v):
                 assignments[k] = v
             else:

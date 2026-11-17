@@ -481,6 +481,34 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         finally:
             pass
 
+    def _coerce_datetime_for_text_columns(self, options) -> dict:
+        """Serialize ``datetime`` values whose target column is a text carrier.
+
+        Oracle binds a Python ``datetime`` natively as ``TIMESTAMP`` -- the right
+        behaviour for a native ``TIMESTAMP`` column, and the reason the datetime
+        adapter passes the value through unchanged. A field declared with
+        ``UseSqlType(TextType())`` is a CLOB instead, and a TIMESTAMP bind cannot
+        go into a CLOB (ORA-00932). The core selects its adapter by Python type
+        only, so it cannot see that declaration; the backend can see the column's
+        real type, and does the serialization here. Native timestamp columns are
+        left alone.
+        """
+        data = options.data
+        datetime_keys = [
+            key
+            for key, value in data.items()
+            if isinstance(value, datetime.datetime) and not hasattr(value, "to_sql")
+        ]
+        if not datetime_keys:
+            return data
+        table = f"{options.schema_name}.{options.table}" if options.schema_name else options.table
+        coerced = dict(data)
+        for key in datetime_keys:
+            declared = self._lookup_oracle_data_type(table, str(key)) or ""
+            if any(carrier in declared for carrier in ("CLOB", "VARCHAR", "NVARCHAR", "LONG")):
+                coerced[key] = data[key].isoformat()
+        return coerced
+
     def adapt_row_types(self, row_dict, column_adapters):
         row_dict = {
             col_name: value.read() if hasattr(value, 'read') else value
@@ -1136,9 +1164,12 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         from rhosocial.activerecord.backend.expression import Column as ExprColumn
         from rhosocial.activerecord.backend.options import ExecutionOptions, StatementType
 
-        # Process values - wrap in Literal if not already an expression
+        # Process values - wrap in Literal if not already an expression.
+        # Datetimes bound to a text-carrier column are serialized first so a
+        # native TIMESTAMP bind never reaches a CLOB (ORA-00932).
+        data = self._coerce_datetime_for_text_columns(options)
         processed_values = []
-        for v in options.data.values():
+        for v in data.values():
             if is_sql_expression(v):
                 processed_values.append(v)
             else:
@@ -1227,9 +1258,11 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         from rhosocial.activerecord.backend.expression import Column as ExprColumn
         from rhosocial.activerecord.backend.options import ExecutionOptions, StatementType
 
-        # Process assignments
+        # Process assignments. Datetimes bound to a text-carrier column are
+        # serialized first so a native TIMESTAMP bind never reaches a CLOB.
+        data = self._coerce_datetime_for_text_columns(options)
         assignments = {}
-        for k, v in options.data.items():
+        for k, v in data.items():
             if is_sql_expression(v):
                 assignments[k] = v
             else:

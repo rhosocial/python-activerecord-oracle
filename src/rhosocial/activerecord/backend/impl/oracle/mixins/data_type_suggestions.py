@@ -85,17 +85,27 @@ ORACLE_DATA_TYPE_SUGGESTIONS: Dict[Any, Optional[Any]] = {
     # native 8-byte IEEE value, and a field that wants those bytes declares it.
     float: DoubleType(),
     decimal.Decimal: DecimalType(),
-    # Oracle's one unbounded character type, and the carrier for the families
-    # below that have no dimensionless column of their own.
-    str: TextType(),
+    # A bare ``str`` is a bounded, comparable value in every other backend
+    # (SQLite/PG/MySQL/MariaDB all suggest a TEXT/VARCHAR that works in a WHERE
+    # ``=``, GROUP BY and a UNIQUE index). Oracle's unbounded character type is
+    # CLOB, which cannot be a comparison key at all (ORA-22848) or an ordinary
+    # B-tree index key. Use VARCHAR2(4000) -- Oracle's maximum in a standard
+    # (non-EXTENDED) strings setup -- so plain string fields stay queryable and
+    # indexable. A field that really needs unbounded text declares TextType()
+    # explicitly and gets CLOB; this suggestion is only the bare-field default.
+    str: VarCharType(length=4000),
     bytes: BlobType(),
     bytearray: BlobType(),
     # ``DATE`` includes a time of day; there is no pure-date column type.
     datetime.date: DateType(),
     # Oracle has no ``TIME`` type; the dialect writes the value as text.
     datetime.time: TimeType(),
-    # Milliseconds, the framework's timestamp default, and ``TIMESTAMP(3)`` here.
-    datetime.datetime: TimestampType(precision=3),
+    # Oracle's native timestamp resolution is microseconds (TIMESTAMP(6), the
+    # default when no precision is written) and the dialect advertises
+    # microsecond support, so a bare ``datetime`` must keep all six fractional
+    # digits. TIMESTAMP(3) silently truncated writes and broke round-trips for
+    # values carrying microseconds.
+    datetime.datetime: TimestampType(precision=6),
     # ``INTERVAL DAY TO SECOND`` is native and renders here; the adapter writes
     # its text form, and this is the declaration a bare duration gets. (MySQL
     # and MariaDB have no interval type and name a text carrier instead.)
