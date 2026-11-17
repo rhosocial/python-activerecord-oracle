@@ -15,6 +15,16 @@ from rhosocial.activerecord.backend.impl.oracle.backend import OracleBackend
 from rhosocial.activerecord.backend.impl.oracle.backend.async_backend import (
     AsyncOracleBackend,
 )
+from rhosocial.activerecord.testsuite.pytest_plugin import Declaration
+
+# The root stays unrestricted: only directories that own a logical database
+# declare themselves serial (see execute/conftest.py and adapters/native/).
+DECLARATION = Declaration(
+    parallel=False,
+    purpose="Backend-owned Oracle feature tests; DB-owning directories declare their own serial scope.",
+    passes_means="a backend-specific feature renders or executes as documented",
+    fails_means="a backend-only feature renders wrongly or misbehaves against the server",
+)
 
 
 def get_enabled_scenarios():
@@ -58,26 +68,6 @@ def get_scenario(name: str, database: str = "test_backend"):
             raise ValueError("No scenarios registered")
     _prepare_database(name, database)
     return OracleBackend, support.oracle.scenario(name).make_config(database)
-
-
-def pytest_collection_modifyitems(config, items):
-    """Pin a backend directory's tests to one worker.
-
-    These directories create and drop tables in the directory's own database,
-    so two workers must never run tests from the same directory at once.
-    Modules that carry an explicit ``xdist_group`` keep their own marker:
-    that group spans directories on purpose (the shared AR_CRM/AR_SHOP
-    schema users), and xdist concatenates every group name an item carries.
-    """
-    for item in items:
-        parts = item.path.parts
-        if "backend" not in parts:
-            continue
-        if item.get_closest_marker("xdist_group") is not None:
-            continue
-        item.add_marker(
-            pytest.mark.xdist_group("oracle-backend::" + str(item.path.parent))
-        )
 
 
 # --- Provider Logic for Fixtures ---

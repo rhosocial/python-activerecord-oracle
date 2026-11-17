@@ -17,6 +17,16 @@ import pytest
 
 import native_models
 import native_support
+from rhosocial.activerecord.testsuite.pytest_plugin import Declaration
+
+# This directory creates native tables in its own schema user, so its tests
+# must stay on one worker per scenario.
+DECLARATION = Declaration(
+    parallel=True,
+    purpose="Oracle native column types (IDENTITY, JSON, BOOLEAN, VECTOR) on a real server.",
+    passes_means="native column values round-trip through the live backend",
+    fails_means="a native type is rendered or bound wrongly against the server",
+)
 
 #: The dialect's own support switches for the column types a native table
 #: needs.  The conftest never inspects a server version itself: it asks the
