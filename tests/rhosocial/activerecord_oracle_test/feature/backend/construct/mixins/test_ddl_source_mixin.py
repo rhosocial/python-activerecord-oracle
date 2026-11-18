@@ -268,6 +268,9 @@ class PlainModel(ActiveRecord):
     def table_name(cls):
         return "ddl_source_plain"
 
+    # The refactor made a bare ``id`` keyless; declare the key this test
+    # expects so the DDL carries the primary-key constraint.
+    __primary_key__ = "id"
     id: int
     optional: Optional[str] = None
 
@@ -277,6 +280,7 @@ class AsyncPlainModel(AsyncActiveRecord):
     def table_name(cls):
         return "ddl_source_async_plain"
 
+    __primary_key__ = "id"
     id: int
     optional: Optional[str] = None
 
