@@ -20,6 +20,7 @@ from rhosocial.activerecord.backend.impl.oracle.backend.async_backend import (
 # The root stays unrestricted: only directories that own a logical database
 # declare themselves serial (see execute/conftest.py and adapters/native/).
 DECLARATION = Declaration(
+    uses_database=True,
     parallel=False,
     purpose="Backend-owned Oracle feature tests; DB-owning directories declare their own serial scope.",
     passes_means="a backend-specific feature renders or executes as documented",

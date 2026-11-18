@@ -22,6 +22,7 @@ import native_support
 # This directory creates native tables in its own schema user, so its tests
 # must stay on one worker per scenario.
 DECLARATION = Declaration(
+    uses_database=True,
     parallel=True,
     purpose="Oracle native column types (IDENTITY, JSON, BOOLEAN, VECTOR) on a real server.",
     passes_means="native column values round-trip through the live backend",

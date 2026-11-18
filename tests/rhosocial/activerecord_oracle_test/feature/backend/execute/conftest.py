@@ -10,6 +10,7 @@ each leaf stays on one worker while different leaves still run in parallel.
 from rhosocial.activerecord.testsuite.pytest_plugin import Declaration
 
 DECLARATION = Declaration(
+    uses_database=True,
     parallel=True,
     purpose="Backend execute tests that create tables in their directory's own schema.",
     passes_means="statements execute correctly against the directory's live schema",

@@ -8,6 +8,7 @@ added/removed indexes.
 
 Supported versions: Oracle 12c+
 """
+from rhosocial.activerecord.backend.expression.statements import auto_increment_parts  # noqa: E402
 
 # ============================================================
 # SECTION: Setup (necessary for execution, reference only)
@@ -45,10 +46,10 @@ backend.execute(sql, params)
 # Baseline table with a non-unique index on EMAIL
 expr = CreateTableStatement(
     dialect=dialect, table=Table(dialect, "USERS"), columns=[
-        ColumnDefinition(dialect, "ID", IntegerType(dialect),
+        ColumnDefinition(dialect, "ID"[0], auto_increment_parts(dialect, IntegerType(dialect))[0],
             constraints=[
-                ColumnConstraint(dialect, branch=ColumnPrimaryKeyConstraint(dialect, is_auto_increment=True)),
-            ]),
+                ColumnConstraint(dialect, branch=ColumnPrimaryKeyConstraint(dialect)),
+            ], attributes=auto_increment_parts(dialect, IntegerType(dialect))[1]),
         ColumnDefinition(dialect, "EMAIL", VarCharType(length=255, dialect=dialect)),
     ],
     indexes=[IndexDefinition(dialect, "IDX_EMAIL", ["EMAIL"])],

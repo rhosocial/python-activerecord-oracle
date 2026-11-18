@@ -30,6 +30,7 @@ formatter: Oracle 12+ renders the same identity clause as before, while Oracle
 are all 12+, so the below-12 refusal is a dialect-level test and the live case
 covers 12+.
 """
+from rhosocial.activerecord.backend.expression.statements import auto_increment_parts  # noqa: E402
 
 import uuid
 
@@ -122,12 +123,15 @@ def _oracle(version=(19, 0, 0)) -> OracleDialect:
     return OracleDialect(version=version)
 
 
-def _column(dialect, *, name="id", attribute=None, constraints=(), invisible=False):
+def _column(dialect, *, name="id", attribute=None, attributes=None, constraints=(), invisible=False):
     """One identity column; ``OracleColumnDefinition`` when INVISIBLE is asked."""
     column_class = OracleColumnDefinition if invisible else ColumnDefinition
     kwargs = {}
+    merged = list(attributes or ())
     if attribute is not None:
-        kwargs["attributes"] = [attribute]
+        merged.append(attribute)
+    if merged:
+        kwargs["attributes"] = merged
     if invisible:
         kwargs["invisible"] = True
     return column_class(
@@ -135,10 +139,10 @@ def _column(dialect, *, name="id", attribute=None, constraints=(), invisible=Fal
     )
 
 
-def _pk_constraint(dialect, *, is_auto_increment=False):
+def _pk_constraint(dialect):
     return ColumnConstraint(
         dialect,
-        branch=ColumnPrimaryKeyConstraint(dialect, is_auto_increment=is_auto_increment),
+        branch=ColumnPrimaryKeyConstraint(dialect),
     )
 
 
@@ -349,9 +353,8 @@ class TestLegacyAutoIncrement:
             columns=[
                 _column(
                     dialect,
-                    constraints=[
-                        _pk_constraint(dialect, is_auto_increment=True)
-                    ],
+                    constraints=[_pk_constraint(dialect)],
+                    attributes=auto_increment_parts(dialect, IntegerType(dialect))[1],
                 )
             ],
         )
@@ -473,9 +476,8 @@ class TestIdentityColumnShapes:
             columns=[
                 _column(
                     dialect,
-                    constraints=[
-                        _pk_constraint(dialect, is_auto_increment=True)
-                    ],
+                    constraints=[_pk_constraint(dialect)],
+                    attributes=auto_increment_parts(dialect, IntegerType(dialect))[1],
                 )
             ],
         )

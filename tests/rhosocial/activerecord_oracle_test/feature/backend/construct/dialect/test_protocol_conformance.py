@@ -119,6 +119,7 @@ ORACLE_PROTOCOLS = [
     # latter, and declares it True from 12c on.
     dialect_protocols.AutoIncrementColumnSupport,
     dialect_protocols.IdentityColumnSupport,
+    dialect_protocols.IntegerAutoIncrementColumnSuggestionSupport,
     dialect_protocols.ColumnAttributeSupport,
     dialect_protocols.CommentSupport,
     dialect_protocols.ConstraintSupport,

@@ -17,6 +17,7 @@ dialect has neither, so the DEFAULT is *refused* with a message naming the
 Both directions are pinned, because a case that only ever exercises the working
 side cannot notice the refusal going away.
 """
+from rhosocial.activerecord.backend.expression.statements import auto_increment_parts  # noqa: E402
 
 import pytest
 
@@ -57,18 +58,20 @@ def dialect_with_boolean():
     return OracleDialect(version=(23, 0, 0))
 
 
-def _pk(dialect):
-    return [ColumnConstraint(
-        dialect,
-        branch=ColumnPrimaryKeyConstraint(dialect, is_auto_increment=True),
-    )]
+def _id_column(dialect, data_type):
+    suggested_type, attributes = auto_increment_parts(dialect, data_type)
+    return ColumnDefinition(
+        dialect, "id", suggested_type,
+        constraints=[ColumnConstraint(dialect, branch=ColumnPrimaryKeyConstraint(dialect))],
+        attributes=attributes,
+    )
 
 
 def _build_table(dialect):
     return CreateTableStatement(
         dialect=dialect, table=Table(dialect, "test_tbl"),
         columns=[
-            ColumnDefinition(dialect, "id", IntegerType(dialect), constraints=_pk(dialect)),
+            _id_column(dialect, IntegerType(dialect)),
             ColumnDefinition(dialect, "name", TextType(dialect),
                 constraints=[ColumnConstraint(dialect, branch=ColumnNotNullConstraint(dialect))]),
             ColumnDefinition(dialect, "flag", BooleanType(dialect),
@@ -97,7 +100,7 @@ class TestAutoIncrementDDL:
         expr = CreateTableStatement(
             dialect=d, table=Table(d, "bool_test"),
             columns=[
-                ColumnDefinition(d, "id", IntegerType(d), constraints=_pk(d)),
+                _id_column(d, IntegerType(d)),
                 ColumnDefinition(d, "flag", BooleanType(d),
                     constraints=[ColumnConstraint(d, branch=ColumnNotNullConstraint(d)),
                                  ColumnConstraint(d, branch=ColumnDefaultConstraint(d, True))]),
@@ -115,7 +118,7 @@ class TestAutoIncrementDDL:
         expr = CreateTableStatement(
             dialect=dialect, table=Table(dialect, "ts_test"),
             columns=[
-                ColumnDefinition(dialect, "id", IntegerType(dialect), constraints=_pk(dialect)),
+                _id_column(dialect, IntegerType(dialect)),
                 ColumnDefinition(dialect, "created_at", TimestampType(dialect=dialect)),
             ],
         )
@@ -140,7 +143,7 @@ class TestAutoIncrementDDL:
         expr = CreateTableStatement(
             dialect=dialect, table=Table(dialect, "bool_test"),
             columns=[
-                ColumnDefinition(dialect, "id", IntegerType(dialect), constraints=_pk(dialect)),
+                _id_column(dialect, IntegerType(dialect)),
                 ColumnDefinition(dialect, "flag", BooleanType(dialect),
                     constraints=[
                         ColumnConstraint(dialect, branch=ColumnNotNullConstraint(dialect)),
