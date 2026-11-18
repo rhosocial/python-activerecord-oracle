@@ -109,7 +109,11 @@ from typing import Dict
 
 import pytest
 
-from rhosocial.activerecord.backend.dialect.exceptions import (ProtocolNotImplementedError, UnsupportedFeatureError)
+from rhosocial.activerecord.backend.dialect.exceptions import (
+    ProtocolNotImplementedError,
+    UnsupportedDataTypeError,
+    UnsupportedFeatureError,
+)
 from rhosocial.activerecord.backend.expression.bases import BaseExpression
 from rhosocial.activerecord.backend.expression.core import Column, Literal
 from rhosocial.activerecord.backend.expression.operators import RawSQL
@@ -1893,22 +1897,22 @@ LEGITIMATE_NON_RENDERS: Dict[str, tuple] = {
     # --- than that the class declares none, and the fragment follows the
     # --- current wording rather than the old one.
     "rhosocial.activerecord.backend.expression.types._base.DataType": (
-        TypeError, "does not support the generic type None"
+        UnsupportedDataTypeError, "does not support the generic type None"
     ),
     "rhosocial.activerecord.backend.expression.types.array.ArrayType": (
-        TypeError, "does not support the generic type 'array'"
+        UnsupportedDataTypeError, "does not support the generic type 'array'"
     ),
     "rhosocial.activerecord.backend.expression.types.binary.BinaryType": (
-        TypeError, "does not support the generic type 'binary'"
+        UnsupportedDataTypeError, "does not support the generic type 'binary'"
     ),
     "rhosocial.activerecord.backend.expression.types.binary.VarBinaryType": (
-        TypeError, "does not support the generic type 'varbinary'"
+        UnsupportedDataTypeError, "does not support the generic type 'varbinary'"
     ),
     "rhosocial.activerecord.backend.expression.types.enum_.EnumType": (
-        TypeError, "does not support the generic type 'enum'"
+        UnsupportedDataTypeError, "does not support the generic type 'enum'"
     ),
     "rhosocial.activerecord.backend.expression.types.uuid_.UUIDType": (
-        TypeError, "does not support the generic type 'uuid'"
+        UnsupportedDataTypeError, "does not support the generic type 'uuid'"
     ),
     # --- group five: a generic partition clause. This backend requires one of
     # --- its own -- RANGE / LIST / HASH carry structured definitions, and the
