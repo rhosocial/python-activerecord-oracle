@@ -56,6 +56,9 @@ class DeepCustomer(ActiveRecord):
 
     c: ClassVar[FieldProxy] = FieldProxy()
 
+    # A bare ``id: Optional[int]`` is keyless under the current declaration
+    # contract; the identity must be declared or the INSERT sends NULL for ID.
+    __primary_key__ = "id"
     id: Optional[int] = None
     name: str
 

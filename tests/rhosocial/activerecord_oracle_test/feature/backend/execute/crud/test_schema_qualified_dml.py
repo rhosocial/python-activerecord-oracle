@@ -37,6 +37,7 @@ class SchemaCustomer(ActiveRecord):
 
     c: ClassVar[FieldProxy] = FieldProxy()
 
+    __primary_key__ = "id"
     id: Optional[int] = None
     name: str
 
@@ -52,6 +53,7 @@ class SchemaOrder(ActiveRecord):
 
     c: ClassVar[FieldProxy] = FieldProxy()
 
+    __primary_key__ = "id"
     id: Optional[int] = None
     customer_id: int
     amount: int
@@ -182,6 +184,7 @@ async def test_async_insert_is_scoped(provisioned):
 
         c: ClassVar[FieldProxy] = FieldProxy()
 
+        __primary_key__ = "id"
         id: _Optional[int] = None
         name: str
 

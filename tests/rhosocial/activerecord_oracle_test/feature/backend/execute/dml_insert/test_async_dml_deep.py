@@ -36,6 +36,7 @@ class AsyncCustomer(AsyncActiveRecord):
 
     c: ClassVar[FieldProxy] = FieldProxy()
 
+    __primary_key__ = "id"
     id: Optional[int] = None
     name: str
 

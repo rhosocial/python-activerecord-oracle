@@ -41,6 +41,7 @@ from rhosocial.activerecord.model import ActiveRecord
 class _NativeModel(ActiveRecord):
     model_config = ConfigDict(arbitrary_types_allowed=True)
     c: ClassVar[FieldProxy] = FieldProxy()
+    __primary_key__ = "id"
     id: Optional[int] = None
 
 
