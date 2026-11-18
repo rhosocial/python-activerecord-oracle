@@ -12,12 +12,12 @@ touches them must not create them -- Oracle rejects the whole statement with
 ``ORA-00902: invalid datatype`` and would take an unrelated test's setup down
 with it.
 """
+from rhosocial.activerecord.testsuite.pytest_plugin import Declaration
 
 import pytest
 
 import native_models
 import native_support
-from rhosocial.activerecord.testsuite.pytest_plugin import Declaration
 
 # This directory creates native tables in its own schema user, so its tests
 # must stay on one worker per scenario.

@@ -5,6 +5,7 @@ The backend runs these against a real server. The scenario supplies the
 connection parameters; the logical database name is derived from the
 directory that owns the test, so two directories never share tables.
 """
+from rhosocial.activerecord.testsuite.pytest_plugin import Declaration
 
 import pytest
 import pytest_asyncio
@@ -15,7 +16,6 @@ from rhosocial.activerecord.backend.impl.oracle.backend import OracleBackend
 from rhosocial.activerecord.backend.impl.oracle.backend.async_backend import (
     AsyncOracleBackend,
 )
-from rhosocial.activerecord.testsuite.pytest_plugin import Declaration
 
 # The root stays unrestricted: only directories that own a logical database
 # declare themselves serial (see execute/conftest.py and adapters/native/).
