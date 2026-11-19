@@ -130,12 +130,12 @@ jobs:
       - name: Run tests
         run: |
           export PYTHONPATH=src:tests
-          python -m pytest tests/ --tb=short -n auto --dist=loadgroup -x
+          python -m pytest tests/ --tb=short -n auto --dist=loadgroup -x --ignore=tests/benchmark
 
       - name: Run tests with coverage
         run: |
           export PYTHONPATH=src:tests
-          python -m pytest tests/ --tb=short -n auto --dist=loadgroup --cov=src/rhosocial --cov-branch --cov-report=xml
+          python -m pytest tests/ --tb=short -n auto --dist=loadgroup --cov=src/rhosocial --cov-branch --cov-report=xml --ignore=tests/benchmark
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -258,12 +258,12 @@ jobs:
       - name: Run tests
         run: |
           export PYTHONPATH=src:tests
-          python -m pytest tests/ --tb=short -n auto --dist=loadgroup -x
+          python -m pytest tests/ --tb=short -n auto --dist=loadgroup -x --ignore=tests/benchmark
 
       - name: Run tests with coverage
         run: |
           export PYTHONPATH=src:tests
-          python -m pytest tests/ --tb=short -n auto --dist=loadgroup --cov=src/rhosocial --cov-branch --cov-report=xml
+          python -m pytest tests/ --tb=short -n auto --dist=loadgroup --cov=src/rhosocial --cov-branch --cov-report=xml --ignore=tests/benchmark
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -385,12 +385,12 @@ jobs:
       - name: Run tests
         run: |
           export PYTHONPATH=src:tests
-          python -m pytest tests/ --tb=short -n 2 --dist=loadgroup -x
+          python -m pytest tests/ --tb=short -n 2 --dist=loadgroup -x --ignore=tests/benchmark
 
       - name: Run tests with coverage
         run: |
           export PYTHONPATH=src:tests
-          python -m pytest tests/ --tb=short -n 2 --dist=loadgroup --cov=src/rhosocial --cov-branch --cov-report=xml
+          python -m pytest tests/ --tb=short -n 2 --dist=loadgroup --cov=src/rhosocial --cov-branch --cov-report=xml --ignore=tests/benchmark
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -521,12 +521,12 @@ jobs:
       - name: Run tests
         run: |
           export PYTHONPATH=src:tests
-          python -m pytest tests/ --tb=short -n 2 --dist=loadgroup -x
+          python -m pytest tests/ --tb=short -n 2 --dist=loadgroup -x --ignore=tests/benchmark
 
       - name: Run tests with coverage
         run: |
           export PYTHONPATH=src:tests
-          python -m pytest tests/ --tb=short -n 2 --dist=loadgroup --cov=src/rhosocial --cov-branch --cov-report=xml
+          python -m pytest tests/ --tb=short -n 2 --dist=loadgroup --cov=src/rhosocial --cov-branch --cov-report=xml --ignore=tests/benchmark
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
