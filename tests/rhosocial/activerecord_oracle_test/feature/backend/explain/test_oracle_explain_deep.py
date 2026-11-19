@@ -2,53 +2,102 @@
 """Backend-local, deep EXPLAIN tests for Oracle.
 
 The shared testsuite contracts only assert that EXPLAIN *can run*. This file
-interprets what Oracle actually returns, which is deliberately NOT generalized
-into the testsuite because dialects disagree on plan shape:
+pins what is genuinely backend-specific, using the expression system only:
 
-* Oracle's ``EXPLAIN PLAN FOR`` writes rows into ``PLAN_TABLE`` (the same table
-  ``DBMS_XPLAN`` reads). Each row exposes ``OPERATION`` / ``OPTIONS`` /
-  ``OBJECT_NAME`` / ``ID`` / ``PARENT_ID``; the tree is rebuilt from the ids.
-* This backend cannot return that table as a client result set, so
-  ``format_explain_statement`` renders a tiny ``SELECT 1 AS EXPLAIN_PLAN FROM
-  DUAL`` fallback. ANALYZE and FORMAT are advertised as unsupported and never
-  change the emitted SQL -- verified here at construction level (no DB needed).
-* ``OracleExplainResult.from_rows`` maps raw PLAN_TABLE rows into the structured
-  tree used for interpretation. Scan / index / join / aggregate evidence is
-  asserted both on synthetic rows (always runs) and on live rows (CI / local DB).
+* Capability gates and the exact SQL rendered by ``format_explain_statement``
+  are checked construction-level. Oracle's ``EXPLAIN PLAN FOR`` writes to
+  ``PLAN_TABLE`` and yields no client result set, so this backend renders a
+  ``SELECT 1 AS EXPLAIN_PLAN FROM DUAL`` fallback and advertises ANALYZE / FORMAT
+  as unsupported. The wrapped statement is always built from expression objects
+  (``QueryStatement`` / ``NamedRelationRef`` / ``Table`` / ``Column`` / ...) --
+  never from a SQL string.
+* PLAN_TABLE result *interpretation* is checked through the production
+  ``OracleExplainResult.from_rows`` machinery, which maps OPERATION / OPTIONS /
+  OBJECT_NAME / ID / PARENT_ID rows into a tree and exposes scan / index / join
+  / aggregate evidence.
 
-Partition pruning is intentionally NOT asserted: Oracle does support
-declarative partitioning, but a stable "pruned partition" string in PLAN_TABLE
-is version- and statistics-dependent, so a fake assertion would be worse than
-none. The existing ``execute/partition`` test already covers EXPLAIN acceptance
-on a partitioned table; this file only checks that partition metadata columns
-are *represented* by the result type, not that pruning happened.
+A live-DB PLAN_TABLE test is deliberately absent. Oracle has no expression type
+for the ``EXPLAIN PLAN SET STATEMENT_ID ... FOR`` + ``PLAN_TABLE`` flow, and
+neither ``OracleBackend`` nor ``AsyncOracleBackend`` implements ``explain()``;
+the local renderer only produces the SELECT-from-DUAL fallback. There is
+therefore no way to obtain real plan rows through the public expression API,
+and hand-built SQL is forbidden. Real EXPLAIN acceptance against a partitioned
+table is already covered by the ``execute/partition`` tests.
 """
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import pytest
 
 from rhosocial.activerecord.backend.dialect import protocols as dialect_protocols
-from rhosocial.activerecord.backend.errors import DatabaseError
 from rhosocial.activerecord.backend.expression import (
+    AllColumnsWildcard,
     Column,
+    ComparisonPredicate,
     ExplainFormat,
     ExplainOptions,
+    ExplainStatement,
     ExplainType,
+    Literal,
     QueryStatement,
 )
-from rhosocial.activerecord.backend.expression.statements import ExplainStatement
+from rhosocial.activerecord.backend.expression.objects import Table
+from rhosocial.activerecord.backend.expression.query_parts import WhereClause
+from rhosocial.activerecord.backend.expression.sources import NamedRelationRef
 from rhosocial.activerecord.backend.impl.oracle import dialect as oracle_dialect
 from rhosocial.activerecord.backend.impl.oracle.explain import (
     OracleExplainResult,
     OracleExplainRow,
 )
-from rhosocial.activerecord.backend.options import ExecutionOptions
-from rhosocial.activerecord.backend.schema import StatementType
 
 # --- helpers ---------------------------------------------------------------
 
 _FALLBACK_SQL = "SELECT 1 AS EXPLAIN_PLAN FROM DUAL"
+
+
+def _dialect() -> oracle_dialect.OracleDialect:
+    return oracle_dialect.OracleDialect(version=(23, 0, 0))
+
+
+def _query(dialect: oracle_dialect.OracleDialect) -> QueryStatement:
+    """A fully expression-built SELECT used as the wrapped EXPLAIN statement."""
+    return QueryStatement(
+        dialect,
+        select=[Column(dialect, "id"), Column(dialect, "name")],
+        from_=NamedRelationRef(dialect, Table(dialect, "users")),
+        where=WhereClause(
+            dialect,
+            condition=ComparisonPredicate(
+                dialect,
+                ">",
+                Column(dialect, "price"),
+                Literal(dialect, 100),
+            ),
+        ),
+    )
+
+
+def _wildcard_query(dialect: oracle_dialect.OracleDialect) -> QueryStatement:
+    """Second expression-built query, used to show SQL is statement-independent."""
+    return QueryStatement(
+        dialect,
+        select=[AllColumnsWildcard(dialect)],
+        from_=NamedRelationRef(dialect, Table(dialect, "orders")),
+    )
+
+
+def _render(
+    dialect: oracle_dialect.OracleDialect,
+    options: Optional[ExplainOptions] = None,
+    statement: Optional[QueryStatement] = None,
+) -> Tuple[str, tuple]:
+    """Render an EXPLAIN expression; returns the dialect's (sql, params)."""
+    expr = ExplainStatement(
+        dialect,
+        statement=statement if statement is not None else _query(dialect),
+        options=options,
+    )
+    return dialect.format_explain_statement(expr)
 
 
 def _plan_row(
@@ -71,43 +120,32 @@ def _plan_row(
     return row
 
 
-def _triples(rows: List[Dict[str, Any]]) -> List[Tuple[Any, Any, Any]]:
-    """Extract (OPERATION, OPTIONS, OBJECT_NAME) from raw PLAN_TABLE rows."""
-    return [
-        (
-            r.get("operation") or r.get("OPERATION"),
-            r.get("options") or r.get("OPTIONS"),
-            r.get("object_name") or r.get("OBJECT_NAME"),
-        )
-        for r in rows
-    ]
-
-
 # --- capability + exact SQL (construction-level, no DB) --------------------
 
 
 class TestOracleExplainCapabilities:
     """Oracle advertises EXPLAIN PLAN but no ANALYZE / FORMAT options."""
 
-    @pytest.fixture
-    def dialect(self) -> oracle_dialect.OracleDialect:
-        return oracle_dialect.OracleDialect(version=(23, 0, 0))
-
-    def test_supports_explain_plan(self, dialect) -> None:
+    def test_supports_explain_plan(self) -> None:
+        dialect = _dialect()
         assert isinstance(dialect, dialect_protocols.ExplainSupport)
         assert dialect.supports_explain_plan() is True
 
-    def test_supports_explain_analyze_is_false(self, dialect) -> None:
+    def test_supports_explain_analyze_is_false(self) -> None:
         """Oracle has no EXPLAIN ANALYZE equivalent."""
-        assert dialect.supports_explain_analyze() is False
+        assert _dialect().supports_explain_analyze() is False
 
     @pytest.mark.parametrize(
         "format_type",
         [f.value for f in ExplainFormat] + ["DOT", "BASIC", "TREE"],
     )
-    def test_supports_explain_format_is_false_for_every_format(self, dialect, format_type) -> None:
+    def test_supports_explain_format_is_false_for_every_format(self, format_type) -> None:
         """No FORMAT option is part of Oracle's EXPLAIN PLAN grammar."""
-        assert dialect.supports_explain_format(format_type) is False
+        assert _dialect().supports_explain_format(format_type) is False
+
+
+class TestOracleExplainRendering:
+    """Exact fallback SQL for expression-built EXPLAIN statements."""
 
     @pytest.mark.parametrize(
         "options",
@@ -120,21 +158,26 @@ class TestOracleExplainCapabilities:
         ],
         ids=["none", "default", "analyze", "json", "analyze-verbose"],
     )
-    def test_format_explain_statement_emits_exact_fallback(self, dialect, options) -> None:
+    def test_format_explain_statement_emits_exact_fallback(self, options) -> None:
         """Every option combination renders the same SELECT-from-DUAL fallback."""
-        statement = QueryStatement(dialect, select=[Column(dialect, "1")])
-        expr = ExplainStatement(dialect, statement=statement, options=options)
-        sql, params = dialect.format_explain_statement(expr)
+        sql, params = _render(_dialect(), options)
         assert sql == _FALLBACK_SQL, "Oracle EXPLAIN must render the SELECT 1 fallback"
-        assert params == ()
+        assert params == (), "the fallback has no parameters"
 
-    def test_explain_statement_to_sql_uses_fallback(self, dialect) -> None:
+    def test_explain_statement_to_sql_uses_fallback(self) -> None:
         """Expression.to_sql() dispatches through format_explain_statement."""
-        statement = QueryStatement(dialect, select=[Column(dialect, "1")])
-        expr = ExplainStatement(dialect, statement=statement)
+        dialect = _dialect()
+        expr = ExplainStatement(dialect, statement=_query(dialect))
         sql, params = expr.to_sql()
         assert sql == _FALLBACK_SQL
         assert params == ()
+
+    def test_fallback_is_independent_of_wrapped_statement(self) -> None:
+        """Two different expression-built queries render the identical fallback."""
+        dialect = _dialect()
+        assert _render(dialect, statement=_query(dialect)) == _render(
+            dialect, statement=_wildcard_query(dialect)
+        )
 
 
 # --- result interpretation, synthetic PLAN_TABLE rows (no DB) --------------
@@ -220,93 +263,3 @@ class TestOracleExplainResultInterpretation:
         )
         part = plan.find_operations("PARTITION RANGE")[0]
         assert (part.partition_start, part.partition_stop, part.partition_id) == ("1", "1", 1)
-
-
-# --- live PLAN_TABLE interpretation (CI / local DB) ------------------------
-
-
-@pytest.mark.backend
-@pytest.mark.xdist_group("oracle_explain_deep")
-class TestOracleExplainPlanTableLive:
-    """Interpret real PLAN_TABLE rows from a live Oracle server.
-
-    Uses a directory-owned schema (``test_backend_explain``) and a unique
-    STATEMENT_ID so the GTT stays session-local and leaves no residue. One tiny
-    indexed table is created and dropped within a single test, keeping the
-    footprint small for contention-sensitive Oracle CI.
-    """
-
-    _TABLE = "AR_EXPLAIN_DEEP_T"
-    _STATEMENT_ID = "AR_EXPLAIN_DEEP"
-
-    @pytest.fixture
-    def plan_env(self, oracle_backend_single):
-        backend = oracle_backend_single
-        if not backend.dialect.supports_explain_plan():
-            pytest.skip("Oracle dialect does not advertise EXPLAIN PLAN support")
-
-        table = self._TABLE
-        sid = self._STATEMENT_ID
-        try:
-            backend.execute(f"DROP TABLE {table}", ())
-        except DatabaseError as exc:
-            if "ORA-00942" not in str(exc):
-                raise
-        backend.execute(f"CREATE TABLE {table} (ID NUMBER PRIMARY KEY, V VARCHAR2(20))", ())
-        backend.execute(f"INSERT INTO {table} VALUES (1, 'x')", ())
-        try:
-            yield backend
-        finally:
-            backend.execute(f"DELETE FROM PLAN_TABLE WHERE STATEMENT_ID = '{sid}'", ())
-            backend.execute(f"DROP TABLE {table}", ())
-
-    def _explain(self, backend, sql: str) -> List[Dict[str, Any]]:
-        sid = self._STATEMENT_ID
-        backend.execute(f"EXPLAIN PLAN SET STATEMENT_ID = '{sid}' FOR {sql}", ())
-        rows = (
-            backend.execute(
-                "SELECT ID, PARENT_ID, OPERATION, OPTIONS, OBJECT_NAME, COST, CARDINALITY "
-                f"FROM PLAN_TABLE WHERE STATEMENT_ID = '{sid}' ORDER BY ID",
-                (),
-                options=ExecutionOptions(stmt_type=StatementType.DQL),
-            ).data
-            or []
-        )
-        backend.execute(f"DELETE FROM PLAN_TABLE WHERE STATEMENT_ID = '{sid}'", ())
-        return list(rows)
-
-    def test_live_plan_table_scan_index_and_aggregate(self, plan_env) -> None:
-        backend = plan_env
-        table = self._TABLE
-
-        agg = _triples(self._explain(backend, "SELECT COUNT(*) FROM DUAL"))
-        assert any(
-            op == "SORT" and opts == "AGGREGATE" for op, opts, _ in agg
-        ), "COUNT(*) must plan as a SORT AGGREGATE"
-
-        indexed = _triples(self._explain(backend, f"SELECT * FROM {table} WHERE ID = 1"))
-        assert any(
-            op == "INDEX" and opts and "SCAN" in opts for op, opts, _ in indexed
-        ), "a primary-key lookup must plan as an INDEX ... SCAN"
-        assert any(
-            op == "TABLE ACCESS" and opts == "BY INDEX ROWID" for op, opts, _ in indexed
-        ), "the PK lookup must reach the table by index rowid"
-
-        scanned = _triples(self._explain(backend, f"SELECT * FROM {table} WHERE V = 'x'"))
-        assert (
-            "TABLE ACCESS",
-            "FULL",
-            table,
-        ) in scanned, "a non-indexed predicate must plan as a full TABLE ACCESS"
-
-    def test_live_plan_rows_interpreted_by_result_type(self, plan_env) -> None:
-        """Live raw rows (lowercase keys) map through the structured result type."""
-        backend = plan_env
-        raw = self._explain(backend, f"SELECT * FROM {self._TABLE} WHERE ID = 1")
-        assert raw, "EXPLAIN PLAN must write rows into PLAN_TABLE"
-
-        upper = [{key.upper(): value for key, value in row.items()} for row in raw]
-        plan = OracleExplainResult.from_rows(upper, statement_id=self._STATEMENT_ID)
-        assert plan.rows
-        assert plan.find_index_scans(), "live PK plan must expose index-scan evidence"
-        assert plan.get_summary()["index_scans"] >= 1
