@@ -536,3 +536,152 @@ jobs:
           flags: unittests,python-3.15,oracle-26ai
           name: codecov-oracle-3.15-26ai
           fail_ci_if_error: true
+
+  # Single, minimal benchmark leg: the shared testsuite benchmark contracts
+  # (crud/query/transaction/mixin) run against Oracle via the provider plugin.
+  # Kept to one server (26ai), one scenario and a single process so the heavy
+  # Oracle CI does not fan out. Feature jobs above are left untouched.
+  benchmark-oracle-26ai:
+    name: Benchmark / Oracle 26ai
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    services:
+      oracle:
+        image: gvenzl/oracle-free:23-slim
+        env:
+          ORACLE_PASSWORD: password
+          ORACLE_CHARACTERSET: AL32UTF8
+        ports:
+          - 1521:1521
+        options: >-
+          --health-cmd "healthcheck.sh"
+          --health-interval 30s
+          --health-timeout 60s
+          --health-retries 15
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Install activerecord and testsuite from git
+        run: |
+          pip install "rhosocial-activerecord @ git+https://github.com/rhosocial/python-activerecord.git@feature/activerecord-ddl"  # NOSONAR
+          pip install "rhosocial-activerecord-testsuite @ git+https://github.com/rhosocial/python-activerecord-testsuite.git@feature/activerecord-ddl"  # NOSONAR
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Wait for Oracle and test connectivity
+        run: |
+          python -c "
+          import sys, time, oracledb
+          max_retries = 30
+          for attempt in range(max_retries):
+              try:
+                  conn = oracledb.connect(
+                      user='system', password='password',
+                      dsn='localhost:1521/FREEPDB1')
+                  conn.close()
+                  print('Oracle 26ai connectivity OK')
+                  break
+              except Exception as e:
+                  if attempt < max_retries - 1:
+                      print(f'Retry {attempt+1}/{max_retries}: {e}')
+                      time.sleep(10)
+                  else:
+                      print(f'Failed: {e}')
+                      sys.exit(1)
+          "
+
+      - name: Ensure PDB service registered with listener
+        run: |
+          docker exec -i ${{ job.services.oracle.id }} sqlplus -L / as sysdba <<EOF
+          -- Boost connection capacity so benchmark setup (fresh schema users
+          -- per run) does not exhaust the dispatcher / session pool.
+          alter system set processes=600 scope=spfile;
+          alter system set sessions=900 scope=spfile;
+          alter system set dispatchers='(PROTOCOL=TCP)(DISPATCHERS=4)' scope=both;
+          alter system set local_listener='(ADDRESS=(PROTOCOL=TCP)(HOST=0.0.0.0)(PORT=1521))' scope=both;
+          alter system register;
+          exit;
+          EOF
+          docker restart ${{ job.services.oracle.id }}
+          sleep 30
+          docker exec -i ${{ job.services.oracle.id }} sqlplus -L / as sysdba <<EOF
+          alter system set dispatchers='(PROTOCOL=TCP)(DISPATCHERS=4)' scope=both;
+          alter system register;
+          exit;
+          EOF
+          sleep 5
+          python -c "
+          import oracledb
+          conn = oracledb.connect(
+              user='system', password='password',
+              dsn='localhost:1521/FREEPDB1')
+          conn.close()
+          print('PDB service FREEPDB1 registered OK')
+          "
+
+      - name: Create Oracle scenario config
+        run: |
+          cat > oracle_scenarios.yaml << EOF
+          scenarios:
+            oracle_26ai:
+              host: localhost
+              port: 1521
+              username: system
+              password: password
+              service_name: FREEPDB1
+              encoding: AL32UTF8
+          EOF
+          echo "ORACLE_SCENARIOS_CONFIG_PATH=$(pwd)/oracle_scenarios.yaml" >> $GITHUB_ENV
+
+      - name: Run shared benchmark contracts
+        run: |
+          set -o pipefail
+          export PYTHONPATH=src:tests
+          TESTSUITE_DIR=$(python - <<'PY'
+          import pathlib
+          import rhosocial.activerecord.testsuite as testsuite
+
+          print(pathlib.Path(testsuite.__file__).parent)
+          PY
+          )
+          python -m pytest \
+            -p tests.benchmark.providers \
+            --rootdir=. \
+            --confcutdir=. \
+            "$TESTSUITE_DIR/benchmark/crud/core" \
+            "$TESTSUITE_DIR/benchmark/query" \
+            "$TESTSUITE_DIR/benchmark/transaction" \
+            "$TESTSUITE_DIR/benchmark/mixin" \
+            -m benchmark \
+            --benchmark-size=small \
+            --benchmark-sort=mean \
+            --tb=short | tee -a benchmark-output.txt
+
+      - name: Write benchmark conclusion
+        if: always()
+        run: |
+          {
+            echo "## Oracle 26ai Benchmark Conclusion"
+            echo
+            echo "- Python: 3.14"
+            echo "- Server: Oracle 26ai (gvenzl/oracle-free:23-slim), scenario oracle_26ai"
+            echo "- Scope: shared testsuite benchmark contracts (crud/query/transaction/mixin)"
+            echo "- Size: small"
+            echo "- Result: benchmark job fails only when benchmark execution or correctness checks fail."
+            echo
+            echo '```text'
+            grep -A 120 "benchmark:" benchmark-output.txt || cat benchmark-output.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
