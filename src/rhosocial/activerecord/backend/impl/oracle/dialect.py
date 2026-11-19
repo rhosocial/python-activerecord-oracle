@@ -517,6 +517,25 @@ class OracleDialect(
             )
         return sql, expr.query_params
 
+    def format_exists_predicate(self, expr: Any) -> Tuple[str, tuple]:
+        """Render a scalar ``EXISTS`` as ``CASE WHEN ... THEN 1 ELSE 0 END``.
+
+        Core's ``exists()`` uses ``ExistsPredicate`` as an aliased scalar select
+        expression, which renders as ``SELECT EXISTS (subquery) AS ...`` on
+        dialects with a boolean type. Oracle has no boolean scalar and rejects
+        EXISTS in a SELECT list (ORA-00936: missing expression), so the aliased
+        (scalar) form maps to the portable integer 1/0 form; ``_run_scalar``
+        reads it back and ``bool()`` coerces it. An unaliased EXISTS stays a
+        plain boolean predicate, preserving its behaviour in WHERE/HAVING
+        contexts. This is the same fix SQL Server applies in T-SQL.
+        """
+        subquery_sql, subquery_params = expr.subquery.to_sql()
+        negation = "NOT " if getattr(expr, "is_not", False) else ""
+        exists_clause = f"{negation}EXISTS {subquery_sql}"
+        if getattr(expr, "alias", None):
+            exists_clause = f"CASE WHEN {exists_clause} THEN 1 ELSE 0 END"
+        return self._with_predicate_alias(exists_clause, expr), subquery_params
+
     def get_server_version(self) -> Tuple[int, int, int]:
         """Return the configured Oracle version tuple."""
         return self.version
