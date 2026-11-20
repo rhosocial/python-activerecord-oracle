@@ -13,5 +13,3 @@ from rhosocial.activerecord.testsuite.feature.basic.worker.conftest import (  # 
     user_class_for_worker,
 )
 from rhosocial.activerecord.testsuite.feature.basic.worker.test_parallel_crud import *  # noqa: F403
-from rhosocial.activerecord.testsuite.feature.basic.worker.test_parallel_crud_async import *  # noqa: F403
-

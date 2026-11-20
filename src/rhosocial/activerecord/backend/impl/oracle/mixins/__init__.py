@@ -5,6 +5,7 @@ This package aggregates Oracle-specific mixins that, combined with the
 core framework mixins, provide the full Oracle dialect surface area.
 """
 
+from .integer_auto_increment_column_suggestion import OracleIntegerAutoIncrementColumnSuggestionMixin
 from .analyze import OracleAnalyzeMixin
 from .backend_mixin import OracleBackendMixin
 from .collation import OracleCollationMixin
@@ -16,6 +17,7 @@ from .database_link import OracleDatabaseLinkMixin
 from .datetime_op import OracleDateTimeMixin
 from .ddl import OracleDDLMixin
 from .ddl_type import OracleTypeDDLMixin
+from .data_type_suggestions import OracleDataTypeSuggestionsMixin
 from .dml import OracleDMLOperationMixin
 from .expression import OracleExpressionMixin
 from .features import OracleFeaturesMixin
@@ -51,6 +53,7 @@ from .ddl_view import OracleViewMixin
 from .explain import OracleExplainMixin
 
 __all__ = [
+    'OracleIntegerAutoIncrementColumnSuggestionMixin',
     "OracleAnalyzeMixin",
     "OracleBackendMixin",
     "OracleCollationMixin",
@@ -58,6 +61,7 @@ __all__ = [
     "OracleDateTimeMixin",
     "OracleDDLMixin",
     "OracleTypeDDLMixin",
+    "OracleDataTypeSuggestionsMixin",
     "OracleExpressionMixin",
     "OracleFeaturesMixin",
     "OracleFunctionFormatMixin",

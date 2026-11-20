@@ -380,15 +380,15 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         """
         Convert non-basic types to Oracle-compatible values.
 
-        oracledb thin mode only supports basic Python types (str, int, float, bytes, None)
-        for bind parameters. Types like time, dict, list, UUID, Decimal must be serialized
-        to strings or converted to compatible types.
+        ``datetime`` is bound as-is: oracledb binds a Python ``datetime`` to
+        ``DATE``, ``TIMESTAMP`` and ``TIMESTAMP WITH TIME ZONE`` natively,
+        truncating microseconds for ``DATE`` and keeping them (and the UTC
+        offset) for the timestamp types.  Formatting it to text instead broke
+        ``DATE`` columns (ORA-01830: ``DATE`` has no fractional seconds) and
+        dropped the UTC offset of ``TIMESTAMP WITH TIME ZONE`` binds.
 
-        Args:
-            params: Original parameter tuple
-
-        Returns:
-            Tuple with converted values suitable for oracledb binding
+        Types like time, dict, list, UUID and Decimal must still be serialized
+        to driver-compatible values (Oracle has no ``TIME`` column type).
         """
         from datetime import datetime, time
         from decimal import Decimal
@@ -401,7 +401,7 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
                 if isinstance(param, bool):
                     converted.append(1 if param else 0)
                 elif isinstance(param, datetime):
-                    converted.append(param.strftime('%Y-%m-%d %H:%M:%S.%f'))
+                    converted.append(param)
                 elif isinstance(param, time):
                     converted.append(param.strftime('%H:%M:%S'))
                 elif isinstance(param, (dict, list)):
@@ -417,6 +417,30 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
             return tuple(converted)
         finally:
             pass
+
+    async def _coerce_datetime_for_text_columns(self, options) -> dict:
+        """Serialize ``datetime`` values whose target column is a text carrier.
+
+        Async mirror of :meth:`OracleBackend._coerce_datetime_for_text_columns`:
+        a datetime field declared as ``TextType()`` lands in a CLOB, which
+        cannot accept a native TIMESTAMP bind (ORA-00932). Native timestamp
+        columns are left alone.
+        """
+        data = options.data
+        datetime_keys = [
+            key
+            for key, value in data.items()
+            if isinstance(value, datetime.datetime) and not hasattr(value, "to_sql")
+        ]
+        if not datetime_keys:
+            return data
+        table = f"{options.schema_name}.{options.table}" if options.schema_name else options.table
+        coerced = dict(data)
+        for key in datetime_keys:
+            declared = await self._lookup_oracle_data_type_async(table, str(key)) or ""
+            if any(carrier in declared for carrier in ("CLOB", "VARCHAR", "NVARCHAR", "LONG")):
+                coerced[key] = data[key].isoformat()
+        return coerced
 
     async def _process_result_set(
         self, cursor, is_select, column_adapters=None, column_mapping=None
@@ -450,12 +474,27 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         return final_results
 
     def _set_input_sizes_for_params(self, cursor, params) -> None:
+        """Declare the bind type a value needs, where the default would lose it.
+
+        Same contract as the synchronous method: a long string is bound as
+        CLOB, a naive ``datetime`` as ``TIMESTAMP`` (the default is ``DATE``,
+        which drops microseconds), and an aware one as
+        ``TIMESTAMP WITH TIME ZONE`` so its offset is carried.
+        """
         if not params:
             return
-        sizes = [
-            oracledb.DB_TYPE_CLOB if isinstance(param, str) and len(param.encode('utf-8')) > 4000 else None
-            for param in params
-        ]
+        sizes = []
+        for param in params:
+            if isinstance(param, datetime.datetime):
+                sizes.append(
+                    oracledb.DB_TYPE_TIMESTAMP_TZ
+                    if param.tzinfo is not None
+                    else oracledb.DB_TYPE_TIMESTAMP
+                )
+            elif isinstance(param, str) and len(param.encode("utf-8")) > 4000:
+                sizes.append(oracledb.DB_TYPE_CLOB)
+            else:
+                sizes.append(None)
         if any(size is not None for size in sizes):
             cursor.setinputsizes(*sizes)
 
@@ -950,9 +989,12 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         from rhosocial.activerecord.backend.expression import Column as ExprColumn
         from rhosocial.activerecord.backend.options import ExecutionOptions, StatementType
 
-        # Process values - wrap in Literal if not already an expression
+        # Process values - wrap in Literal if not already an expression.
+        # Datetimes bound to a text-carrier column are serialized first so a
+        # native TIMESTAMP bind never reaches a CLOB (ORA-00932).
+        data = await self._coerce_datetime_for_text_columns(options)
         processed_values = []
-        for v in options.data.values():
+        for v in data.values():
             if is_sql_expression(v):
                 processed_values.append(v)
             else:
@@ -1047,9 +1089,11 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
         from rhosocial.activerecord.backend.expression import Column as ExprColumn
         from rhosocial.activerecord.backend.options import ExecutionOptions, StatementType
 
-        # Process assignments
+        # Process assignments. Datetimes bound to a text-carrier column are
+        # serialized first so a native TIMESTAMP bind never reaches a CLOB.
+        data = await self._coerce_datetime_for_text_columns(options)
         assignments = {}
-        for k, v in options.data.items():
+        for k, v in data.items():
             if is_sql_expression(v):
                 assignments[k] = v
             else:
@@ -1278,6 +1322,10 @@ class AsyncOracleBackend(OracleBackendMixin, IntrospectorBackendMixin, AsyncStor
                 last_insert_id=None
             )
 
+            # RETURNING INTO bypasses execute(), so nothing has committed the
+            # DML.  Mirror the sync helper and the core async contract: commit
+            # when no explicit transaction encloses the statement.
+            await self._handle_auto_commit_if_needed()
             return result
 
         except Exception as e:

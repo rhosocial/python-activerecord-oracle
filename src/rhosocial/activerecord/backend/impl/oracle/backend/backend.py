@@ -443,15 +443,15 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         """
         Convert non-basic types to Oracle-compatible values.
 
-        oracledb thin mode only supports basic Python types (str, int, float, bytes, None)
-        for bind parameters. Types like time, dict, list, UUID, Decimal must be serialized
-        to strings or converted to compatible types.
+        ``datetime`` is bound as-is: oracledb binds a Python ``datetime`` to
+        ``DATE``, ``TIMESTAMP`` and ``TIMESTAMP WITH TIME ZONE`` natively,
+        truncating microseconds for ``DATE`` and keeping them (and the UTC
+        offset) for the timestamp types.  Formatting it to text instead broke
+        ``DATE`` columns (ORA-01830: ``DATE`` has no fractional seconds) and
+        dropped the UTC offset of ``TIMESTAMP WITH TIME ZONE`` binds.
 
-        Args:
-            params: Original parameter tuple
-
-        Returns:
-            Tuple with converted values suitable for oracledb binding
+        Types like time, dict, list, UUID and Decimal must still be serialized
+        to driver-compatible values (Oracle has no ``TIME`` column type).
         """
         from datetime import datetime, time
         from decimal import Decimal
@@ -464,7 +464,7 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
                 if isinstance(param, bool):
                     converted.append(1 if param else 0)
                 elif isinstance(param, datetime):
-                    converted.append(param.strftime('%Y-%m-%d %H:%M:%S.%f'))
+                    converted.append(param)
                 elif isinstance(param, time):
                     converted.append(param.strftime('%H:%M:%S'))
                 elif isinstance(param, (dict, list)):
@@ -480,6 +480,34 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
             return tuple(converted)
         finally:
             pass
+
+    def _coerce_datetime_for_text_columns(self, options) -> dict:
+        """Serialize ``datetime`` values whose target column is a text carrier.
+
+        Oracle binds a Python ``datetime`` natively as ``TIMESTAMP`` -- the right
+        behaviour for a native ``TIMESTAMP`` column, and the reason the datetime
+        adapter passes the value through unchanged. A field declared with
+        ``UseSqlType(TextType())`` is a CLOB instead, and a TIMESTAMP bind cannot
+        go into a CLOB (ORA-00932). The core selects its adapter by Python type
+        only, so it cannot see that declaration; the backend can see the column's
+        real type, and does the serialization here. Native timestamp columns are
+        left alone.
+        """
+        data = options.data
+        datetime_keys = [
+            key
+            for key, value in data.items()
+            if isinstance(value, datetime.datetime) and not hasattr(value, "to_sql")
+        ]
+        if not datetime_keys:
+            return data
+        table = f"{options.schema_name}.{options.table}" if options.schema_name else options.table
+        coerced = dict(data)
+        for key in datetime_keys:
+            declared = self._lookup_oracle_data_type(table, str(key)) or ""
+            if any(carrier in declared for carrier in ("CLOB", "VARCHAR", "NVARCHAR", "LONG")):
+                coerced[key] = data[key].isoformat()
+        return coerced
 
     def adapt_row_types(self, row_dict, column_adapters):
         row_dict = {
@@ -497,12 +525,34 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         return super().adapt_row_types(row_dict, column_adapters)
 
     def _set_input_sizes_for_params(self, cursor, params) -> None:
+        """Declare the bind type a value needs, where the default would lose it.
+
+        Two values need one:
+
+        * a long string is bound as CLOB, so it is not truncated at the driver's
+          4000-byte inline limit;
+        * a ``datetime`` is bound as ``TIMESTAMP`` -- left to the default the
+          driver sends a ``DATE``, which Oracle stores with whole seconds and
+          silently drops the microseconds (measured: a bound ``datetime`` with
+          ````.123456`` reads back without it, while the same instant inserted
+          through ``TO_TIMESTAMP`` keeps it). An aware value is bound as
+          ``TIMESTAMP WITH TIME ZONE`` so its offset is carried rather than
+          converted to the session's.
+        """
         if not params:
             return
-        sizes = [
-            oracledb.DB_TYPE_CLOB if isinstance(param, str) and len(param.encode('utf-8')) > 4000 else None
-            for param in params
-        ]
+        sizes = []
+        for param in params:
+            if isinstance(param, datetime.datetime):
+                sizes.append(
+                    oracledb.DB_TYPE_TIMESTAMP_TZ
+                    if param.tzinfo is not None
+                    else oracledb.DB_TYPE_TIMESTAMP
+                )
+            elif isinstance(param, str) and len(param.encode("utf-8")) > 4000:
+                sizes.append(oracledb.DB_TYPE_CLOB)
+            else:
+                sizes.append(None)
         if any(size is not None for size in sizes):
             cursor.setinputsizes(*sizes)
 
@@ -1114,9 +1164,12 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         from rhosocial.activerecord.backend.expression import Column as ExprColumn
         from rhosocial.activerecord.backend.options import ExecutionOptions, StatementType
 
-        # Process values - wrap in Literal if not already an expression
+        # Process values - wrap in Literal if not already an expression.
+        # Datetimes bound to a text-carrier column are serialized first so a
+        # native TIMESTAMP bind never reaches a CLOB (ORA-00932).
+        data = self._coerce_datetime_for_text_columns(options)
         processed_values = []
-        for v in options.data.values():
+        for v in data.values():
             if is_sql_expression(v):
                 processed_values.append(v)
             else:
@@ -1205,9 +1258,11 @@ class OracleBackend(IntrospectorBackendMixin, OracleConcurrencyMixin, OracleBack
         from rhosocial.activerecord.backend.expression import Column as ExprColumn
         from rhosocial.activerecord.backend.options import ExecutionOptions, StatementType
 
-        # Process assignments
+        # Process assignments. Datetimes bound to a text-carrier column are
+        # serialized first so a native TIMESTAMP bind never reaches a CLOB.
+        data = self._coerce_datetime_for_text_columns(options)
         assignments = {}
-        for k, v in options.data.items():
+        for k, v in data.items():
             if is_sql_expression(v):
                 assignments[k] = v
             else:

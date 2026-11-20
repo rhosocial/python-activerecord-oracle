@@ -19,19 +19,28 @@ import uuid
 from datetime import datetime, date, time
 from decimal import Decimal
 from enum import Enum
-from typing import Any, Dict, Optional, Type, Union, get_origin, get_args
+from typing import Any, Callable, Dict, Optional, Type, Union, get_origin, get_args
 
 from rhosocial.activerecord.backend.type_adapter import BaseSQLTypeAdapter
 
 
 class OracleBooleanAdapter(BaseSQLTypeAdapter):
-    """Adapter for converting between Python bool and Oracle NUMBER(1)."""
+    """Adapter for converting between Python bool and Oracle booleans.
+
+    Oracle stores booleans either as ``NUMBER(1)`` (the classic portable
+    carrier) or as the native ``BOOLEAN`` type (23ai+).  The target decides:
+    ``int`` binds 0/1, ``bool`` binds a real boolean so a native ``BOOLEAN``
+    column never goes through the numeric carrier.
+    """
 
     def __init__(self):
         super().__init__()
         self.register_type(bool, int)
+        self.register_type(bool, bool)
 
     def _do_to_database(self, value: Any, target_type: Type, options: Optional[Dict[str, Any]]) -> Any:
+        if target_type is bool:
+            return bool(value)
         return 1 if bool(value) else 0
 
     def _do_from_database(self, value: Any, target_type: Type, options: Optional[Dict[str, Any]]) -> Any:
@@ -114,15 +123,21 @@ class OracleDateAdapter(BaseSQLTypeAdapter):
 
 
 class OracleTimeAdapter(BaseSQLTypeAdapter):
-    """Adapter for converting between Python time and Oracle INTERVAL or VARCHAR2."""
+    """Adapter for converting between Python time and Oracle ``VARCHAR2(8)``.
+
+    Oracle has no ``TIME`` column type; the dialect's generic time carrier is
+    ``VARCHAR2(8)`` (see ``format_data_type_time``), which holds ``HH:MM:SS``.
+    Sub-second precision cannot be stored there, so it is dropped on write
+    rather than overflowing the column (ORA-12899).  A wider carrier can be
+    declared explicitly when fractional seconds matter.
+    """
 
     def __init__(self):
         super().__init__()
         self.register_type(time, str)
 
     def _do_to_database(self, value: Any, target_type: Type, options: Optional[Dict[str, Any]]) -> Any:
-        # Store as ISO format string for simplicity
-        return value.isoformat()
+        return value.strftime('%H:%M:%S')
 
     def _do_from_database(self, value: Any, target_type: Type, options: Optional[Dict[str, Any]]) -> Any:
         if isinstance(value, str):
@@ -160,22 +175,42 @@ class OracleDecimalAdapter(BaseSQLTypeAdapter):
 
 
 class OracleJSONAdapter(BaseSQLTypeAdapter):
-    """Adapter for converting between Python dict/list and Oracle JSON storage."""
+    """Adapter for converting between Python dict/list and Oracle JSON storage.
 
-    def __init__(self):
+    The optional ``default`` and ``object_hook`` mirror their ``json.dumps`` /
+    ``json.loads`` namesakes.  Leaving both as ``None`` keeps the historical
+    behaviour byte-for-byte identical.  Oracle may hand back a native JSON
+    value that ``oracledb`` already decoded to ``dict``/``list``; ``object_hook``
+    is then run over that decoded value by re-encoding and decoding it, so the
+    hook sees every object just as it would through ``json.loads``.
+    """
+
+    def __init__(
+        self,
+        default: Optional[Callable[[Any], Any]] = None,
+        object_hook: Optional[Callable[[dict], Any]] = None,
+    ):
         super().__init__()
+        self.default = default
+        self.object_hook = object_hook
         self.register_type(dict, str)
         self.register_type(list, str)
 
+    def _apply_object_hook(self, value: Any) -> Any:
+        """Run ``object_hook`` over an already-decoded JSON value."""
+        if self.object_hook is None:
+            return value
+        return json.loads(json.dumps(value, default=self.default), object_hook=self.object_hook)
+
     def _do_to_database(self, value: Any, target_type: Type, options: Optional[Dict[str, Any]]) -> Any:
-        return json.dumps(value)
+        return json.dumps(value, default=self.default)
 
     def _do_from_database(self, value: Any, target_type: Type, options: Optional[Dict[str, Any]]) -> Any:
         if hasattr(value, 'read'):
             value = value.read()
         if isinstance(value, str):
             try:
-                parsed = json.loads(value)
+                parsed = json.loads(value, object_hook=self.object_hook)
                 # If the model declares the column as a string field, keep
                 # the JSON string instead of returning a parsed object;
                 # other backends (and ``JsonUser.preferences`` tests in the
@@ -191,8 +226,8 @@ class OracleJSONAdapter(BaseSQLTypeAdapter):
                 native = dict(value) if isinstance(value, dict) else list(value)
                 if target_type is str:
                     # Serialise back so the consumer still sees a JSON string
-                    return json.dumps(native, ensure_ascii=False)
-                return native
+                    return json.dumps(native, ensure_ascii=False, default=self.default)
+                return self._apply_object_hook(native)
             except (TypeError, ValueError):
                 pass
         return value
@@ -218,34 +253,103 @@ class OracleBytesAdapter(BaseSQLTypeAdapter):
 
 
 class OracleIntervalAdapter(BaseSQLTypeAdapter):
-    """Adapter for Oracle INTERVAL types (YEAR TO MONTH, DAY TO SECOND)."""
+    """Adapter for Oracle INTERVAL types (YEAR TO MONTH, DAY TO SECOND).
+
+    The Python surface is the two wrapper dataclasses plus ``timedelta`` for
+    ``DAY TO SECOND``.  Reads also accept the driver's own values: oracledb
+    returns ``oracledb.IntervalYM`` for ``YEAR TO MONTH`` and ``datetime.
+    timedelta`` for ``DAY TO SECOND``; both are converted to the declared
+    Python type instead of passing the driver object through (which would fail
+    pydantic validation).
+
+    ``YEAR TO MONTH`` is deliberately **not** converted to ``timedelta``: a
+    month's length is not a constant, so a timedelta cannot carry it honestly.
+    Declare ``IntervalYearToMonth`` for that column.
+    """
 
     def __init__(self):
         super().__init__()
         # Import here to avoid circular imports
-        from .type_values import IntervalYearToMonth, IntervalDayToSecond
+        from datetime import timedelta
+
+        from .type_values import IntervalDayToSecond, IntervalYearToMonth
+
         self.IntervalYearToMonth = IntervalYearToMonth
         self.IntervalDayToSecond = IntervalDayToSecond
         self.register_type(IntervalYearToMonth, str)
         self.register_type(IntervalDayToSecond, str)
+        self.register_type(timedelta, str)
 
     def _do_to_database(self, value: Any, target_type: Type, options: Optional[Dict[str, Any]]) -> Any:
+        from datetime import timedelta
+
+        if isinstance(value, timedelta):
+            return str(self.IntervalDayToSecond.from_timedelta(value))
         return str(value)
 
     def _do_from_database(self, value: Any, target_type: Type, options: Optional[Dict[str, Any]]) -> Any:
+        from datetime import timedelta
+
         if isinstance(value, str):
-            # Determine if it's YEAR TO MONTH or DAY TO SECOND
-            if ' ' in value or ':' in value:
-                # DAY TO SECOND format: '5 12:30:45'
-                return self.IntervalDayToSecond.from_string(value)
-            elif '-' in value:
-                # YEAR TO MONTH format: '01-06'
-                return self.IntervalYearToMonth.from_string(value)
+            text = value.strip()
+            # DAY TO SECOND is 'D HH:MM:SS[.ffffff]' (a lone time part is
+            # possible); YEAR TO MONTH is '[-]YY-MM'.
+            if ':' in text or ' ' in text:
+                parsed = self.IntervalDayToSecond.from_string(text)
+            elif '-' in text:
+                parsed = self.IntervalYearToMonth.from_string(text)
+            else:
+                raise ValueError(f"Unrecognised Oracle interval text: {text!r}")
+            return self._coerce(parsed, target_type)
+
+        if isinstance(value, timedelta):
+            if target_type is timedelta:
+                return value
+            if target_type is self.IntervalDayToSecond:
+                return self.IntervalDayToSecond.from_timedelta(value)
+            if target_type is self.IntervalYearToMonth:
+                raise ValueError(
+                    "a DAY TO SECOND interval cannot be expressed as YEAR TO MONTH"
+                )
+            return value
+
+        # oracledb.IntervalYM(years=..., months=...) for YEAR TO MONTH.
+        if hasattr(value, 'years') and hasattr(value, 'months'):
+            parsed_ym = self.IntervalYearToMonth(
+                years=int(value.years), months=int(value.months)
+            )
+            if target_type is timedelta:
+                raise ValueError(
+                    "a YEAR TO MONTH interval cannot be expressed as timedelta: "
+                    "months have no fixed length"
+                )
+            return parsed_ym
+
         return value
+
+    @staticmethod
+    def _coerce(parsed: Any, target_type: Type) -> Any:
+        """Return the parsed interval in the shape the field declared."""
+        from datetime import timedelta
+
+        if target_type is timedelta:
+            if not hasattr(parsed, 'to_timedelta'):
+                raise ValueError(
+                    "a YEAR TO MONTH interval cannot be expressed as timedelta: "
+                    "months have no fixed length"
+                )
+            return parsed.to_timedelta()
+        return parsed
 
 
 class OracleRowIDAdapter(BaseSQLTypeAdapter):
-    """Adapter for Oracle ROWID/UROWID types."""
+    """Adapter for Oracle ROWID/UROWID types.
+
+    oracledb returns both as plain ``str``.  The read path therefore has to
+    choose the wrapper from what the field declares: ``OracleRowID`` for an
+    ``ROWID`` column, ``OracleURowID`` for ``UROWID``.  Only when the target
+    is not one of those wrappers does it fall back to shape detection.
+    """
 
     def __init__(self):
         super().__init__()
@@ -261,14 +365,21 @@ class OracleRowIDAdapter(BaseSQLTypeAdapter):
         return str(value)
 
     def _do_from_database(self, value: Any, target_type: Type, options: Optional[Dict[str, Any]]) -> Any:
-        if isinstance(value, str):
-            if len(value) == 18:
-                try:
-                    return self.OracleRowID(value)
-                except ValueError:
-                    return self.OracleURowID(value)
+        if not isinstance(value, str):
+            return value
+        if target_type is self.OracleURowID:
             return self.OracleURowID(value)
-        return value
+        if target_type is self.OracleRowID:
+            try:
+                return self.OracleRowID(value)
+            except ValueError:
+                return self.OracleURowID(value)
+        if len(value) == 18:
+            try:
+                return self.OracleRowID(value)
+            except ValueError:
+                return self.OracleURowID(value)
+        return self.OracleURowID(value)
 
 
 class OracleXMLAdapter(BaseSQLTypeAdapter):
@@ -500,3 +611,15 @@ oracle_adapters = [
     OracleSDOGeometryAdapter,
     OracleVectorAdapter,
 ]
+
+# Neutral value adapters live in their own module (this file stays a single
+# backend-native adapter module) but are re-exported here so callers have one
+# import site.
+from .neutral_adapters import (  # noqa: E402  (re-export after the native set)
+    OracleNeutralBitStringAdapter,  # noqa: F401
+    OracleNeutralGeometryAdapter,  # noqa: F401
+    OracleNeutralMacAddressAdapter,  # noqa: F401
+    OracleNeutralRangeAdapter,  # noqa: F401
+    OracleNeutralVectorAdapter,  # noqa: F401
+    neutral_adapters,  # noqa: F401
+)

@@ -108,6 +108,7 @@ from rhosocial.activerecord.backend.expression.types import (
     BlobType,
     DoubleType,
     FloatType,
+    LENGTH_PARAMETERS,
     TextType,
     TimestampTzType,
     VarBinaryType,
@@ -208,7 +209,7 @@ class OracleRawType(VarBinaryType):
     they are one type would be false about storage.
 
     Prefixed because core ``varbinary`` is **substituted** on this backend
-    rather than rendered (``suggested_data_types()`` names this class for it):
+    rather than rendered (``substitute_data_types()`` names this class for it):
     there is no ``format_data_type_varbinary``, so this class is the only way
     to write a bounded byte string at all.
 
@@ -236,7 +237,7 @@ class OracleRawType(VarBinaryType):
             ``MAX_STRING_SIZE = STANDARD`` ceiling: a substitute that renders
             a 2 KB column for a 128-bit identifier is a column that does not
             match what the caller declared, and this class is what
-            ``suggested_data_types()`` points a caller at for ``uuid``.
+            ``substitute_data_types()`` points a caller at for ``uuid``.
 
             It is **not** a default for ``binary``, the other concept this
             class substitutes for: 16 is the width a UUID needs and nothing
@@ -245,7 +246,7 @@ class OracleRawType(VarBinaryType):
             caller declared. ``varbinary`` is not this class at all — a
             variable-length byte string with no ceiling is core
             :class:`~...expression.types.BlobType` (``BLOB``). See
-            ``mixins/types.py``'s ``suggested_data_types`` for the reasoning
+            ``mixins/types.py``'s ``substitute_data_types`` for the reasoning
             and the measurements.
 
             A byte string of any other width is spelled out —
@@ -257,7 +258,7 @@ class OracleRawType(VarBinaryType):
     # ``RAW(n)`` is bounded and the bound is the declaration; two RAW columns
     #     of different widths are different columns.
 
-    PARAMETERS = ("length",)
+    PARAMETERS = LENGTH_PARAMETERS
 
     name = "oracle_raw"
 

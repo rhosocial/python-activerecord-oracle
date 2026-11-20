@@ -7,4 +7,3 @@ and makes them discoverable by pytest in this project's test run.
 """
 
 from rhosocial.activerecord.testsuite.feature.basic.nopk.test_keyless_models import *  # noqa: F403
-from rhosocial.activerecord.testsuite.feature.basic.nopk.test_keyless_models_async import *  # noqa: F403

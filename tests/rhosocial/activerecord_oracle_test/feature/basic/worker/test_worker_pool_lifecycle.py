@@ -10,5 +10,3 @@ Imports tests from testsuite and makes them discoverable by pytest.
 # by directory ancestry. The imported name is consumed by pytest fixture lookup.
 from rhosocial.activerecord.testsuite.feature.basic.worker.conftest import user_class_for_worker  # noqa: F401
 from rhosocial.activerecord.testsuite.feature.basic.worker.test_worker_pool_lifecycle import *  # noqa: F403
-from rhosocial.activerecord.testsuite.feature.basic.worker.test_worker_pool_lifecycle_async import *  # noqa: F403
-

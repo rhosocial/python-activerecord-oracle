@@ -124,3 +124,7 @@ class AsyncOracleTransactionManager(OracleTransactionMixin, AsyncTransactionMana
     def supports_savepoint(self) -> bool:
         """Check if savepoints are supported."""
         return True
+
+    async def supports_savepoint(self) -> bool:
+        """Async counterpart of the sync capability probe."""
+        return self._backend.dialect.supports_savepoint()

@@ -28,7 +28,7 @@ class OracleDataTypeSupport(Protocol):
       the dispatch: :meth:`DataTypeMixin.format_data_type` looks the method up
       from ``type(data_type).name``, so a name without a formatter is a type
       that cannot be written.
-    * **Stance** — ``suggested_data_types()``, for the core concepts Oracle
+    * **Stance** — ``substitute_data_types()``, for the core concepts Oracle
       stores some other way. A concept that is neither rendered nor named as a
       substitute leaves the caller with "unsupported" and nothing to go on,
       which is indistinguishable from never having considered it.
@@ -67,7 +67,7 @@ class OracleDataTypeSupport(Protocol):
         """``{generic name: concrete DataType class}`` for everything rendered."""
         ...
 
-    def suggested_data_types(self) -> Dict[str, type]:
+    def substitute_data_types(self) -> Dict[str, type]:
         """``{core concept name: the DataType Oracle stores instead}``."""
         ...
 

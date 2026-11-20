@@ -1,5 +1,11 @@
 # Oracle Test Scenarios Configuration
-# Copy this file and modify for your environment
+# Copy this file to oracle_scenarios.yaml and modify it for your environment.
+#
+# One server per scenario.  The logical name comes from the test directory: it
+# becomes the schema user a test connects as, while maintenance work (creating
+# and dropping that user) runs as the administrative user configured here, so
+# that user must be allowed to CREATE and DROP users.  Do not put a
+# database/schema name here.
 
 scenarios:
   # Default Oracle Free / XE scenario
@@ -7,24 +13,21 @@ scenarios:
     host: localhost
     port: 1521
     service_name: FREEPDB1
-    username: test_user
-    password: test_password
-    database: test_db
+    username: system
+    password: password
 
   # Oracle 19c scenario
   oracle_19c:
     host: localhost
     port: 1521
     service_name: ORCLPDB1
-    username: test_user
-    password: test_password
-    database: test_db
+    username: system
+    password: password
 
   # Oracle 12c scenario
   oracle_12c:
     host: localhost
     port: 1521
     service_name: ORCLPDB1
-    username: test_user
-    password: test_password
-    database: test_db
+    username: system
+    password: password

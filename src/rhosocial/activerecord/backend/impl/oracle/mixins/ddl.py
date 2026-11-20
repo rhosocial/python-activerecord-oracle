@@ -206,33 +206,12 @@ class OracleDDLMixin:
         params.extend(attr_params)
 
         constraint_parts: List[str] = []
-        identity_clause: Optional[str] = None
-        identity_params: tuple = ()
 
         for constraint in col_def.constraints:
             constraint_sql, constraint_params = self.format_column_constraint(constraint)
             if constraint_sql.strip():
                 constraint_parts.append(constraint_sql.strip())
                 params.extend(constraint_params)
-
-            if (
-                isinstance(constraint.branch, ColumnPrimaryKeyConstraint)
-                and constraint.branch.is_auto_increment
-                and identity_clause is None
-            ):
-                # The legacy marker is the SQL-standard identity clause in its
-                # default generation mode, routed through the gated formatter
-                # so the version boundary lives in one place: Oracle < 12
-                # refuses by name instead of silently dropping the clause.
-                # The clause renders in the attribute position, before the
-                # inline constraints.
-                identity_clause, identity_params = self.format_identity_clause(
-                    IdentityClause(self, "BY DEFAULT")
-                )
-
-        if identity_clause is not None:
-            parts.append(identity_clause.strip())
-            params.extend(identity_params)
 
         if constraint_parts:
             parts.append(" ".join(constraint_parts))
