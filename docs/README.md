@@ -7,6 +7,7 @@ This directory contains documentation for the Oracle backend implementation of r
 - [Database Introspection](introspection.md)
 - [Date/Time Expressions](datetime-expressions.md)
 - [Partitioning and Partition Maintenance](partition.md)
+- [Migrations](en_US/migration/README.md) — Oracle-specific migration guide (English; [中文](zh_CN/migration/README.md))
 
 ## Overview
 
