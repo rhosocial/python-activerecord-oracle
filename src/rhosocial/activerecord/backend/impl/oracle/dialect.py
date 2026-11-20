@@ -5,6 +5,7 @@ Assembles the full Oracle dialect surface by composing generic mixins
 (provided by the core framework) together with Oracle-specific mixins
 that override version-gated capability checks and syntax formatters.
 """
+
 from typing import Any, Optional, Tuple, TYPE_CHECKING
 
 from rhosocial.activerecord.backend.dialect.base import SQLDialectBase
@@ -46,10 +47,8 @@ from rhosocial.activerecord.backend.dialect.mixins import (
     SQLXMLMixin,
     CollationMixin,
     CTEMixin,
-
     WindowFunctionMixin,
     JSONMixin,
-
     # Named objects: each *NameMixin turns one catalogue object into SQL
     # through its format_<kind>_object, and each inherits NamespaceMixin, so
     # each must precede it. RelationSourceMixin renders the FROM side.
@@ -74,9 +73,7 @@ from rhosocial.activerecord.backend.dialect.mixins import (
     ExplainMixin,
     GraphMixin,
     GraphTableMixin,
-
     MergeMixin,
-
     TemporalTableMixin,
     UpsertMixin,
     LateralJoinMixin,
@@ -160,6 +157,7 @@ from .mixins import (
     OracleViewMixin,
     OracleExplainMixin,
     OracleIntegerAutoIncrementColumnSuggestionMixin,
+    OraclePartitionSuggestionMixin,
 )
 from .protocols.partition import OraclePartitionSupport
 from .protocols.data_type import OracleDataTypeSupport
@@ -172,7 +170,8 @@ if TYPE_CHECKING:
 
 
 class OracleDialect(
-    # Backend suggestion first: no core mixin may shadow its answer.
+    # Backend suggestions first: no core mixin may shadow their answers.
+    OraclePartitionSuggestionMixin,
     OracleIntegerAutoIncrementColumnSuggestionMixin,
     # The bases below come in bundles: a backend mixin, then the core bundle
     # it stands in for. The backend's answer has to come first -- a mixin
@@ -260,16 +259,12 @@ class OracleDialect(
     SQLXMLMixin,
     CollationMixin,
     CTEMixin,
-
     WindowFunctionMixin,
     JSONMixin,
-
     ArrayMixin,
     ExplainMixin,
     GraphMixin,
-
     MergeMixin,
-
     TemporalTableMixin,
     UpsertMixin,
     LateralJoinMixin,
@@ -412,11 +407,7 @@ class OracleDialect(
         if value is None:
             return None
         if isinstance(value, str):
-            value = tuple(
-                int(part)
-                for part in value.strip().split(".")
-                if part.strip().isdigit()
-            )
+            value = tuple(int(part) for part in value.strip().split(".") if part.strip().isdigit())
         if not isinstance(value, (tuple, list)):
             raise TypeError("version_full must be a tuple or string")
         result = tuple(int(part) for part in value)
@@ -468,6 +459,7 @@ class OracleDialect(
             if self.is_reserved_word(identifier):
                 import warnings
                 from rhosocial.activerecord.backend.warnings import IdentifierQuotingWarning
+
                 warnings.warn(
                     f"Identifier '{identifier}' is a reserved word in {self.name} "
                     f"and may cause SQL errors without quoting.",
@@ -511,10 +503,7 @@ class OracleDialect(
         """
         sql = f"({expr.query_input})"
         if expr.alias:
-            sql = (
-                f"{sql}{self.source_alias_separator()}"
-                f"{self.format_identifier(expr.alias)}"
-            )
+            sql = f"{sql}{self.source_alias_separator()}" f"{self.format_identifier(expr.alias)}"
         return sql, expr.query_params
 
     def format_exists_predicate(self, expr: Any) -> Tuple[str, tuple]:

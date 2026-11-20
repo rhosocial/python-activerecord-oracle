@@ -7,7 +7,7 @@ This is the Oracle backend for [rhosocial-activerecord](https://github.com/rhoso
 
 - [Database Introspection](../introspection.md) — reading Oracle schema metadata.
 - [Date/Time Expressions](../datetime-expressions.md) — Oracle date/time handling.
-- [Partitioning and Partition Maintenance](../partition.md) — partitioned tables and maintenance operations.
+- [Partitioning: DDL, Suggestions and Introspection](../partition.md) — partitioned tables, lifecycle suggestions and introspection.
 - [Migrations](migration/README.md) — Oracle-specific migration concerns (the migration system itself is documented in the core chapter).
 
 ## Overview

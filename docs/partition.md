@@ -1,4 +1,4 @@
-# Partitioning and Partition Maintenance
+# Partitioning: DDL, Suggestions and Introspection
 
 Oracle partitioning is owned by the **backend**, not by an ActiveRecord model.
 The framework plan (`2026-11-02/partitioned-model-support.md`) puts the line
@@ -7,7 +7,7 @@ here:
 | Layer | Responsibility |
 |---|---|
 | ActiveRecord model | the composite primary-key shape a partitioned table needs, including every partitioning column |
-| Oracle backend | partition DDL expressions and partition maintenance |
+| Oracle backend | partition DDL expressions, lifecycle suggestions and introspection |
 | Application | table names, partition columns, retention policy and scheduling |
 
 Nothing in this package hard-codes an application's table name or retention
@@ -93,7 +93,7 @@ The plan layer refuses a count override when the table strategy is RANGE or
 LIST, and refuses subpartition definitions whose bound kind does not match the
 table strategy.
 
-## Maintenance: `OraclePartitionPlan`
+## Plans and lifecycle suggestions
 
 The backend's `partition` package describes a tree by policy rather than by a
 list of hand-written names:
@@ -103,9 +103,7 @@ from datetime import date
 
 from rhosocial.activerecord.backend.impl.oracle.partition import (
     OraclePartitionBranch,
-    OraclePartitionMaintenance,
     OraclePartitionPlan,
-    OracleSubpartitionPolicy,
 )
 
 plan = OraclePartitionPlan(
@@ -117,63 +115,44 @@ plan = OraclePartitionPlan(
         OraclePartitionBranch(name="P2", less_than=(date(2026, 3, 1),)),
     ),
 )
-maintenance = OraclePartitionMaintenance(backend)
-report = maintenance.ensure(plan)
 ```
 
 A plan has exactly one of:
 
 - `policy=` a generated first-level strategy
   (`OracleRangePolicy`, `OracleListPolicy`, `OracleHashPolicy`), or
-- `branches=` explicit first-level partitions.
+- `branches=` explicit first-level partitions,
 
 and at most one `subpartition=` table-level strategy
 (`OracleSubpartitionPolicy`). The schema is optional (`schema="APP"`); the
 name pattern defaults to `"{parent}_{suffix}"`.
 
-### Operations
+The dialect answers *how* each lifecycle operation is spelled through the
+eight backend-suggestion methods. Each returns a frozen suggestion whose
+`operations` is an ordered tuple of real DDL expression nodes, `False` when
+Oracle has no mechanism for the strategy, or `None` when nothing needs doing:
 
-| Call | What it does |
+| Method | Oracle answer |
 |---|---|
-| `ensure(plan, through=None)` | Reads `ALL_TAB_PARTITIONS`, then issues `ALTER TABLE ... ADD PARTITION` only for missing partitions. Oracle has no `ADD PARTITION IF NOT EXISTS`, so idempotency comes from the read. |
-| `list(plan, through=None)` | Returns `OraclePartitionReport`: the dictionary tree (root, partitions, subpartitions), `missing`, `orphans`, `issues` and `errors`. No DDL. |
-| `validate(plan, through=None)` | `list` with the focus on `issues`: strategy mismatch, subpartition-count mismatch, gaps, overlaps, missing parent. It never repairs. |
-| `drop_before(plan, cutoff, dry_run=True)` | Drops top-level partitions whose **whole** range ends at or before `cutoff`. Default is a dry run. `MAXVALUE` is never a candidate. |
-| `drop_partition(plan, name, dry_run=False)` | Explicitly drops one named top-level partition and its subpartitions. |
+| `suggest_partition_build` | `PARTITION BY RANGE/LIST/HASH`, or `INTERVAL` / `REFERENCE` clause for CREATE TABLE |
+| `suggest_partition_table_drop` | `DROP TABLE` for the whole table (not one partition) |
+| `suggest_partition_table_alter` | `False` — Oracle cannot change a table's partitioning scheme in place |
+| `suggest_partition_add` | `ALTER TABLE ... ADD PARTITION <name>` per definition; no `IF NOT EXISTS` |
+| `suggest_partition_drop` | `ALTER TABLE ... DROP PARTITION <name>` (drops its subpartitions too) |
+| `suggest_partition_split` | `ALTER TABLE ... SPLIT PARTITION ... AT (...) INTO (...)` |
+| `suggest_partition_merge` | `ALTER TABLE ... MERGE PARTITIONS p1, p2 INTO p3` |
+| `suggest_partition_retention` | `DROP PARTITION` for branches whose bound is at or before the cutoff; `MAXVALUE` is never a candidate |
 
-`AsyncOraclePartitionMaintenance` exposes the same five methods as coroutines.
+Adding and dropping are by partition **name**; idempotency comes from reading
+the data dictionary first, because Oracle has no `ADD PARTITION IF NOT EXISTS`.
+Retention compares each branch's upper bound (the `HIGH_VALUE` analog): a
+`MAXVALUE` terminator has no finite end and is never selected. The plan layer
+(`OracleRangePolicy(maxvalue=True)`) and the parser (`parse_high_value`) supply
+the values those comparisons use.
 
-`list` and `validate` compare every existing top-level partition's
-`HIGH_VALUE` with the plan: a RANGE `less_than` bound, a LIST value set, or a
-`MAXVALUE` terminator. A name that exists with a different bound is reported
-as `boundary mismatch`; a bound the conservative parser cannot recognize is
-reported as `unparsed bound` rather than passing silently. `ensure` therefore
-does not treat a boundary-mismatched partition as present. Each
-`OraclePartitionInfo` keeps the raw text on `bound` / `high_value` and stores
-`range_start`, `range_end` or the LIST `values` in `extras` when parsing
-succeeds.
-
-### Reports and Oracle's non-transactional DDL
-
-Oracle commits each `ALTER TABLE` implicitly. The executor therefore does not
-pretend a group of statements is atomic:
-
-- operations are executed one statement at a time;
-- `report.operations` lists the statements that succeeded (or would run, on a
-  dry run);
-- `report.errors` records each failure with Oracle's message;
-- the post-operation `list` shows what actually exists.
-
-Two Oracle limitations are reported rather than hidden:
-
-- **`ADD` above `MAXVALUE`.** Oracle cannot add a partition whose bound is
-  below the existing `MAXVALUE` partition; it raises `ORA-14074`. `validate`
-  states that the partition needs `SPLIT PARTITION` first, and `ensure`
-  records the server error.
-- **Dropping the only partition.** Oracle raises `ORA-14083` when a `DROP
-  PARTITION` would leave a partitioned table with no partitions. `drop_before`
-  records it; callers should keep at least one partition or plan a
-  reorganisation.
+Oracle commits each `ALTER TABLE` implicitly, so there is no transactional
+"ensure" executor in the backend. Callers apply the suggested expression chain
+one statement at a time and decide their own failure handling.
 
 ## Boundaries and labels
 
@@ -190,9 +169,7 @@ Two Oracle limitations are reported rather than hidden:
 ## Scope limits
 
 - No per-branch subpartition strategy is modelled, because Oracle has none.
-- No scheduler, daemon or CLI is added; the application calls `ensure` on its
-  write path and `drop_before` from its maintenance job.
+- No scheduler, daemon or CLI is added; the application owns scheduling and
+  decides how to apply the suggested DDL.
 - `attach` / `detach` are not applicable to Oracle; use `EXCHANGE PARTITION`.
-- The plan does not create the parent table. It reconciles partitions below an
-  already existing partitioned table, which keeps table DDL and table policy
-  separate.
+- REFERENCES are gated on Oracle version; `SYSTEM` partitioning is out of scope.

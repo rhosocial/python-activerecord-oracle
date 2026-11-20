@@ -3,27 +3,23 @@
 
 Every test is parameterized over the canonical catalog in
 ``partition_syntax_fixtures``.  The matrix pins plan generation, the
-table-level subpartition shape, DDL fragments, MAXVALUE handling and
-maintenance candidate selection without connecting to a server.
+table-level subpartition shape, DDL fragments and MAXVALUE handling without
+connecting to a server.
 """
 
-from datetime import date
 from typing import Any, Iterable, Tuple
 
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.partition import (
     OracleListPolicy,
-    OraclePartitionBranch,
-    OraclePartitionMaintenance,
     OraclePartitionPlan,
     OraclePartitionSpec,
 )
 from partition_syntax_fixtures import (
     CASES,
-    PartitionStubBackend,
     PartitionSyntaxCase,
+    build_add_all,
     build_plan_clause,
-    partition_infos,
     partition_syntax_case,
 )
 
@@ -46,8 +42,8 @@ REQUIRED_CASES = {
     "lifecycle_split_merge",
     "lifecycle_exchange_truncate",
     "lifecycle_move",
-    "maintenance_ensure_list_drop_validate",
-    "maintenance_drop_partition",
+    "add_drop_three_branches",
+    "drop_named_partition",
 }
 
 
@@ -155,128 +151,6 @@ def test_maxvalue_terminator_handling(partition_syntax_case):
         assert spec.less_than == ("MAXVALUE",)
         assert spec.range_end is None
 
-    maintenance = OraclePartitionMaintenance(
-        PartitionStubBackend(_dialect(), case.plan.parent)
-    )
-    infos = partition_infos(case.plan)
-    candidates = maintenance._drop_candidates(
-        case.plan, date(2030, 1, 1), infos, case.through
-    )
-    candidate_names = tuple(spec.name for spec in candidates)
-    for name in case.maxvalue_names:
-        assert name not in candidate_names
-
-
-def test_drop_candidate_selection(partition_syntax_case):
-    case = partition_syntax_case
-    if case.drop_cutoff is None:
-        return
-
-    maintenance = OraclePartitionMaintenance(
-        PartitionStubBackend(_dialect(), case.plan.parent)
-    )
-    infos = partition_infos(case.plan)
-    candidates = maintenance._drop_candidates(
-        case.plan, case.drop_cutoff, infos, case.through
-    )
-    assert tuple(spec.name for spec in candidates) == case.expected_drop_candidates
-
-
-def test_maintenance_scenario(partition_syntax_case):
-    case = partition_syntax_case
-    scenario = case.maintenance
-    if scenario is None:
-        return
-
-    dialect = _dialect()
-    plan = case.plan
-    stub = PartitionStubBackend(
-        dialect,
-        plan.parent,
-        root_method=plan.method,
-        subpartition_method=(
-            plan.subpartition.method if plan.subpartition is not None else None
-        ),
-        present_names=scenario.present_names,
-        fail_marker=scenario.fail_marker,
-        plan=plan,
-    )
-    maintenance = OraclePartitionMaintenance(stub)
-
-    if scenario.fail_marker is not None:
-        report = maintenance.ensure(plan)
-        assert isinstance(report.errors, tuple)
-        assert report.dry_run is False
-        assert tuple(operation.name for operation in report.operations) == (
-            scenario.expected_created
-        )
-        for needle in scenario.expected_errors_contain:
-            assert any(needle in error for error in report.errors)
-        assert report.has_errors is True
-
-        listed = maintenance.list(plan)
-        assert tuple(name for _, name in listed.missing) == scenario.expected_missing
-        assert isinstance(listed.errors, tuple)
-        assert listed.errors == ()
-
-        validated = maintenance.validate(plan)
-        assert validated.issues == listed.issues
-
-        dropped = maintenance.drop_before(plan, scenario.cutoff)
-        assert dropped.dry_run is True
-        assert tuple(
-            operation.name for operation in dropped.operations
-        ) == scenario.expected_dropped
-        assert dropped.errors == ()
-        return
-
-    if scenario.named_drop is not None:
-        report = maintenance.drop_partition(plan, scenario.named_drop)
-        assert isinstance(report.errors, tuple)
-        assert report.errors == ()
-        assert report.dry_run is False
-        assert tuple(operation.name for operation in report.operations) == (
-            scenario.named_drop,
-        )
-        assert report.operations[0].sql == (
-            'ALTER TABLE "%s" DROP PARTITION "%s"'
-            % (plan.parent, scenario.named_drop)
-        )
-        return
-
-    report = maintenance.drop_before(plan, scenario.cutoff)
-    assert report.dry_run is True
-    assert tuple(
-        operation.name for operation in report.operations
-    ) == scenario.expected_dropped
-    assert report.errors == ()
-
-
-def test_ensure_does_not_treat_a_boundary_mismatch_as_present():
-    plan = OraclePartitionPlan(
-        parent="EVENTS",
-        method="RANGE",
-        columns="CREATED_AT",
-        branches=(
-            OraclePartitionBranch(name="P1", less_than=(date(2026, 2, 1),)),
-            OraclePartitionBranch(name="P2", less_than=(date(2026, 3, 1),)),
-        ),
-    )
-    stub = PartitionStubBackend(
-        _dialect(),
-        plan.parent,
-        present_names=("P1", "P2"),
-        plan=plan,
-        bound_overrides={
-            "P1": "TO_DATE(' 2026-02-15 00:00:00', 'SYYYY-MM-DD HH24:MI:SS')",
-        },
-    )
-    report = OraclePartitionMaintenance(stub).ensure(plan)
-
-    # P1 exists by name but its bound is wrong, so it is attempted again.
-    assert tuple(operation.name for operation in report.operations) == ("P1",)
-    assert any("boundary mismatch" in issue for issue in report.issues)
-
 
 def test_single_column_list_add_keeps_every_value_in_the_group():
     dialect = _dialect()
@@ -290,14 +164,9 @@ def test_single_column_list_add_keeps_every_value_in_the_group():
             labels=("e",),
         ),
     )
-    maintenance = OraclePartitionMaintenance(
-        PartitionStubBackend(dialect, plan.parent)
-    )
-    spec = next(plan.iter_specs())
-    sql, params = maintenance._add_statement(plan, spec)
+    statements = build_add_all(dialect, plan)
 
-    assert sql == (
-        'ALTER TABLE "REGIONS" ADD PARTITION "REGIONS_E" '
-        "VALUES ('EAST', 'NORTH')"
-    )
+    assert len(statements) == 1
+    sql, params = statements[0]
     assert params == ()
+    assert sql == ('ALTER TABLE "REGIONS" ADD PARTITION "REGIONS_E" ' "VALUES ('EAST', 'NORTH')")
