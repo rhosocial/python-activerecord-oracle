@@ -19,10 +19,7 @@ from rhosocial.activerecord.backend.expression import Column, Literal
 from rhosocial.activerecord.backend.expression.statements import (
     PartitionDefinitionExpression,
 )
-from rhosocial.activerecord.backend.expression.statements import (
-    PartitionClause,
-    PartitionStrategy,
-)
+from rhosocial.activerecord.backend.expression.statements import PartitionClause
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.expression.partition import (
@@ -368,7 +365,7 @@ class TestGenericPartitionClauseRejected:
         d = _dialect()
         c = PartitionClause(
             d,
-            PartitionStrategy.RANGE,
+            "RANGE",
             [Column(d, "id")],
         )
         with pytest.raises(TypeError, match="Oracle-specific partition clause"):
@@ -378,7 +375,7 @@ class TestGenericPartitionClauseRejected:
         d = _dialect()
         c = PartitionClause(
             d,
-            PartitionStrategy.HASH,
+            "HASH",
             [Column(d, "id")],
         )
         with pytest.raises(TypeError, match="Oracle-specific partition clause"):

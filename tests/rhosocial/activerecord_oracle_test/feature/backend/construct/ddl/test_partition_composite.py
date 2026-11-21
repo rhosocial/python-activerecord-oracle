@@ -209,7 +209,7 @@ class TestCompositeRangeList:
         assert params == ()
 
 
-class TestSubpartitionDefinitionValidation:
+class TestSubpartitionDefinitionExpressionValidation:
     """Renderer-level guard rails for per-partition overrides."""
 
     def test_count_and_definitions_are_exclusive(self):

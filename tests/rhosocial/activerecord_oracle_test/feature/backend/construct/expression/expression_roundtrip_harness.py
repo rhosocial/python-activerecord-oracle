@@ -893,11 +893,10 @@ def _join_expr(dialect):
 def _partition_clause(dialect):
     from rhosocial.activerecord.backend.expression.core import Column
     from rhosocial.activerecord.backend.expression.statements.ddl_partition import (
-        PartitionClause,
-        PartitionStrategy,
+        PartitionByRangeClause,
     )
 
-    return PartitionClause(dialect, method=PartitionStrategy.RANGE, keys=[Column(dialect, "created_at")])
+    return PartitionByRangeClause(dialect, [Column(dialect, "created_at")])
 
 
 def _on_conflict(dialect):

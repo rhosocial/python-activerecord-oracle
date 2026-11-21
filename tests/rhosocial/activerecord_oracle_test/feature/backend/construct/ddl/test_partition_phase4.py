@@ -23,10 +23,7 @@ import pytest
 
 from rhosocial.activerecord.backend.dialect.protocols import PartitionSupport
 from rhosocial.activerecord.backend.expression import Column
-from rhosocial.activerecord.backend.expression.statements import (
-    PartitionClause,
-    PartitionStrategy,
-)
+from rhosocial.activerecord.backend.expression.statements import PartitionClause
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 from rhosocial.activerecord.backend.expression.statements import (
     PartitionDefinitionExpression,
@@ -359,7 +356,7 @@ class TestOraclePartitionClauseErrors:
     def test_generic_partition_clause_rejected(self):
         """The generic core PartitionClause (dialect_options bag) is rejected."""
         d = _dialect()
-        clause = PartitionClause(d, PartitionStrategy.HASH, [Column(d, "id")])
+        clause = PartitionClause(d, "HASH", [Column(d, "id")])
         with pytest.raises(TypeError, match="Oracle-specific partition clause"):
             clause.to_sql()
 

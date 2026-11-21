@@ -2040,7 +2040,7 @@ CORE_ARTIFACT_GAPS: Dict[str, tuple] = {
         "xml",
     ),
     # The partition clause / statement nodes used to sit here: they carried
-    # the old ``OraclePartitionDefinition`` dataclass, which no artifact can
+    # the old backend partition-definition dataclass, which no artifact can
     # hold. They now carry ``PartitionDefinitionExpression`` nodes instead,
     # so all three channels round-trip and the pins were removed.
     # ---------------------------------------------------------------
