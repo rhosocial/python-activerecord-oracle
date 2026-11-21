@@ -10,7 +10,7 @@ Oracle notes:
 
 Supported versions: Oracle 12c+
 """
-from rhosocial.activerecord.backend.expression.statements import auto_increment_parts  # noqa: E402
+from rhosocial.activerecord.backend.suggestion import IntegerAutoIncrementSuggestionRenderer  # noqa: E402
 
 # ============================================================
 # SECTION: Setup (necessary for execution, reference only)
@@ -65,10 +65,10 @@ snapshot_before = builder.build()
 # primary key column.
 expr = CreateTableStatement(
     dialect=dialect, table=Table(dialect, "USERS"), columns=[
-        ColumnDefinition(dialect, "ID"[0], auto_increment_parts(dialect, IntegerType(dialect))[0],
+        ColumnDefinition(dialect, "ID"[0], IntegerAutoIncrementSuggestionRenderer().parts(dialect, IntegerType(dialect))[0],
             constraints=[
                 ColumnConstraint(dialect, branch=ColumnPrimaryKeyConstraint(dialect)),
-            ], attributes=auto_increment_parts(dialect, IntegerType(dialect))[1]),
+            ], attributes=IntegerAutoIncrementSuggestionRenderer().parts(dialect, IntegerType(dialect))[1]),
         ColumnDefinition(dialect, "NAME", VarCharType(length=100, dialect=dialect)),
     ]
 )

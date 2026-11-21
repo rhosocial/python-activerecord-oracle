@@ -53,6 +53,14 @@ def get_all_protocol_methods(proto: type) -> set:
 # Both are listed here -- satisfying one without the other is a real and
 # interesting state, not an accident.
 ORACLE_PROTOCOLS = [
+    dialect_protocols.PartitionBuildSuggestionSupport,
+    dialect_protocols.PartitionTableDropSuggestionSupport,
+    dialect_protocols.PartitionTableAlterSuggestionSupport,
+    dialect_protocols.PartitionAddSuggestionSupport,
+    dialect_protocols.PartitionDropSuggestionSupport,
+    dialect_protocols.PartitionSplitSuggestionSupport,
+    dialect_protocols.PartitionMergeSuggestionSupport,
+    dialect_protocols.PartitionRetentionSuggestionSupport,
     # --- Named objects: which namespace levels a name may carry ---
     dialect_protocols.ForeignTableObjectSupport,
     dialect_protocols.IndexObjectSupport,

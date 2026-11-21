@@ -7,7 +7,7 @@ for the connected server version when ``expr.to_sql()`` is called.
 """
 
 from rhosocial.activerecord.backend.expression.objects import Table
-from rhosocial.activerecord.backend.expression.statements import auto_increment_parts
+from rhosocial.activerecord.backend.suggestion import IntegerAutoIncrementSuggestionRenderer
 from rhosocial.activerecord.backend.expression.statements.ddl_table import (
     ColumnConstraint,
     ColumnDefinition,
@@ -20,7 +20,7 @@ from rhosocial.activerecord.backend.expression.types import IntegerType, VarChar
 
 def create_audit_table(dialect):
     """CREATE TABLE audit_log (id ... IDENTITY, actor VARCHAR2, action VARCHAR2)."""
-    id_type, id_attributes = auto_increment_parts(dialect, IntegerType(dialect))
+    id_type, id_attributes = IntegerAutoIncrementSuggestionRenderer().parts(dialect, IntegerType(dialect))
     return CreateTableStatement(
         dialect,
         table=Table(dialect, "audit_log"),

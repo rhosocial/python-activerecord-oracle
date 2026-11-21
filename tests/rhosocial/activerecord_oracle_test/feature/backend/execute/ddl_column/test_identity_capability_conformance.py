@@ -30,7 +30,7 @@ formatter: Oracle 12+ renders the same identity clause as before, while Oracle
 are all 12+, so the below-12 refusal is a dialect-level test and the live case
 covers 12+.
 """
-from rhosocial.activerecord.backend.expression.statements import auto_increment_parts  # noqa: E402
+from rhosocial.activerecord.backend.suggestion import IntegerAutoIncrementSuggestionRenderer  # noqa: E402
 
 import uuid
 
@@ -354,7 +354,7 @@ class TestLegacyAutoIncrement:
                 _column(
                     dialect,
                     constraints=[_pk_constraint(dialect)],
-                    attributes=auto_increment_parts(dialect, IntegerType(dialect))[1],
+                    attributes=IntegerAutoIncrementSuggestionRenderer().parts(dialect, IntegerType(dialect))[1],
                 )
             ],
         )
@@ -477,7 +477,7 @@ class TestIdentityColumnShapes:
                 _column(
                     dialect,
                     constraints=[_pk_constraint(dialect)],
-                    attributes=auto_increment_parts(dialect, IntegerType(dialect))[1],
+                    attributes=IntegerAutoIncrementSuggestionRenderer().parts(dialect, IntegerType(dialect))[1],
                 )
             ],
         )
