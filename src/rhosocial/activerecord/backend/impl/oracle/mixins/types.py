@@ -363,7 +363,7 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
             "uuid": OracleRawType,
         }
 
-    def format_data_type_integer(self, data_type: IntegerType) -> Tuple[str, tuple]:
+    def format_data_type_integer(self, expr: IntegerType) -> Tuple[str, tuple]:
         """``INTEGER`` and ``INT`` are one 4-byte signed integer, written as
         Oracle's ``NUMBER(10)``.
 
@@ -376,14 +376,14 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
         the refusal is written down. For why the width is ten digits — and why
         it is not the ``NUMBER(38)`` Oracle's ANSI table gives the word
         ``INTEGER`` — see this class's docstring."""
-        self.check_spelling(data_type, IntegerType)
-        self._refuse_unsigned_integer(data_type, "INTEGER", "NUMBER(10)")
+        self.check_spelling(expr, IntegerType)
+        self._refuse_unsigned_integer(expr, "INTEGER", "NUMBER(10)")
         return "NUMBER(10)", ()
 
     def supports_data_type_integer(self) -> bool:
         return True
 
-    def format_data_type_bigint(self, data_type: BigIntType) -> Tuple[str, tuple]:
+    def format_data_type_bigint(self, expr: BigIntType) -> Tuple[str, tuple]:
         """``BIGINT`` and ``INT8`` are the same 8-byte signed integer, written
         as Oracle's ``NUMBER(19)``.
 
@@ -396,14 +396,14 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
         ``unsigned`` is refused rather than ignored; see
         :meth:`_refuse_unsigned_integer`, and this class's docstring for the
         width."""
-        self.check_spelling(data_type, BigIntType)
-        self._refuse_unsigned_integer(data_type, "BIGINT", "NUMBER(19)")
+        self.check_spelling(expr, BigIntType)
+        self._refuse_unsigned_integer(expr, "BIGINT", "NUMBER(19)")
         return "NUMBER(19)", ()
 
     def supports_data_type_bigint(self) -> bool:
         return True
 
-    def format_data_type_smallint(self, data_type: SmallIntType) -> Tuple[str, tuple]:
+    def format_data_type_smallint(self, expr: SmallIntType) -> Tuple[str, tuple]:
         """``SMALLINT`` and ``INT2`` are the same 2-byte signed integer,
         written as Oracle's ``NUMBER(5)``.
 
@@ -416,8 +416,8 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
 
         ``unsigned`` is refused rather than ignored; see
         :meth:`_refuse_unsigned_integer`."""
-        self.check_spelling(data_type, SmallIntType)
-        self._refuse_unsigned_integer(data_type, "SMALLINT", "NUMBER(5)")
+        self.check_spelling(expr, SmallIntType)
+        self._refuse_unsigned_integer(expr, "SMALLINT", "NUMBER(5)")
         return "NUMBER(5)", ()
 
     def supports_data_type_smallint(self) -> bool:
@@ -610,7 +610,7 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
             ),
         )
 
-    def format_data_type_float(self, data_type: FloatType) -> Tuple[str, tuple]:
+    def format_data_type_float(self, expr: FloatType) -> Tuple[str, tuple]:
         """``FLOAT(p)`` — a subtype of ``NUMBER`` with a **binary** precision, and
         the precision is written out even when the caller declared none.
 
@@ -663,21 +663,21 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
         something other than ``FLOAT``: ``float`` is the concept the caller
         asked for, and Oracle's word for it is ``FLOAT``.
         """
-        self._refuse_unsigned_numeric(data_type, "FLOAT")
-        if data_type.precision is not None:
-            if not (1 <= data_type.precision <= self._FLOAT_DEFAULT_PRECISION):
+        self._refuse_unsigned_numeric(expr, "FLOAT")
+        if expr.precision is not None:
+            if not (1 <= expr.precision <= self._FLOAT_DEFAULT_PRECISION):
                 raise ValueError(
                     f"Oracle FLOAT binary precision must be 1-"
                     f"{self._FLOAT_DEFAULT_PRECISION}, "
-                    f"got {data_type.precision}"
+                    f"got {expr.precision}"
                 )
-            return f"FLOAT({data_type.precision})", ()
+            return f"FLOAT({expr.precision})", ()
         return f"FLOAT({self.type_parameter_defaults()['float']['precision']})", ()
 
     def supports_data_type_float(self) -> bool:
         return True
 
-    def format_data_type_real(self, data_type: RealType) -> Tuple[str, tuple]:
+    def format_data_type_real(self, expr: RealType) -> Tuple[str, tuple]:
         """Oracle has no ``REAL`` type — ``REAL`` is an alias it accepts for
         ``FLOAT(63)``, per the ANSI conversion table's note 4 — and the precision
         is written out because that is what the server reports back for a column
@@ -694,13 +694,13 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
 
         ``unsigned`` is refused rather than ignored; see
         :meth:`_refuse_unsigned_numeric`."""
-        self._refuse_unsigned_numeric(data_type, "FLOAT")
+        self._refuse_unsigned_numeric(expr, "FLOAT")
         return f"FLOAT({self._REAL_PRECISION})", ()
 
     def supports_data_type_real(self) -> bool:
         return True
 
-    def format_data_type_double(self, data_type: DoubleType) -> Tuple[str, tuple]:
+    def format_data_type_double(self, expr: DoubleType) -> Tuple[str, tuple]:
         """``double`` and ``double precision`` are one 64-bit float, and Oracle's
         own name for it is ``FLOAT`` carrying a binary precision. Both
         spellings render ``FLOAT(126)``, stated in full rather than as a bare
@@ -718,14 +718,14 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
 
         ``unsigned`` is refused rather than ignored, **before** the spelling
         check; see :meth:`_refuse_unsigned_numeric`."""
-        self._refuse_unsigned_numeric(data_type, "FLOAT")
-        self.check_spelling(data_type, DoubleType)
+        self._refuse_unsigned_numeric(expr, "FLOAT")
+        self.check_spelling(expr, DoubleType)
         return f"FLOAT({self.type_parameter_defaults()['float']['precision']})", ()
 
     def supports_data_type_double(self) -> bool:
         return True
 
-    def format_data_type_decimal(self, data_type: DecimalType) -> Tuple[str, tuple]:
+    def format_data_type_decimal(self, expr: DecimalType) -> Tuple[str, tuple]:
         """``DECIMAL``, ``NUMERIC`` and ``DEC`` are one exact-numeric concept
         and Oracle calls it ``NUMBER``; all three are accepted and all three
         render as ``NUMBER``.
@@ -735,30 +735,30 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
         :meth:`_refuse_unsigned_numeric`, which is where the reason and the
         measurements live.  Those two checks, and the ``-84..127`` scale bound,
         are untouched and still fire for a signed declaration."""
-        self._refuse_unsigned_numeric(data_type, "NUMBER")
-        self.check_spelling(data_type, DecimalType)
-        if data_type.precision is not None:
-            if not (1 <= data_type.precision <= 38):
+        self._refuse_unsigned_numeric(expr, "NUMBER")
+        self.check_spelling(expr, DecimalType)
+        if expr.precision is not None:
+            if not (1 <= expr.precision <= 38):
                 raise ValueError(
                     f"Oracle NUMBER precision must be 1-38, "
-                    f"got {data_type.precision}"
+                    f"got {expr.precision}"
                 )
-        if data_type.scale is not None:
-            if not (-84 <= data_type.scale <= 127):
+        if expr.scale is not None:
+            if not (-84 <= expr.scale <= 127):
                 raise ValueError(
                     f"Oracle NUMBER scale must be -84 to 127, "
-                    f"got {data_type.scale}"
+                    f"got {expr.scale}"
                 )
-        if data_type.precision is not None and data_type.scale is not None:
-            return f"NUMBER({data_type.precision}, {data_type.scale})", ()
-        if data_type.precision is not None:
-            return f"NUMBER({data_type.precision})", ()
+        if expr.precision is not None and expr.scale is not None:
+            return f"NUMBER({expr.precision}, {expr.scale})", ()
+        if expr.precision is not None:
+            return f"NUMBER({expr.precision})", ()
         return "NUMBER", ()
 
     def supports_data_type_decimal(self) -> bool:
         return True
 
-    def format_data_type_boolean(self, data_type: BooleanType) -> Tuple[str, tuple]:
+    def format_data_type_boolean(self, expr: BooleanType) -> Tuple[str, tuple]:
         """``boolean`` and ``bool`` are one concept, and which Oracle column type
         carries it depends on the release: **``BOOLEAN`` from 23ai**, and
         ``NUMBER(1)`` before that.
@@ -830,7 +830,7 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
         ``tests/.../test_introspector_deep.py::TestDialectCarriesTheServersOwnVersion``
         pins the agreement per server so it cannot go back to being inert.
         """
-        self.check_spelling(data_type, BooleanType)
+        self.check_spelling(expr, BooleanType)
         version = getattr(self, "_version", None)
         if version is not None and version >= _ORACLE_BOOLEAN_TYPE_MIN_VERSION:
             return "BOOLEAN", ()
@@ -846,7 +846,7 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
         question and not this one's."""
         return True
 
-    def format_data_type_varchar(self, data_type: VarCharType) -> Tuple[str, tuple]:
+    def format_data_type_varchar(self, expr: VarCharType) -> Tuple[str, tuple]:
         """``varchar`` and ``character varying`` are the same variable-length
         string, and Oracle's word for it is ``VARCHAR2``. Both are accepted —
         Oracle's own grammar admits ``CHARACTER VARYING`` as a synonym for
@@ -869,13 +869,13 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
         ``nvarchar2`` (2000).
         https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/Data-Types.html
         """
-        self.check_spelling(data_type, VarCharType)
-        return (f"VARCHAR2({data_type.length})" if data_type.length is not None else "VARCHAR2(4000)"), ()
+        self.check_spelling(expr, VarCharType)
+        return (f"VARCHAR2({expr.length})" if expr.length is not None else "VARCHAR2(4000)"), ()
 
     def supports_data_type_varchar(self) -> bool:
         return True
 
-    def format_data_type_char(self, data_type: CharType) -> Tuple[str, tuple]:
+    def format_data_type_char(self, expr: CharType) -> Tuple[str, tuple]:
         """``char`` and ``character`` are the same fixed-length,
         blank-padded string, and Oracle's word for it is ``CHAR``. Both are
         accepted (``CHARACTER`` is a documented Oracle synonym) and both
@@ -908,75 +908,75 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
         the identity closed: add ``"char": {"length": 1}`` to
         :meth:`type_parameter_defaults` and drop the bare-word branch below.
         """
-        self.check_spelling(data_type, CharType)
-        return (f"CHAR({data_type.length})" if data_type.length is not None else "CHAR"), ()
+        self.check_spelling(expr, CharType)
+        return (f"CHAR({expr.length})" if expr.length is not None else "CHAR"), ()
 
     def supports_data_type_char(self) -> bool:
         return True
 
-    def format_data_type_text(self, data_type: TextType) -> Tuple[str, tuple]:
+    def format_data_type_text(self, expr: TextType) -> Tuple[str, tuple]:
         """``text`` and ``clob`` are one unbounded string, and Oracle's word
         for it is ``CLOB`` — so both render ``CLOB`` and neither is refused.
         Refusing ``text`` here would refuse the concept's *default* spelling,
         which is what every plain ``TextType(d)`` carries; and refusing
         ``clob`` would refuse the one word Oracle does write. The two arms
         collapse, so there is nothing left to distinguish between them."""
-        self.check_spelling(data_type, TextType)
+        self.check_spelling(expr, TextType)
         return "CLOB", ()
 
     def supports_data_type_text(self) -> bool:
         return True
 
-    def format_data_type_blob(self, data_type: BlobType) -> Tuple[str, tuple]:
+    def format_data_type_blob(self, expr: BlobType) -> Tuple[str, tuple]:
         """``blob`` and ``bytea`` are the same unbounded byte storage; Oracle
         calls it ``BLOB``. ``BYTEA`` is not an Oracle word at all, but it is
         a spelling of the concept and the column Oracle produces is a
         ``BLOB``, so it is accepted and normalised rather than refused."""
-        self.check_spelling(data_type, BlobType)
+        self.check_spelling(expr, BlobType)
         return "BLOB", ()
 
     def supports_data_type_blob(self) -> bool:
         return True
 
-    def format_data_type_datetime(self, data_type: DateTimeType) -> Tuple[str, tuple]:
-        if data_type.precision is not None:
-            if not (0 <= data_type.precision <= 9):
+    def format_data_type_datetime(self, expr: DateTimeType) -> Tuple[str, tuple]:
+        if expr.precision is not None:
+            if not (0 <= expr.precision <= 9):
                 raise ValueError(
                     f"Oracle TIMESTAMP fractional seconds precision must be 0-9, "
-                    f"got {data_type.precision}"
+                    f"got {expr.precision}"
                 )
-            return f"TIMESTAMP({data_type.precision})", ()
+            return f"TIMESTAMP({expr.precision})", ()
         return "TIMESTAMP", ()
 
     def supports_data_type_datetime(self) -> bool:
         return True
 
-    def format_data_type_date(self, data_type: DateType) -> Tuple[str, tuple]:
+    def format_data_type_date(self, expr: DateType) -> Tuple[str, tuple]:
         return "DATE", ()
 
     def supports_data_type_date(self) -> bool:
         return True
 
-    def format_data_type_time(self, data_type: TimeType) -> Tuple[str, tuple]:
+    def format_data_type_time(self, expr: TimeType) -> Tuple[str, tuple]:
         return "VARCHAR2(8)", ()
 
     def supports_data_type_time(self) -> bool:
         return True
 
-    def format_data_type_timestamp(self, data_type: TimestampType) -> Tuple[str, tuple]:
-        if data_type.precision is not None:
-            if not (0 <= data_type.precision <= 9):
+    def format_data_type_timestamp(self, expr: TimestampType) -> Tuple[str, tuple]:
+        if expr.precision is not None:
+            if not (0 <= expr.precision <= 9):
                 raise ValueError(
                     f"Oracle TIMESTAMP fractional seconds precision must be 0-9, "
-                    f"got {data_type.precision}"
+                    f"got {expr.precision}"
                 )
-            return f"TIMESTAMP({data_type.precision})", ()
+            return f"TIMESTAMP({expr.precision})", ()
         return "TIMESTAMP", ()
 
     def supports_data_type_timestamp(self) -> bool:
         return True
 
-    def format_data_type_json(self, data_type: JsonType) -> Tuple[str, tuple]:
+    def format_data_type_json(self, expr: JsonType) -> Tuple[str, tuple]:
         """``JSON`` is a native Oracle **column type** from 21c, and text below it.
 
         The version boundary is Oracle's, not this backend's: 21c introduced the
@@ -1006,7 +1006,7 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
     def supports_data_type_json(self) -> bool:
         return True
 
-    def format_data_type_interval(self, data_type: IntervalType) -> Tuple[str, tuple]:
+    def format_data_type_interval(self, expr: IntervalType) -> Tuple[str, tuple]:
         """Oracle has **both** interval types natively, so neither is
         substituted for text.
 
@@ -1074,8 +1074,8 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
         and this method renders it verbatim.
         https://docs.oracle.com/en/database/oracle/oracle-database/26/nlspg/datetime-data-types-and-time-zone-support.html
         """
-        if data_type.fields:
-            return f"INTERVAL {data_type.fields.upper()}", ()
+        if expr.fields:
+            return f"INTERVAL {expr.fields.upper()}", ()
         # The two numbers are named at module scope so they are traceable to the
         # sentences that document them rather than buried inside a SQL string.
         return (
@@ -1087,7 +1087,7 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
     def supports_data_type_interval(self) -> bool:
         return True
 
-    def format_data_type_xml(self, data_type: XmlType) -> Tuple[str, tuple]:
+    def format_data_type_xml(self, expr: XmlType) -> Tuple[str, tuple]:
         """``XMLTYPE`` — Oracle's native XML type, available on every release
         this backend targets (``XMLType`` is the 21c spelling of the same
         type and renders identically).
@@ -1107,7 +1107,7 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
     def supports_data_type_xml(self) -> bool:
         return True
 
-    def format_data_type_custom(self, data_type: CustomType) -> Tuple[str, tuple]:
+    def format_data_type_custom(self, expr: CustomType) -> Tuple[str, tuple]:
         """Write a type name the framework has no class for, verbatim.
 
         ``CustomType`` is what :meth:`parse_type` returns for every name the
@@ -1124,7 +1124,7 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
         subquery. This position cannot take a bound parameter, so the grammar
         is the whole defence.
         """
-        return data_type.raw, ()
+        return expr.raw, ()
 
     def supports_data_type_custom(self) -> bool:
         return True
@@ -1138,25 +1138,25 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
     # `oracle_blob` — see this class's docstring for the measurement that
     # removed them.
 
-    def format_data_type_oracle_nvarchar2(self, data_type: OracleNVarChar2Type) -> Tuple[str, tuple]:
-        return (f"NVARCHAR2({data_type.length})" if data_type.length is not None else "NVARCHAR2(2000)"), ()
+    def format_data_type_oracle_nvarchar2(self, expr: OracleNVarChar2Type) -> Tuple[str, tuple]:
+        return (f"NVARCHAR2({expr.length})" if expr.length is not None else "NVARCHAR2(2000)"), ()
 
     def supports_data_type_oracle_nvarchar2(self) -> bool:
         return True
 
-    def format_data_type_oracle_nclob(self, data_type: OracleNClobType) -> Tuple[str, tuple]:
+    def format_data_type_oracle_nclob(self, expr: OracleNClobType) -> Tuple[str, tuple]:
         return "NCLOB", ()
 
     def supports_data_type_oracle_nclob(self) -> bool:
         return True
 
-    def format_data_type_oracle_long(self, data_type: OracleLongType) -> Tuple[str, tuple]:
+    def format_data_type_oracle_long(self, expr: OracleLongType) -> Tuple[str, tuple]:
         return "LONG", ()
 
     def supports_data_type_oracle_long(self) -> bool:
         return True
 
-    def format_data_type_oracle_raw(self, data_type: OracleRawType) -> Tuple[str, tuple]:
+    def format_data_type_oracle_raw(self, expr: OracleRawType) -> Tuple[str, tuple]:
         """``RAW(n)`` — Oracle requires the size, so there is no bare form.
 
         Oracle's summary says "You must specify size for a ``RAW`` value", and
@@ -1177,18 +1177,18 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
         a fixed-length one.
         https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/Data-Types.html
         """
-        return f"RAW({data_type.length})", ()
+        return f"RAW({expr.length})", ()
 
     def supports_data_type_oracle_raw(self) -> bool:
         return True
 
-    def format_data_type_oracle_long_raw(self, data_type: OracleLongRawType) -> Tuple[str, tuple]:
+    def format_data_type_oracle_long_raw(self, expr: OracleLongRawType) -> Tuple[str, tuple]:
         return "LONG RAW", ()
 
     def supports_data_type_oracle_long_raw(self) -> bool:
         return True
 
-    def format_data_type_oracle_binary_float(self, data_type: OracleBinaryFloatType) -> Tuple[str, tuple]:
+    def format_data_type_oracle_binary_float(self, expr: OracleBinaryFloatType) -> Tuple[str, tuple]:
         """``BINARY_FLOAT`` — 32-bit IEEE, written as the catalog writes it.
 
         The word is the whole declaration and takes no parameters, so nothing
@@ -1206,7 +1206,7 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
     def supports_data_type_oracle_binary_float(self) -> bool:
         return True
 
-    def format_data_type_oracle_binary_double(self, data_type: OracleBinaryDoubleType) -> Tuple[str, tuple]:
+    def format_data_type_oracle_binary_double(self, expr: OracleBinaryDoubleType) -> Tuple[str, tuple]:
         """``BINARY_DOUBLE`` — 64-bit IEEE, written as the catalog writes it.
 
         The 8-byte sibling of :meth:`format_data_type_oracle_binary_float`,
@@ -1226,7 +1226,7 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
     # get an Oracle-specific rendering instead of falling back to the base
     # class' default SQL (which is often MySQL-flavored or undefined).
 
-    def format_data_type_tinyint(self, data_type: TinyIntType) -> Tuple[str, tuple]:
+    def format_data_type_tinyint(self, expr: TinyIntType) -> Tuple[str, tuple]:
         """Oracle has no 1-byte integer type at all — ``TINYINT`` and ``INT1``
         are absent from the ANSI names it recognises and the server rejects both
         (``ORA-00902``) — so the concept is *widened* to the smallest ``NUMBER``
@@ -1238,31 +1238,31 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
         The same reasoning picks the other widths; see this class's docstring.
         Widening the column does not make it unsigned, so ``unsigned`` is still
         refused rather than ignored; see :meth:`_refuse_unsigned_integer`."""
-        self.check_spelling(data_type, TinyIntType)
-        self._refuse_unsigned_integer(data_type, "TINYINT", "NUMBER(3)")
+        self.check_spelling(expr, TinyIntType)
+        self._refuse_unsigned_integer(expr, "TINYINT", "NUMBER(3)")
         return "NUMBER(3)", ()
 
     def supports_data_type_tinyint(self) -> bool:
         return True
 
-    def format_data_type_timetz(self, data_type: TimeTzType) -> Tuple[str, tuple]:
+    def format_data_type_timetz(self, expr: TimeTzType) -> Tuple[str, tuple]:
         # Oracle supports TIMESTAMP WITH TIME ZONE; precision optional.
-        return (f"TIMESTAMP({data_type.precision}) WITH TIME ZONE"
-                if data_type.precision is not None
+        return (f"TIMESTAMP({expr.precision}) WITH TIME ZONE"
+                if expr.precision is not None
                 else "TIMESTAMP WITH TIME ZONE"), ()
 
     def supports_data_type_timetz(self) -> bool:
         return True
 
-    def format_data_type_timestamptz(self, data_type: TimestampTzType) -> Tuple[str, tuple]:
-        return (f"TIMESTAMP({data_type.precision}) WITH TIME ZONE"
-                if data_type.precision is not None
+    def format_data_type_timestamptz(self, expr: TimestampTzType) -> Tuple[str, tuple]:
+        return (f"TIMESTAMP({expr.precision}) WITH TIME ZONE"
+                if expr.precision is not None
                 else "TIMESTAMP WITH TIME ZONE"), ()
 
     def supports_data_type_timestamptz(self) -> bool:
         return True
 
-    def format_data_type_oracle_timestamp_ltz(self, data_type: OracleTimestampLtzType) -> Tuple[str, tuple]:
+    def format_data_type_oracle_timestamp_ltz(self, expr: OracleTimestampLtzType) -> Tuple[str, tuple]:
         """``TIMESTAMP(n) WITH LOCAL TIME ZONE`` — the local-time-zone spelling.
 
         Oracle's two timestamp-with-time-zone forms are different columns:
@@ -1278,14 +1278,14 @@ class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
         (6) is the separate question tracked as F.4-5.
         https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/Data-Types.html
         """
-        return (f"TIMESTAMP({data_type.precision}) WITH LOCAL TIME ZONE"
-                if data_type.precision is not None
+        return (f"TIMESTAMP({expr.precision}) WITH LOCAL TIME ZONE"
+                if expr.precision is not None
                 else "TIMESTAMP WITH LOCAL TIME ZONE"), ()
 
     def supports_data_type_oracle_timestamp_ltz(self) -> bool:
         return True
 
-    def format_data_type_jsonb(self, data_type: JsonBType) -> Tuple[str, tuple]:
+    def format_data_type_jsonb(self, expr: JsonBType) -> Tuple[str, tuple]:
         """Oracle has no ``JSONB`` — but from 21c it has ``JSON``, which is the answer.
 
         ``JSONB`` is PostgreSQL's binary JSON, and Oracle has no binary-JSON

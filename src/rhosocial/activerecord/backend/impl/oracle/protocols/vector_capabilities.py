@@ -7,7 +7,7 @@ the capability contract.  Regenerate via scripts/p7_generate_protocols.py
 when mixins gain new public rendering methods.
 """
 
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Tuple
 
 from typing import Protocol
 
@@ -19,8 +19,6 @@ class OracleVectorSupport(Protocol):
     def supports_vector_distance_metric(self, metric: str) -> bool:
         ...  # pragma: no cover
     def format_vector_literal_expression(self, expr: 'VectorLiteralExpression') -> Tuple[str, tuple]:
-        ...  # pragma: no cover
-    def format_vector_distance(self, expr: Union[Dict[str, Any], Any]) -> Tuple[str, tuple]:
         ...  # pragma: no cover
     def format_vector_operand_expression(self, expr: 'VectorOperandExpression') -> Tuple[str, tuple]:
         ...  # pragma: no cover

@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 class OracleExpressionMixin:
     """Oracle-specific expression formatting that delegates to ``to_sql``."""
 
-    def format_named_relation(self, ref: "BaseExpression") -> Tuple[str, tuple]:
+    def format_named_relation(self, expr: "BaseExpression") -> Tuple[str, tuple]:
         """Format a ``FROM`` reference to a named relation for Oracle.
 
         The relation's name, the ``@"DBLINK"`` suffix and the alias all come
@@ -60,15 +60,15 @@ class OracleExpressionMixin:
         Returns:
             Tuple of (SQL string, parameters tuple).
         """
-        if not isinstance(ref, OracleNamedRelationRef) or ref.flashback is None:
-            return super().format_named_relation(ref)
+        if not isinstance(expr, OracleNamedRelationRef) or expr.flashback is None:
+            return super().format_named_relation(expr)
 
-        name_sql, params = ref.relation.to_sql()
-        flashback_sql, flashback_params = ref.flashback.to_sql()
-        if ref.alias:
+        name_sql, params = expr.relation.to_sql()
+        flashback_sql, flashback_params = expr.flashback.to_sql()
+        if expr.alias:
             name_sql = (
                 f"{name_sql} {flashback_sql}{self.source_alias_separator()}"
-                f"{self.format_identifier(ref.alias, ref.alias_need_quote)}"
+                f"{self.format_identifier(expr.alias, expr.alias_need_quote)}"
             )
         else:
             name_sql = f"{name_sql} {flashback_sql}"

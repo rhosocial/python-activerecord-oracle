@@ -77,7 +77,7 @@ class OracleLiteralValueMixin:
     literal-construction protocol live.
     """
 
-    def format_literal(self, value: Any) -> str:
+    def format_literal(self, expr: Any) -> str:
         """Render *value* as inline SQL text, Oracle's spelling where it has one.
 
         The dispatch order is load-bearing in two places, both because a
@@ -99,9 +99,9 @@ class OracleLiteralValueMixin:
             ValueError: A timestamp whose UTC offset carries seconds, which
                 ``TZH:TZM`` cannot spell.
         """
-        if isinstance(value, bool):
+        if isinstance(expr, bool):
             if not self.supports_boolean_type():
-                keyword = "TRUE" if value else "FALSE"
+                keyword = "TRUE" if expr else "FALSE"
                 raise UnsupportedFeatureError(
                     self.name,
                     f"{keyword} literal in a DDL position",
@@ -111,21 +111,21 @@ class OracleLiteralValueMixin:
                         "NUMBER(1) convention (1/0) with an Integer value."
                     ),
                 )
-            return super().format_literal(value)
-        if isinstance(value, (bytes, bytearray)):
-            return f"HEXTORAW('{bytes(value).hex().upper()}')"
-        if isinstance(value, _uuid.UUID):
-            return self.format_literal(str(value))
-        if isinstance(value, _dt.timedelta):
-            return self._format_oracle_interval(value)
-        if isinstance(value, _dt.datetime):
-            return self._format_oracle_timestamp(value)
-        if isinstance(value, _dt.date):
-            return f"TO_DATE({self.format_literal(value.isoformat())}, 'YYYY-MM-DD')"
-        if isinstance(value, _dt.time):
+            return super().format_literal(expr)
+        if isinstance(expr, (bytes, bytearray)):
+            return f"HEXTORAW('{bytes(expr).hex().upper()}')"
+        if isinstance(expr, _uuid.UUID):
+            return self.format_literal(str(expr))
+        if isinstance(expr, _dt.timedelta):
+            return self._format_oracle_interval(expr)
+        if isinstance(expr, _dt.datetime):
+            return self._format_oracle_timestamp(expr)
+        if isinstance(expr, _dt.date):
+            return f"TO_DATE({self.format_literal(expr.isoformat())}, 'YYYY-MM-DD')"
+        if isinstance(expr, _dt.time):
             raise UnsupportedFeatureError(
                 self.name,
-                f"time-of-day literal ({value.isoformat()}) in a DDL position",
+                f"time-of-day literal ({expr.isoformat()}) in a DDL position",
                 suggestion=(
                     "Oracle has no time-of-day literal: TO_DATE with only time "
                     "fields invents the first day of the current month, a date "
@@ -134,7 +134,7 @@ class OracleLiteralValueMixin:
                     "datetime."
                 ),
             )
-        return super().format_literal(value)
+        return super().format_literal(expr)
 
     def _format_oracle_interval(self, span: _dt.timedelta) -> str:
         """``INTERVAL '<d> HH:MM:SS.ffffff' DAY(p) TO SECOND(6)``.

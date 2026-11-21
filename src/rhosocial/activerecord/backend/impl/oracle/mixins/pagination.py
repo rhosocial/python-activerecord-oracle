@@ -14,7 +14,7 @@ class OraclePaginationMixin:
     pre-12c uses ROWNUM-based pagination.
     """
 
-    def format_limit_offset(
+    def build_limit_offset(
         self,
         limit: Optional[int] = None,
         offset: Optional[int] = None,
@@ -36,54 +36,54 @@ class OraclePaginationMixin:
             return None, []
         return " ".join(sql_parts), params
 
-    def format_limit_offset_clause(self, clause) -> Tuple[str, tuple]:
+    def format_limit_offset_clause(self, expr) -> Tuple[str, tuple]:
         """Format LIMIT and OFFSET clause for Oracle."""
         all_params: List[Any] = []
         sql_parts: List[str] = []
 
         if self.version >= (12, 0, 0):
-            if clause.offset is not None:
-                if isinstance(clause.offset, ToSQLProtocol):
-                    offset_sql, offset_params = clause.offset.to_sql()
+            if expr.offset is not None:
+                if isinstance(expr.offset, ToSQLProtocol):
+                    offset_sql, offset_params = expr.offset.to_sql()
                     sql_parts.append(f"OFFSET {offset_sql} ROWS")
                     all_params.extend(offset_params)
                 else:
                     sql_parts.append(f"OFFSET {self.get_parameter_placeholder()} ROWS")
-                    all_params.append(clause.offset)
+                    all_params.append(expr.offset)
 
-            if clause.limit is not None:
+            if expr.limit is not None:
                 # ``with_ties`` is a declared field of the core
                 # LimitOffsetClause, read directly rather than probed.
-                suffix = "WITH TIES" if clause.with_ties else "ONLY"
+                suffix = "WITH TIES" if expr.with_ties else "ONLY"
                 if suffix == "WITH TIES" and not self.supports_fetch_with_ties():
                     raise UnsupportedFeatureError(
                         self.name,
                         "FETCH FIRST ... ROWS WITH TIES",
                         "Oracle supports FETCH FIRST ... WITH TIES since 12c.",
                     )
-                if isinstance(clause.limit, ToSQLProtocol):
-                    limit_sql, limit_params = clause.limit.to_sql()
+                if isinstance(expr.limit, ToSQLProtocol):
+                    limit_sql, limit_params = expr.limit.to_sql()
                     sql_parts.append(f"FETCH FIRST {limit_sql} ROWS {suffix}")
                     all_params.extend(limit_params)
                 else:
                     sql_parts.append(
                         f"FETCH FIRST {self.get_parameter_placeholder()} ROWS {suffix}"
                     )
-                    all_params.append(clause.limit)
+                    all_params.append(expr.limit)
         else:
-            if clause.with_ties:
+            if expr.with_ties:
                 raise UnsupportedFeatureError(
                     self.name,
                     "FETCH FIRST ... ROWS WITH TIES",
                     "Oracle supports FETCH FIRST ... WITH TIES since 12c.",
                 )
-            if clause.limit is not None:
-                if isinstance(clause.limit, ToSQLProtocol):
-                    limit_sql, limit_params = clause.limit.to_sql()
+            if expr.limit is not None:
+                if isinstance(expr.limit, ToSQLProtocol):
+                    limit_sql, limit_params = expr.limit.to_sql()
                     sql_parts.append(f"ROWNUM <= {limit_sql}")
                     all_params.extend(limit_params)
                 else:
                     sql_parts.append(f"ROWNUM <= {self.get_parameter_placeholder()}")
-                    all_params.append(clause.limit)
+                    all_params.append(expr.limit)
 
         return " ".join(sql_parts), tuple(all_params)

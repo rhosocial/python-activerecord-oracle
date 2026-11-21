@@ -7,14 +7,14 @@ the capability contract.  Regenerate via scripts/p7_generate_protocols.py
 when mixins gain new public rendering methods.
 """
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Tuple
 
 from typing import Protocol
 
 class OracleDDLSupport(Protocol):
     """Auto-generated capability protocol (P7)."""
 
-    def format_column_definition(self, col_def: 'ColumnDefinition') -> Tuple[str, tuple]:
+    def format_column_definition(self, expr: 'ColumnDefinition') -> Tuple[str, tuple]:
         ...  # pragma: no cover
-    def format_table_constraint(self, t_const: 'TableConstraint') -> Tuple[str, tuple]:
+    def format_table_constraint(self, expr: 'TableConstraint') -> Tuple[str, tuple]:
         ...  # pragma: no cover

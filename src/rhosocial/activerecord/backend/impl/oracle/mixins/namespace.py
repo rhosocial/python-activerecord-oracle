@@ -84,7 +84,7 @@ class OracleNamespaceMixin(TableNameMixin):
         parts.append(self.format_identifier(expr.name, expr.name_need_quote))
         return self.separator.join(parts), ()
 
-    def format_table_object(self, obj: Table) -> Tuple[str, tuple]:
+    def format_table_object(self, expr: Table) -> Tuple[str, tuple]:
         """Render a table name, adding ``@"DBLINK"`` when the table is remote.
 
         Args:
@@ -107,14 +107,14 @@ class OracleNamespaceMixin(TableNameMixin):
                 :class:`~...dialect.protocols.NamespaceSupport` and declares
                 ``supports_catalog()`` false, which is how it says so.
         """
-        if not isinstance(obj, Table):
+        if not isinstance(expr, Table):
             raise TypeError(
                 f"format_table_object expects a Table, "
-                f"got {type(obj).__name__}"
+                f"got {type(expr).__name__}"
             )
-        name_sql, params = super().format_table_object(obj)
-        if isinstance(obj, OracleRemoteName) and obj.dblink:
+        name_sql, params = super().format_table_object(expr)
+        if isinstance(expr, OracleRemoteName) and expr.dblink:
             name_sql = (
-                f"{name_sql}@{self.format_identifier(obj.dblink, obj.dblink_need_quote)}"
+                f"{name_sql}@{self.format_identifier(expr.dblink, expr.dblink_need_quote)}"
             )
         return name_sql, params

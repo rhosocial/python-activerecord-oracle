@@ -16,12 +16,9 @@ declares its own ``format_<kind>_object``, and a row source is read through
 of thing named.
 """
 
-from typing import Any, Dict, List, Optional, Tuple
 
 from typing import Protocol
 
 class OracleIdentifierSupport(Protocol):
     """Auto-generated capability protocol (P7)."""
 
-    def format_column(self, name: str, table: Optional[str]=None, alias: Optional[str]=None, schema_name: Optional[str]=None) -> Tuple[str, Tuple]:
-        ...  # pragma: no cover

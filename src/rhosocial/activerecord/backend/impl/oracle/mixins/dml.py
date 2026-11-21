@@ -31,26 +31,26 @@ class OracleDMLOperationMixin(object):
     def supports_hint_in_insert(self) -> bool:
         return True
 
-    def format_on_conflict_clause(self, conflict_clause) -> Tuple[str, tuple]:
+    def format_on_conflict_clause(self, expr) -> Tuple[str, tuple]:
         """Format ON CONFLICT clause for Oracle.
 
         Oracle has no native ON CONFLICT semantics; the equivalent is the
         MERGE statement. This method does not produce MERGE SQL directly
-        (that is handled by ``format_merge_statement``); it only validates
+        (that is handled by ``build_merge_statement``); it only validates
         the requested action and returns a placeholder fragment.
         """
-        action = getattr(conflict_clause, "action", None)
+        action = getattr(expr, "action", None)
         if action == "do_update":
             raise NotImplementedError(
                 "Oracle ON CONFLICT DO UPDATE is expressed via MERGE; "
-                "use format_merge_statement instead."
+                "use build_merge_statement instead."
             )
         return "", ()
 
     def supports_insert_first(self) -> bool:
         return True
 
-    def format_merge_statement(self, target_table: str, source_query: str,
+    def build_merge_statement(self, target_table: str, source_query: str,
                                match_condition: str, update_setters: str,
                                insert_columns: str, insert_values: str,
                                *,
@@ -121,7 +121,7 @@ class OracleDMLOperationMixin(object):
             parts.append(log_sql)
         return " ".join(parts), ()
 
-    def format_insert_all_statement(
+    def build_insert_all_statement(
         self,
         into_clauses: List[dict],
         select_query: Optional[str] = None,
@@ -141,12 +141,12 @@ class OracleDMLOperationMixin(object):
         Values may be plain SQL fragment strings or ``BaseExpression``
         objects (rendered with parameter binding).
         """
-        return self.format_multi_table_insert_statement(
+        return self._format_multi_table_insert_statement(
             "ALL", into_clauses, select_query,
             when_clauses=when_clauses, else_clause=else_clause,
         )
 
-    def format_insert_first_statement(
+    def build_insert_first_statement(
         self,
         into_clauses: List[dict],
         select_query: Optional[str] = None,
@@ -156,16 +156,16 @@ class OracleDMLOperationMixin(object):
     ) -> Tuple[str, tuple]:
         """Format an Oracle ``INSERT FIRST`` multi-table insert statement.
 
-        Identical to :meth:`format_insert_all_statement` but emits the
+        Identical to :meth:`build_insert_all_statement` but emits the
         ``FIRST`` keyword: only the first matching ``WHEN`` branch is
         evaluated per source row.
         """
-        return self.format_multi_table_insert_statement(
+        return self._format_multi_table_insert_statement(
             "FIRST", into_clauses, select_query,
             when_clauses=when_clauses, else_clause=else_clause,
         )
 
-    def format_multi_table_insert_statement(
+    def _format_multi_table_insert_statement(
         self,
         keyword: str,
         into_clauses: List[dict],
@@ -186,18 +186,18 @@ class OracleDMLOperationMixin(object):
         params: List[Any] = []
         parts = [f"INSERT {keyword}"]
         for spec in into_clauses:
-            parts.append(self.format_insert_into_spec(spec, params)[0])
+            parts.append(self._format_insert_into_spec(spec, params)[0])
         for spec in when_clauses or []:
             condition = spec.get("condition")
             cond_sql = self._render_insert_fragment(condition, params)
-            parts.append(f"WHEN {cond_sql} THEN {self.format_insert_into_spec(spec, params)[0]}")
+            parts.append(f"WHEN {cond_sql} THEN {self._format_insert_into_spec(spec, params)[0]}")
         if else_clause:
-            parts.append(f"ELSE {self.format_insert_into_spec(else_clause, params)[0]}")
+            parts.append(f"ELSE {self._format_insert_into_spec(else_clause, params)[0]}")
         if select_query:
             parts.append(select_query)
         return " ".join(parts), tuple(params)
 
-    def format_insert_into_spec(self, spec: dict, params: List[Any]) -> Tuple[str, tuple]:
+    def _format_insert_into_spec(self, spec: dict, params: List[Any]) -> Tuple[str, tuple]:
         table = spec["table"]
         columns = spec.get("columns") or ""
         values = spec.get("values") or ""

@@ -29,7 +29,7 @@ class OracleOptimizerHintMixin(object):
     def supports_hint_with_arguments(self) -> bool:
         return True
 
-    def format_optimizer_hint(
+    def build_optimizer_hint(
         self,
         name: str,
         args: Tuple[Any, ...] = (),
