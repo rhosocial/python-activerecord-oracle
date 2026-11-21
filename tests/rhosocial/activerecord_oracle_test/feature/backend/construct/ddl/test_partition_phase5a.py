@@ -3,7 +3,7 @@
 
 Verifies that the backend-specific ``OraclePartitionByRange`` /
 ``OraclePartitionByList`` / ``OraclePartitionByHash`` expressions and
-the ``OraclePartitionDefinition`` / ``OraclePartitionValue`` /
+the ``PartitionDefinitionExpression`` / ``OraclePartitionValue`` /
 ``OraclePartitionMaxValue`` helpers produce the expected Oracle SQL
 shape, and that the generic ``PartitionClause`` (Phase 4) path remains
 backward compatible.
@@ -17,6 +17,9 @@ from datetime import date
 
 from rhosocial.activerecord.backend.expression import Column, Literal
 from rhosocial.activerecord.backend.expression.statements import (
+    PartitionDefinitionExpression,
+)
+from rhosocial.activerecord.backend.expression.statements import (
     PartitionClause,
     PartitionStrategy,
 )
@@ -26,7 +29,6 @@ from rhosocial.activerecord.backend.impl.oracle.expression.partition import (
     OraclePartitionByHash,
     OraclePartitionByList,
     OraclePartitionByRange,
-    OraclePartitionDefinition,
     OraclePartitionMaxValue,
     OraclePartitionValue,
 )
@@ -47,10 +49,13 @@ class TestOraclePartitionByRange:
     def test_range_with_value_and_maxvalue(self):
         d = _dialect()
         c = OraclePartitionByRange(
-            d, [Column(d, "id")],
+            d,
+            [Column(d, "id")],
             partitions=[
-                OraclePartitionDefinition(name="p1", less_than=[OraclePartitionValue(d, 100)]),
-                OraclePartitionDefinition(name="p2", less_than=[OraclePartitionMaxValue(d)]),
+                PartitionDefinitionExpression(
+                    d, name="p1", less_than=[OraclePartitionValue(d, 100)]
+                ),
+                PartitionDefinitionExpression(d, name="p2", less_than=[OraclePartitionMaxValue(d)]),
             ],
         )
         sql, params = c.to_sql()
@@ -64,13 +69,16 @@ class TestOraclePartitionByRange:
     def test_range_multi_column(self):
         d = _dialect()
         c = OraclePartitionByRange(
-            d, [Column(d, "a"), Column(d, "b")],
+            d,
+            [Column(d, "a"), Column(d, "b")],
             partitions=[
-                OraclePartitionDefinition(
+                PartitionDefinitionExpression(
+                    d,
                     name="p1",
                     less_than=[OraclePartitionValue(d, 1), OraclePartitionValue(d, 100)],
                 ),
-                OraclePartitionDefinition(
+                PartitionDefinitionExpression(
+                    d,
                     name="p2",
                     less_than=[OraclePartitionMaxValue(d), OraclePartitionMaxValue(d)],
                 ),
@@ -83,10 +91,13 @@ class TestOraclePartitionByRange:
     def test_range_string_boundary_escaped(self):
         d = _dialect()
         c = OraclePartitionByRange(
-            d, [Column(d, "name")],
+            d,
+            [Column(d, "name")],
             partitions=[
-                OraclePartitionDefinition(name="p1", less_than=[OraclePartitionValue(d, "M")]),
-                OraclePartitionDefinition(name="p2", less_than=[OraclePartitionMaxValue(d)]),
+                PartitionDefinitionExpression(
+                    d, name="p1", less_than=[OraclePartitionValue(d, "M")]
+                ),
+                PartitionDefinitionExpression(d, name="p2", less_than=[OraclePartitionMaxValue(d)]),
             ],
         )
         sql, _ = c.to_sql()
@@ -97,10 +108,13 @@ class TestOraclePartitionByRange:
         """A core ``Literal`` expression is also accepted as a boundary value."""
         d = _dialect()
         c = OraclePartitionByRange(
-            d, [Column(d, "id")],
+            d,
+            [Column(d, "id")],
             partitions=[
-                OraclePartitionDefinition(name="p1", less_than=[Literal(d, 50)]),
-                OraclePartitionDefinition(name="p2", less_than=[Literal(d, date(2026, 1, 1))]),
+                PartitionDefinitionExpression(d, name="p1", less_than=[Literal(d, 50)]),
+                PartitionDefinitionExpression(
+                    d, name="p2", less_than=[Literal(d, date(2026, 1, 1))]
+                ),
             ],
         )
         sql, _ = c.to_sql()
@@ -117,8 +131,9 @@ class TestOraclePartitionByRange:
     def test_range_missing_less_than_raises(self):
         d = _dialect()
         c = OraclePartitionByRange(
-            d, [Column(d, "id")],
-            partitions=[OraclePartitionDefinition(name="p1")],
+            d,
+            [Column(d, "id")],
+            partitions=[PartitionDefinitionExpression(d, name="p1")],
         )
         with pytest.raises(ValueError, match="less_than"):
             c.to_sql()
@@ -126,9 +141,12 @@ class TestOraclePartitionByRange:
     def test_range_pre_11g_raises(self):
         d = OracleDialect(version=(10, 0, 0))
         c = OraclePartitionByRange(
-            d, [Column(d, "id")],
+            d,
+            [Column(d, "id")],
             partitions=[
-                OraclePartitionDefinition(name="p1", less_than=[OraclePartitionValue(d, 100)]),
+                PartitionDefinitionExpression(
+                    d, name="p1", less_than=[OraclePartitionValue(d, 100)]
+                ),
             ],
         )
         with pytest.raises(UnsupportedFeatureError):
@@ -146,29 +164,35 @@ class TestOraclePartitionByList:
     def test_list_single_column(self):
         d = _dialect()
         c = OraclePartitionByList(
-            d, [Column(d, "region")],
+            d,
+            [Column(d, "region")],
             partitions=[
-                OraclePartitionDefinition(
+                PartitionDefinitionExpression(
+                    d,
                     name="p_east",
                     in_values=[OraclePartitionValue(d, "EAST"), OraclePartitionValue(d, "NORTH")],
                 ),
-                OraclePartitionDefinition(name="p_west", in_values=[OraclePartitionValue(d, "WEST")]),
+                PartitionDefinitionExpression(
+                    d, name="p_west", in_values=[OraclePartitionValue(d, "WEST")]
+                ),
             ],
         )
         sql, params = c.to_sql()
         assert sql == (
             ' PARTITION BY LIST ("REGION") '
-            '(PARTITION "P_EAST" VALUES (\'EAST\', \'NORTH\'), '
-            'PARTITION "P_WEST" VALUES (\'WEST\'))'
+            "(PARTITION \"P_EAST\" VALUES ('EAST', 'NORTH'), "
+            "PARTITION \"P_WEST\" VALUES ('WEST'))"
         )
         assert params == ()
 
     def test_list_multi_column(self):
         d = _dialect()
         c = OraclePartitionByList(
-            d, [Column(d, "a"), Column(d, "b")],
+            d,
+            [Column(d, "a"), Column(d, "b")],
             partitions=[
-                OraclePartitionDefinition(
+                PartitionDefinitionExpression(
+                    d,
                     name="p1",
                     in_values=[
                         [OraclePartitionValue(d, "x"), OraclePartitionValue(d, 1)],
@@ -189,8 +213,9 @@ class TestOraclePartitionByList:
     def test_list_missing_in_values_raises(self):
         d = _dialect()
         c = OraclePartitionByList(
-            d, [Column(d, "region")],
-            partitions=[OraclePartitionDefinition(name="p1")],
+            d,
+            [Column(d, "region")],
+            partitions=[PartitionDefinitionExpression(d, name="p1")],
         )
         with pytest.raises(ValueError, match="in_values"):
             c.to_sql()
@@ -220,10 +245,11 @@ class TestOraclePartitionByHash:
     def test_hash_with_explicit_partitions(self):
         d = _dialect()
         c = OraclePartitionByHash(
-            d, [Column(d, "id")],
+            d,
+            [Column(d, "id")],
             partitions=[
-                OraclePartitionDefinition(name="p1"),
-                OraclePartitionDefinition(name="p2"),
+                PartitionDefinitionExpression(d, name="p1"),
+                PartitionDefinitionExpression(d, name="p2"),
             ],
         )
         sql, _ = c.to_sql()
@@ -250,26 +276,28 @@ class TestOraclePartitionByHash:
 # ---------------------------------------------------------------------------
 
 
-class TestOraclePartitionDefinition:
-    """OraclePartitionDefinition dataclass validation."""
+class TestPartitionDefinitionExpression:
+    """PartitionDefinitionExpression validation."""
 
     def test_name_must_be_non_empty(self):
+        d = _dialect()
         with pytest.raises(ValueError):
-            OraclePartitionDefinition(name="")
+            PartitionDefinitionExpression(d, name="")
 
     def test_name_must_be_str(self):
+        d = _dialect()
         with pytest.raises(ValueError):
-            OraclePartitionDefinition(name=None)  # type: ignore[arg-type]
+            PartitionDefinitionExpression(d, name=None)  # type: ignore[arg-type]
 
     def test_less_than_and_in_values_mutually_exclusive(self):
         d = _dialect()
         with pytest.raises(ValueError):
-            OraclePartitionDefinition(
+            PartitionDefinitionExpression(
+                d,
                 name="p1",
                 less_than=[OraclePartitionValue(d, 1)],
                 in_values=[OraclePartitionValue(d, "x")],
             )
-
 
 
 # ---------------------------------------------------------------------------
@@ -339,7 +367,9 @@ class TestGenericPartitionClauseRejected:
     def test_generic_partition_clause_raises_type_error(self):
         d = _dialect()
         c = PartitionClause(
-            d, PartitionStrategy.RANGE, [Column(d, "id")],
+            d,
+            PartitionStrategy.RANGE,
+            [Column(d, "id")],
         )
         with pytest.raises(TypeError, match="Oracle-specific partition clause"):
             c.to_sql()
@@ -347,7 +377,9 @@ class TestGenericPartitionClauseRejected:
     def test_generic_hash_clause_raises_type_error(self):
         d = _dialect()
         c = PartitionClause(
-            d, PartitionStrategy.HASH, [Column(d, "id")],
+            d,
+            PartitionStrategy.HASH,
+            [Column(d, "id")],
         )
         with pytest.raises(TypeError, match="Oracle-specific partition clause"):
             c.to_sql()
@@ -356,9 +388,12 @@ class TestGenericPartitionClauseRejected:
         """Oracle-specific expression dispatches to the structured formatter."""
         d = _dialect()
         c = OraclePartitionByRange(
-            d, [Column(d, "id")],
+            d,
+            [Column(d, "id")],
             partitions=[
-                OraclePartitionDefinition(name="p1", less_than=[OraclePartitionValue(d, 100)]),
+                PartitionDefinitionExpression(
+                    d, name="p1", less_than=[OraclePartitionValue(d, 100)]
+                ),
             ],
         )
         sql, _ = c.to_sql()

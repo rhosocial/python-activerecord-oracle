@@ -10,7 +10,7 @@ Phase 5 scope:
 * Backend-specific
   :class:`~rhosocial.activerecord.backend.impl.oracle.expression.partition.OraclePartitionByRange`
   / ``...ByList`` / ``...ByHash`` expressions with structured
-  :class:`OraclePartitionDefinition` definitions.
+  :class:`PartitionDefinitionExpression` definitions.
 * Oracle-specific INTERVAL / REFERENCE partitioning.
 * Composite partitioning via :class:`OracleSubpartitionClause`.
 * Partition maintenance statement formatters for the Oracle-specific
@@ -32,26 +32,31 @@ returned as parameters. The values are still supplied through
 ``OraclePartitionValue`` / ``Literal`` expressions so they flow through
 the Expression/Dialect layer and are escaped by the dialect.
 """
+
 from datetime import date, datetime
 from decimal import Decimal
 from math import isfinite
-from typing import Any, List, Sequence, Tuple, TYPE_CHECKING
+from typing import Any, List, Optional, Sequence, Tuple, TYPE_CHECKING
 
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 from rhosocial.activerecord.backend.expression.bases import BaseExpression
 from rhosocial.activerecord.backend.expression.core import Literal
+from rhosocial.activerecord.backend.expression.statements import (
+    PartitionDefinitionExpression,
+    PartitionOptionsExpression,
+    SubpartitionDefinitionExpression,
+)
 
 from ..expression.partition import (
     OracleIntervalPartitionClause,
     OraclePartitionByHash,
     OraclePartitionByList,
     OraclePartitionByRange,
-    OraclePartitionDefinition,
     OraclePartitionMaxValue,
     OraclePartitionValue,
     OracleReferencePartitionClause,
     OracleSubpartitionClause,
-    OracleSubpartitionDefinition,
+    subpartitions_count_of,
 )
 from ..expression.partition_lifecycle import (
     OracleAddPartitionStatement,
@@ -107,8 +112,7 @@ class OraclePartitionMixin:
 
         if not isinstance(expr.table, Table):
             raise TypeError(
-                f"{type(expr).__name__}.table must be a Table, "
-                f"got {type(expr.table).__name__}"
+                f"{type(expr).__name__}.table must be a Table, " f"got {type(expr.table).__name__}"
             )
         return expr.table.to_sql()[0]
 
@@ -274,7 +278,9 @@ class OraclePartitionMixin:
             sub_sql, _ = expr.subpartition_by.to_sql()
             sql = f"{sql} {sub_sql.strip()}"
         if expr.partitions:
-            part_sqls = [self.format_partition_definition(p, strategy="RANGE")[0] for p in expr.partitions]
+            part_sqls = [
+                self.format_partition_definition(p, strategy="RANGE")[0] for p in expr.partitions
+            ]
             sql = f"{sql} ({', '.join(part_sqls)})"
         return f" {sql}", ()
 
@@ -292,7 +298,9 @@ class OraclePartitionMixin:
             sub_sql, _ = expr.subpartition_by.to_sql()
             sql = f"{sql} {sub_sql.strip()}"
         if expr.partitions:
-            part_sqls = [self.format_partition_definition(p, strategy="LIST")[0] for p in expr.partitions]
+            part_sqls = [
+                self.format_partition_definition(p, strategy="LIST")[0] for p in expr.partitions
+            ]
             sql = f"{sql} ({', '.join(part_sqls)})"
         return f" {sql}", ()
 
@@ -312,7 +320,9 @@ class OraclePartitionMixin:
         if expr.partitions_count is not None:
             sql = f"{sql} PARTITIONS {expr.partitions_count}"
         elif expr.partitions:
-            part_sqls = [self.format_partition_definition(p, strategy="HASH")[0] for p in expr.partitions]
+            part_sqls = [
+                self.format_partition_definition(p, strategy="HASH")[0] for p in expr.partitions
+            ]
             sql = f"{sql} ({', '.join(part_sqls)})"
         return f" {sql}", ()
 
@@ -339,7 +349,9 @@ class OraclePartitionMixin:
                 "Use a RawSQL for the interval expression."
             )
         sql = f"PARTITION BY RANGE ({key_sql}) INTERVAL ({interval_sql})"
-        part_sqls = [self.format_partition_definition(p, strategy="RANGE")[0] for p in expr.partitions]
+        part_sqls = [
+            self.format_partition_definition(p, strategy="RANGE")[0] for p in expr.partitions
+        ]
         if part_sqls:
             sql = f"{sql} ({', '.join(part_sqls)})"
         return f" {sql}", ()
@@ -371,8 +383,7 @@ class OraclePartitionMixin:
                 sql = f"{sql} SUBPARTITIONS {expr.count}"
             if expr.templates:
                 template_parts = [
-                    self.format_subpartition_definition(template)[0]
-                    for template in expr.templates
+                    self.format_subpartition_definition(template)[0] for template in expr.templates
                 ]
                 sql = f"{sql} SUBPARTITION TEMPLATE ({', '.join(template_parts)})"
             return f" {sql}", ()
@@ -384,8 +395,7 @@ class OraclePartitionMixin:
         sql = f"SUBPARTITION BY {strategy} ({key_sql})"
         if expr.templates:
             template_parts = [
-                self.format_subpartition_definition(template)[0]
-                for template in expr.templates
+                self.format_subpartition_definition(template)[0] for template in expr.templates
             ]
             sql = f"{sql} SUBPARTITION TEMPLATE ({', '.join(template_parts)})"
         return f" {sql}", ()
@@ -395,25 +405,34 @@ class OraclePartitionMixin:
     # ------------------------------------------------------------------
     def format_partition_definition(
         self,
-        definition: OraclePartitionDefinition,
+        definition: PartitionDefinitionExpression,
         *,
-        strategy: str,
+        strategy: Optional[str] = None,
     ) -> Tuple[str, tuple]:
         """Format a single ``PARTITION ... VALUES ...`` definition.
 
         Args:
-            definition: an :class:`OraclePartitionDefinition`.
+            definition: a :class:`PartitionDefinitionExpression`.
             strategy: ``"RANGE"`` / ``"LIST"`` / ``"HASH"`` — determines
-                which boundary form to emit.
+                which boundary form to emit. When omitted (a bare
+                ``definition.to_sql()`` call), it is inferred from the
+                boundary that is present.
 
         Returns:
             Tuple of (SQL fragment string, empty parameters tuple).
         """
-        if not isinstance(definition, OraclePartitionDefinition):
+        if not isinstance(definition, PartitionDefinitionExpression):
             raise TypeError(
-                "definition must be an OraclePartitionDefinition, "
+                "definition must be a PartitionDefinitionExpression, "
                 f"got {type(definition).__name__}"
             )
+        if strategy is None:
+            if definition.less_than is not None:
+                strategy = "RANGE"
+            elif definition.in_values is not None:
+                strategy = "LIST"
+            else:
+                strategy = "HASH"
         name_sql = self.format_identifier(definition.name)
         if strategy.upper() == "RANGE":
             if definition.less_than is None:
@@ -457,23 +476,26 @@ class OraclePartitionMixin:
         parts: List[str] = [f"PARTITION {name_sql}"]
         if body is not None:
             parts.append(body)
-        if definition.subpartitions_count is not None:
-            parts.append(f"SUBPARTITIONS {definition.subpartitions_count}")
-        if definition.subpartition_definitions:
+        subpartitions_count = subpartitions_count_of(definition)
+        if subpartitions_count is not None and definition.subpartitions:
+            raise ValueError("subpartitions_count and subpartitions are mutually exclusive")
+        if subpartitions_count is not None:
+            parts.append(f"SUBPARTITIONS {subpartitions_count}")
+        if definition.subpartitions:
             sub_parts = [
-                self.format_subpartition_definition(d)[0] for d in definition.subpartition_definitions
+                self.format_subpartition_definition(d)[0] for d in definition.subpartitions
             ]
             parts.append(f"({', '.join(sub_parts)})")
         return " ".join(parts), ()
 
     def format_subpartition_definition(
         self,
-        definition: OracleSubpartitionDefinition,
+        definition: SubpartitionDefinitionExpression,
     ) -> Tuple[str, tuple]:
         """Format a single ``SUBPARTITION name [VALUES ...]`` definition."""
-        if not isinstance(definition, OracleSubpartitionDefinition):
+        if not isinstance(definition, SubpartitionDefinitionExpression):
             raise TypeError(
-                "definition must be an OracleSubpartitionDefinition, "
+                "definition must be a SubpartitionDefinitionExpression, "
                 f"got {type(definition).__name__}"
             )
         name_sql = self.format_identifier(definition.name)
@@ -491,6 +513,23 @@ class OraclePartitionMixin:
                     value_parts.append(self.format_partition_boundary_value(value)[0])
             parts.append(f"VALUES ({', '.join(value_parts)})")
         return " ".join(parts), ()
+
+    def format_partition_definition_options(
+        self, expr: PartitionOptionsExpression
+    ) -> Tuple[str, tuple]:
+        """Render a definition's options node as its Oracle option fragment.
+
+        Oracle's only partition-definition option is the per-partition hash
+        subpartition count. When the node carries none, it renders nothing.
+        """
+        if not isinstance(expr, PartitionOptionsExpression):
+            raise TypeError(
+                "expr must be a PartitionOptionsExpression, " f"got {type(expr).__name__}"
+            )
+        count = expr.options.get("subpartitions_count")
+        if count is None:
+            return "", ()
+        return f"SUBPARTITIONS {count}", ()
 
     def format_partition_value(self, expr: OraclePartitionValue) -> Tuple[str, tuple]:
         """Format a partition boundary value expression.
@@ -526,8 +565,7 @@ class OraclePartitionMixin:
         for key in keys:
             if not isinstance(key, BaseExpression):
                 raise TypeError(
-                    "partition keys must be BaseExpression instances, "
-                    f"got {type(key).__name__}"
+                    "partition keys must be BaseExpression instances, " f"got {type(key).__name__}"
                 )
             key_sql, _ = key.to_sql()
             key_sql_parts.append(key_sql)
@@ -618,10 +656,7 @@ class OraclePartitionMixin:
         part_sql = self.format_identifier(expr.partition_name)
         at_parts = [self.format_partition_boundary_value(v)[0] for v in expr.at_values]
         at_sql = ", ".join(at_parts)
-        new_parts = [
-            f"PARTITION {self.format_identifier(np.name)}"
-            for np in expr.new_partitions
-        ]
+        new_parts = [f"PARTITION {self.format_identifier(np.name)}" for np in expr.new_partitions]
         new_sql = ", ".join(new_parts)
         return (
             f"ALTER TABLE {table_sql} SPLIT PARTITION {part_sql} "
@@ -643,8 +678,7 @@ class OraclePartitionMixin:
         names_sql = ", ".join(self.format_identifier(n) for n in expr.partition_names)
         into_name = self.format_identifier(expr.into_partition.name)
         return (
-            f"ALTER TABLE {table_sql} MERGE PARTITIONS {names_sql} "
-            f"INTO PARTITION {into_name}",
+            f"ALTER TABLE {table_sql} MERGE PARTITIONS {names_sql} " f"INTO PARTITION {into_name}",
             (),
         )
 
@@ -668,10 +702,7 @@ class OraclePartitionMixin:
                 f"got {type(expr.with_table).__name__}"
             )
         with_sql = expr.with_table.to_sql()[0]
-        sql = (
-            f"ALTER TABLE {table_sql} EXCHANGE PARTITION {part_sql} "
-            f"WITH TABLE {with_sql}"
-        )
+        sql = f"ALTER TABLE {table_sql} EXCHANGE PARTITION {part_sql} " f"WITH TABLE {with_sql}"
         if expr.including_indexes:
             sql = f"{sql} INCLUDING INDEXES"
         if expr.with_validation:

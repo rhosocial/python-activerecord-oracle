@@ -9,6 +9,10 @@ Oracle execution is covered in ``test_oracle_partition_phase5_real.py``.
 import pytest
 
 from rhosocial.activerecord.backend.expression import Column, Literal
+from rhosocial.activerecord.backend.expression.statements import (
+    PartitionDefinitionExpression,
+    SubpartitionDefinitionExpression,
+)
 from rhosocial.activerecord.backend.expression.operators import RawSQL
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
@@ -17,12 +21,10 @@ from rhosocial.activerecord.backend.impl.oracle.expression.partition import (
     OraclePartitionByHash,
     OraclePartitionByList,
     OraclePartitionByRange,
-    OraclePartitionDefinition,
     OraclePartitionMaxValue,
     OraclePartitionValue,
     OracleReferencePartitionClause,
     OracleSubpartitionClause,
-    OracleSubpartitionDefinition,
     OracleSubpartitionStrategy,
 )
 
@@ -42,32 +44,43 @@ class TestOracleIntervalPartition:
     def test_interval_basic(self):
         d = _dialect()
         c = OracleIntervalPartitionClause(
-            d, [Column(d, "created_at")],
+            d,
+            [Column(d, "created_at")],
             interval=RawSQL(d, "NUMTOYMINTERVAL(1, 'YEAR')"),
             partitions=[
-                OraclePartitionDefinition(name="p0", less_than=[OraclePartitionValue(d, "2026-01-01")]),
+                PartitionDefinitionExpression(
+                    d, name="p0", less_than=[OraclePartitionValue(d, "2026-01-01")]
+                ),
             ],
         )
         sql, params = c.to_sql()
-        assert sql == (
-            ' PARTITION BY RANGE ("CREATED_AT") INTERVAL (NUMTOYMINTERVAL(1, \'YEAR\')) (PARTITION "P0" VALUES LESS THAN (\'2026-01-01\'))'
+        expected_sql = (
+            " PARTITION BY RANGE (\"CREATED_AT\") INTERVAL (NUMTOYMINTERVAL(1, 'YEAR')) "
+            "(PARTITION \"P0\" VALUES LESS THAN ('2026-01-01'))"
         )
+        assert sql == expected_sql
         assert params == ()
 
     def test_interval_requires_single_key_column(self):
         d = _dialect()
         with pytest.raises(ValueError, match="exactly one"):
             OracleIntervalPartitionClause(
-                d, [Column(d, "a"), Column(d, "b")],
+                d,
+                [Column(d, "a"), Column(d, "b")],
                 interval=RawSQL(d, "x"),
-                partitions=[OraclePartitionDefinition(name="p0", less_than=[OraclePartitionValue(d, 1)])],
+                partitions=[
+                    PartitionDefinitionExpression(
+                        d, name="p0", less_than=[OraclePartitionValue(d, 1)]
+                    )
+                ],
             )
 
     def test_interval_requires_seed_partition(self):
         d = _dialect()
         with pytest.raises(ValueError, match="seed partition"):
             OracleIntervalPartitionClause(
-                d, [Column(d, "created_at")],
+                d,
+                [Column(d, "created_at")],
                 interval=RawSQL(d, "x"),
                 partitions=[],
             )
@@ -76,9 +89,12 @@ class TestOracleIntervalPartition:
         """INTERVAL expression must not produce bind parameters (Oracle DDL)."""
         d = _dialect()
         c = OracleIntervalPartitionClause(
-            d, [Column(d, "created_at")],
+            d,
+            [Column(d, "created_at")],
             interval=Literal(d, "x"),  # Literal -> parameterized
-            partitions=[OraclePartitionDefinition(name="p0", less_than=[OraclePartitionValue(d, 1)])],
+            partitions=[
+                PartitionDefinitionExpression(d, name="p0", less_than=[OraclePartitionValue(d, 1)])
+            ],
         )
         with pytest.raises(ValueError, match="bind parameters"):
             c.to_sql()
@@ -86,9 +102,12 @@ class TestOracleIntervalPartition:
     def test_interval_pre_11g_raises(self):
         d = OracleDialect(version=(10, 0, 0))
         c = OracleIntervalPartitionClause(
-            d, [Column(d, "created_at")],
+            d,
+            [Column(d, "created_at")],
             interval=RawSQL(d, "x"),
-            partitions=[OraclePartitionDefinition(name="p0", less_than=[OraclePartitionValue(d, 1)])],
+            partitions=[
+                PartitionDefinitionExpression(d, name="p0", less_than=[OraclePartitionValue(d, 1)])
+            ],
         )
         with pytest.raises(UnsupportedFeatureError):
             c.to_sql()
@@ -103,9 +122,14 @@ class TestOracleIntervalPartition:
         d = _dialect()
         with pytest.raises(TypeError):
             OracleIntervalPartitionClause(
-                d, [Column(d, "created_at")],
+                d,
+                [Column(d, "created_at")],
                 interval="not an expression",  # type: ignore[arg-type]
-                partitions=[OraclePartitionDefinition(name="p0", less_than=[OraclePartitionValue(d, 1)])],
+                partitions=[
+                    PartitionDefinitionExpression(
+                        d, name="p0", less_than=[OraclePartitionValue(d, 1)]
+                    )
+                ],
             )
 
 
@@ -173,14 +197,17 @@ class TestOracleCompositePartition:
             d, OracleSubpartitionStrategy.HASH, keys=[Column(d, "id")], count=2
         )
         c = OraclePartitionByRange(
-            d, [Column(d, "created_at")],
+            d,
+            [Column(d, "created_at")],
             subpartition_by=sub,
             partitions=[
-                OraclePartitionDefinition(
+                PartitionDefinitionExpression(
+                    d,
                     name="p1",
                     less_than=[OraclePartitionValue(d, "2026-01-01")],
                 ),
-                OraclePartitionDefinition(
+                PartitionDefinitionExpression(
+                    d,
                     name="p2",
                     less_than=[OraclePartitionMaxValue(d)],
                 ),
@@ -199,18 +226,21 @@ class TestOracleCompositePartition:
             d, OracleSubpartitionStrategy.HASH, keys=[Column(d, "id")], count=2
         )
         c = OraclePartitionByRange(
-            d, [Column(d, "created_at")],
+            d,
+            [Column(d, "created_at")],
             subpartition_by=sub,
             partitions=[
-                OraclePartitionDefinition(
+                PartitionDefinitionExpression(
+                    d,
                     name="p1",
                     less_than=[OraclePartitionValue(d, "2026-01-01")],
-                    subpartition_definitions=[
-                        OracleSubpartitionDefinition(name="p1_sub1"),
-                        OracleSubpartitionDefinition(name="p1_sub2"),
+                    subpartitions=[
+                        SubpartitionDefinitionExpression(d, name="p1_sub1"),
+                        SubpartitionDefinitionExpression(d, name="p1_sub2"),
                     ],
                 ),
-                OraclePartitionDefinition(
+                PartitionDefinitionExpression(
+                    d,
                     name="p2",
                     less_than=[OraclePartitionValue(d, "2027-01-01")],
                 ),
@@ -225,10 +255,12 @@ class TestOracleCompositePartition:
             d, OracleSubpartitionStrategy.HASH, keys=[Column(d, "id")], count=3
         )
         c = OraclePartitionByList(
-            d, [Column(d, "region")],
+            d,
+            [Column(d, "region")],
             subpartition_by=sub,
             partitions=[
-                OraclePartitionDefinition(
+                PartitionDefinitionExpression(
+                    d,
                     name="p_east",
                     in_values=[OraclePartitionValue(d, "EAST")],
                 ),
@@ -248,9 +280,7 @@ class TestOracleCompositePartition:
 
     def test_subpartition_by_range_template(self):
         d = _dialect()
-        sub = OracleSubpartitionClause(
-            d, OracleSubpartitionStrategy.RANGE, keys=[Column(d, "id")]
-        )
+        sub = OracleSubpartitionClause(d, OracleSubpartitionStrategy.RANGE, keys=[Column(d, "id")])
         sql, _ = sub.to_sql()
         assert sql == ' SUBPARTITION BY RANGE ("ID")'
 
@@ -294,23 +324,24 @@ class TestOracleCompositePartition:
 
     def test_subpartition_definition_with_less_than(self):
         d = _dialect()
-        sub_def = OracleSubpartitionDefinition(
-            name="sub1", less_than=[OraclePartitionValue(d, 100)]
+        sub_def = SubpartitionDefinitionExpression(
+            d, name="sub1", less_than=[OraclePartitionValue(d, 100)]
         )
         sql, _ = d.format_subpartition_definition(sub_def)
         assert sql == 'SUBPARTITION "SUB1" VALUES LESS THAN (100)'
 
     def test_subpartition_definition_with_in_values(self):
         d = _dialect()
-        sub_def = OracleSubpartitionDefinition(
-            name="sub1", in_values=[OraclePartitionValue(d, "EAST")]
+        sub_def = SubpartitionDefinitionExpression(
+            d, name="sub1", in_values=[OraclePartitionValue(d, "EAST")]
         )
         sql, _ = d.format_subpartition_definition(sub_def)
-        assert sql == 'SUBPARTITION "SUB1" VALUES (\'EAST\')'
+        assert sql == "SUBPARTITION \"SUB1\" VALUES ('EAST')"
 
     def test_subpartition_definition_name_required(self):
+        d = _dialect()
         with pytest.raises(ValueError):
-            OracleSubpartitionDefinition(name="")
+            SubpartitionDefinitionExpression(d, name="")
 
     def test_subpartitioning_capability_gating(self):
         assert _dialect((11, 0, 0)).supports_subpartitioning() is True
@@ -330,9 +361,7 @@ class TestOracleCompositePartition:
         sub = OracleSubpartitionClause(
             d, OracleSubpartitionStrategy.HASH, keys=[Column(d, "region")], count=2
         )
-        c = OraclePartitionByHash(
-            d, [Column(d, "id")], partitions_count=4, subpartition_by=sub
-        )
+        c = OraclePartitionByHash(d, [Column(d, "id")], partitions_count=4, subpartition_by=sub)
         sql, _ = c.to_sql()
         assert 'PARTITION BY HASH ("ID")' in sql
         assert 'SUBPARTITION BY HASH ("REGION") SUBPARTITIONS 2' in sql
@@ -343,6 +372,7 @@ class TestOracleCompositePartition:
         d = _dialect()
         with pytest.raises(TypeError):
             OraclePartitionByRange(
-                d, [Column(d, "id")],
+                d,
+                [Column(d, "id")],
                 subpartition_by="not a clause",  # type: ignore[arg-type]
             )

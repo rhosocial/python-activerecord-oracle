@@ -19,11 +19,8 @@ from typing import Any, List, Optional
 from ....expression import Column
 from ....expression.bases import BaseExpression
 from ....expression.objects import Table
-from ..expression.partition import (
-    OraclePartitionDefinition,
-    OraclePartitionMaxValue,
-    OracleSubpartitionClause,
-)
+from ....expression.statements import PartitionDefinitionExpression
+from ..expression.partition import OraclePartitionMaxValue, OracleSubpartitionClause
 
 __all__ = ["OraclePartitionSuggestionBase"]
 
@@ -47,8 +44,18 @@ def _get(plan: Any, name: str, default: Any = None) -> Any:
 
 
 def _word(strategy: Any) -> str:
-    """Normalise a strategy member or its spelling to an upper-case word."""
-    value = getattr(strategy, "value", strategy)
+    """Normalise a strategy clause (or a legacy word/member) to an upper-case word.
+
+    A ``PartitionByClause`` carries the word in ``.word`` (core's clause nodes
+    expose it through ``.method``); a legacy string enum carried it in
+    ``.value``. Reading all three keeps the suggestion runtime compatible
+    with either data carrier while the annotations speak in clauses.
+    """
+    value = getattr(
+        strategy,
+        "word",
+        getattr(strategy, "method", getattr(strategy, "value", strategy)),
+    )
     return str(value).strip().upper()
 
 
@@ -96,7 +103,7 @@ def _bound_value(candidate: Any) -> Any:
         return _MAXVALUE
     if isinstance(candidate, str) and candidate.strip().upper() == "MAXVALUE":
         return _MAXVALUE
-    if isinstance(candidate, OraclePartitionDefinition):
+    if isinstance(candidate, PartitionDefinitionExpression):
         less_than = candidate.less_than or ()
         return _bound_value(less_than[0]) if less_than else None
     if getattr(candidate, "is_maxvalue", False):
@@ -153,7 +160,7 @@ class OraclePartitionSuggestionBase:
 
     def _suggestion_definitions(
         self, plan: Any, name: str = "definitions"
-    ) -> Optional[List[OraclePartitionDefinition]]:
+    ) -> Optional[List[PartitionDefinitionExpression]]:
         raw = _get(plan, name)
         if raw is None:
             return None
@@ -161,7 +168,9 @@ class OraclePartitionSuggestionBase:
             values = list(raw)
         except TypeError:
             return None
-        if not values or not all(isinstance(value, OraclePartitionDefinition) for value in values):
+        if not values or not all(
+            isinstance(value, PartitionDefinitionExpression) for value in values
+        ):
             return None
         return values
 

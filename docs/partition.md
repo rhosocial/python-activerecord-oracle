@@ -22,12 +22,13 @@ from datetime import date
 
 from rhosocial.activerecord.backend.expression import Column, CreateTableStatement
 from rhosocial.activerecord.backend.expression.objects import Table
+from rhosocial.activerecord.backend.expression.statements import PartitionDefinitionExpression
 from rhosocial.activerecord.backend.impl.oracle.expression.partition import (
     OraclePartitionByRange,
-    OraclePartitionDefinition,
     OraclePartitionValue,
     OracleSubpartitionClause,
     OracleSubpartitionStrategy,
+    partition_definition_options,
 )
 
 clause = OraclePartitionByRange(
@@ -40,12 +41,15 @@ clause = OraclePartitionByRange(
         count=2,
     ),
     partitions=[
-        OraclePartitionDefinition(
+        PartitionDefinitionExpression(
+            dialect,
             name="P1",
             less_than=[OraclePartitionValue(dialect, date(2026, 2, 1))],
-            subpartitions_count=3,
+            options=partition_definition_options(dialect, subpartitions_count=3),
         ),
-        OraclePartitionDefinition(name="P2", less_than=[OraclePartitionValue(dialect, date(2026, 3, 1))]),
+        PartitionDefinitionExpression(
+            dialect, name="P2", less_than=[OraclePartitionValue(dialect, date(2026, 3, 1))]
+        ),
     ],
 )
 CreateTableStatement(dialect=dialect, table=Table(dialect, "EVENTS"), columns=[...], partition=clause)
@@ -69,9 +73,10 @@ Oracle's subpartition **strategy** is declared once, above all top-level
 partitions (`SUBPARTITION BY ...`). What a top-level partition may vary is its
 own definitions or its HASH count:
 
-- `OraclePartitionDefinition(subpartitions_count=N)` renders a per-partition
-  `SUBPARTITIONS N` override for `SUBPARTITION BY HASH`.
-- `OraclePartitionDefinition(subpartition_definitions=[...])` renders explicit
+- `PartitionDefinitionExpression(..., options=partition_definition_options(dialect,
+  subpartitions_count=N))` renders a per-partition `SUBPARTITIONS N` override for
+  `SUBPARTITION BY HASH`.
+- `PartitionDefinitionExpression(..., subpartitions=[...])` renders explicit
   `SUBPARTITION ... VALUES ...` definitions for RANGE / LIST subpartitioning.
   The number and boundaries may differ from one top-level partition to the
   next.
@@ -87,11 +92,11 @@ pick its own child strategy.
 
 ### Renderer guard rails
 
-`OraclePartitionDefinition` refuses `subpartitions_count` together with
-`subpartition_definitions`, and refuses a non-positive or non-integer count.
-The plan layer refuses a count override when the table strategy is RANGE or
-LIST, and refuses subpartition definitions whose bound kind does not match the
-table strategy.
+`partition_definition_options` refuses a non-positive or non-integer
+`subpartitions_count`; the renderer refuses a count together with explicit
+`subpartitions`. The plan layer refuses a count override when the table
+strategy is RANGE or LIST, and refuses subpartition definitions whose bound kind
+does not match the table strategy.
 
 ## Plans and lifecycle suggestions
 

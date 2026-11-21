@@ -7,7 +7,7 @@
 
 ## 后端差异要点（相对其它后端）
 
-- **5 个顶层策略**：`OraclePartitionStrategy` 为 `RANGE / LIST / HASH / INTERVAL / REFERENCE`
+- **5 个顶层策略**：`RANGE / LIST / HASH / INTERVAL / REFERENCE`（由策略子句或 Oracle 专有词表达）
   （比其它后端少，且没有 SYSTEM；SYSTEM 不在本范围）。INTERVAL 是 Oracle 的自动扩展分区，
   REFERENCE 通过外键继承父表分区、没有自己的分区键。
 - **SPLIT / MERGE 是 Oracle 独有**：`suggest_partition_split` / `suggest_partition_merge`

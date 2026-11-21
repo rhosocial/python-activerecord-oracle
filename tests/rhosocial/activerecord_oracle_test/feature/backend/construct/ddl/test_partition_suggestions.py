@@ -25,6 +25,9 @@ from rhosocial.activerecord.backend.dialect.protocols import (
     PartitionTableDropSuggestionSupport,
 )
 from rhosocial.activerecord.backend.expression import Column, DropTableStatement
+from rhosocial.activerecord.backend.expression.statements import (
+    PartitionDefinitionExpression,
+)
 from rhosocial.activerecord.backend.expression.operators import RawSQL
 from rhosocial.activerecord.backend.suggestion import (
     PartitionAddSuggestion,
@@ -37,15 +40,18 @@ from rhosocial.activerecord.backend.suggestion import (
     PartitionTableDropSuggestion,
 )
 
+from rhosocial.activerecord.backend.expression.statements import (
+    PartitionByHashClause,
+    PartitionByListClause,
+    PartitionByRangeClause,
+)
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.expression.partition import (
     OracleIntervalPartitionClause,
     OraclePartitionByHash,
     OraclePartitionByList,
     OraclePartitionByRange,
-    OraclePartitionDefinition,
     OraclePartitionMaxValue,
-    OraclePartitionStrategy,
     OraclePartitionValue,
     OracleReferencePartitionClause,
 )
@@ -59,6 +65,25 @@ from rhosocial.activerecord.backend.impl.oracle.partition import (
     OraclePartitionPlan,
     OracleRangePolicy,
 )
+
+
+def _strategy(dialect, word):
+    """Build a strategy clause for a suggestion call.
+
+    Core has dedicated clause nodes for RANGE / LIST / HASH, which is what
+    the suggestion protocol is annotated with. INTERVAL and REFERENCE are
+    Oracle-only words with no core clause, so their plain word is passed
+    (the suggestion runtime still accepts a word alongside a clause).
+    """
+    keys = [Column(dialect, "ID")]
+    return {
+        "RANGE": PartitionByRangeClause(dialect, keys),
+        "LIST": PartitionByListClause(dialect, keys),
+        "HASH": PartitionByHashClause(dialect, keys),
+    }.get(word, word)
+
+
+_ALL_STRATEGIES = ("RANGE", "LIST", "HASH", "INTERVAL", "REFERENCE")
 
 PROTOCOLS = (
     ("build", PartitionBuildSuggestionSupport, PartitionBuildSuggestion),
@@ -78,15 +103,21 @@ def dialect():
 
 
 def _range(dialect, name, bound):
-    return OraclePartitionDefinition(name=name, less_than=[OraclePartitionValue(dialect, bound)])
+    return PartitionDefinitionExpression(
+        dialect, name=name, less_than=[OraclePartitionValue(dialect, bound)]
+    )
 
 
 def _list(dialect, name, value):
-    return OraclePartitionDefinition(name=name, in_values=[OraclePartitionValue(dialect, value)])
+    return PartitionDefinitionExpression(
+        dialect, name=name, in_values=[OraclePartitionValue(dialect, value)]
+    )
 
 
 def _maxvalue(dialect, name):
-    return OraclePartitionDefinition(name=name, less_than=[OraclePartitionMaxValue(dialect)])
+    return PartitionDefinitionExpression(
+        dialect, name=name, less_than=[OraclePartitionMaxValue(dialect)]
+    )
 
 
 def _sql(operations):
@@ -101,7 +132,7 @@ def test_dialect_satisfies_all_eight_protocols(dialect):
 def test_suggestion_values_are_frozen_dataclasses(dialect):
     for name, _protocol, cls in PROTOCOLS:
         suggestion = getattr(dialect, f"suggest_partition_{name}")(
-            OraclePartitionStrategy.RANGE, None
+            _strategy(dialect, "RANGE"), None
         )
         assert isinstance(suggestion, cls)
         assert dataclasses.is_dataclass(suggestion)
@@ -112,13 +143,13 @@ def test_suggestion_values_are_frozen_dataclasses(dialect):
 def test_build_returns_real_partition_by_clauses(dialect):
     definitions = [_range(dialect, "P1", 100), _range(dialect, "P2", 200)]
     cases = (
-        (OraclePartitionStrategy.RANGE, {"definitions": definitions}, OraclePartitionByRange),
+        (_strategy(dialect, "RANGE"), {"definitions": definitions}, OraclePartitionByRange),
         (
-            OraclePartitionStrategy.LIST,
+            _strategy(dialect, "LIST"),
             {"definitions": [_list(dialect, "P1", "a"), _list(dialect, "P2", "b")]},
             OraclePartitionByList,
         ),
-        (OraclePartitionStrategy.HASH, {"partitions_count": 4}, OraclePartitionByHash),
+        (_strategy(dialect, "HASH"), {"partitions_count": 4}, OraclePartitionByHash),
     )
     for strategy, extra, clause_class in cases:
         plan = {"keys": [Column(dialect, "ID")], **extra}
@@ -128,7 +159,7 @@ def test_build_returns_real_partition_by_clauses(dialect):
         assert "PARTITION BY" in _sql(suggestion.operations)
 
     interval = dialect.suggest_partition_build(
-        OraclePartitionStrategy.INTERVAL,
+        _strategy(dialect, "INTERVAL"),
         {
             "keys": [Column(dialect, "CREATED_AT")],
             "interval": RawSQL(dialect, "NUMTOYMINTERVAL(1, 'MONTH')"),
@@ -139,7 +170,7 @@ def test_build_returns_real_partition_by_clauses(dialect):
     assert "INTERVAL (" in _sql(interval.operations)
 
     reference = dialect.suggest_partition_build(
-        OraclePartitionStrategy.REFERENCE, {"fk_constraint": "FK_PARENT"}
+        _strategy(dialect, "REFERENCE"), {"fk_constraint": "FK_PARENT"}
     )
     assert isinstance(reference.operations[0], OracleReferencePartitionClause)
     assert "PARTITION BY REFERENCE" in _sql(reference.operations)
@@ -147,48 +178,44 @@ def test_build_returns_real_partition_by_clauses(dialect):
 
 def test_build_declines_unknown_or_incomplete_plan(dialect):
     assert dialect.suggest_partition_build("SPATIAL", {}).operations is False
-    assert dialect.suggest_partition_build(OraclePartitionStrategy.RANGE, {}).operations is False
+    assert dialect.suggest_partition_build(_strategy(dialect, "RANGE"), {}).operations is False
     assert (
         dialect.suggest_partition_build(
-            OraclePartitionStrategy.INTERVAL, {"keys": [Column(dialect, "C")]}
+            _strategy(dialect, "INTERVAL"), {"keys": [Column(dialect, "C")]}
         ).operations
         is False
     )
-    assert (
-        dialect.suggest_partition_build(OraclePartitionStrategy.REFERENCE, {}).operations is False
-    )
+    assert dialect.suggest_partition_build(_strategy(dialect, "REFERENCE"), {}).operations is False
 
 
 def test_table_drop_is_drop_table_statement(dialect):
-    suggestion = dialect.suggest_partition_table_drop(OraclePartitionStrategy.RANGE, {"table": "T"})
+    suggestion = dialect.suggest_partition_table_drop(_strategy(dialect, "RANGE"), {"table": "T"})
     assert len(suggestion.operations) == 1
     assert isinstance(suggestion.operations[0], DropTableStatement)
     assert _sql(suggestion.operations).upper().startswith("DROP TABLE")
-    assert (
-        dialect.suggest_partition_table_drop(OraclePartitionStrategy.RANGE, {}).operations is False
-    )
+    assert dialect.suggest_partition_table_drop(_strategy(dialect, "RANGE"), {}).operations is False
 
 
 def test_table_alter_reports_no_mechanism(dialect):
-    for strategy in OraclePartitionStrategy:
+    for strategy in _ALL_STRATEGIES:
         assert dialect.suggest_partition_table_alter(strategy, {"table": "T"}).operations is False
 
 
 def test_add_returns_one_add_partition_per_definition(dialect):
     suggestion = dialect.suggest_partition_add(
-        OraclePartitionStrategy.RANGE,
+        _strategy(dialect, "RANGE"),
         {"table": "T", "definitions": [_range(dialect, "P1", 100), _range(dialect, "P2", 200)]},
     )
     assert len(suggestion.operations) == 2
     assert all(isinstance(op, OracleAddPartitionStatement) for op in suggestion.operations)
     assert "ADD PARTITION" in _sql(suggestion.operations)
     assert (
-        dialect.suggest_partition_add(OraclePartitionStrategy.RANGE, {"table": "T"}).operations
+        dialect.suggest_partition_add(_strategy(dialect, "RANGE"), {"table": "T"}).operations
         is False
     )
     assert (
         dialect.suggest_partition_add(
-            OraclePartitionStrategy.REFERENCE,
+            _strategy(dialect, "REFERENCE"),
             {"table": "T", "definitions": [_range(dialect, "P1", 100)]},
         ).operations
         is False
@@ -197,17 +224,17 @@ def test_add_returns_one_add_partition_per_definition(dialect):
 
 def test_drop_by_name_and_tri_state(dialect):
     suggestion = dialect.suggest_partition_drop(
-        OraclePartitionStrategy.RANGE, {"table": "T", "names": ["P0", "P1"]}
+        _strategy(dialect, "RANGE"), {"table": "T", "names": ["P0", "P1"]}
     )
     assert all(isinstance(op, OracleDropPartitionStatement) for op in suggestion.operations)
     assert "DROP PARTITION" in _sql(suggestion.operations)
     assert (
-        dialect.suggest_partition_drop(OraclePartitionStrategy.RANGE, {"table": "T"}).operations
+        dialect.suggest_partition_drop(_strategy(dialect, "RANGE"), {"table": "T"}).operations
         is None
     )
     assert (
         dialect.suggest_partition_drop(
-            OraclePartitionStrategy.REFERENCE, {"table": "T", "names": ["P0"]}
+            _strategy(dialect, "REFERENCE"), {"table": "T", "names": ["P0"]}
         ).operations
         is False
     )
@@ -215,7 +242,7 @@ def test_drop_by_name_and_tri_state(dialect):
 
 def test_split_returns_a_real_split_statement(dialect):
     suggestion = dialect.suggest_partition_split(
-        OraclePartitionStrategy.RANGE,
+        _strategy(dialect, "RANGE"),
         {
             "table": "T",
             "partition": "P0",
@@ -227,14 +254,14 @@ def test_split_returns_a_real_split_statement(dialect):
     assert isinstance(suggestion.operations[0], OracleSplitPartitionStatement)
     assert "SPLIT PARTITION" in _sql(suggestion.operations)
     assert (
-        dialect.suggest_partition_split(OraclePartitionStrategy.RANGE, {"table": "T"}).operations
+        dialect.suggest_partition_split(_strategy(dialect, "RANGE"), {"table": "T"}).operations
         is False
     )
 
 
 def test_merge_returns_a_real_merge_statement(dialect):
     suggestion = dialect.suggest_partition_merge(
-        OraclePartitionStrategy.RANGE,
+        _strategy(dialect, "RANGE"),
         {
             "table": "T",
             "names": ["P0", "P1"],
@@ -245,7 +272,7 @@ def test_merge_returns_a_real_merge_statement(dialect):
     assert isinstance(suggestion.operations[0], OracleMergePartitionsStatement)
     assert "MERGE PARTITIONS" in _sql(suggestion.operations)
     assert (
-        dialect.suggest_partition_merge(OraclePartitionStrategy.RANGE, {"table": "T"}).operations
+        dialect.suggest_partition_merge(_strategy(dialect, "RANGE"), {"table": "T"}).operations
         is False
     )
 
@@ -257,7 +284,7 @@ def test_retention_drops_old_partitions_but_never_maxvalue(dialect):
         _maxvalue(dialect, "PMAX"),
     ]
     suggestion = dialect.suggest_partition_retention(
-        OraclePartitionStrategy.RANGE,
+        _strategy(dialect, "RANGE"),
         {"table": "T", "definitions": definitions, "cutoff": date(2026, 2, 1)},
     )
     assert all(isinstance(op, OracleDropPartitionStatement) for op in suggestion.operations)
@@ -265,12 +292,12 @@ def test_retention_drops_old_partitions_but_never_maxvalue(dialect):
     assert "PMAX" not in _sql(suggestion.operations)
 
     nothing = dialect.suggest_partition_retention(
-        OraclePartitionStrategy.RANGE,
+        _strategy(dialect, "RANGE"),
         {"table": "T", "definitions": definitions, "cutoff": date(2025, 1, 1)},
     )
     assert nothing.operations is None
     assert (
-        dialect.suggest_partition_retention(OraclePartitionStrategy.LIST, {"table": "T"}).operations
+        dialect.suggest_partition_retention(_strategy(dialect, "LIST"), {"table": "T"}).operations
         is False
     )
 
@@ -289,7 +316,7 @@ def test_retention_compares_high_value_of_a_real_plan(dialect):
         ),
     )
     suggestion = dialect.suggest_partition_retention(
-        OraclePartitionStrategy.RANGE,
+        _strategy(dialect, "RANGE"),
         {"table": "EVENTS", "plan": plan, "cutoff": date(2026, 2, 1)},
     )
     names = [op.partition_name for op in suggestion.operations]
@@ -323,18 +350,18 @@ def test_suggestions_work_with_maintenance_modules_blocked(dialect, monkeypatch)
         module = importlib.import_module(f"{package.__name__}.{name}")
         importlib.reload(module)
     assert dialect.suggest_partition_build(
-        OraclePartitionStrategy.RANGE,
+        _strategy(dialect, "RANGE"),
         {"keys": [Column(dialect, "ID")], "definitions": [_range(dialect, "P1", 1)]},
     ).operations
     assert dialect.suggest_partition_add(
-        OraclePartitionStrategy.RANGE, {"table": "T", "definitions": [_range(dialect, "P1", 1)]}
+        _strategy(dialect, "RANGE"), {"table": "T", "definitions": [_range(dialect, "P1", 1)]}
     ).operations
     assert dialect.suggest_partition_drop(
-        OraclePartitionStrategy.RANGE, {"table": "T", "names": ["P1"]}
+        _strategy(dialect, "RANGE"), {"table": "T", "names": ["P1"]}
     ).operations
     assert (
         dialect.suggest_partition_retention(
-            OraclePartitionStrategy.RANGE,
+            _strategy(dialect, "RANGE"),
             {"table": "T", "definitions": [_range(dialect, "P1", 1)], "cutoff": date(2026, 1, 1)},
         ).operations
         is not None

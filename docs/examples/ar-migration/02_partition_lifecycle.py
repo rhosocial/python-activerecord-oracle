@@ -11,11 +11,11 @@ from __future__ import annotations
 
 from datetime import date
 
+from rhosocial.activerecord.backend.expression import Column
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.expression.partition import (
-    OraclePartitionDefinition,
+    PartitionDefinitionExpression,
     OraclePartitionMaxValue,
-    OraclePartitionStrategy,
     OraclePartitionValue,
 )
 from rhosocial.activerecord.backend.impl.oracle.partition import (
@@ -24,9 +24,27 @@ from rhosocial.activerecord.backend.impl.oracle.partition import (
 )
 
 
+def _strategy(dialect, word):
+    """策略子句：core 的 RANGE/LIST/HASH 用表达式节点，Oracle 专有词用词本身。"""
+    from rhosocial.activerecord.backend.expression.statements import (
+        PartitionByHashClause,
+        PartitionByListClause,
+        PartitionByRangeClause,
+    )
+
+    keys = [Column(dialect, "ID")]
+    return {
+        "RANGE": PartitionByRangeClause(dialect, keys),
+        "LIST": PartitionByListClause(dialect, keys),
+        "HASH": PartitionByHashClause(dialect, keys),
+    }.get(word, word)
+
+
 def _range(dialect, name, bound):
     """一个 RANGE 分区定义。"""
-    return OraclePartitionDefinition(name=name, less_than=[OraclePartitionValue(dialect, bound)])
+    return PartitionDefinitionExpression(
+        dialect, name=name, less_than=[OraclePartitionValue(dialect, bound)]
+    )
 
 
 def _emit(title, suggestion):
@@ -45,7 +63,7 @@ def _emit(title, suggestion):
 
 def scenario_add(dialect):
     suggestion = dialect.suggest_partition_add(
-        OraclePartitionStrategy.RANGE,
+        _strategy(dialect, "RANGE"),
         {
             "table": "T",
             "definitions": [_range(dialect, "P1", 100), _range(dialect, "P2", 200)],
@@ -56,17 +74,17 @@ def scenario_add(dialect):
 
 def scenario_drop(dialect):
     suggestion = dialect.suggest_partition_drop(
-        OraclePartitionStrategy.RANGE, {"table": "T", "names": ["P0", "P1"]}
+        _strategy(dialect, "RANGE"), {"table": "T", "names": ["P0", "P1"]}
     )
     _emit("[02] DROP PARTITION - 按名称删除（多条）", suggestion)
 
-    empty = dialect.suggest_partition_drop(OraclePartitionStrategy.RANGE, {"table": "T"})
+    empty = dialect.suggest_partition_drop(_strategy(dialect, "RANGE"), {"table": "T"})
     _emit("[02b] DROP PARTITION - 未给名称（tri-state: None）", empty)
 
 
 def scenario_split(dialect):
     suggestion = dialect.suggest_partition_split(
-        OraclePartitionStrategy.RANGE,
+        _strategy(dialect, "RANGE"),
         {
             "table": "T",
             "partition": "P0",
@@ -79,7 +97,7 @@ def scenario_split(dialect):
 
 def scenario_merge(dialect):
     suggestion = dialect.suggest_partition_merge(
-        OraclePartitionStrategy.RANGE,
+        _strategy(dialect, "RANGE"),
         {
             "table": "T",
             "names": ["P0", "P1"],
@@ -94,10 +112,12 @@ def scenario_retention_definitions(dialect):
         _range(dialect, "P0", date(2026, 1, 1)),
         _range(dialect, "P1", date(2026, 2, 1)),
         _range(dialect, "P2", date(2026, 3, 1)),
-        OraclePartitionDefinition(name="PMAX", less_than=[OraclePartitionMaxValue(dialect)]),
+        PartitionDefinitionExpression(
+            dialect, name="PMAX", less_than=[OraclePartitionMaxValue(dialect)]
+        ),
     ]
     suggestion = dialect.suggest_partition_retention(
-        OraclePartitionStrategy.RANGE,
+        _strategy(dialect, "RANGE"),
         {"table": "T", "definitions": definitions, "cutoff": date(2026, 2, 1)},
     )
     _emit("[05] RETENTION - date cutoff 淘汰旧分区（MAXVALUE 永不淘汰）", suggestion)
@@ -118,21 +138,19 @@ def scenario_retention_plan(dialect):
         ),
     )
     suggestion = dialect.suggest_partition_retention(
-        OraclePartitionStrategy.RANGE,
+        _strategy(dialect, "RANGE"),
         {"table": "EVENTS", "plan": plan, "cutoff": date(2026, 3, 1)},
     )
     _emit("[06] RETENTION - 真实 OraclePartitionPlan 读取 HIGH_VALUE 类比", suggestion)
 
 
 def scenario_table_drop(dialect):
-    suggestion = dialect.suggest_partition_table_drop(OraclePartitionStrategy.RANGE, {"table": "T"})
+    suggestion = dialect.suggest_partition_table_drop(_strategy(dialect, "RANGE"), {"table": "T"})
     _emit("[07] TABLE DROP - 删除整张分区表（DropTableStatement）", suggestion)
 
 
 def scenario_table_alter(dialect):
-    suggestion = dialect.suggest_partition_table_alter(
-        OraclePartitionStrategy.RANGE, {"table": "T"}
-    )
+    suggestion = dialect.suggest_partition_table_alter(_strategy(dialect, "RANGE"), {"table": "T"})
     _emit("[08] TABLE ALTER - Oracle 无法原地改分区方案（tri-state: False）", suggestion)
 
 

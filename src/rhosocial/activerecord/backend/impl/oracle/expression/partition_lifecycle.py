@@ -21,16 +21,17 @@ partition boundary values referenced by SPLIT/ADD are rendered as
 safely-escaped inline literals through
 :meth:`OraclePartitionMixin.format_partition_boundary_value`.
 """
+
 from __future__ import annotations
 
 from typing import Optional, Sequence, TYPE_CHECKING
 
 from rhosocial.activerecord.backend.expression.bases import BaseExpression
 from rhosocial.activerecord.backend.expression.objects import Table
+from rhosocial.activerecord.backend.expression.statements import PartitionDefinitionExpression
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
-    from .partition import OraclePartitionDefinition
 
 
 class _OraclePartitionMaintenanceExpression(BaseExpression):
@@ -44,9 +45,7 @@ class _OraclePartitionMaintenanceExpression(BaseExpression):
     def __init__(self, dialect: "OracleDialect", table: Table):
         super().__init__(dialect)
         if not isinstance(table, Table):
-            raise TypeError(
-                f"table must be a Table, got {type(table).__name__}"
-            )
+            raise TypeError(f"table must be a Table, got {type(table).__name__}")
         self.table = table
 
 
@@ -59,26 +58,24 @@ class OracleAddPartitionStatement(_OraclePartitionMaintenanceExpression):
 
     Args:
         table: the target table, carrying its owner.
-        partition: an :class:`OraclePartitionDefinition` describing the
+        partition: a :class:`PartitionDefinitionExpression` describing the
             new partition (with ``less_than`` for RANGE or ``in_values``
             for LIST).
 
     Raises:
-        TypeError: if ``partition`` is not an :class:`OraclePartitionDefinition`.
+        TypeError: if ``partition`` is not a :class:`PartitionDefinitionExpression`.
     """
 
     def __init__(
         self,
         dialect: "OracleDialect",
         table: Table,
-        partition: "OraclePartitionDefinition",
+        partition: PartitionDefinitionExpression,
     ):
         super().__init__(dialect, table)
-        from .partition import OraclePartitionDefinition  # local to avoid cycle
-
-        if not isinstance(partition, OraclePartitionDefinition):
+        if not isinstance(partition, PartitionDefinitionExpression):
             raise TypeError(
-                "partition must be an OraclePartitionDefinition, "
+                "partition must be a PartitionDefinitionExpression, "
                 f"got {type(partition).__name__}"
             )
         self.partition = partition
@@ -133,13 +130,13 @@ class OracleSplitPartitionStatement(_OraclePartitionMaintenanceExpression):
         partition_name: name of the partition to split.
         at_values: boundary value(s) at which to split (sequence of
             ``OraclePartitionValue`` / ``Literal`` / ``"MAXVALUE"``).
-        new_partitions: exactly two :class:`OraclePartitionDefinition`
+        new_partitions: exactly two :class:`PartitionDefinitionExpression`
             instances describing the resulting partitions.
 
     Raises:
         ValueError: if ``new_partitions`` does not contain exactly 2 entries.
         TypeError: if ``new_partitions`` entries are not
-            :class:`OraclePartitionDefinition`.
+            :class:`PartitionDefinitionExpression`.
     """
 
     def __init__(
@@ -148,7 +145,7 @@ class OracleSplitPartitionStatement(_OraclePartitionMaintenanceExpression):
         table: Table,
         partition_name: str,
         at_values: Sequence,
-        new_partitions: Sequence["OraclePartitionDefinition"],
+        new_partitions: Sequence[PartitionDefinitionExpression],
     ):
         super().__init__(dialect, table)
         if not isinstance(partition_name, str) or not partition_name.strip():
@@ -159,12 +156,10 @@ class OracleSplitPartitionStatement(_OraclePartitionMaintenanceExpression):
             raise ValueError(
                 f"SPLIT PARTITION requires exactly 2 new partitions, got {len(new_partitions)}"
             )
-        from .partition import OraclePartitionDefinition
-
         for np in new_partitions:
-            if not isinstance(np, OraclePartitionDefinition):
+            if not isinstance(np, PartitionDefinitionExpression):
                 raise TypeError(
-                    "new_partitions must contain OraclePartitionDefinition instances, "
+                    "new_partitions must contain PartitionDefinitionExpression instances, "
                     f"got {type(np).__name__}"
                 )
         self.partition_name = partition_name
@@ -185,7 +180,7 @@ class OracleMergePartitionsStatement(_OraclePartitionMaintenanceExpression):
     Args:
         table: the target table, carrying its owner.
         partition_names: exactly two partition names to merge.
-        into_partition: the :class:`OraclePartitionDefinition` for the
+        into_partition: the :class:`PartitionDefinitionExpression` for the
             resulting merged partition.
 
     Raises:
@@ -197,7 +192,7 @@ class OracleMergePartitionsStatement(_OraclePartitionMaintenanceExpression):
         dialect: "OracleDialect",
         table: Table,
         partition_names: Sequence[str],
-        into_partition: "OraclePartitionDefinition",
+        into_partition: PartitionDefinitionExpression,
     ):
         super().__init__(dialect, table)
         if len(partition_names) != 2:
@@ -207,11 +202,9 @@ class OracleMergePartitionsStatement(_OraclePartitionMaintenanceExpression):
         for pn in partition_names:
             if not isinstance(pn, str) or not pn.strip():
                 raise ValueError("partition names must be non-empty strings")
-        from .partition import OraclePartitionDefinition
-
-        if not isinstance(into_partition, OraclePartitionDefinition):
+        if not isinstance(into_partition, PartitionDefinitionExpression):
             raise TypeError(
-                "into_partition must be an OraclePartitionDefinition, "
+                "into_partition must be a PartitionDefinitionExpression, "
                 f"got {type(into_partition).__name__}"
             )
         self.partition_names = list(partition_names)
@@ -257,9 +250,7 @@ class OracleExchangePartitionStatement(_OraclePartitionMaintenanceExpression):
         if not isinstance(partition_name, str) or not partition_name.strip():
             raise ValueError("partition_name must be a non-empty string")
         if not isinstance(with_table, Table):
-            raise TypeError(
-                f"with_table must be a Table, got {type(with_table).__name__}"
-            )
+            raise TypeError(f"with_table must be a Table, got {type(with_table).__name__}")
         self.partition_name = partition_name
         self.with_table = with_table
         self.including_indexes = bool(including_indexes)

@@ -154,6 +154,7 @@ from rhosocial.activerecord.backend.expression.statements.dql import (
 )
 from rhosocial.activerecord.backend.expression.sources import NamedRelationRef
 from rhosocial.activerecord.backend.expression.types import IntegerType
+
 # The round-trip harness is vendored beside this matrix (see its module
 # docstring for provenance): the testsuite retired it in e05edb0 with the
 # direction that round-trip coverage moves to the owning repository.
@@ -219,8 +220,7 @@ def assert_bind_params_equal(a, b, path="bind parameters"):
     reports a difference that is an identity comparison, not a loss.
     """
     assert isinstance(a, (list, tuple)) and isinstance(b, (list, tuple)), (
-        f"{path}: expected parameter sequences, got "
-        f"{type(a).__name__} and {type(b).__name__}"
+        f"{path}: expected parameter sequences, got " f"{type(a).__name__} and {type(b).__name__}"
     )
     assert type(a) is type(b), (
         f"{path}: the sequence changed type, {type(a).__name__} became "
@@ -236,9 +236,7 @@ def assert_bind_params_equal(a, b, path="bind parameters"):
                 f"{path}[{i}]: expected a nested expression, got "
                 f"{type(x).__name__} and {type(y).__name__}"
             )
-            assert_bind_params_equal(
-                _flatten_params(x), _flatten_params(y), f"{path}[{i}]"
-            )
+            assert_bind_params_equal(_flatten_params(x), _flatten_params(y), f"{path}[{i}]")
         else:
             assert x == y, f"{path}[{i}]: {x!r} != {y!r}"
 
@@ -251,6 +249,7 @@ def _flatten_params(instance):
 # ---------------------------------------------------------------------------
 # Discovery: walk both packages, never the process-global registry
 # ---------------------------------------------------------------------------
+
 
 def _collect_matrix_classes():
     """Every concrete expression class either package defines.
@@ -280,9 +279,7 @@ def _collect_matrix_classes():
             by_identity.setdefault(id(cls), cls)
     return {
         f"{cls.__module__}.{cls.__name__}": cls
-        for cls in sorted(
-            by_identity.values(), key=lambda c: (c.__module__, c.__name__)
-        )
+        for cls in sorted(by_identity.values(), key=lambda c: (c.__module__, c.__name__))
     }
 
 
@@ -304,6 +301,7 @@ register_all(REGISTERED)
 # Shared builders
 # ---------------------------------------------------------------------------
 
+
 def _table_obj(dialect, name="t"):
     """A table with a bare name and no namespace."""
     return Table(dialect, name)
@@ -321,17 +319,13 @@ def _column_predicate(dialect):
 
 def _one_column_query(dialect):
     """A single-column ``SELECT`` over a table."""
-    return QueryStatement(
-        dialect, select=[Column(dialect, "id")], from_=_table_obj(dialect)
-    )
+    return QueryStatement(dialect, select=[Column(dialect, "id")], from_=_table_obj(dialect))
 
 
 def _compound_arms(dialect):
     """Two single-column SELECTs over two tables, no bind parameters."""
     return [
-        QueryStatement(
-            dialect, select=[Column(dialect, "id")], from_=_table_obj(dialect)
-        ),
+        QueryStatement(dialect, select=[Column(dialect, "id")], from_=_table_obj(dialect)),
         QueryStatement(
             dialect,
             select=[Column(dialect, "id")],
@@ -455,9 +449,7 @@ def _register_core_specials():
     # commit fixed, and passing ``"LIKE"`` here reintroduced it in the matrix.
     register_special_constructor(
         "predicates.LikePredicate",
-        lambda d: LikePredicate(
-            d, LikeOperator.LIKE, Column(d, "a"), Literal(d, "%x%")
-        ),
+        lambda d: LikePredicate(d, LikeOperator.LIKE, Column(d, "a"), Literal(d, "%x%")),
     )
     register_special_constructor(
         "predicates.ILikePredicate",
@@ -482,9 +474,7 @@ def _register_core_specials():
         "statements.ddl_alter.AddTableConstraintAction",
         lambda d: ddl_alter.AddTableConstraintAction(
             d,
-            TableConstraint(
-                d, branch=TablePrimaryKeyConstraint(d, ["a"]), name="c"
-            ),
+            TableConstraint(d, branch=TablePrimaryKeyConstraint(d, ["a"]), name="c"),
         ),
     )
 
@@ -508,14 +498,10 @@ def _register_core_specials():
     def window_specification(dialect):
         return WindowSpecification(dialect, partition_by=[Column(dialect, "a")])
 
-    register_special_constructor(
-        "advanced_functions.WindowSpecification", window_specification
-    )
+    register_special_constructor("advanced_functions.WindowSpecification", window_specification)
     register_special_constructor(
         "advanced_functions.WindowDefinition",
-        lambda dialect: WindowDefinition(
-            dialect, "w", window_specification(dialect)
-        ),
+        lambda dialect: WindowDefinition(dialect, "w", window_specification(dialect)),
     )
     register_special_constructor(
         "advanced_functions.WindowClause",
@@ -561,9 +547,7 @@ def _register_core_specials():
     )
     register_special_constructor(
         "datetime.ExtractFieldExpression",
-        lambda d: datetime_mod.ExtractFieldExpression(
-            d, "YEAR", Column(d, "created_at")
-        ),
+        lambda d: datetime_mod.ExtractFieldExpression(d, "YEAR", Column(d, "created_at")),
     )
 
     # SUBSTRING: both required operands are SQLValue forward references,
@@ -586,9 +570,7 @@ def _register_core_specials():
 
     register_special_constructor(
         "operators.ArithmeticOperation",
-        lambda d: ArithmeticOperation(
-            d, ArithmeticOperator.ADD, Literal(d, 1), Literal(d, 2)
-        ),
+        lambda d: ArithmeticOperation(d, ArithmeticOperator.ADD, Literal(d, 1), Literal(d, 2)),
     )
 
     # A compound SELECT: `op` is the closed set-operation enum and both
@@ -614,9 +596,7 @@ def _register_core_specials():
     # the matrix walks a real compound query whose SQL is pinned below.
     register_special_constructor(
         "statements.dql.SetOperationStatement",
-        lambda d: SetOperationStatement(
-            d, SetOperationKind.UNION_ALL, _compound_arms(d)
-        ),
+        lambda d: SetOperationStatement(d, SetOperationKind.UNION_ALL, _compound_arms(d)),
     )
 
     # The declared-result annotations. The generic guess hands their
@@ -632,9 +612,15 @@ def _register_core_specials():
 
     for _ann_name in (
         "_Annotation",
-        "TextAnnotation", "NumberAnnotation", "IntegerAnnotation",
-        "TemporalAnnotation", "BooleanAnnotation", "ArrayAnnotation",
-        "JSONAnnotation", "UUIDAnnotation", "BinaryAnnotation",
+        "TextAnnotation",
+        "NumberAnnotation",
+        "IntegerAnnotation",
+        "TemporalAnnotation",
+        "BooleanAnnotation",
+        "ArrayAnnotation",
+        "JSONAnnotation",
+        "UUIDAnnotation",
+        "BinaryAnnotation",
         "XMLAnnotation",
     ):
         _ann_cls = getattr(declared_mod, _ann_name)
@@ -724,9 +710,7 @@ def _register_core_specials():
 
     register_special_constructor(
         "datetime.TemporalOptionsExpression",
-        lambda dialect: TemporalOptionsExpression(
-            dialect, {"as_of": "2020-01-01"}
-        ),
+        lambda dialect: TemporalOptionsExpression(dialect, {"as_of": "2020-01-01"}),
     )
 
     # SQL graph patterns. A path is a sequence of vertices and edges, and the
@@ -739,9 +723,7 @@ def _register_core_specials():
     def graph_vertex(dialect):
         return graph_mod.GraphVertex(dialect, "n", NodeTable(dialect, "people"))
 
-    register_special_constructor(
-        "graph.GraphVertex", graph_vertex
-    )
+    register_special_constructor("graph.GraphVertex", graph_vertex)
     register_special_constructor(
         "graph.PathPattern",
         lambda dialect: graph_mod.PathPattern(dialect, graph_vertex(dialect)),
@@ -768,18 +750,14 @@ def _register_core_specials():
 
         return OracleNamedRelationRef(dialect, _table_obj(dialect))
 
-    register_special_constructor(
-        "sources.OracleNamedRelationRef", oracle_named_relation
-    )
+    register_special_constructor("sources.OracleNamedRelationRef", oracle_named_relation)
 
     # SQL/XML. Every one of these takes a sequence, and a sequence of nothing is
     # not a statement: XMLATTRIBUTES over no attribute, XMLCONCAT over no part,
     # XMLFOREST over no item, XMLTABLE with no columns and no row document.
     register_special_constructor(
         "xml.XMLAttributesExpression",
-        lambda d: xml_mod.XMLAttributesExpression(
-            d, [xml_mod.XMLAttribute(Literal(d, "v"), "a")]
-        ),
+        lambda d: xml_mod.XMLAttributesExpression(d, [xml_mod.XMLAttribute(Literal(d, "v"), "a")]),
     )
     register_special_constructor(
         "xml.XMLConcatExpression",
@@ -787,9 +765,7 @@ def _register_core_specials():
     )
     register_special_constructor(
         "xml.XMLForestExpression",
-        lambda d: xml_mod.XMLForestExpression(
-            d, [xml_mod.XMLForestItem(Literal(d, "v"), "a")]
-        ),
+        lambda d: xml_mod.XMLForestExpression(d, [xml_mod.XMLForestItem(Literal(d, "v"), "a")]),
     )
     # Statements that name a catalogue object. Every parameter below is annotated
     # with the object type, so the introspective guess -- `"x"` for anything it
@@ -811,6 +787,7 @@ def _register_core_specials():
         ddl_function as ddl_fn,
     )
     from rhosocial.activerecord.backend.expression.statements import ddl_table as ddl_tbl
+
     register_special_constructor(
         "statements.ddl_table.DropTableStatement",
         lambda d: ddl_tbl.DropTableStatement(d, table=_table_obj(d)),
@@ -837,9 +814,7 @@ def _register_core_specials():
     )
     register_special_constructor(
         "statements.ddl_index.DropFulltextIndexStatement",
-        lambda d: ddl_index.DropFulltextIndexStatement(
-            d, index=_index_obj(d), table=_table_obj(d)
-        ),
+        lambda d: ddl_index.DropFulltextIndexStatement(d, index=_index_obj(d), table=_table_obj(d)),
     )
     register_special_constructor(
         "statements.ddl_schema.CreateSchemaStatement",
@@ -859,15 +834,11 @@ def _register_core_specials():
     )
     register_special_constructor(
         "statements.ddl_sequence.AlterSequenceStatement",
-        lambda d: ddl_sequence.AlterSequenceStatement(
-            d, sequence=_sequence_obj(d), start=1
-        ),
+        lambda d: ddl_sequence.AlterSequenceStatement(d, sequence=_sequence_obj(d), start=1),
     )
     register_special_constructor(
         "statements.ddl_view.CreateViewStatement",
-        lambda d: ddl_view.CreateViewStatement(
-            d, view=_view_obj(d), query=_one_column_query(d)
-        ),
+        lambda d: ddl_view.CreateViewStatement(d, view=_view_obj(d), query=_one_column_query(d)),
     )
     register_special_constructor(
         "statements.ddl_view.DropViewStatement",
@@ -881,23 +852,17 @@ def _register_core_specials():
     )
     register_special_constructor(
         "statements.ddl_view.DropMaterializedViewStatement",
-        lambda d: ddl_view.DropMaterializedViewStatement(
-            d, view=_materialized_view_obj(d)
-        ),
+        lambda d: ddl_view.DropMaterializedViewStatement(d, view=_materialized_view_obj(d)),
     )
     register_special_constructor(
         "statements.ddl_view.RefreshMaterializedViewStatement",
-        lambda d: ddl_view.RefreshMaterializedViewStatement(
-            d, view=_materialized_view_obj(d)
-        ),
+        lambda d: ddl_view.RefreshMaterializedViewStatement(d, view=_materialized_view_obj(d)),
     )
     # A column's type is dispatched through its own dialect, so the type must be
     # bound to the one under test. The testsuite's shared factory supplies an
     # unbound IntegerType, which renders nothing; re-registering it here is what
     # makes the class render at all.
-    register_special_constructor(
-        "statements.ddl_table.ColumnDefinition", _integer_column
-    )
+    register_special_constructor("statements.ddl_table.ColumnDefinition", _integer_column)
     register_special_constructor(
         "statements.ddl_table.CreateTableStatement",
         lambda d: ddl_tbl.CreateTableStatement(
@@ -958,6 +923,7 @@ def _register_core_specials():
         "statements.ddl_alter.DropIndexAction",
         lambda d: ddl_alter.DropIndexAction(d, index=_index_obj(d)),
     )
+
     # INSERT names the table it writes; a VALUES source needs one row.
     # CREATE TYPE carries a *type definition*, not a bare value: the formatter
     # reads `.definition_kind` off it and then renders it. An object type also
@@ -973,15 +939,11 @@ def _register_core_specials():
             type=_type_obj(dialect),
             definition=OracleObjectTypeDefinition(
                 dialect,
-                attributes=[
-                    OracleTypeAttribute(name="attr", data_type=IntegerType(dialect))
-                ],
+                attributes=[OracleTypeAttribute(name="attr", data_type=IntegerType(dialect))],
             ),
         )
 
-    register_special_constructor(
-        "statements.ddl_type.CreateTypeStatement", create_type
-    )
+    register_special_constructor("statements.ddl_type.CreateTypeStatement", create_type)
     register_special_constructor(
         "statements.ddl_type.DropTypeStatement",
         lambda d: ddl_type.DropTypeStatement(d, type=_type_obj(d)),
@@ -1008,9 +970,7 @@ def _register_core_specials():
     )
     register_special_constructor(
         "statements.dml.UpdateStatement",
-        lambda d: dml.UpdateStatement(
-            d, table=_table_obj(d), assignments={"a": Literal(d, 1)}
-        ),
+        lambda d: dml.UpdateStatement(d, table=_table_obj(d), assignments={"a": Literal(d, 1)}),
     )
     register_special_constructor(
         "dml.DeleteStatement",
@@ -1058,24 +1018,16 @@ def _register_core_specials():
     def _match_clause(dialect):
         return graph_mod.MatchClause(dialect, _path_pattern(dialect))
 
-    register_special_constructor(
-        "graph.GraphVertex", _graph_vertex
-    )
-    register_special_constructor(
-        "graph.PathPattern", _path_pattern
-    )
-    register_special_constructor(
-        "graph.MatchClause", _match_clause
-    )
+    register_special_constructor("graph.GraphVertex", _graph_vertex)
+    register_special_constructor("graph.PathPattern", _path_pattern)
+    register_special_constructor("graph.MatchClause", _match_clause)
     register_special_constructor(
         "graph.VertexTable",
         lambda d: graph_mod.VertexTable(d, _node_table(d)),
     )
     register_special_constructor(
         "graph.EdgeTableDefinition",
-        lambda d: graph_mod.EdgeTableDefinition(
-            d, _edge_table_obj(d), ["a"], ["b"]
-        ),
+        lambda d: graph_mod.EdgeTableDefinition(d, _edge_table_obj(d), ["a"], ["b"]),
     )
     register_special_constructor(
         "graph.CreatePropertyGraphStatement",
@@ -1083,11 +1035,7 @@ def _register_core_specials():
             d,
             graph=_property_graph(d),
             vertex_tables=[graph_mod.VertexTable(d, _node_table(d))],
-            edge_tables=[
-                graph_mod.EdgeTableDefinition(
-                    d, _edge_table_obj(d), ["a"], ["b"]
-                )
-            ],
+            edge_tables=[graph_mod.EdgeTableDefinition(d, _edge_table_obj(d), ["a"], ["b"])],
         ),
     )
     register_special_constructor(
@@ -1126,11 +1074,7 @@ def _register_core_specials():
         return XMLTableExpression(
             dialect,
             RawSQL(dialect, "'.'"),
-            [
-                XMLTableColumn(
-                    "c", "VARCHAR(10)", path=RawSQL(dialect, "'.'")
-                )
-            ],
+            [XMLTableColumn("c", "VARCHAR(10)", path=RawSQL(dialect, "'.'"))],
         )
 
     register_special_constructor("xml.XMLTableExpression", xml_table)
@@ -1176,9 +1120,7 @@ def _register_core_specials():
     )
     register_special_constructor(
         "statements.ddl_table.ColumnGeneratedConstraint",
-        lambda d: ColumnGeneratedConstraint(
-            d, _inline_column_expression(d), storage_type=None
-        ),
+        lambda d: ColumnGeneratedConstraint(d, _inline_column_expression(d), storage_type=None),
     )
 
 
@@ -1297,9 +1239,7 @@ def _register_oracle_specials():
         )
 
     def as_of_clause(d):
-        return OracleAsOfClause(
-            d, mode=OracleAsOfMode.TIMESTAMP, value="SYSTIMESTAMP"
-        )
+        return OracleAsOfClause(d, mode=OracleAsOfMode.TIMESTAMP, value="SYSTIMESTAMP")
 
     def versions_between_clause(d):
         return OracleVersionsBetweenClause(
@@ -1320,9 +1260,7 @@ def _register_oracle_specials():
         )
 
     def materialized_view_log_expression(d):
-        return OracleCreateMaterializedViewLogStatement(
-            d, table=_table_obj(d), with_rowid=True
-        )
+        return OracleCreateMaterializedViewLogStatement(d, table=_table_obj(d), with_rowid=True)
 
     def create_materialized_view(d):
         return OracleCreateMaterializedViewStatement(
@@ -1368,24 +1306,20 @@ def _register_oracle_specials():
             [Column(d, "created_at")],
             interval=RawSQL(d, "INTERVAL '1' MONTH"),
             partitions=[
-                part_mod.OraclePartitionDefinition(
-                    name="p1", less_than=[part_mod.OraclePartitionValue(d, 100)]
+                part_mod.PartitionDefinitionExpression(
+                    d, name="p1", less_than=[part_mod.OraclePartitionValue(d, 100)]
                 )
             ],
         )
 
     def add_partition_expression(d):
-        definition = part_mod.OraclePartitionDefinition(
-            name="p_new", less_than=[part_mod.OraclePartitionMaxValue(d)]
+        definition = part_mod.PartitionDefinitionExpression(
+            d, name="p_new", less_than=[part_mod.OraclePartitionMaxValue(d)]
         )
-        return pl_mod.OracleAddPartitionStatement(
-            d, table=_table_obj(d), partition=definition
-        )
+        return pl_mod.OracleAddPartitionStatement(d, table=_table_obj(d), partition=definition)
 
     def drop_partition_expression(d):
-        return pl_mod.OracleDropPartitionStatement(
-            d, table=_table_obj(d), partition_name="p1"
-        )
+        return pl_mod.OracleDropPartitionStatement(d, table=_table_obj(d), partition_name="p1")
 
     def split_partition_expression(d):
         # SPLIT PARTITION splits one partition into exactly two, so the class
@@ -1397,11 +1331,11 @@ def _register_oracle_specials():
             partition_name="p_old",
             at_values=[part_mod.OraclePartitionValue(d, 100)],
             new_partitions=[
-                part_mod.OraclePartitionDefinition(
-                    name="p1", less_than=[part_mod.OraclePartitionValue(d, 100)]
+                part_mod.PartitionDefinitionExpression(
+                    d, name="p1", less_than=[part_mod.OraclePartitionValue(d, 100)]
                 ),
-                part_mod.OraclePartitionDefinition(
-                    name="p2", less_than=[part_mod.OraclePartitionMaxValue(d)]
+                part_mod.PartitionDefinitionExpression(
+                    d, name="p2", less_than=[part_mod.OraclePartitionMaxValue(d)]
                 ),
             ],
         )
@@ -1411,8 +1345,8 @@ def _register_oracle_specials():
             d,
             table=_table_obj(d),
             partition_names=["p1", "p2"],
-            into_partition=part_mod.OraclePartitionDefinition(
-                name="p_merged", less_than=[part_mod.OraclePartitionMaxValue(d)]
+            into_partition=part_mod.PartitionDefinitionExpression(
+                d, name="p_merged", less_than=[part_mod.OraclePartitionMaxValue(d)]
             ),
         )
 
@@ -1425,14 +1359,10 @@ def _register_oracle_specials():
         )
 
     def move_partition_expression(d):
-        return pl_mod.OracleMovePartitionStatement(
-            d, table=_table_obj(d), partition_name="p1"
-        )
+        return pl_mod.OracleMovePartitionStatement(d, table=_table_obj(d), partition_name="p1")
 
     def truncate_partition_expression(d):
-        return pl_mod.OracleTruncatePartitionStatement(
-            d, table=_table_obj(d), partition_name="p1"
-        )
+        return pl_mod.OracleTruncatePartitionStatement(d, table=_table_obj(d), partition_name="p1")
 
     def partition_maintenance_base(d):
         return pl_mod._OraclePartitionMaintenanceExpression(d, table=_table_obj(d))
@@ -1460,19 +1390,13 @@ def _register_oracle_specials():
         return OraclePackage(d, "pkg", schema_name="ar_crm")
 
     def create_package(d):
-        return OracleCreatePackageStatement(
-            d, package=_package(d), body="END pkg;"
-        )
+        return OracleCreatePackageStatement(d, package=_package(d), body="END pkg;")
 
     def create_package_body(d):
-        return OracleCreatePackageBodyStatement(
-            d, package=_package(d), body="END pkg;"
-        )
+        return OracleCreatePackageBodyStatement(d, package=_package(d), body="END pkg;")
 
     def create_synonym(d):
-        return OracleCreateSynonymStatement(
-            d, synonym=Synonym(d, "s"), table=_table_obj(d)
-        )
+        return OracleCreateSynonymStatement(d, synonym=Synonym(d, "s"), table=_table_obj(d))
 
     def drop_synonym(d):
         return OracleDropSynonymStatement(d, synonym=Synonym(d, "s"))
@@ -1502,9 +1426,7 @@ def _register_oracle_specials():
         return OracleTypeAttribute(name="attr", data_type=IntegerType(d))
 
     def _method(d):
-        return OracleTypeMethod(
-            declaration="MEMBER PROCEDURE do_it", kind=None
-        )
+        return OracleTypeMethod(declaration="MEMBER PROCEDURE do_it", kind=None)
 
     def add_attribute(d):
         return OracleAlterTypeAddAttributeAction(d, attribute=_attribute(d))
@@ -1552,9 +1474,7 @@ def _register_oracle_specials():
         )
 
     def varray_definition(d):
-        return OracleVarrayTypeDefinition(
-            d, element_type="NUMBER", size_limit=10
-        )
+        return OracleVarrayTypeDefinition(d, element_type="NUMBER", size_limit=10)
 
     def nested_table_definition(d):
         return OracleNestedTableTypeDefinition(d, element_type="NUMBER")
@@ -1577,7 +1497,10 @@ def _register_oracle_specials():
         ("flashback.OracleFlashbackTableStatement", flashback_table_expression),
         ("flashback.OraclePurgeStatement", purge_expression),
         ("materialized_view.OracleCreateMaterializedViewStatement", create_materialized_view),
-        ("materialized_view.OracleCreateMaterializedViewLogStatement", materialized_view_log_expression),
+        (
+            "materialized_view.OracleCreateMaterializedViewLogStatement",
+            materialized_view_log_expression,
+        ),
         ("materialized_view.OracleDropMaterializedViewStatement", drop_materialized_view),
         ("materialized_view.OracleRefreshMaterializedViewStatement", refresh_materialized_view),
         ("objects.OracleTable", oracle_table),
@@ -1676,6 +1599,13 @@ _register_oracle_specials()
 #: :func:`TestMatrixIntegrity.test_unconstructible_list_is_exact` fails in both
 #: directions when the sets disagree.
 UNCONSTRUCTIBLE: tuple = (
+    # Core's strategy clauses require a non-empty key list, which the generic
+    # heuristic cannot supply (it builds `keys=[]`). They are user-facing
+    # suggestion nodes; the renderable counterpart on this dialect is the
+    # Oracle-specific partition clause covered in the expression matrix.
+    "rhosocial.activerecord.backend.expression.statements.ddl_partition.PartitionByHashClause",
+    "rhosocial.activerecord.backend.expression.statements.ddl_partition.PartitionByListClause",
+    "rhosocial.activerecord.backend.expression.statements.ddl_partition.PartitionByRangeClause",
     "rhosocial.activerecord.backend.expression.statements.ddl_alter.AlterConstraintAction",
     "rhosocial.activerecord.backend.expression.uuid.UUIDCastFunction",
     "rhosocial.activerecord.backend.expression.uuid.UUIDConstantExpression",
@@ -1725,7 +1655,8 @@ LEGITIMATE_NON_RENDERS: Dict[str, tuple] = {
     #  double scan of both tables -- so the probe stays False rather than
     #  promising a formatter that does not exist.
     "rhosocial.activerecord.backend.expression.introspection.JoinCoverageQueryStatement": (
-        ProtocolNotImplementedError, 'does not implement ',
+        ProtocolNotImplementedError,
+        "does not implement ",
     ),
     # ---- core operational families this dialect does not answer ----
     #  Oracle exposes these through GV$/V$ dynamic performance views and
@@ -1733,16 +1664,20 @@ LEGITIMATE_NON_RENDERS: Dict[str, tuple] = {
     #  schema-scoped catalogue -- a shape the dialect layer has no slot for.
     #  The probes answer False pending that decision.
     "rhosocial.activerecord.backend.expression.introspection.RuntimeMetricsQueryStatement": (
-        ProtocolNotImplementedError, 'does not implement ',
+        ProtocolNotImplementedError,
+        "does not implement ",
     ),
     "rhosocial.activerecord.backend.expression.introspection.IndexUsageStatsQueryStatement": (
-        ProtocolNotImplementedError, 'does not implement ',
+        ProtocolNotImplementedError,
+        "does not implement ",
     ),
     "rhosocial.activerecord.backend.expression.introspection.ObjectDependencyQueryStatement": (
-        ProtocolNotImplementedError, 'does not implement ',
+        ProtocolNotImplementedError,
+        "does not implement ",
     ),
     "rhosocial.activerecord.backend.expression.introspection.DDLStatementQueryStatement": (
-        ProtocolNotImplementedError, 'does not implement ',
+        ProtocolNotImplementedError,
+        "does not implement ",
     ),
     # Oracle exposes index and table use through GV$/V$ dynamic performance
     # views, which name a live instance's state rather than a schema-scoped
@@ -1750,16 +1685,20 @@ LEGITIMATE_NON_RENDERS: Dict[str, tuple] = {
     # probes answer False, and these stay a declared gap until that decision
     # is made.
     "rhosocial.activerecord.backend.expression.introspection.UnusedIndexesQueryStatement": (
-        ProtocolNotImplementedError, 'does not implement ',
+        ProtocolNotImplementedError,
+        "does not implement ",
     ),
     "rhosocial.activerecord.backend.expression.introspection.TableUsageStatsQueryStatement": (
-        ProtocolNotImplementedError, 'does not implement ',
+        ProtocolNotImplementedError,
+        "does not implement ",
     ),
     "rhosocial.activerecord.backend.expression.pivot.Pivot": (
-        UnsupportedFeatureError, "does not support the 'format_pivot' statement"
+        UnsupportedFeatureError,
+        "does not support the 'format_pivot' statement",
     ),
     "rhosocial.activerecord.backend.expression.pivot.Unpivot": (
-        UnsupportedFeatureError, "does not support the 'format_unpivot' statement"
+        UnsupportedFeatureError,
+        "does not support the 'format_unpivot' statement",
     ),
     "rhosocial.activerecord.backend.expression.predicates.ILikePredicate": (
         UnsupportedFeatureError,
@@ -1767,73 +1706,90 @@ LEGITIMATE_NON_RENDERS: Dict[str, tuple] = {
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_database."
     "AlterDatabaseStatement": (
-        UnsupportedFeatureError, "does not support the 'format_alter_database_statement' statement"
+        UnsupportedFeatureError,
+        "does not support the 'format_alter_database_statement' statement",
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_database."
     "CreateDatabaseStatement": (
-        UnsupportedFeatureError, "does not support the 'format_create_database_statement' statement"
+        UnsupportedFeatureError,
+        "does not support the 'format_create_database_statement' statement",
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_database."
     "DropDatabaseStatement": (
-        UnsupportedFeatureError, "does not support the 'format_drop_database_statement' statement"
+        UnsupportedFeatureError,
+        "does not support the 'format_drop_database_statement' statement",
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_domain."
     "AddDomainCheckAction": (
-        UnsupportedFeatureError, "does not support the 'format_domain_alter_action' statement"
+        UnsupportedFeatureError,
+        "does not support the 'format_domain_alter_action' statement",
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_domain."
     "AlterDomainStatement": (
-        UnsupportedFeatureError, "does not support the 'format_alter_domain_statement' statement"
+        UnsupportedFeatureError,
+        "does not support the 'format_alter_domain_statement' statement",
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_domain."
     "CreateDomainStatement": (
-        UnsupportedFeatureError, "does not support the 'format_create_domain_statement' statement"
+        UnsupportedFeatureError,
+        "does not support the 'format_create_domain_statement' statement",
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_domain."
     "DomainCheckConstraint": (
-        UnsupportedFeatureError, "does not support the 'format_domain_check_constraint' statement"
+        UnsupportedFeatureError,
+        "does not support the 'format_domain_check_constraint' statement",
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_domain."
     "DomainValueExpression": (
-        UnsupportedFeatureError, "does not support the 'format_domain_value_expression' statement"
+        UnsupportedFeatureError,
+        "does not support the 'format_domain_value_expression' statement",
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_domain."
     "DropDomainCheckAction": (
-        UnsupportedFeatureError, "does not support the 'format_domain_alter_action' statement"
+        UnsupportedFeatureError,
+        "does not support the 'format_domain_alter_action' statement",
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_domain."
     "DropDomainDefaultAction": (
-        UnsupportedFeatureError, "does not support the 'format_domain_alter_action' statement"
+        UnsupportedFeatureError,
+        "does not support the 'format_domain_alter_action' statement",
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_domain."
     "DropDomainStatement": (
-        UnsupportedFeatureError, "does not support the 'format_drop_domain_statement' statement"
+        UnsupportedFeatureError,
+        "does not support the 'format_drop_domain_statement' statement",
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_domain."
     "DropDomainNotNullAction": (
-        UnsupportedFeatureError, "does not support the 'format_domain_alter_action' statement"
+        UnsupportedFeatureError,
+        "does not support the 'format_domain_alter_action' statement",
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_domain."
     "RenameDomainAction": (
-        UnsupportedFeatureError, "does not support the 'format_domain_alter_action' statement"
+        UnsupportedFeatureError,
+        "does not support the 'format_domain_alter_action' statement",
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_domain."
     "SetDomainDefaultAction": (
-        UnsupportedFeatureError, "does not support the 'format_domain_alter_action' statement"
+        UnsupportedFeatureError,
+        "does not support the 'format_domain_alter_action' statement",
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_domain."
     "SetDomainNotNullAction": (
-        UnsupportedFeatureError, "does not support the 'format_domain_alter_action' statement"
+        UnsupportedFeatureError,
+        "does not support the 'format_domain_alter_action' statement",
     ),
     "rhosocial.activerecord.backend.expression.statements.ddl_function."
     "DropFunctionStatement": (
-        UnsupportedFeatureError, "does not support the 'format_drop_function_statement' statement"
+        UnsupportedFeatureError,
+        "does not support the 'format_drop_function_statement' statement",
     ),
     # The root of the row-source tree. No concrete source renders through
     # `format_table_source`; each overrides `format_method` instead. The root
     # declares none, so there is nothing for the dialect to dispatch to.
     "rhosocial.activerecord.backend.expression.sources.base.TableSource": (
-        UnsupportedFeatureError, "does not support the 'format_table_source' statement"
+        UnsupportedFeatureError,
+        "does not support the 'format_table_source' statement",
     ),
     # --- group two: a dispatch collision. This backend defines a formatter under
     # --- a core formatter's name with a different signature, so a core expression
@@ -1846,9 +1802,7 @@ LEGITIMATE_NON_RENDERS: Dict[str, tuple] = {
     # --- in `to_sql()` inspects what answers a lookup, not what a formatter does
     # --- once called.
     "rhosocial.activerecord.backend.expression.statements.ddl_function."
-    "CreateFunctionStatement": (
-        AttributeError, "has no attribute 'return_keyword'"
-    ),
+    "CreateFunctionStatement": (AttributeError, "has no attribute 'return_keyword'"),
     # The shared-state base of the declared-result family, and the same kind of
     # entry. It carries one field -- the node being annotated -- and deliberately
     # no alias: the alias belongs to the concrete ``TextAnnotation`` and its ten
@@ -1861,7 +1815,8 @@ LEGITIMATE_NON_RENDERS: Dict[str, tuple] = {
     # the field, so a base that later grows an alias fails here rather than
     # staying quietly green.
     "rhosocial.activerecord.backend.expression.declared._Annotation": (
-        AttributeError, "has no attribute 'alias'"
+        AttributeError,
+        "has no attribute 'alias'",
     ),
     # query_sources.JSONTableExpression used to sit here: it dispatched to a
     # formatter built for this backend's own JSON_TABLE expression and died
@@ -1869,13 +1824,9 @@ LEGITIMATE_NON_RENDERS: Dict[str, tuple] = {
     # the core node found each other -- so the pin is gone and the matrix
     # asserts the round-trip.
     "rhosocial.activerecord.backend.expression.sources.json."
-    "JsonTableSource": (
-        TypeError, "missing 2 required positional arguments"
-    ),
+    "JsonTableSource": (TypeError, "missing 2 required positional arguments"),
     "rhosocial.activerecord.backend.expression.statements.dml."
-    "MergeStatement": (
-        TypeError, "missing 5 required positional arguments"
-    ),
+    "MergeStatement": (TypeError, "missing 5 required positional arguments"),
     # --- group three was the SHOW query layer: the eight OracleQuery*
     # --- expressions were pinned because OracleShowDialectMixin was exported
     # --- and documented as composed but never listed in OracleDialect's bases,
@@ -1897,22 +1848,28 @@ LEGITIMATE_NON_RENDERS: Dict[str, tuple] = {
     # --- than that the class declares none, and the fragment follows the
     # --- current wording rather than the old one.
     "rhosocial.activerecord.backend.expression.types._base.DataType": (
-        UnsupportedDataTypeError, "does not support the generic type None"
+        UnsupportedDataTypeError,
+        "does not support the generic type None",
     ),
     "rhosocial.activerecord.backend.expression.types.array.ArrayType": (
-        UnsupportedDataTypeError, "does not support the generic type 'array'"
+        UnsupportedDataTypeError,
+        "does not support the generic type 'array'",
     ),
     "rhosocial.activerecord.backend.expression.types.binary.BinaryType": (
-        UnsupportedDataTypeError, "does not support the generic type 'binary'"
+        UnsupportedDataTypeError,
+        "does not support the generic type 'binary'",
     ),
     "rhosocial.activerecord.backend.expression.types.binary.VarBinaryType": (
-        UnsupportedDataTypeError, "does not support the generic type 'varbinary'"
+        UnsupportedDataTypeError,
+        "does not support the generic type 'varbinary'",
     ),
     "rhosocial.activerecord.backend.expression.types.enum_.EnumType": (
-        UnsupportedDataTypeError, "does not support the generic type 'enum'"
+        UnsupportedDataTypeError,
+        "does not support the generic type 'enum'",
     ),
     "rhosocial.activerecord.backend.expression.types.uuid_.UUIDType": (
-        UnsupportedDataTypeError, "does not support the generic type 'uuid'"
+        UnsupportedDataTypeError,
+        "does not support the generic type 'uuid'",
     ),
     # --- group five: a generic partition clause. This backend requires one of
     # --- its own -- RANGE / LIST / HASH carry structured definitions, and the
@@ -1921,11 +1878,13 @@ LEGITIMATE_NON_RENDERS: Dict[str, tuple] = {
     # --- backend starts accepting fails here.
     "rhosocial.activerecord.backend.expression.statements.ddl_partition."
     "PartitionClause": (
-        TypeError, "Oracle table partitioning requires an Oracle-specific partition"
+        TypeError,
+        "Oracle table partitioning requires an Oracle-specific partition",
     ),
     "rhosocial.activerecord.backend.impl.oracle.expression.partition."
     "OraclePartitionClause": (
-        TypeError, "Oracle table partitioning requires an Oracle-specific partition"
+        TypeError,
+        "Oracle table partitioning requires an Oracle-specific partition",
     ),
 }
 
@@ -1980,7 +1939,7 @@ CORE_SERIALISATION_DEFECTS: Dict[str, tuple] = {}
 # holds are outside that set, and each gap below is one of them:
 #
 # 1. **a dataclass value.** ``OracleTypeAttribute``, ``OracleTypeMethod``,
-#    ``OraclePartitionDefinition``, ``GraphColumn``, ``XMLAttribute``,
+#    ``PartitionDefinitionExpression``, ``GraphColumn``, ``XMLAttribute``,
 #    ``XMLForestItem``, ``XMLTableColumn`` and ``ViewOptions`` are plain
 #    dataclasses held as node parameters. ``_encode_value`` reaches
 #    ``_encode_scalar``, which asks the value vocabulary and is told the type
@@ -2033,37 +1992,57 @@ CORE_ARTIFACT_GAPS: Dict[str, tuple] = {
     # needs either a kind on the parameter's class or an encoder
     # branch, both of which are core's to write.
     # ---------------------------------------------------------------
-    "rhosocial.activerecord.backend.expression.statements.ddl_type.CreateTypeStatement":
-        ("dict", "json", "xml"),
-    "rhosocial.activerecord.backend.expression.statements.ddl_view.CreateViewStatement":
-        ("dict", "json", "xml"),
-    "rhosocial.activerecord.backend.expression.xml.XMLAttributesExpression":
-        ("dict", "json", "xml"),
-    "rhosocial.activerecord.backend.expression.xml.XMLForestExpression":
-        ("dict", "json", "xml"),
-    "rhosocial.activerecord.backend.expression.xml.XMLTableExpression":
-        ("dict", "json", "xml"),
-    "rhosocial.activerecord.backend.impl.oracle.expression.ddl.type.OracleAlterTypeAddAttributeAction":
-        ("dict", "json", "xml"),
-    "rhosocial.activerecord.backend.impl.oracle.expression.ddl.type.OracleAlterTypeAddMethodAction":
-        ("dict", "json", "xml"),
-    "rhosocial.activerecord.backend.impl.oracle.expression.ddl.type.OracleAlterTypeDropMethodAction":
-        ("dict", "json", "xml"),
-    "rhosocial.activerecord.backend.impl.oracle.expression.ddl.type.OracleAlterTypeModifyAttributeAction":
-        ("dict", "json", "xml"),
-    "rhosocial.activerecord.backend.impl.oracle.expression.ddl.type.OracleObjectTypeDefinition":
-        ("dict", "json", "xml"),
-    "rhosocial.activerecord.backend.impl.oracle.expression.ddl.type.OracleSqljTypeDefinition":
-        ("dict", "json", "xml"),
-    "rhosocial.activerecord.backend.impl.oracle.expression.partition.OracleIntervalPartitionClause":
-        ("dict", "json", "xml"),
-    "rhosocial.activerecord.backend.impl.oracle.expression.partition_lifecycle.OracleAddPartitionStatement":
-        ("dict", "json", "xml"),
-    "rhosocial.activerecord.backend.impl.oracle.expression.partition_lifecycle.OracleMergePartitionsStatement":
-        ("dict", "json", "xml"),
-    "rhosocial.activerecord.backend.impl.oracle.expression.partition_lifecycle.OracleSplitPartitionStatement":
-        ("dict", "json", "xml"),
-
+    "rhosocial.activerecord.backend.expression.statements.ddl_type.CreateTypeStatement": (
+        "dict",
+        "json",
+        "xml",
+    ),
+    "rhosocial.activerecord.backend.expression.statements.ddl_view.CreateViewStatement": (
+        "dict",
+        "json",
+        "xml",
+    ),
+    "rhosocial.activerecord.backend.expression.xml.XMLAttributesExpression": (
+        "dict",
+        "json",
+        "xml",
+    ),
+    "rhosocial.activerecord.backend.expression.xml.XMLForestExpression": ("dict", "json", "xml"),
+    "rhosocial.activerecord.backend.expression.xml.XMLTableExpression": ("dict", "json", "xml"),
+    "rhosocial.activerecord.backend.impl.oracle.expression.ddl.type.OracleAlterTypeAddAttributeAction": (
+        "dict",
+        "json",
+        "xml",
+    ),
+    "rhosocial.activerecord.backend.impl.oracle.expression.ddl.type.OracleAlterTypeAddMethodAction": (
+        "dict",
+        "json",
+        "xml",
+    ),
+    "rhosocial.activerecord.backend.impl.oracle.expression.ddl.type.OracleAlterTypeDropMethodAction": (
+        "dict",
+        "json",
+        "xml",
+    ),
+    "rhosocial.activerecord.backend.impl.oracle.expression.ddl.type.OracleAlterTypeModifyAttributeAction": (
+        "dict",
+        "json",
+        "xml",
+    ),
+    "rhosocial.activerecord.backend.impl.oracle.expression.ddl.type.OracleObjectTypeDefinition": (
+        "dict",
+        "json",
+        "xml",
+    ),
+    "rhosocial.activerecord.backend.impl.oracle.expression.ddl.type.OracleSqljTypeDefinition": (
+        "dict",
+        "json",
+        "xml",
+    ),
+    # The partition clause / statement nodes used to sit here: they carried
+    # the old ``OraclePartitionDefinition`` dataclass, which no artifact can
+    # hold. They now carry ``PartitionDefinitionExpression`` nodes instead,
+    # so all three channels round-trip and the pins were removed.
     # ---------------------------------------------------------------
     # Two: the XML channel alone used to lose the datetime family.
     # ``DateTimeField`` and ``IntervalUnit`` are ``(str, Enum)``, so
@@ -2076,7 +2055,6 @@ CORE_ARTIFACT_GAPS: Dict[str, tuple] = {
     # normaliser accepts it. No rows left here, and the block stays to
     # say why the family was the one place the XML channel diverged.
     # ---------------------------------------------------------------
-
     # ---------------------------------------------------------------
     # Three: a word-or-enum parameter whose constructor does not
     # normalise the word back into the member. ``GraphEdge``,
@@ -2095,12 +2073,13 @@ CORE_ARTIFACT_GAPS: Dict[str, tuple] = {
     # the same SQL. They are gone from the table rather than narrowed,
     # because no channel loses them any more.
     # ---------------------------------------------------------------
-    "rhosocial.activerecord.backend.expression.statements.ddl_trigger.CreateTriggerStatement":
-        ("json", "xml"),
+    "rhosocial.activerecord.backend.expression.statements.ddl_trigger.CreateTriggerStatement": (
+        "json",
+        "xml",
+    ),
     "rhosocial.activerecord.backend.expression.graph.GraphEdge": ("json", "xml"),
     "rhosocial.activerecord.backend.expression.xml.XMLParseExpression": ("json", "xml"),
     "rhosocial.activerecord.backend.expression.xml.XMLSerializeExpression": ("json", "xml"),
-
     # ---------------------------------------------------------------
     # Four: a bind-parameter *tuple*, written as a plain JSON list and
     # read back as one. ``Subquery.query_params`` is a tuple of the
@@ -2117,9 +2096,10 @@ CORE_ARTIFACT_GAPS: Dict[str, tuple] = {
     # entry rather than a render one.
     # ---------------------------------------------------------------
     "rhosocial.activerecord.backend.expression.advanced_functions.ExistsPredicate": (
-        "dict", "json", "xml",
+        "dict",
+        "json",
+        "xml",
     ),
-
     # ---------------------------------------------------------------
     # Five: a dataclass parameter on a class this dialect also cannot
     # render. ``GraphTableExpression`` holds a ``GraphColumn``, which is
@@ -2132,7 +2112,9 @@ CORE_ARTIFACT_GAPS: Dict[str, tuple] = {
     # the class still renders no SQL for Oracle.
     # ---------------------------------------------------------------
     "rhosocial.activerecord.backend.expression.graph.GraphTableExpression": (
-        "dict", "json", "xml",
+        "dict",
+        "json",
+        "xml",
     ),
 }
 
@@ -2238,6 +2220,7 @@ def _unmodelled_methods():
 # The local SQL assertion: classify the outcome instead of swallowing it
 # ---------------------------------------------------------------------------
 
+
 def assert_sql_roundtrip_classified(fqn, instance, dialect):
     """Assert an expression's SQL survives the round-trip, or say precisely why not.
 
@@ -2316,9 +2299,7 @@ def assert_sql_roundtrip_classified(fqn, instance, dialect):
             f"non-render raising {expected_type.__name__}, but it raised "
             f"{type(exc).__name__}: {exc}"
         )
-        assert fragment in str(exc), (
-            f"{fqn}: expected the message to say {fragment!r}, got: {exc}"
-        )
+        assert fragment in str(exc), f"{fqn}: expected the message to say {fragment!r}, got: {exc}"
         return "non-render"
 
     # A plain-JSON artifact cannot carry what this node holds, on the channels
@@ -2338,6 +2319,7 @@ def assert_sql_roundtrip_classified(fqn, instance, dialect):
     # than reporting the class as a non-render. The class *does* render; the
     # check above is what proves it.
     gaps = CORE_ARTIFACT_GAPS.get(fqn, ())
+
     # Each channel is decoded *inside* the try, not before the loop: the three
     # decoders are built lazily as functions rather than eagerly as values,
     # because the one that raises is the one the table below exempts, and an
@@ -2347,9 +2329,7 @@ def assert_sql_roundtrip_classified(fqn, instance, dialect):
         return (
             (
                 name,
-                (lambda n=name: _channel_decode(
-                    _channel_payload(instance, n), dialect, n
-                )),
+                (lambda n=name: _channel_decode(_channel_payload(instance, n), dialect, n)),
             )
             for name in ("dict", "json", "xml")
         )
@@ -2422,9 +2402,7 @@ def oracle_dialect():
     return dialect
 
 
-@pytest.fixture(
-    params=[fqn for fqn in sorted(REGISTERED)], ids=sorted(REGISTERED)
-)
+@pytest.fixture(params=[fqn for fqn in sorted(REGISTERED)], ids=sorted(REGISTERED))
 def oracle_expr_case(request, oracle_dialect):
     fqn = request.param
     cls = REGISTERED[fqn]
@@ -2518,10 +2496,7 @@ class TestMatrixIntegrity:
             instance, _ = make_instance(REGISTERED[fqn], oracle_dialect)
             assert instance is not None, f"{fqn}: listed as a defect but will not build"
             expected_sql, _ = instance.to_sql()
-            assert (
-                deserialize(serialize(instance), oracle_dialect).to_sql()[0]
-                == expected_sql
-            ), (
+            assert deserialize(serialize(instance), oracle_dialect).to_sql()[0] == expected_sql, (
                 f"{fqn}: CORE_SERIALISATION_DEFECTS exists because core's JSON and "
                 f"XML encoders drop this class. The dict channel now loses it too, "
                 f"so the entry no longer describes the defect."
@@ -2547,9 +2522,9 @@ class TestMatrixIntegrity:
         a deliberate decision.
         """
         unknown = set(UNCONSTRUCTIBLE) - set(REGISTERED)
-        assert not unknown, (
-            f"UNCONSTRUCTIBLE names classes that were not registered: {sorted(unknown)}"
-        )
+        assert (
+            not unknown
+        ), f"UNCONSTRUCTIBLE names classes that were not registered: {sorted(unknown)}"
 
     def test_core_artifact_gaps_are_real_classes(self):
         """Every pinned gap names a collected class.
@@ -2560,8 +2535,7 @@ class TestMatrixIntegrity:
         """
         unknown = set(CORE_ARTIFACT_GAPS) - set(REGISTERED)
         assert not unknown, (
-            f"CORE_ARTIFACT_GAPS names classes that were not registered: "
-            f"{sorted(unknown)}"
+            f"CORE_ARTIFACT_GAPS names classes that were not registered: " f"{sorted(unknown)}"
         )
 
     def test_core_artifact_gaps_list_is_exact(self, oracle_dialect):
@@ -2613,23 +2587,16 @@ class TestMatrixIntegrity:
                     payload = _channel_payload(instance, channel)
                     restored = _channel_decode(payload, oracle_dialect, channel)
                     decoded_sql, decoded_params = restored.to_sql()
-                    if not _roundtrips(
-                        expected_sql, expected_params, decoded_sql, decoded_params
-                    ):
+                    if not _roundtrips(expected_sql, expected_params, decoded_sql, decoded_params):
                         lost.add(channel)
                 except Exception:
                     lost.add(channel)
             if lost:
                 observed[fqn] = lost
         declared = {fqn: set(channels) for fqn, channels in CORE_ARTIFACT_GAPS.items()}
-        assert declared == observed, (
-            "CORE_ARTIFACT_GAPS and the observed losses disagree.\
-"
-            f"  pinned but not lost: "
-            f"{sorted(k for k in declared if observed.get(k) != declared[k])}\
-"
-            f"  lost but not pinned: {sorted(set(observed) - set(declared))}"
-        )
+        assert declared == observed, "CORE_ARTIFACT_GAPS and the observed losses disagree.\
+" f"  pinned but not lost: " f"{sorted(k for k in declared if observed.get(k) != declared[k])}\
+" f"  lost but not pinned: {sorted(set(observed) - set(declared))}"
 
     def test_core_artifact_gaps_still_lose_the_class(self, oracle_dialect):
         """Each pinned channel still loses its class, and the others still work.
@@ -2674,9 +2641,7 @@ class TestMatrixIntegrity:
                         f"observed set."
                     )
                     continue
-                roundtrips = _roundtrips(
-                    expected_sql, expected_params, decoded_sql, decoded_params
-                )
+                roundtrips = _roundtrips(expected_sql, expected_params, decoded_sql, decoded_params)
                 if channel in channels:
                     assert not roundtrips, (
                         f"{fqn}: {channel} is pinned in CORE_ARTIFACT_GAPS as "
@@ -2696,8 +2661,7 @@ class TestMatrixIntegrity:
         """Every pinned non-render names a class that was actually collected."""
         unknown = set(LEGITIMATE_NON_RENDERS) - set(REGISTERED)
         assert not unknown, (
-            f"LEGITIMATE_NON_RENDERS names classes that were not registered: "
-            f"{sorted(unknown)}"
+            f"LEGITIMATE_NON_RENDERS names classes that were not registered: " f"{sorted(unknown)}"
         )
 
     def test_core_serialisation_defects_are_real_classes(self):
@@ -2717,14 +2681,12 @@ class TestMatrixIntegrity:
         for fqn, (expected_type, fragment) in LEGITIMATE_NON_RENDERS.items():
             instance, source = make_instance(REGISTERED[fqn], oracle_dialect)
             assert instance is not None, (
-                f"{fqn} is pinned as a non-render but could not be constructed "
-                f"({source})"
+                f"{fqn} is pinned as a non-render but could not be constructed " f"({source})"
             )
             with pytest.raises(expected_type) as exc_info:
                 instance.to_sql()
             assert fragment in str(exc_info.value), (
-                f"{fqn}: expected the message to mention {fragment!r}, got: "
-                f"{exc_info.value}"
+                f"{fqn}: expected the message to mention {fragment!r}, got: " f"{exc_info.value}"
             )
 
     def test_unmodelled_formatter_list_is_exact(self, oracle_dialect):
@@ -2793,8 +2755,7 @@ class TestMatrixIntegrity:
         stray = [
             fqn
             for fqn in REGISTERED
-            if not fqn.startswith(f"{ORACLE_EXPR_PKG}.")
-            and not fqn.startswith(f"{CORE_EXPR_PKG}.")
+            if not fqn.startswith(f"{ORACLE_EXPR_PKG}.") and not fqn.startswith(f"{CORE_EXPR_PKG}.")
         ]
         assert not stray, f"classes outside the two packages are in the matrix: {stray}"
         assert expected == set(REGISTERED), (
@@ -2803,8 +2764,7 @@ class TestMatrixIntegrity:
             f"\n  covered but no longer defined: {sorted(set(REGISTERED) - expected)}"
         )
         assert len(REGISTERED) > 300, (
-            f"only {len(REGISTERED)} classes collected; the package walk may "
-            f"have stopped early"
+            f"only {len(REGISTERED)} classes collected; the package walk may " f"have stopped early"
         )
 
     def test_core_package_is_actually_covered(self):
@@ -2814,9 +2774,7 @@ class TestMatrixIntegrity:
         classes every statement is built from untested, which is precisely the
         blind spot that let a formatter read a field core had removed stay green.
         """
-        core_classes = [
-            fqn for fqn in REGISTERED if fqn.startswith(f"{CORE_EXPR_PKG}.")
-        ]
+        core_classes = [fqn for fqn in REGISTERED if fqn.startswith(f"{CORE_EXPR_PKG}.")]
         assert len(core_classes) > 200, (
             f"only {len(core_classes)} core classes in the matrix; the core "
             f"package is not being walked"
@@ -2846,9 +2804,9 @@ class TestMatrixIntegrity:
                     unresolved.append(f"{fqn}: kind '{kind}' resolves elsewhere")
             except RegistryError:
                 unresolved.append(f"{fqn}: kind '{kind}' is not registered")
-        assert not unresolved, (
-            f"the matrix covers classes the registry cannot resolve: {unresolved}"
-        )
+        assert (
+            not unresolved
+        ), f"the matrix covers classes the registry cannot resolve: {unresolved}"
 
     def test_coverage_report(self, oracle_dialect):
         """Surface the classification distribution, so coverage stays transparent.
@@ -2915,8 +2873,8 @@ class TestMatrixIntegrity:
 # value used here ("AR_CRM") appears nowhere else in the SQL, so any change to
 # the level is visible.
 
-_OWNER = "reporting"          # deliberately not a substring of any object name
-_OBJECT = "ledger_entries"    # deliberately not the owner, in either direction
+_OWNER = "reporting"  # deliberately not a substring of any object name
+_OBJECT = "ledger_entries"  # deliberately not the owner, in either direction
 
 
 class TestOracleNamespaceShape:
@@ -2961,9 +2919,7 @@ class TestOracleNamespaceShape:
         why, because Oracle would resolve it.
         """
         with pytest.raises(UnsupportedFeatureError) as exc_info:
-            Table(
-                oracle_dialect, _OBJECT, catalog_name="other", schema_name=_OWNER
-            ).to_sql()
+            Table(oracle_dialect, _OBJECT, catalog_name="other", schema_name=_OWNER).to_sql()
         assert "catalog" in str(exc_info.value)
 
     def test_catalog_alone_is_refused(self, oracle_dialect):
@@ -2979,9 +2935,7 @@ class TestOracleNamespaceShape:
         output identical, the test above would be testing nothing. Here the two
         renderings differ by exactly the owner level.
         """
-        with_owner, _ = Table(
-            oracle_dialect, _OBJECT, schema_name=_OWNER
-        ).to_sql()
+        with_owner, _ = Table(oracle_dialect, _OBJECT, schema_name=_OWNER).to_sql()
         without_owner, _ = Table(oracle_dialect, _OBJECT).to_sql()
         assert with_owner != without_owner
         assert without_owner == '"LEDGER_ENTRIES"'
@@ -3016,9 +2970,7 @@ class TestOracleNamespaceShape:
     )
     def test_every_kind_refuses_a_catalog(self, oracle_dialect, kind):
         with pytest.raises(UnsupportedFeatureError, match="catalog"):
-            kind(
-                oracle_dialect, _OBJECT, catalog_name="other", schema_name=_OWNER
-            ).to_sql()
+            kind(oracle_dialect, _OBJECT, catalog_name="other", schema_name=_OWNER).to_sql()
 
 
 # ---------------------------------------------------------------------------
@@ -3069,9 +3021,7 @@ def test_set_operation_statement_parameters_concatenate_in_part_order(
             dialect,
             select=[Column(dialect, "id"), Literal(dialect, 1)],
             from_=_table_obj(dialect),
-            where=ComparisonPredicate(
-                dialect, "=", Column(dialect, "id"), Literal(dialect, 5)
-            ),
+            where=ComparisonPredicate(dialect, "=", Column(dialect, "id"), Literal(dialect, 5)),
         ),
         QueryStatement(
             dialect,
@@ -3084,8 +3034,6 @@ def test_set_operation_statement_parameters_concatenate_in_part_order(
     rendered, params = node.to_sql()
 
     assert rendered == (
-        'SELECT "ID", ? FROM "T" WHERE "ID" = ? '
-        "UNION ALL "
-        'SELECT "ID", ? FROM "U"'
+        'SELECT "ID", ? FROM "T" WHERE "ID" = ? ' "UNION ALL " 'SELECT "ID", ? FROM "U"'
     )
     assert params == (1, 5, 2)

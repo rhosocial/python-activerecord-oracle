@@ -21,17 +21,20 @@ from typing import Any, Callable, Optional, Tuple
 import pytest
 
 from rhosocial.activerecord.backend.expression import Column
+from rhosocial.activerecord.backend.expression.statements import (
+    PartitionDefinitionExpression,
+    SubpartitionDefinitionExpression,
+)
 from rhosocial.activerecord.backend.expression.objects import Table
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.expression.partition import (
     OraclePartitionByHash,
     OraclePartitionByList,
     OraclePartitionByRange,
-    OraclePartitionDefinition,
     OraclePartitionMaxValue,
     OraclePartitionValue,
     OracleSubpartitionClause,
-    OracleSubpartitionDefinition,
+    partition_definition_options,
 )
 from rhosocial.activerecord.backend.impl.oracle.expression.partition_lifecycle import (
     OracleAddPartitionStatement,
@@ -122,7 +125,7 @@ def _subpartition_definition(
     dialect: OracleDialect,
     spec: OracleSubpartitionSpec,
     multi_column: bool,
-) -> OracleSubpartitionDefinition:
+) -> SubpartitionDefinitionExpression:
     less_than = None
     if spec.less_than is not None:
         less_than = [_boundary(dialect, value) for value in spec.less_than]
@@ -132,7 +135,8 @@ def _subpartition_definition(
             in_values = [[_boundary(dialect, value) for value in group] for group in spec.in_values]
         else:
             in_values = [_boundary(dialect, value) for group in spec.in_values for value in group]
-    return OracleSubpartitionDefinition(
+    return SubpartitionDefinitionExpression(
+        dialect,
         name=spec.name,
         less_than=less_than,
         in_values=in_values,
@@ -163,7 +167,7 @@ def _partition_definition(
     dialect: OracleDialect,
     plan: OraclePartitionPlan,
     spec: Any,
-) -> OraclePartitionDefinition:
+) -> PartitionDefinitionExpression:
     less_than = None
     if spec.less_than is not None:
         less_than = [_boundary(dialect, value) for value in spec.less_than]
@@ -179,12 +183,13 @@ def _partition_definition(
         subpartitions = [
             _subpartition_definition(dialect, sub, multi_column) for sub in spec.subpartitions
         ]
-    return OraclePartitionDefinition(
+    return PartitionDefinitionExpression(
+        dialect,
         name=spec.name,
         less_than=less_than,
         in_values=in_values,
-        subpartition_definitions=subpartitions,
-        subpartitions_count=spec.subpartitions_count,
+        subpartitions=subpartitions,
+        options=partition_definition_options(dialect, subpartitions_count=spec.subpartitions_count),
     )
 
 
@@ -261,11 +266,13 @@ def build_split_merge(
         "P_MAX",
         at_values=[OraclePartitionValue(dialect, date(2026, 2, 1))],
         new_partitions=[
-            OraclePartitionDefinition(
+            PartitionDefinitionExpression(
+                dialect,
                 name="P2",
                 less_than=[OraclePartitionValue(dialect, date(2026, 2, 1))],
             ),
-            OraclePartitionDefinition(
+            PartitionDefinitionExpression(
+                dialect,
                 name="P_MAX",
                 less_than=[OraclePartitionMaxValue(dialect)],
             ),
@@ -275,7 +282,8 @@ def build_split_merge(
         dialect,
         table,
         ["P1", "P2"],
-        OraclePartitionDefinition(
+        PartitionDefinitionExpression(
+            dialect,
             name="P12",
             less_than=[OraclePartitionValue(dialect, date(2026, 3, 1))],
         ),

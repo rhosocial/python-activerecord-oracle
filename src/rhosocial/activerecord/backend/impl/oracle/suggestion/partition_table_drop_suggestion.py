@@ -16,7 +16,7 @@ from ....expression import DropTableStatement
 from ._common import OraclePartitionSuggestionBase
 
 if TYPE_CHECKING:  # pragma: no cover
-    from ....expression.statements import PartitionStrategy
+    from ....expression.statements import PartitionByClause
 
 __all__ = ["OraclePartitionTableDropSuggestionMixin"]
 
@@ -26,7 +26,7 @@ class OraclePartitionTableDropSuggestionMixin(OraclePartitionSuggestionBase):
 
     def suggest_partition_table_drop(
         self,
-        strategy: "PartitionStrategy",
+        strategy: "PartitionByClause",
         plan: object,
     ) -> PartitionTableDropSuggestion:
         """Suggest dropping the whole partitioned table (not a single partition)."""

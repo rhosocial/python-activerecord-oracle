@@ -16,7 +16,7 @@ from ..expression.partition_lifecycle import OracleMergePartitionsStatement
 from ._common import _REFERENCE, OraclePartitionSuggestionBase, _get, _word
 
 if TYPE_CHECKING:  # pragma: no cover
-    from ....expression.statements import PartitionStrategy
+    from ....expression.statements import PartitionByClause
 
 __all__ = ["OraclePartitionMergeSuggestionMixin"]
 
@@ -26,7 +26,7 @@ class OraclePartitionMergeSuggestionMixin(OraclePartitionSuggestionBase):
 
     def suggest_partition_merge(
         self,
-        strategy: "PartitionStrategy",
+        strategy: "PartitionByClause",
         plan: object,
     ) -> PartitionMergeSuggestion:
         """Suggest ``MERGE PARTITIONS p1, p2 INTO p3``."""

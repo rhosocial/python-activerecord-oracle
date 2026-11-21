@@ -12,9 +12,11 @@ import pytest
 
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 from rhosocial.activerecord.backend.expression.objects import Table
+from rhosocial.activerecord.backend.expression.statements import (
+    PartitionDefinitionExpression,
+)
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.expression.partition import (
-    OraclePartitionDefinition,
     OraclePartitionMaxValue,
     OraclePartitionValue,
 )
@@ -42,8 +44,9 @@ class TestOracleAddPartition:
     def test_add_range_partition(self):
         d = _dialect()
         e = OracleAddPartitionStatement(
-            d, Table(d, "orders"),
-            OraclePartitionDefinition(name="p3", less_than=[OraclePartitionValue(d, 200)]),
+            d,
+            Table(d, "orders"),
+            PartitionDefinitionExpression(d, name="p3", less_than=[OraclePartitionValue(d, 200)]),
         )
         sql, params = e.to_sql()
         assert sql == 'ALTER TABLE "ORDERS" ADD PARTITION "P3" VALUES LESS THAN (200)'
@@ -52,8 +55,11 @@ class TestOracleAddPartition:
     def test_add_list_partition(self):
         d = _dialect()
         e = OracleAddPartitionStatement(
-            d, Table(d, "orders"),
-            OraclePartitionDefinition(name="p_south", in_values=[OraclePartitionValue(d, "SOUTH")]),
+            d,
+            Table(d, "orders"),
+            PartitionDefinitionExpression(
+                d, name="p_south", in_values=[OraclePartitionValue(d, "SOUTH")]
+            ),
         )
         sql, _ = e.to_sql()
         assert sql == 'ALTER TABLE "ORDERS" ADD PARTITION "P_SOUTH" VALUES (\'SOUTH\')'
@@ -61,8 +67,9 @@ class TestOracleAddPartition:
     def test_add_pre_11g_raises(self):
         d = OracleDialect(version=(10, 0, 0))
         e = OracleAddPartitionStatement(
-            d, Table(d, "orders"),
-            OraclePartitionDefinition(name="p3", less_than=[OraclePartitionValue(d, 200)]),
+            d,
+            Table(d, "orders"),
+            PartitionDefinitionExpression(d, name="p3", less_than=[OraclePartitionValue(d, 200)]),
         )
         with pytest.raises(UnsupportedFeatureError):
             e.to_sql()
@@ -76,8 +83,11 @@ class TestOracleAddPartition:
         d = _dialect()
         with pytest.raises(ValueError):
             OracleAddPartitionStatement(
-                d, Table(d, ""),
-                OraclePartitionDefinition(name="p3", less_than=[OraclePartitionValue(d, 200)]),
+                d,
+                Table(d, ""),
+                PartitionDefinitionExpression(
+                    d, name="p3", less_than=[OraclePartitionValue(d, 200)]
+                ),
             )
 
 
@@ -121,11 +131,17 @@ class TestOracleSplitPartition:
     def test_split_basic(self):
         d = _dialect()
         e = OracleSplitPartitionStatement(
-            d, Table(d, "orders"), "p_max",
+            d,
+            Table(d, "orders"),
+            "p_max",
             at_values=[OraclePartitionValue(d, 200)],
             new_partitions=[
-                OraclePartitionDefinition(name="p2", less_than=[OraclePartitionValue(d, 200)]),
-                OraclePartitionDefinition(name="p_max", less_than=[OraclePartitionMaxValue(d)]),
+                PartitionDefinitionExpression(
+                    d, name="p2", less_than=[OraclePartitionValue(d, 200)]
+                ),
+                PartitionDefinitionExpression(
+                    d, name="p_max", less_than=[OraclePartitionMaxValue(d)]
+                ),
             ],
         )
         sql, params = e.to_sql()
@@ -138,10 +154,14 @@ class TestOracleSplitPartition:
         d = _dialect()
         with pytest.raises(ValueError, match="exactly 2"):
             OracleSplitPartitionStatement(
-                d, Table(d, "orders"), "p_max",
+                d,
+                Table(d, "orders"),
+                "p_max",
                 at_values=[OraclePartitionValue(d, 200)],
                 new_partitions=[
-                    OraclePartitionDefinition(name="p2", less_than=[OraclePartitionValue(d, 200)]),
+                    PartitionDefinitionExpression(
+                        d, name="p2", less_than=[OraclePartitionValue(d, 200)]
+                    ),
                 ],
             )
 
@@ -149,22 +169,32 @@ class TestOracleSplitPartition:
         d = _dialect()
         with pytest.raises(ValueError, match="at_values"):
             OracleSplitPartitionStatement(
-                d, Table(d, "orders"), "p_max",
+                d,
+                Table(d, "orders"),
+                "p_max",
                 at_values=[],
                 new_partitions=[
-                    OraclePartitionDefinition(name="p2", less_than=[OraclePartitionValue(d, 200)]),
-                    OraclePartitionDefinition(name="p3", less_than=[OraclePartitionMaxValue(d)]),
+                    PartitionDefinitionExpression(
+                        d, name="p2", less_than=[OraclePartitionValue(d, 200)]
+                    ),
+                    PartitionDefinitionExpression(
+                        d, name="p3", less_than=[OraclePartitionMaxValue(d)]
+                    ),
                 ],
             )
 
     def test_split_pre_11g_raises(self):
         d = OracleDialect(version=(10, 0, 0))
         e = OracleSplitPartitionStatement(
-            d, Table(d, "orders"), "p_max",
+            d,
+            Table(d, "orders"),
+            "p_max",
             at_values=[OraclePartitionValue(d, 200)],
             new_partitions=[
-                OraclePartitionDefinition(name="p2", less_than=[OraclePartitionValue(d, 200)]),
-                OraclePartitionDefinition(name="p3", less_than=[OraclePartitionMaxValue(d)]),
+                PartitionDefinitionExpression(
+                    d, name="p2", less_than=[OraclePartitionValue(d, 200)]
+                ),
+                PartitionDefinitionExpression(d, name="p3", less_than=[OraclePartitionMaxValue(d)]),
             ],
         )
         with pytest.raises(UnsupportedFeatureError):
@@ -180,28 +210,34 @@ class TestOracleMergePartitions:
     def test_merge_basic(self):
         d = _dialect()
         e = OracleMergePartitionsStatement(
-            d, Table(d, "orders"), ["p1", "p2"],
-            OraclePartitionDefinition(name="p12", less_than=[OraclePartitionValue(d, 200)]),
+            d,
+            Table(d, "orders"),
+            ["p1", "p2"],
+            PartitionDefinitionExpression(d, name="p12", less_than=[OraclePartitionValue(d, 200)]),
         )
         sql, params = e.to_sql()
-        assert sql == (
-            'ALTER TABLE "ORDERS" MERGE PARTITIONS "P1", "P2" INTO PARTITION "P12"'
-        )
+        assert sql == ('ALTER TABLE "ORDERS" MERGE PARTITIONS "P1", "P2" INTO PARTITION "P12"')
         assert params == ()
 
     def test_merge_requires_two_partition_names(self):
         d = _dialect()
         with pytest.raises(ValueError, match="exactly 2"):
             OracleMergePartitionsStatement(
-                d, Table(d, "orders"), ["p1"],
-                OraclePartitionDefinition(name="p12", less_than=[OraclePartitionValue(d, 200)]),
+                d,
+                Table(d, "orders"),
+                ["p1"],
+                PartitionDefinitionExpression(
+                    d, name="p12", less_than=[OraclePartitionValue(d, 200)]
+                ),
             )
 
     def test_merge_pre_11g_raises(self):
         d = OracleDialect(version=(10, 0, 0))
         e = OracleMergePartitionsStatement(
-            d, Table(d, "orders"), ["p1", "p2"],
-            OraclePartitionDefinition(name="p12", less_than=[OraclePartitionValue(d, 200)]),
+            d,
+            Table(d, "orders"),
+            ["p1", "p2"],
+            PartitionDefinitionExpression(d, name="p12", less_than=[OraclePartitionValue(d, 200)]),
         )
         with pytest.raises(UnsupportedFeatureError):
             e.to_sql()
@@ -215,7 +251,9 @@ class TestOracleMergePartitions:
 class TestOracleExchangePartition:
     def test_exchange_basic(self):
         d = _dialect()
-        e = OracleExchangePartitionStatement(d, Table(d, "orders"), "p1", Table(d, "orders_p1_staging"))
+        e = OracleExchangePartitionStatement(
+            d, Table(d, "orders"), "p1", Table(d, "orders_p1_staging")
+        )
         sql, params = e.to_sql()
         assert sql == (
             'ALTER TABLE "ORDERS" EXCHANGE PARTITION "P1" WITH TABLE "ORDERS_P1_STAGING" WITH VALIDATION'
@@ -225,8 +263,12 @@ class TestOracleExchangePartition:
     def test_exchange_with_options(self):
         d = _dialect()
         e = OracleExchangePartitionStatement(
-            d, Table(d, "orders"), "p1", Table(d, "orders_p1_staging"),
-            including_indexes=True, with_validation=False,
+            d,
+            Table(d, "orders"),
+            "p1",
+            Table(d, "orders_p1_staging"),
+            including_indexes=True,
+            with_validation=False,
         )
         sql, _ = e.to_sql()
         assert sql == (
@@ -320,30 +362,36 @@ class TestOracleTruncatePartition:
 class TestOracleMaintenanceCapabilityGating:
     """All Oracle maintenance statements are gated for 11g+."""
 
-    @pytest.mark.parametrize("method", [
-        "supports_add_partition",
-        "supports_drop_partition",
-        "supports_truncate_partition",
-        "supports_reorganize_partition",
-        "supports_split_partition",
-        "supports_merge_partition",
-        "supports_exchange_partition",
-        "supports_move_partition",
-    ])
+    @pytest.mark.parametrize(
+        "method",
+        [
+            "supports_add_partition",
+            "supports_drop_partition",
+            "supports_truncate_partition",
+            "supports_reorganize_partition",
+            "supports_split_partition",
+            "supports_merge_partition",
+            "supports_exchange_partition",
+            "supports_move_partition",
+        ],
+    )
     def test_supported_for_11g(self, method):
         d = _dialect((11, 0, 0))
         assert getattr(d, method)() is True
 
-    @pytest.mark.parametrize("method", [
-        "supports_add_partition",
-        "supports_drop_partition",
-        "supports_truncate_partition",
-        "supports_reorganize_partition",
-        "supports_split_partition",
-        "supports_merge_partition",
-        "supports_exchange_partition",
-        "supports_move_partition",
-    ])
+    @pytest.mark.parametrize(
+        "method",
+        [
+            "supports_add_partition",
+            "supports_drop_partition",
+            "supports_truncate_partition",
+            "supports_reorganize_partition",
+            "supports_split_partition",
+            "supports_merge_partition",
+            "supports_exchange_partition",
+            "supports_move_partition",
+        ],
+    )
     def test_unsupported_pre_11g(self, method):
         d = OracleDialect(version=(10, 0, 0))
         assert getattr(d, method)() is False

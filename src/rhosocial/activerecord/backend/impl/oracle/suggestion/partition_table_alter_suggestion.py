@@ -15,7 +15,7 @@ from rhosocial.activerecord.backend.suggestion import PartitionTableAlterSuggest
 from ._common import OraclePartitionSuggestionBase
 
 if TYPE_CHECKING:  # pragma: no cover
-    from ....expression.statements import PartitionStrategy
+    from ....expression.statements import PartitionByClause
 
 __all__ = ["OraclePartitionTableAlterSuggestionMixin"]
 
@@ -25,7 +25,7 @@ class OraclePartitionTableAlterSuggestionMixin(OraclePartitionSuggestionBase):
 
     def suggest_partition_table_alter(
         self,
-        strategy: "PartitionStrategy",
+        strategy: "PartitionByClause",
         plan: object,
     ) -> PartitionTableAlterSuggestion:
         """Oracle cannot change a table's partitioning scheme in place.

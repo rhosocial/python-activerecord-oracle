@@ -2,13 +2,15 @@
 """Oracle partition DDL expressions.
 
 This module defines backend-specific partition clause expressions as
-structured ``Expression`` / dataclass objects.
+structured ``Expression`` nodes.
 
 Phase 5 scope (this module):
 
-* ``OraclePartitionDefinition`` — a single ``PARTITION ... VALUES ...``
-  definition (RANGE / LIST / SYSTEM), with optional subpartition
-  definitions for composite partitioning.
+* ``PartitionDefinitionExpression`` / ``SubpartitionDefinitionExpression``
+  (from core) — a single ``PARTITION ... VALUES ...`` definition (RANGE /
+  LIST / SYSTEM) and its subpartitions for composite partitioning.
+* ``partition_definition_options`` — carries Oracle's per-partition
+  ``SUBPARTITIONS n`` override in a definition's ``options`` node.
 * ``OraclePartitionValue`` / ``OraclePartitionMaxValue`` — boundary value
   expressions rendered as safely-escaped inline literals (Oracle DDL does
   not accept bind variables).
@@ -27,9 +29,9 @@ All expressions delegate SQL generation to the dialect through public
 ``format_*`` formatters declared in
 :class:`~rhosocial.activerecord.backend.impl.oracle.protocols.partition.OraclePartitionSupport`.
 """
+
 from __future__ import annotations
 
-from dataclasses import dataclass
 from decimal import Decimal
 from enum import Enum
 from math import isfinite
@@ -38,8 +40,9 @@ from typing import Any, List, Optional, Sequence, TYPE_CHECKING, Union
 from rhosocial.activerecord.backend.expression.bases import BaseExpression
 from rhosocial.activerecord.backend.expression.statements import (
     PartitionClause,
-    PartitionDefinition,
-    SubpartitionDefinition,
+    PartitionDefinitionExpression,
+    PartitionOptionsExpression,
+    SubpartitionDefinitionExpression,
 )
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -49,31 +52,6 @@ if TYPE_CHECKING:  # pragma: no cover
 # ---------------------------------------------------------------------------
 # Strategy enums
 # ---------------------------------------------------------------------------
-
-
-class OraclePartitionStrategy(str, Enum):
-    """A word, carried by the artifact as the str it is.
-
-    ``(str, Enum)`` alone is not enough: ``Enum.__str__`` wins over the
-    mixin and writes ``OraclePartitionStrategy.MEMBER``, which is a name nothing on the wire
-    can read. Setting ``__str__`` to ``str.__str__`` makes the member *be*
-    the word it carries, which is what a plain-JSON artifact can encode and
-    a formatter can spell.
-    """
-
-    __str__ = str.__str__
-    """Oracle top-level partitioning strategies.
-
-    Oracle supports RANGE, LIST, HASH, INTERVAL, REFERENCE and SYSTEM
-    partitioning. SYSTEM partitioning (application-managed row placement)
-    is intentionally out of Phase 5 scope.
-    """
-
-    RANGE = "RANGE"
-    LIST = "LIST"
-    HASH = "HASH"
-    INTERVAL = "INTERVAL"
-    REFERENCE = "REFERENCE"
 
 
 class OracleSubpartitionStrategy(str, Enum):
@@ -159,79 +137,44 @@ class OraclePartitionValue(BaseExpression):
 
 
 # ---------------------------------------------------------------------------
-# Partition / subpartition definitions
+# Partition / subpartition definition helpers
 # ---------------------------------------------------------------------------
 
 
-@dataclass
-class OracleSubpartitionDefinition(SubpartitionDefinition):
-    """A single named Oracle subpartition within a partition definition.
+def partition_definition_options(
+    dialect: "OracleDialect",
+    *,
+    subpartitions_count: Optional[int] = None,
+) -> PartitionOptionsExpression:
+    """Wrap Oracle's per-partition ``SUBPARTITIONS n`` override as options.
 
-    Derives from the generic ``SubpartitionDefinition`` and adds Oracle's
-    subpartition boundary fields (RANGE ``less_than`` / LIST ``in_values``).
-    When omitted, Oracle applies the template from the ``SUBPARTITION BY``
-    clause automatically.
-
-    Raises:
-        ValueError: if ``name`` is empty or whitespace-only.
-    """
-
-    less_than: Optional[Sequence[BaseExpression]] = None
-    in_values: Optional[Sequence[Union[BaseExpression, Sequence[BaseExpression]]]] = None
-
-
-@dataclass
-class OraclePartitionDefinition(PartitionDefinition):
-    """An Oracle ``PARTITION ... VALUES ...`` definition.
-
-    Derives from the generic ``PartitionDefinition``. Oracle permits a
-    boundary to be omitted (HASH / composite HASH subpartitioning), so the
-    base's "mutually exclusive" check is the only boundary validation here;
-    the strategy-specific requirement is enforced by the formatter.
-
-    For RANGE: provide ``less_than`` (sequence of ``BaseExpression`` or
-    ``OraclePartitionMaxValue``). The special ``MAXVALUE`` upper bound is
-    expressed via :class:`OraclePartitionMaxValue`.
-
-    For LIST: provide ``in_values``. Single-column LIST uses a flat
-    sequence of ``BaseExpression``; multi-column LIST uses a sequence of
-    sequences (row tuples).
-
-    For HASH / composite HASH subpartitioning: neither ``less_than`` nor
-    ``in_values`` is required; explicit ``subpartition_definitions`` may
-    be provided to override the template. When the table declares
-    ``SUBPARTITION BY HASH``, ``subpartitions_count`` overrides the default
-    number of hash subpartitions for this partition only.
+    ``PartitionDefinitionExpression`` carries backend-specific storage
+    details in its ``options`` node; Oracle's only such detail is the
+    per-partition hash subpartition count. Validation stays here so a bad
+    count is refused when the definition is built, not when it renders.
 
     Raises:
-        ValueError: if both ``less_than`` and ``in_values`` are provided, or
-            if ``subpartitions_count`` and ``subpartition_definitions`` are
-            both provided, or if ``subpartitions_count`` is not positive.
         TypeError: if ``subpartitions_count`` is not an ``int``.
+        ValueError: if ``subpartitions_count`` is not positive.
     """
+    if subpartitions_count is not None:
+        if isinstance(subpartitions_count, bool) or not isinstance(subpartitions_count, int):
+            raise TypeError(
+                "subpartitions_count must be an int, " f"got {type(subpartitions_count).__name__}"
+            )
+        if subpartitions_count <= 0:
+            raise ValueError(
+                "subpartitions_count must be a positive integer, " f"got {subpartitions_count}"
+            )
+    return PartitionOptionsExpression(dialect, {"subpartitions_count": subpartitions_count})
 
-    subpartition_definitions: Optional[Sequence[OracleSubpartitionDefinition]] = None
-    subpartitions_count: Optional[int] = None
 
-    def __post_init__(self) -> None:
-        super().__post_init__()
-        if self.subpartitions_count is not None:
-            if isinstance(self.subpartitions_count, bool) or not isinstance(
-                self.subpartitions_count, int
-            ):
-                raise TypeError(
-                    "subpartitions_count must be an int, "
-                    f"got {type(self.subpartitions_count).__name__}"
-                )
-            if self.subpartitions_count <= 0:
-                raise ValueError(
-                    "subpartitions_count must be a positive integer, "
-                    f"got {self.subpartitions_count}"
-                )
-            if self.subpartition_definitions:
-                raise ValueError(
-                    "subpartitions_count and subpartition_definitions are mutually exclusive"
-                )
+def subpartitions_count_of(definition: PartitionDefinitionExpression) -> Optional[int]:
+    """Read the per-partition ``SUBPARTITIONS n`` override, if any."""
+    options = getattr(definition, "options", None)
+    if options is None:
+        return None
+    return options.options.get("subpartitions_count")
 
 
 # ---------------------------------------------------------------------------
@@ -249,10 +192,9 @@ class OracleSubpartitionClause(BaseExpression):
 
     For HASH subpartitioning, ``count`` renders ``SUBPARTITIONS N``; for
     RANGE / LIST subpartitioning, individual subpartition definitions are
-    declared per-partition via
-    :class:`OraclePartitionDefinition.subpartition_definitions`. ``templates``
-    renders ``SUBPARTITION TEMPLATE (...)`` so new top-level partitions inherit
-    the same subpartition names and boundaries.
+    declared per-partition via ``PartitionDefinitionExpression.subpartitions``.
+    ``templates`` renders ``SUBPARTITION TEMPLATE (...)`` so new top-level
+    partitions inherit the same subpartition names and boundaries.
 
     Raises:
         TypeError: if ``strategy`` is not an :class:`OracleSubpartitionStrategy`.
@@ -269,16 +211,13 @@ class OracleSubpartitionClause(BaseExpression):
         *,
         keys: Optional[Sequence[BaseExpression]] = None,
         count: Optional[int] = None,
-        templates: Optional[Sequence[OracleSubpartitionDefinition]] = None,
+        templates: Optional[Sequence[SubpartitionDefinitionExpression]] = None,
     ):
         super().__init__(dialect)
         strategy = normalize_subpartition_strategy(strategy)
         if count is not None:
             if not isinstance(count, int) or isinstance(count, bool):
-                raise TypeError(
-                    "count must be an int, "
-                    f"got {type(count).__name__}"
-                )
+                raise TypeError("count must be an int, " f"got {type(count).__name__}")
             if count <= 0:
                 raise ValueError(f"count must be a positive integer, got {count}")
             if templates:
@@ -303,9 +242,14 @@ class OracleSubpartitionClause(BaseExpression):
 
 
 class OraclePartitionClause(PartitionClause):
-    """Base Oracle partition clause with Oracle-specific strategy enum."""
+    """Base Oracle partition clause.
 
-    strategy_type = OraclePartitionStrategy
+    The strategy word is carried by the clause itself (``.method``), as a
+    plain string, just like core's ``PartitionByRangeClause`` and siblings.
+    Oracle-specific words outside core's RANGE/LIST/HASH vocabulary are set
+    by the INTERVAL / REFERENCE subclasses, which bypass the vocabulary
+    check the way the REFERENCE clause already did.
+    """
 
 
 class OraclePartitionByRange(OraclePartitionClause):
@@ -320,13 +264,15 @@ class OraclePartitionByRange(OraclePartitionClause):
         dialect: "OracleDialect",
         keys: Sequence[BaseExpression],
         *,
-        partitions: Optional[Sequence[OraclePartitionDefinition]] = None,
+        partitions: Optional[Sequence[PartitionDefinitionExpression]] = None,
         subpartition_by: Optional[OracleSubpartitionClause] = None,
     ):
-        super().__init__(dialect, OraclePartitionStrategy.RANGE, keys)
-        if subpartition_by is not None and not isinstance(subpartition_by, OracleSubpartitionClause):
+        super().__init__(dialect, "RANGE", keys)
+        if subpartition_by is not None and not isinstance(
+            subpartition_by, OracleSubpartitionClause
+        ):
             raise TypeError("subpartition_by must be an OracleSubpartitionClause")
-        self.partitions: List[OraclePartitionDefinition] = list(partitions or [])
+        self.partitions: List[PartitionDefinitionExpression] = list(partitions or [])
         self.subpartition_by = subpartition_by
 
 
@@ -342,13 +288,15 @@ class OraclePartitionByList(OraclePartitionClause):
         dialect: "OracleDialect",
         keys: Sequence[BaseExpression],
         *,
-        partitions: Optional[Sequence[OraclePartitionDefinition]] = None,
+        partitions: Optional[Sequence[PartitionDefinitionExpression]] = None,
         subpartition_by: Optional[OracleSubpartitionClause] = None,
     ):
-        super().__init__(dialect, OraclePartitionStrategy.LIST, keys)
-        if subpartition_by is not None and not isinstance(subpartition_by, OracleSubpartitionClause):
+        super().__init__(dialect, "LIST", keys)
+        if subpartition_by is not None and not isinstance(
+            subpartition_by, OracleSubpartitionClause
+        ):
             raise TypeError("subpartition_by must be an OracleSubpartitionClause")
-        self.partitions: List[OraclePartitionDefinition] = list(partitions or [])
+        self.partitions: List[PartitionDefinitionExpression] = list(partitions or [])
         self.subpartition_by = subpartition_by
 
 
@@ -370,24 +318,25 @@ class OraclePartitionByHash(OraclePartitionClause):
         keys: Sequence[BaseExpression],
         *,
         partitions_count: Optional[int] = None,
-        partitions: Optional[Sequence[OraclePartitionDefinition]] = None,
+        partitions: Optional[Sequence[PartitionDefinitionExpression]] = None,
         subpartition_by: Optional[OracleSubpartitionClause] = None,
     ):
-        super().__init__(dialect, OraclePartitionStrategy.HASH, keys)
-        if subpartition_by is not None and not isinstance(subpartition_by, OracleSubpartitionClause):
+        super().__init__(dialect, "HASH", keys)
+        if subpartition_by is not None and not isinstance(
+            subpartition_by, OracleSubpartitionClause
+        ):
             raise TypeError("subpartition_by must be an OracleSubpartitionClause")
         if partitions_count is not None:
             if not isinstance(partitions_count, int) or isinstance(partitions_count, bool):
                 raise TypeError(
-                    "partitions_count must be an int, "
-                    f"got {type(partitions_count).__name__}"
+                    "partitions_count must be an int, " f"got {type(partitions_count).__name__}"
                 )
             if partitions_count <= 0:
                 raise ValueError(
                     f"partitions_count must be a positive integer, got {partitions_count}"
                 )
         self.partitions_count = partitions_count
-        self.partitions: List[OraclePartitionDefinition] = list(partitions or [])
+        self.partitions: List[PartitionDefinitionExpression] = list(partitions or [])
         self.subpartition_by = subpartition_by
 
 
@@ -419,23 +368,32 @@ class OracleIntervalPartitionClause(OraclePartitionClause):
         keys: Sequence[BaseExpression],
         *,
         interval: BaseExpression,
-        partitions: Sequence[OraclePartitionDefinition],
+        partitions: Sequence[PartitionDefinitionExpression],
     ):
-        super().__init__(dialect, OraclePartitionStrategy.INTERVAL, keys)
+        # INTERVAL is Oracle-only, outside core's RANGE/LIST/HASH vocabulary:
+        # set the clause fields directly instead of going through the base's
+        # closed-vocabulary check, while keeping its key validation.
+        BaseExpression.__init__(self, dialect)
+        if not keys:
+            raise ValueError("keys are required")
+        for key in keys:
+            if not isinstance(key, BaseExpression):
+                raise TypeError(
+                    "keys must contain BaseExpression instances, " f"got {type(key).__name__}"
+                )
+        self.method = "INTERVAL"
+        self.keys = list(keys)
         if len(self.keys) != 1:
             raise ValueError(
                 "INTERVAL partitioning requires exactly one partition key column, "
                 f"got {len(self.keys)}"
             )
         if not isinstance(interval, BaseExpression):
-            raise TypeError(
-                "interval must be a BaseExpression, "
-                f"got {type(interval).__name__}"
-            )
+            raise TypeError("interval must be a BaseExpression, " f"got {type(interval).__name__}")
         if not partitions:
             raise ValueError("INTERVAL partitioning requires at least one seed partition")
         self.interval = interval
-        self.partitions: List[OraclePartitionDefinition] = list(partitions)
+        self.partitions: List[PartitionDefinitionExpression] = list(partitions)
 
 
 class OracleReferencePartitionClause(OraclePartitionClause):
@@ -467,6 +425,6 @@ class OracleReferencePartitionClause(OraclePartitionClause):
         BaseExpression.__init__(self, dialect)
         if not isinstance(fk_constraint, str) or not fk_constraint.strip():
             raise ValueError("fk_constraint must be a non-empty string")
-        self.method = OraclePartitionStrategy.REFERENCE.value
+        self.method = "REFERENCE"
         self.keys: List[BaseExpression] = []
         self.fk_constraint = fk_constraint

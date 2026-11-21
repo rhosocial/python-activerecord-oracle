@@ -33,7 +33,7 @@ from ._common import (
 )
 
 if TYPE_CHECKING:  # pragma: no cover
-    from ....expression.statements import PartitionStrategy
+    from ....expression.statements import PartitionByClause
 
 __all__ = ["OraclePartitionBuildSuggestionMixin"]
 
@@ -43,7 +43,7 @@ class OraclePartitionBuildSuggestionMixin(OraclePartitionSuggestionBase):
 
     def suggest_partition_build(
         self,
-        strategy: "PartitionStrategy",
+        strategy: "PartitionByClause",
         plan: object,
     ) -> PartitionBuildSuggestion:
         """Suggest the inline ``PARTITION BY`` clause for CREATE TABLE."""

@@ -16,7 +16,7 @@ from ..expression.partition_lifecycle import OracleSplitPartitionStatement
 from ._common import _REFERENCE, OraclePartitionSuggestionBase, _get, _word
 
 if TYPE_CHECKING:  # pragma: no cover
-    from ....expression.statements import PartitionStrategy
+    from ....expression.statements import PartitionByClause
 
 __all__ = ["OraclePartitionSplitSuggestionMixin"]
 
@@ -26,7 +26,7 @@ class OraclePartitionSplitSuggestionMixin(OraclePartitionSuggestionBase):
 
     def suggest_partition_split(
         self,
-        strategy: "PartitionStrategy",
+        strategy: "PartitionByClause",
         plan: object,
     ) -> PartitionSplitSuggestion:
         """Suggest ``SPLIT PARTITION`` -- Oracle's split mechanism."""

@@ -28,7 +28,7 @@ from ._common import (
 )
 
 if TYPE_CHECKING:  # pragma: no cover
-    from ....expression.statements import PartitionStrategy
+    from ....expression.statements import PartitionByClause
 
 __all__ = ["OraclePartitionRetentionSuggestionMixin"]
 
@@ -38,7 +38,7 @@ class OraclePartitionRetentionSuggestionMixin(OraclePartitionSuggestionBase):
 
     def suggest_partition_retention(
         self,
-        strategy: "PartitionStrategy",
+        strategy: "PartitionByClause",
         plan: object,
     ) -> PartitionRetentionSuggestion:
         """Suggest DROP PARTITION for RANGE/INTERVAL partitions older than a cutoff.
