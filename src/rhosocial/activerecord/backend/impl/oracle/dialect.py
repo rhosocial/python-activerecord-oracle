@@ -116,7 +116,6 @@ from .mixins import (
     OracleCollationMixin,
     OracleColumnTypeMixin,
     OracleCommentMixin,
-    OracleDataTypeSuggestionsMixin,
     OracleDatabaseLinkMixin,
     OracleDateTimeMixin,
     OracleDDLMixin,
@@ -156,6 +155,9 @@ from .mixins import (
     OracleVectorMixin,
     OracleViewMixin,
     OracleExplainMixin,
+)
+from .suggestion import (
+    OracleDataTypeSuggestionsMixin,
     OracleIntegerAutoIncrementColumnSuggestionMixin,
     OraclePartitionSuggestionMixin,
 )

@@ -1,4 +1,4 @@
-# src/rhosocial/activerecord/backend/impl/oracle/mixins/integer_auto_increment_column_suggestion.py
+# src/rhosocial/activerecord/backend/impl/oracle/suggestion/integer_auto_increment.py
 """OracleIntegerAutoIncrementColumnSuggestionMixin -- oracle's integer auto-increment column suggestion.
 
 The answer is the backend's own spelling, assembled from its capability
@@ -9,10 +9,9 @@ formatter owns the SQL spelling.
 
 from typing import TYPE_CHECKING
 
-from ....expression.statements import (
-    IdentityClause,
-    IntegerAutoIncrementColumnSuggestion,
-)
+from rhosocial.activerecord.backend.suggestion import IntegerAutoIncrementColumnSuggestion
+
+from ....expression.statements import IdentityClause
 
 if TYPE_CHECKING:  # pragma: no cover
     from ....expression.types._base import DataType

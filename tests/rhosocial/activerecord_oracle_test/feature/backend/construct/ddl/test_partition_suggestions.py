@@ -25,9 +25,9 @@ from rhosocial.activerecord.backend.dialect.protocols import (
     PartitionTableAlterSuggestionSupport,
     PartitionTableDropSuggestionSupport,
 )
-from rhosocial.activerecord.backend.expression import (
-    Column,
-    DropTableStatement,
+from rhosocial.activerecord.backend.expression import Column, DropTableStatement
+from rhosocial.activerecord.backend.expression.operators import RawSQL
+from rhosocial.activerecord.backend.suggestion import (
     PartitionAddSuggestion,
     PartitionBuildSuggestion,
     PartitionDropSuggestion,
@@ -37,7 +37,6 @@ from rhosocial.activerecord.backend.expression import (
     PartitionTableAlterSuggestion,
     PartitionTableDropSuggestion,
 )
-from rhosocial.activerecord.backend.expression.operators import RawSQL
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.expression.partition import (
     OracleIntervalPartitionClause,
@@ -309,7 +308,7 @@ def test_suggestions_work_with_maintenance_modules_blocked(dialect, monkeypatch)
         monkeypatch.setitem(sys.modules, name, None)
 
     module = importlib.import_module(
-        "rhosocial.activerecord.backend.impl.oracle.mixins.partition_suggestion"
+        "rhosocial.activerecord.backend.impl.oracle.suggestion.partition"
     )
     importlib.reload(module)
     assert dialect.suggest_partition_build(
