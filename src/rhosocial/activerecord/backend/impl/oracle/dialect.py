@@ -159,7 +159,14 @@ from .mixins import (
 from .suggestion import (
     OracleDataTypeSuggestionsMixin,
     OracleIntegerAutoIncrementColumnSuggestionMixin,
-    OraclePartitionSuggestionMixin,
+    OraclePartitionAddSuggestionMixin,
+    OraclePartitionBuildSuggestionMixin,
+    OraclePartitionDropSuggestionMixin,
+    OraclePartitionMergeSuggestionMixin,
+    OraclePartitionRetentionSuggestionMixin,
+    OraclePartitionSplitSuggestionMixin,
+    OraclePartitionTableAlterSuggestionMixin,
+    OraclePartitionTableDropSuggestionMixin,
 )
 from .protocols.partition import OraclePartitionSupport
 from .protocols.data_type import OracleDataTypeSupport
@@ -173,7 +180,17 @@ if TYPE_CHECKING:
 
 class OracleDialect(
     # Backend suggestions first: no core mixin may shadow their answers.
-    OraclePartitionSuggestionMixin,
+    # The eight partition suggestions are split one-per-file and all inherit
+    # the shared base from ._common; listed together the common base lands
+    # last in their C3 merge and never conflicts with another base here.
+    OraclePartitionAddSuggestionMixin,
+    OraclePartitionBuildSuggestionMixin,
+    OraclePartitionDropSuggestionMixin,
+    OraclePartitionMergeSuggestionMixin,
+    OraclePartitionRetentionSuggestionMixin,
+    OraclePartitionSplitSuggestionMixin,
+    OraclePartitionTableAlterSuggestionMixin,
+    OraclePartitionTableDropSuggestionMixin,
     OracleIntegerAutoIncrementColumnSuggestionMixin,
     # The bases below come in bundles: a backend mixin, then the core bundle
     # it stands in for. The backend's answer has to come first -- a mixin

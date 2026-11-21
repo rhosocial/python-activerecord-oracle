@@ -1,4 +1,4 @@
-# src/rhosocial/activerecord/backend/impl/oracle/suggestion/data_types.py
+# src/rhosocial/activerecord/backend/impl/oracle/suggestion/data_type_suggestions.py
 """Oracle's **suggested data types**: what a bare field is declared as here.
 
 The DDL half of the type answer, separate from :mod:`.column_type` for the reason

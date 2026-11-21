@@ -14,7 +14,6 @@ import sys
 from datetime import date
 
 import pytest
-
 from rhosocial.activerecord.backend.dialect.protocols import (
     PartitionAddSuggestionSupport,
     PartitionBuildSuggestionSupport,
@@ -37,6 +36,7 @@ from rhosocial.activerecord.backend.suggestion import (
     PartitionTableAlterSuggestion,
     PartitionTableDropSuggestion,
 )
+
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.expression.partition import (
     OracleIntervalPartitionClause,
@@ -307,10 +307,21 @@ def test_suggestions_work_with_maintenance_modules_blocked(dialect, monkeypatch)
     for name in module_names:
         monkeypatch.setitem(sys.modules, name, None)
 
-    module = importlib.import_module(
-        "rhosocial.activerecord.backend.impl.oracle.suggestion.partition"
-    )
-    importlib.reload(module)
+    package = importlib.import_module("rhosocial.activerecord.backend.impl.oracle.suggestion")
+    importlib.reload(package)
+    for name in (
+        "_common",
+        "partition_add_suggestion",
+        "partition_build_suggestion",
+        "partition_drop_suggestion",
+        "partition_merge_suggestion",
+        "partition_retention_suggestion",
+        "partition_split_suggestion",
+        "partition_table_alter_suggestion",
+        "partition_table_drop_suggestion",
+    ):
+        module = importlib.import_module(f"{package.__name__}.{name}")
+        importlib.reload(module)
     assert dialect.suggest_partition_build(
         OraclePartitionStrategy.RANGE,
         {"keys": [Column(dialect, "ID")], "definitions": [_range(dialect, "P1", 1)]},
