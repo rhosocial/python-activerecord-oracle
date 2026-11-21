@@ -33,52 +33,6 @@ _RETURNING_WHITELIST = {
 _PARAM_RE = re.compile(r"^(\w+)\s*(?:\(\s*(\d+)\s*(?:,\s*(\d+)\s*)?\))?$")
 
 
-def _coerce_returning_type(
-    dialect: "OracleDialect",
-    returning: Union[str, "DataType"],
-) -> "DataType":
-    """Coerce a returning-type specification into a safe DataType instance."""
-    from rhosocial.activerecord.backend.expression.types._base import DataType
-
-    if isinstance(returning, DataType):
-        return returning
-    if not isinstance(returning, str):
-        raise TypeError(
-            f"returning must be a DataType instance or type-name string, "
-            f"got {type(returning).__name__}"
-        )
-    m = _PARAM_RE.match(returning.strip())
-    if not m:
-        raise TypeError(
-            f"Unsupported Oracle RETURNING type: {returning!r}. "
-            f"Use a DataType instance or one of: "
-            f"{', '.join(sorted(_RETURNING_WHITELIST))}."
-        )
-    base_name = m.group(1).upper()
-    spec = _RETURNING_WHITELIST.get(base_name)
-    if spec is None:
-        raise TypeError(
-            f"Unsupported Oracle RETURNING type: {returning!r}. "
-            f"Allowed: {', '.join(sorted(_RETURNING_WHITELIST))}."
-        )
-    cls_name, kwargs = spec
-    from rhosocial.activerecord.backend.expression import types as _types
-    cls = getattr(_types, cls_name, None)
-    if cls is None:
-        # Oracle-namespaced classes (BINARY_FLOAT / BINARY_DOUBLE) live in
-        # this backend's own type module, not in core's expression.types.
-        from ..expression import types as _oracle_types
-        cls = getattr(_oracle_types, cls_name)
-    if m.group(2):
-        if cls_name == "VarCharType":
-            kwargs = {"length": int(m.group(2))}
-        elif cls_name == "DecimalType":
-            p = int(m.group(2))
-            s = int(m.group(3)) if m.group(3) else None
-            kwargs = {"precision": p, "scale": s}
-    return cls(dialect=dialect, **kwargs)
-
-
 def json_value(
     dialect: "OracleDialect",
     json_doc: "bases.BaseExpression",
@@ -105,7 +59,7 @@ def json_value(
         json_doc,
         path_expr,
         returning_type=(
-            _coerce_returning_type(dialect, returning) if returning is not None else None
+            returning
         ),
     )
 
@@ -136,7 +90,7 @@ def json_query(
         json_doc,
         path_expr,
         returning_type=(
-            _coerce_returning_type(dialect, returning) if returning is not None else None
+            returning
         ),
     )
 

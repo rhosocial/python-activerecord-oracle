@@ -7,7 +7,6 @@ the capability contract.  Regenerate via scripts/p7_generate_protocols.py
 when mixins gain new public rendering methods.
 """
 
-from typing import Any, Dict, List, Optional, Tuple
 
 from typing import Protocol
 
@@ -17,8 +16,4 @@ class OracleOptimizerHintSupport(Protocol):
     def supports_optimizer_hint(self) -> bool:
         ...  # pragma: no cover
     def supports_hint_with_arguments(self) -> bool:
-        ...  # pragma: no cover
-    def format_optimizer_hint(self, name: str, args: Tuple[Any, ...]=(), kwargs: Optional[Dict[str, Any]]=None) -> Tuple[str, tuple]:
-        ...  # pragma: no cover
-    def format_multiple_hints(self, *hints: str) -> Tuple[str, tuple]:
         ...  # pragma: no cover

@@ -98,10 +98,10 @@ class OracleRoutineMixin:
         self.validate_namespace(expr)
         return self.format_qualified_name(expr)
 
-    def format_parameters(self, parameters: list) -> Tuple[str, tuple]:
+    def format_parameters(self, expr: list) -> Tuple[str, tuple]:
         """Render formal parameters as a comma-separated declaration list."""
         rendered = []
-        for param in parameters:
+        for param in expr:
             parts = [self.format_identifier(param.name)]
             if param.mode is not None:
                 parts.append(param.mode.value)

@@ -69,7 +69,7 @@ class OracleLockingMixin(object):
 
     def format_for_update_clause(
         self,
-        clause: "ForUpdateClause",
+        expr: "ForUpdateClause",
     ) -> Tuple[str, tuple]:
         """Compose an Oracle FOR UPDATE clause.
 
@@ -93,18 +93,18 @@ class OracleLockingMixin(object):
         from rhosocial.activerecord.backend.expression import LockStrength
         from ..expression.locking import OracleForUpdateClause
 
-        if clause.strength != LockStrength.UPDATE:
+        if expr.strength != LockStrength.UPDATE:
             # The message names the strength the way a SQL writer spells it,
             # which is `.phrase`; `.value` is the word an artifact carries and
             # reads as a bare `update` with no `FOR ` in front of it.
             raise UnsupportedFeatureError(
-                self.name, f"{clause.strength.phrase} (unsupported lock strength)"
+                self.name, f"{expr.strength.phrase} (unsupported lock strength)"
             )
 
         sql_parts: List[str] = ["FOR UPDATE"]
 
         # OF <columns>
-        of_columns = clause.of_columns or []
+        of_columns = expr.of_columns or []
         of_parts: List[str] = []
         for col in of_columns:
             if isinstance(col, str):
@@ -117,9 +117,9 @@ class OracleLockingMixin(object):
             sql_parts.append(f"OF {', '.join(of_parts)}")
 
         # Wait options: NOWAIT | WAIT n | SKIP LOCKED (mutually exclusive)
-        nowait = clause.nowait
-        skip_locked = clause.skip_locked
-        wait = clause.wait if isinstance(clause, OracleForUpdateClause) else None
+        nowait = expr.nowait
+        skip_locked = expr.skip_locked
+        wait = expr.wait if isinstance(expr, OracleForUpdateClause) else None
 
         if nowait:
             sql_parts.append("NOWAIT")

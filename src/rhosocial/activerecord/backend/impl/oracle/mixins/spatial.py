@@ -40,7 +40,7 @@ class OracleSpatialMixin(object):
         """Return whether geodetic (lon/lat) spatial indexes are supported."""
         return True
 
-    def format_spatial_literal(self, geom: Any) -> Tuple[str, tuple]:
+    def format_spatial_literal(self, expr: Any) -> Tuple[str, tuple]:
         """Format a Python geometry value as an SDO_GEOMETRY SQL literal.
 
         When the supplied object exposes an ``sdo_geom_to_wkt`` helper, the
@@ -48,14 +48,14 @@ class OracleSpatialMixin(object):
         ``MDSYS.SDO_GEOMETRY`` constructor. Otherwise the value is coerced
         to its string form, which is expected to be already valid SQL.
         """
-        if geom is None:
+        if expr is None:
             return "NULL", ()
-        if hasattr(geom, "sdo_geom_to_wkt"):
-            wkt = geom.sdo_geom_to_wkt()
+        if hasattr(expr, "sdo_geom_to_wkt"):
+            wkt = expr.sdo_geom_to_wkt()
             return f"MDSYS.SDO_GEOMETRY('{wkt}')", ()
-        return str(geom), ()
+        return str(expr), ()
 
-    def format_spatial_function(self, name: str, *args: str) -> Tuple[str, tuple]:
+    def build_spatial_function(self, name: str, *args: str) -> Tuple[str, tuple]:
         """Format a generic Oracle Spatial function invocation.
 
         Spatial operators and functions in Oracle live under the ``MDSYS``
@@ -65,7 +65,7 @@ class OracleSpatialMixin(object):
         """
         return f"MDSYS.{name.upper()}({', '.join(args)})", ()
 
-    def format_st_function(self, pg_name: str, *args: str) -> Tuple[str, tuple]:
+    def build_st_function(self, pg_name: str, *args: str) -> Tuple[str, tuple]:
         """Map a PostGIS-style ``ST_*`` function name onto Oracle Spatial.
 
         A small lookup table translates the common PostGIS predicate and
@@ -87,7 +87,7 @@ class OracleSpatialMixin(object):
         return f"{oracle_name}({', '.join(args)})", ()
 
     def format_spatial_index_options(
-        self, options: Union[Dict[str, Any], str, None]
+        self, expr: Union[Dict[str, Any], str, None]
     ) -> Tuple[str, tuple]:
         """Format the DDL clause appended to a CREATE INDEX statement.
 
@@ -97,11 +97,11 @@ class OracleSpatialMixin(object):
         when a non-empty ``options`` mapping is supplied.
         """
         clause = "INDEXTYPE IS MDSYS.SPATIAL_INDEX"
-        if options:
-            if isinstance(options, dict):
-                pairs = [f"'{key}={value}'" for key, value in options.items()]
+        if expr:
+            if isinstance(expr, dict):
+                pairs = [f"'{key}={value}'" for key, value in expr.items()]
                 params = " ".join(pairs)
             else:
-                params = str(options)
+                params = str(expr)
             clause = f"{clause} PARAMETERS ({params})"
         return clause, ()

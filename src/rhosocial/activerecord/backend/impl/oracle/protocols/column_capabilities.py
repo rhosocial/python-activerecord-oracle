@@ -7,7 +7,7 @@ the capability contract.  Regenerate via scripts/p7_generate_protocols.py
 when mixins gain new public rendering methods.
 """
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Tuple
 
 from typing import Protocol
 
@@ -24,9 +24,9 @@ class OracleModifyColumnSupport(Protocol):
         ...  # pragma: no cover
     def supports_modify_type_with_data(self) -> bool:
         ...  # pragma: no cover
-    def format_modify_column_action(self, action: 'ModifyColumn') -> Tuple[str, tuple]:
+    def format_modify_column_action(self, expr: 'ModifyColumn') -> Tuple[str, tuple]:
         ...  # pragma: no cover
-    def format_rename_column_action(self, action: 'RenameObject') -> Tuple[str, tuple]:
+    def format_rename_column_action(self, expr: 'RenameObject') -> Tuple[str, tuple]:
         ...  # pragma: no cover
     def supports_set_unused(self) -> bool:
         ...  # pragma: no cover
@@ -40,15 +40,15 @@ class OracleModifyColumnSupport(Protocol):
         ...  # pragma: no cover
     def supports_row_movement(self) -> bool:
         ...  # pragma: no cover
-    def format_set_unused_action(self, action) -> Tuple[str, tuple]:
+    def format_set_unused_action(self, expr) -> Tuple[str, tuple]:
         ...  # pragma: no cover
-    def format_drop_unused_columns_action(self, action) -> Tuple[str, tuple]:
+    def format_drop_unused_columns_action(self, expr) -> Tuple[str, tuple]:
         ...  # pragma: no cover
-    def format_move_table_statement(self, action) -> Tuple[str, tuple]:
+    def format_move_table_statement(self, expr) -> Tuple[str, tuple]:
         ...  # pragma: no cover
-    def format_shrink_space_statement(self, action) -> Tuple[str, tuple]:
+    def format_shrink_space_statement(self, expr) -> Tuple[str, tuple]:
         ...  # pragma: no cover
-    def format_read_only_statement(self, action) -> Tuple[str, tuple]:
+    def format_read_only_statement(self, expr) -> Tuple[str, tuple]:
         ...  # pragma: no cover
-    def format_row_movement_statement(self, action) -> Tuple[str, tuple]:
+    def format_row_movement_statement(self, expr) -> Tuple[str, tuple]:
         ...  # pragma: no cover

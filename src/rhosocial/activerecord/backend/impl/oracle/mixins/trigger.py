@@ -54,7 +54,7 @@ class OracleTriggerMixin(object):
         """Oracle trigger bodies are written in PL/SQL."""
         return True
 
-    def format_create_trigger_statement(self, trigger_expr) -> Tuple[str, tuple]:
+    def format_create_trigger_statement(self, expr) -> Tuple[str, tuple]:
         """Format CREATE OR REPLACE TRIGGER statement (Oracle syntax).
 
         Composes an Oracle trigger DDL from a trigger expression. Oracle
@@ -68,19 +68,19 @@ class OracleTriggerMixin(object):
 
         from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 
-        timing = getattr(trigger_expr, 'timing', None)
+        timing = getattr(expr, 'timing', None)
         timing_value = timing.value if timing is not None else None
 
         if timing_value == "INSTEAD OF" and not self.supports_instead_of_trigger():
             raise UnsupportedFeatureError(self.name, "INSTEAD OF triggers")
 
         parts = ["CREATE OR REPLACE TRIGGER"]
-        parts.append(self._trigger_name_sql(trigger_expr))
+        parts.append(self._trigger_name_sql(expr))
 
         if timing_value is not None:
             parts.append(timing_value)
 
-        events = getattr(trigger_expr, 'events', None) or []
+        events = getattr(expr, 'events', None) or []
         event_values = [e.value for e in events]
 
         if timing_value == "INSTEAD OF":
@@ -88,19 +88,19 @@ class OracleTriggerMixin(object):
                 raise ValueError("INSTEAD OF trigger requires at least one event")
             parts.append(event_values[0])
             parts.append("ON")
-            parts.append(self._trigger_target_sql(trigger_expr))
+            parts.append(self._trigger_target_sql(expr))
         else:
-            if getattr(trigger_expr, 'update_columns', None):
+            if getattr(expr, 'update_columns', None):
                 if not event_values or event_values[0] != "UPDATE":
                     raise ValueError("UPDATE OF requires UPDATE event")
                 parts.append("UPDATE OF")
-                parts.append(", ".join(self.format_identifier(c) for c in trigger_expr.update_columns))
+                parts.append(", ".join(self.format_identifier(c) for c in expr.update_columns))
             elif event_values:
                 parts.append(" OR ".join(event_values))
             parts.append("ON")
-            parts.append(self._trigger_target_sql(trigger_expr))
+            parts.append(self._trigger_target_sql(expr))
 
-        level = getattr(trigger_expr, 'level', None)
+        level = getattr(expr, 'level', None)
         level_value = level.value if level is not None else None
         if level_value == "FOR EACH STATEMENT" and timing_value != "INSTEAD OF":
             if self.supports_compound_trigger():
@@ -113,21 +113,21 @@ class OracleTriggerMixin(object):
             if timing_value != "INSTEAD OF":
                 parts.append("FOR EACH ROW")
 
-        referencing = getattr(trigger_expr, 'referencing', None)
+        referencing = getattr(expr, 'referencing', None)
         if referencing:
             raise NotImplementedError("Oracle REFERENCING clause templating requires dialect-specific context")
 
-        condition = getattr(trigger_expr, 'condition', None)
+        condition = getattr(expr, 'condition', None)
         if condition:
             raise NotImplementedError("Oracle WHEN clause templating requires dialect-specific context")
 
-        body = getattr(trigger_expr, 'body', None)
-        if body is None and getattr(trigger_expr, 'function', None) is None:
+        body = getattr(expr, 'body', None)
+        if body is None and getattr(expr, 'function', None) is None:
             raise NotImplementedError("Oracle trigger body (PL/SQL block) templating requires dialect-specific context")
 
-        if getattr(trigger_expr, 'function', None) is not None:
+        if getattr(expr, 'function', None) is not None:
             parts.append("CALL")
-            parts.append(trigger_expr.function.to_sql()[0])
+            parts.append(expr.function.to_sql()[0])
         elif body is not None:
             parts.append("BEGIN")
             parts.append(body)
@@ -135,7 +135,7 @@ class OracleTriggerMixin(object):
 
         return " ".join(parts), ()
 
-    def format_drop_trigger_statement(self, drop_expr) -> Tuple[str, tuple]:
+    def format_drop_trigger_statement(self, expr) -> Tuple[str, tuple]:
         """Format DROP TRIGGER statement (Oracle syntax)."""
         if not self.supports_trigger():
             from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
@@ -143,10 +143,10 @@ class OracleTriggerMixin(object):
 
         parts = ["DROP TRIGGER"]
 
-        if getattr(drop_expr, 'if_exists', False):
+        if getattr(expr, 'if_exists', False):
             raise NotImplementedError("Oracle does not support IF EXISTS on DROP TRIGGER")
 
-        parts.append(self._trigger_name_sql(drop_expr))
+        parts.append(self._trigger_name_sql(expr))
 
         return " ".join(parts), ()
 

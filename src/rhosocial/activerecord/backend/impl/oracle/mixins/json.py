@@ -21,11 +21,11 @@ class OracleJSONFunctionMixin(object):
         """JSON Relational Duality is supported since Oracle 23ai."""
         return getattr(self, 'version', (23, 0, 0)) >= (23, 0, 0)
 
-    def format_json_extract(self, col_expr: str, path: str) -> Tuple[str, tuple]:
+    def build_json_extract(self, col_expr: str, path: str) -> Tuple[str, tuple]:
         """Format JSON_VALUE function for scalar extraction."""
         return f"JSON_VALUE({col_expr}, '$.{path}')", ()
 
-    def format_json_query(self, col_expr: str, path: str) -> Tuple[str, tuple]:
+    def build_json_query(self, col_expr: str, path: str) -> Tuple[str, tuple]:
         """Format JSON_QUERY function for object/array extraction."""
         return f"JSON_QUERY({col_expr}, '$.{path}')", ()
 
@@ -66,11 +66,11 @@ class OracleJSONFunctionMixin(object):
             sql = f"{sql} AS {self.format_identifier(expr.alias)}"
         return sql, col_params
 
-    def format_json_exists(self, col_expr: str, path: str) -> Tuple[str, tuple]:
+    def build_json_exists(self, col_expr: str, path: str) -> Tuple[str, tuple]:
         """Format JSON_EXISTS function for existence check."""
         return f"JSON_EXISTS({col_expr}, '$.{path}')", ()
 
-    def format_json_table(self, alias: str, col_expr: str,
+    def build_json_table(self, alias: str, col_expr: str,
                           columns: List[Tuple[str, str]]) -> Tuple[str, tuple]:
         """Format JSON_TABLE function with an external alias.
 
@@ -89,7 +89,7 @@ class OracleJSONFunctionMixin(object):
         cols_sql = ", ".join(col_parts)
         return f"JSON_TABLE({col_expr}, '$' COLUMNS ({cols_sql})) {alias}", ()
 
-    def format_json_merge_patch(self, col_expr: str, patch_json: str,
+    def build_json_merge_patch(self, col_expr: str, patch_json: str,
                                 params: Any) -> Tuple[str, tuple]:
         """Format JSON_MERGE_PATCH function.
 

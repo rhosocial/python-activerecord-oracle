@@ -279,7 +279,7 @@ class OraclePartitionMixin:
             sql = f"{sql} {sub_sql.strip()}"
         if expr.partitions:
             part_sqls = [
-                self.format_partition_definition(p, strategy="RANGE")[0] for p in expr.partitions
+                self.build_partition_definition(p, strategy="RANGE")[0] for p in expr.partitions
             ]
             sql = f"{sql} ({', '.join(part_sqls)})"
         return f" {sql}", ()
@@ -299,7 +299,7 @@ class OraclePartitionMixin:
             sql = f"{sql} {sub_sql.strip()}"
         if expr.partitions:
             part_sqls = [
-                self.format_partition_definition(p, strategy="LIST")[0] for p in expr.partitions
+                self.build_partition_definition(p, strategy="LIST")[0] for p in expr.partitions
             ]
             sql = f"{sql} ({', '.join(part_sqls)})"
         return f" {sql}", ()
@@ -321,7 +321,7 @@ class OraclePartitionMixin:
             sql = f"{sql} PARTITIONS {expr.partitions_count}"
         elif expr.partitions:
             part_sqls = [
-                self.format_partition_definition(p, strategy="HASH")[0] for p in expr.partitions
+                self.build_partition_definition(p, strategy="HASH")[0] for p in expr.partitions
             ]
             sql = f"{sql} ({', '.join(part_sqls)})"
         return f" {sql}", ()
@@ -350,7 +350,7 @@ class OraclePartitionMixin:
             )
         sql = f"PARTITION BY RANGE ({key_sql}) INTERVAL ({interval_sql})"
         part_sqls = [
-            self.format_partition_definition(p, strategy="RANGE")[0] for p in expr.partitions
+            self.build_partition_definition(p, strategy="RANGE")[0] for p in expr.partitions
         ]
         if part_sqls:
             sql = f"{sql} ({', '.join(part_sqls)})"
@@ -390,7 +390,7 @@ class OraclePartitionMixin:
         # RANGE / LIST subpartition template: the BY clause names the
         # table-level strategy; a template may fix the subpartition names and
         # boundaries for every partition. Per-partition definitions still
-        # override the template in format_partition_definition.
+        # override the template in build_partition_definition.
         key_sql, _ = self.format_partition_keys(expr.keys) if expr.keys else ("", ())
         sql = f"SUBPARTITION BY {strategy} ({key_sql})"
         if expr.templates:
@@ -403,7 +403,7 @@ class OraclePartitionMixin:
     # ------------------------------------------------------------------
     # Partition / subpartition definition formatters
     # ------------------------------------------------------------------
-    def format_partition_definition(
+    def build_partition_definition(
         self,
         definition: PartitionDefinitionExpression,
         *,
@@ -490,22 +490,22 @@ class OraclePartitionMixin:
 
     def format_subpartition_definition(
         self,
-        definition: SubpartitionDefinitionExpression,
+        expr: SubpartitionDefinitionExpression,
     ) -> Tuple[str, tuple]:
         """Format a single ``SUBPARTITION name [VALUES ...]`` definition."""
-        if not isinstance(definition, SubpartitionDefinitionExpression):
+        if not isinstance(expr, SubpartitionDefinitionExpression):
             raise TypeError(
                 "definition must be a SubpartitionDefinitionExpression, "
-                f"got {type(definition).__name__}"
+                f"got {type(expr).__name__}"
             )
-        name_sql = self.format_identifier(definition.name)
+        name_sql = self.format_identifier(expr.name)
         parts: List[str] = [f"SUBPARTITION {name_sql}"]
-        if definition.less_than is not None:
-            value_parts = [self.format_partition_boundary_value(v)[0] for v in definition.less_than]
+        if expr.less_than is not None:
+            value_parts = [self.format_partition_boundary_value(v)[0] for v in expr.less_than]
             parts.append(f"VALUES LESS THAN ({', '.join(value_parts)})")
-        elif definition.in_values is not None:
+        elif expr.in_values is not None:
             value_parts: List[str] = []
-            for value in definition.in_values:
+            for value in expr.in_values:
                 if isinstance(value, (list, tuple)):
                     inner = [self.format_partition_boundary_value(v)[0] for v in value]
                     value_parts.append(f"({', '.join(inner)})")
@@ -554,7 +554,7 @@ class OraclePartitionMixin:
     # ------------------------------------------------------------------
     # Shared helpers (public, no leading underscore per architecture rules)
     # ------------------------------------------------------------------
-    def format_partition_keys(self, keys: Sequence[BaseExpression]) -> Tuple[str, tuple]:
+    def format_partition_keys(self, expr: Sequence[BaseExpression]) -> Tuple[str, tuple]:
         """Format the partition key column list.
 
         Partition keys are column references (``Column`` expressions), not
@@ -562,7 +562,7 @@ class OraclePartitionMixin:
         parameters.
         """
         key_sql_parts: List[str] = []
-        for key in keys:
+        for key in expr:
             if not isinstance(key, BaseExpression):
                 raise TypeError(
                     "partition keys must be BaseExpression instances, " f"got {type(key).__name__}"
@@ -571,7 +571,7 @@ class OraclePartitionMixin:
             key_sql_parts.append(key_sql)
         return ", ".join(key_sql_parts), ()
 
-    def format_partition_boundary_value(self, value: Any) -> Tuple[str, tuple]:
+    def format_partition_boundary_value(self, expr: Any) -> Tuple[str, tuple]:
         """Render a partition boundary value as a safe inline SQL literal.
 
         Oracle DDL does not accept bind variables, so boundary values are
@@ -590,18 +590,18 @@ class OraclePartitionMixin:
         Returns:
             Tuple of (SQL literal string, empty parameters tuple).
         """
-        if isinstance(value, OraclePartitionMaxValue):
+        if isinstance(expr, OraclePartitionMaxValue):
             return "MAXVALUE", ()
-        if isinstance(value, OraclePartitionValue):
-            return self.format_partition_literal(value.value), ()
-        if isinstance(value, str) and value.upper() == "MAXVALUE":
+        if isinstance(expr, OraclePartitionValue):
+            return self.format_partition_literal(expr.value), ()
+        if isinstance(expr, str) and expr.upper() == "MAXVALUE":
             return "MAXVALUE", ()
-        if isinstance(value, Literal):
-            return self.format_partition_literal(value.value), ()
+        if isinstance(expr, Literal):
+            return self.format_partition_literal(expr.value), ()
         raise TypeError(
             "partition boundary value must be an OraclePartitionValue, "
             "OraclePartitionMaxValue, Literal, or the string 'MAXVALUE', "
-            f"got {type(value).__name__}"
+            f"got {type(expr).__name__}"
         )
 
     def format_add_partition_statement(
@@ -622,7 +622,7 @@ class OraclePartitionMixin:
             strategy = "LIST"
         else:
             strategy = "HASH"
-        part_sql, _ = self.format_partition_definition(part_def, strategy=strategy)
+        part_sql, _ = self.build_partition_definition(part_def, strategy=strategy)
         return f"ALTER TABLE {table_sql} ADD {part_sql}", ()
 
     def format_drop_partition_statement(
@@ -746,7 +746,7 @@ class OraclePartitionMixin:
             sql = f"{sql} UPDATE INDEXES"
         return sql, ()
 
-    def format_partition_literal(self, value: Any) -> str:
+    def format_partition_literal(self, expr: Any) -> str:
         """Format a Python scalar as a safe inline SQL literal.
 
         Named for what it does rather than for how: it builds SQL text, and
@@ -761,31 +761,31 @@ class OraclePartitionMixin:
         types that are valid Oracle partition boundary values are accepted;
         all string/byte values are escaped through ``escape_sql_string``.
         """
-        if value is None:
+        if expr is None:
             return "NULL"
-        if isinstance(value, bool):
+        if isinstance(expr, bool):
             raise TypeError("partition boundary value must not be bool")
-        if isinstance(value, int):
-            return str(value)
-        if isinstance(value, float):
-            if not isfinite(value):
+        if isinstance(expr, int):
+            return str(expr)
+        if isinstance(expr, float):
+            if not isfinite(expr):
                 raise ValueError("partition boundary float must be finite")
-            return repr(value)
-        if isinstance(value, Decimal):
-            if not value.is_finite():
+            return repr(expr)
+        if isinstance(expr, Decimal):
+            if not expr.is_finite():
                 raise ValueError("partition boundary Decimal must be finite")
-            return str(value)
-        if isinstance(value, datetime):
-            escaped = self.escape_sql_string(value.isoformat(sep=" "))
+            return str(expr)
+        if isinstance(expr, datetime):
+            escaped = self.escape_sql_string(expr.isoformat(sep=" "))
             return f"TIMESTAMP '{escaped}'"
-        if isinstance(value, date):
-            escaped = self.escape_sql_string(value.isoformat())
+        if isinstance(expr, date):
+            escaped = self.escape_sql_string(expr.isoformat())
             return f"DATE '{escaped}'"
-        if isinstance(value, str):
-            escaped = self.escape_sql_string(value)
+        if isinstance(expr, str):
+            escaped = self.escape_sql_string(expr)
             return f"'{escaped}'"
         raise TypeError(
             "partition boundary value must be str, int, float, Decimal, "
             "date, datetime, or None, got "
-            f"{type(value).__name__}"
+            f"{type(expr).__name__}"
         )

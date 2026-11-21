@@ -1,7 +1,7 @@
 # tests/rhosocial/activerecord_oracle_test/feature/backend/construct/statements/test_oracle_merge_enhancements.py
 """Tests for Oracle MERGE statement enhancements.
 
-Covers the ``OracleDMLOperationMixin.format_merge_statement`` extensions:
+Covers the ``OracleDMLOperationMixin.build_merge_statement`` extensions:
 the ``WHEN MATCHED ... DELETE WHERE (cond)`` conditional-delete branch
 (10g) and the trailing ``LOG ERRORS INTO ... [REJECT LIMIT n]`` DML
 error-logging clause (10g), plus the ``(10, 0, 0)`` version boundary.
@@ -27,7 +27,7 @@ class TestOracleMergeCapabilities:
 
 class TestOracleMergeEnhancements:
     def test_basic_merge_unchanged(self, dialect):
-        sql, params = dialect.format_merge_statement(
+        sql, params = dialect.build_merge_statement(
             "T", "SRC", "T.ID = SRC.ID", "T.NAME = SRC.NAME", "ID, NAME", "SRC.ID, SRC.NAME"
         )
         assert sql == (
@@ -38,7 +38,7 @@ class TestOracleMergeEnhancements:
         assert params == ()
 
     def test_merge_delete_where(self, dialect):
-        sql, params = dialect.format_merge_statement(
+        sql, params = dialect.build_merge_statement(
             "T", "SRC", "T.ID = SRC.ID", "T.NAME = SRC.NAME", "ID, NAME", "SRC.ID, SRC.NAME",
             delete_where="SRC.FLAG = 1",
         )
@@ -50,7 +50,7 @@ class TestOracleMergeEnhancements:
         assert params == ()
 
     def test_merge_log_errors_into(self, dialect):
-        sql, params = dialect.format_merge_statement(
+        sql, params = dialect.build_merge_statement(
             "T", "SRC", "T.ID = SRC.ID", "T.NAME = SRC.NAME", "ID, NAME", "SRC.ID, SRC.NAME",
             log_errors_into="ERR$_T",
         )
@@ -63,7 +63,7 @@ class TestOracleMergeEnhancements:
         assert params == ()
 
     def test_merge_log_errors_reject_limit(self, dialect):
-        sql, params = dialect.format_merge_statement(
+        sql, params = dialect.build_merge_statement(
             "T", "SRC", "T.ID = SRC.ID", "T.NAME = SRC.NAME", "ID, NAME", "SRC.ID, SRC.NAME",
             log_errors_into="ERR$_T",
             reject_limit=25,
@@ -77,7 +77,7 @@ class TestOracleMergeEnhancements:
         assert params == ()
 
     def test_merge_delete_where_and_log_errors(self, dialect):
-        sql, params = dialect.format_merge_statement(
+        sql, params = dialect.build_merge_statement(
             "T", "SRC", "T.ID = SRC.ID", "T.NAME = SRC.NAME", "ID, NAME", "SRC.ID, SRC.NAME",
             delete_where="SRC.FLAG = 1",
             log_errors_into="ERR$_T",
@@ -92,7 +92,7 @@ class TestOracleMergeEnhancements:
         assert params == ()
 
     def test_merge_delete_where_without_update_branch(self, dialect):
-        sql, params = dialect.format_merge_statement(
+        sql, params = dialect.build_merge_statement(
             "T", "SRC", "T.ID = SRC.ID", "", "", "",
             delete_where="SRC.FLAG = 1",
             log_errors_into="ERR$_T",
@@ -109,7 +109,7 @@ class TestOracleMergeVersionBoundary:
     def test_delete_where_below_10g_raises(self):
         d9 = OracleDialect(version=(9, 2, 0))
         with pytest.raises(UnsupportedFeatureError, match="DELETE WHERE"):
-            d9.format_merge_statement(
+            d9.build_merge_statement(
                 "T", "SRC", "T.ID = SRC.ID", "T.NAME = SRC.NAME", "ID", "ID",
                 delete_where="SRC.FLAG = 1",
             )
@@ -117,14 +117,14 @@ class TestOracleMergeVersionBoundary:
     def test_log_errors_below_10g_raises(self):
         d9 = OracleDialect(version=(9, 2, 0))
         with pytest.raises(UnsupportedFeatureError, match="LOG ERRORS INTO"):
-            d9.format_merge_statement(
+            d9.build_merge_statement(
                 "T", "SRC", "T.ID = SRC.ID", "T.NAME = SRC.NAME", "ID", "ID",
                 log_errors_into="ERR$_T",
             )
 
     def test_at_10g_works(self):
         d10 = OracleDialect(version=(10, 0, 0))
-        sql, params = d10.format_merge_statement(
+        sql, params = d10.build_merge_statement(
             "T", "SRC", "T.ID = SRC.ID", "T.NAME = SRC.NAME", "ID", "ID",
             delete_where="SRC.FLAG = 1",
             log_errors_into="ERR$_T",

@@ -55,7 +55,7 @@ class OracleDataTypeSupport(Protocol):
 
     # --- dispatch entry points ---
 
-    def format_data_type(self, data_type) -> Tuple[str, tuple]:
+    def format_data_type(self, expr) -> Tuple[str, tuple]:
         """Render any ``DataType`` through the ``format_data_type_<name>`` family."""
         ...
 
@@ -73,51 +73,18 @@ class OracleDataTypeSupport(Protocol):
 
     # --- core concepts with a distinct Oracle spelling ---
 
-    def format_data_type_interval(self, data_type) -> Tuple[str, tuple]:
-        """``INTERVAL YEAR TO MONTH`` / ``INTERVAL DAY TO SECOND``."""
-        ...
 
-    def format_data_type_xml(self, data_type) -> Tuple[str, tuple]:
-        """``XMLTYPE`` — the native XML type, an infoset rather than text."""
-        ...
 
-    def format_data_type_custom(self, data_type) -> Tuple[str, tuple]:
-        """A type name the framework does not model, written verbatim."""
-        ...
 
     # --- Oracle-namespaced types ---
 
-    def format_data_type_oracle_nvarchar2(self, data_type) -> Tuple[str, tuple]:
-        """``NVARCHAR2(n)`` — variable-length, national character set."""
-        ...
 
-    def format_data_type_oracle_nclob(self, data_type) -> Tuple[str, tuple]:
-        """``NCLOB`` — unbounded character data, national character set."""
-        ...
 
-    def format_data_type_oracle_long(self, data_type) -> Tuple[str, tuple]:
-        """``LONG`` — deprecated, and not a CLOB."""
-        ...
 
-    def format_data_type_oracle_raw(self, data_type) -> Tuple[str, tuple]:
-        """``RAW(n)`` — a bounded byte string."""
-        ...
 
-    def format_data_type_oracle_long_raw(self, data_type) -> Tuple[str, tuple]:
-        """``LONG RAW`` — deprecated, and not a BLOB."""
-        ...
 
-    def format_data_type_oracle_binary_float(self, data_type) -> Tuple[str, tuple]:
-        """``BINARY_FLOAT`` — 32-bit IEEE, no parameters."""
-        ...
 
-    def format_data_type_oracle_binary_double(self, data_type) -> Tuple[str, tuple]:
-        """``BINARY_DOUBLE`` — 64-bit IEEE, no parameters."""
-        ...
 
-    def format_data_type_oracle_timestamp_ltz(self, data_type) -> Tuple[str, tuple]:
-        """``TIMESTAMP(n) WITH LOCAL TIME ZONE`` — no stored offset."""
-        ...
 
     # --- the capability half of each pair above ---
 

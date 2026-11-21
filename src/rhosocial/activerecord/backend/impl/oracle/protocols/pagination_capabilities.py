@@ -7,14 +7,12 @@ the capability contract.  Regenerate via scripts/p7_generate_protocols.py
 when mixins gain new public rendering methods.
 """
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Tuple
 
 from typing import Protocol
 
 class OraclePaginationSupport(Protocol):
     """Auto-generated capability protocol (P7)."""
 
-    def format_limit_offset(self, limit: Optional[int]=None, offset: Optional[int]=None) -> Tuple[Optional[str], List[Any]]:
-        ...  # pragma: no cover
-    def format_limit_offset_clause(self, clause) -> Tuple[str, tuple]:
+    def format_limit_offset_clause(self, expr) -> Tuple[str, tuple]:
         ...  # pragma: no cover

@@ -7,7 +7,6 @@ the capability contract.  Regenerate via scripts/p7_generate_protocols.py
 when mixins gain new public rendering methods.
 """
 
-from typing import Any, Dict, List, Optional, Tuple
 
 from typing import Protocol
 
@@ -17,18 +16,4 @@ class OracleJSONFunctionSupport(Protocol):
     def supports_json_merge_patch(self) -> bool:
         ...  # pragma: no cover
     def supports_json_duality_view(self) -> bool:
-        ...  # pragma: no cover
-    def format_json_extract(self, col_expr: str, path: str) -> Tuple[str, tuple]:
-        ...  # pragma: no cover
-    def format_json_query(self, col_expr: str, path: str) -> Tuple[str, tuple]:
-        ...  # pragma: no cover
-    def format_json_exists(self, col_expr: str, path: str) -> Tuple[str, tuple]:
-        ...  # pragma: no cover
-    def format_json_table(self, alias: str, col_expr: str, columns: List[Tuple[str, str]]) -> Tuple[str, tuple]:
-        ...  # pragma: no cover
-    def format_json_merge_patch(self, col_expr: str, patch_json: str, params: Any) -> Tuple[str, tuple]:
-        ...  # pragma: no cover
-    def format_json_array(self, *elements: Any) -> Tuple[str, tuple]:
-        ...  # pragma: no cover
-    def format_json_object(self, *pairs: Tuple[str, str]) -> Tuple[str, tuple]:
         ...  # pragma: no cover

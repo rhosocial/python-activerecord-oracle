@@ -7,14 +7,9 @@ the capability contract.  Regenerate via scripts/p7_generate_protocols.py
 when mixins gain new public rendering methods.
 """
 
-from typing import Any, Dict, List, Optional, Tuple
 
 from typing import Protocol
 
 class OracleSequenceSupport(Protocol):
     """Auto-generated capability protocol (P7)."""
 
-    def format_nextval(self, expr) -> Tuple[str, tuple]:
-        ...  # pragma: no cover
-    def format_currval(self, expr) -> Tuple[str, tuple]:
-        ...  # pragma: no cover

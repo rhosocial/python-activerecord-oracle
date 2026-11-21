@@ -17,17 +17,10 @@ from rhosocial.activerecord.backend.dialect.protocols import PartitionSupport
 if TYPE_CHECKING:  # pragma: no cover
     from rhosocial.activerecord.backend.expression.statements import (
         PartitionClause,
-        PartitionDefinitionExpression,
         PartitionOptionsExpression,
-        SubpartitionDefinitionExpression,
     )
     from ..expression.partition import (
-        OracleIntervalPartitionClause,
-        OraclePartitionByHash,
-        OraclePartitionByList,
-        OraclePartitionByRange,
         OraclePartitionValue,
-        OracleReferencePartitionClause,
         OracleSubpartitionClause,
     )
     from ..expression.partition_lifecycle import (
@@ -86,47 +79,15 @@ class OraclePartitionSupport(PartitionSupport):
     # ------------------------------------------------------------------
     # Oracle-specific strategy formatters
     # ------------------------------------------------------------------
-    def format_partition_by_range(self, expr: "OraclePartitionByRange") -> Tuple[str, tuple]:
-        """Format ``PARTITION BY RANGE(...) (...)``."""
-        ...  # pragma: no cover
-
-    def format_partition_by_list(self, expr: "OraclePartitionByList") -> Tuple[str, tuple]:
-        """Format ``PARTITION BY LIST(...) (...)``."""
-        ...  # pragma: no cover
-
-    def format_partition_by_hash(self, expr: "OraclePartitionByHash") -> Tuple[str, tuple]:
-        """Format ``PARTITION BY HASH(...) PARTITIONS N``."""
-        ...  # pragma: no cover
-
-    def format_interval_partition(self, expr: "OracleIntervalPartitionClause") -> Tuple[str, tuple]:
-        """Format ``PARTITION BY RANGE(...) INTERVAL(...) (...)`` (11g+)."""
-        ...  # pragma: no cover
-
-    def format_reference_partition(
-        self, expr: "OracleReferencePartitionClause"
+    def format_subpartition_by(
+        self, expr: "OracleSubpartitionClause"
     ) -> Tuple[str, tuple]:
-        """Format ``PARTITION BY REFERENCE(fk)`` (11g+)."""
-        ...  # pragma: no cover
-
-    def format_subpartition_by(self, expr: "OracleSubpartitionClause") -> Tuple[str, tuple]:
         """Format ``SUBPARTITION BY {RANGE|LIST|HASH}(...)`` template."""
         ...  # pragma: no cover
 
     # ------------------------------------------------------------------
     # Definition / value formatters
     # ------------------------------------------------------------------
-    def format_partition_definition(
-        self, definition: "PartitionDefinitionExpression", *, strategy: str
-    ) -> Tuple[str, tuple]:
-        """Format a single ``PARTITION ... VALUES ...`` definition."""
-        ...  # pragma: no cover
-
-    def format_subpartition_definition(
-        self, definition: "SubpartitionDefinitionExpression"
-    ) -> Tuple[str, tuple]:
-        """Format a single ``SUBPARTITION ... VALUES ...`` definition."""
-        ...  # pragma: no cover
-
     def format_partition_definition_options(
         self, expr: "PartitionOptionsExpression"
     ) -> Tuple[str, tuple]:

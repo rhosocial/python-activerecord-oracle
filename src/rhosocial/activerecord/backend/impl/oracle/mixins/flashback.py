@@ -32,16 +32,16 @@ class OracleFlashbackMixin:
         return True
 
     @staticmethod
-    def format_flashback_value(value) -> Tuple[str, tuple]:
+    def format_flashback_value(expr) -> Tuple[str, tuple]:
         """Render a flashback value as a SQL fragment.
 
         ``BaseExpression`` values are rendered through ``to_sql()``; plain
         values (typically strings such as ``SYSTIMESTAMP - INTERVAL '1' DAY``)
         are treated as raw SQL fragments.
         """
-        if hasattr(value, "to_sql"):
-            return value.to_sql()
-        return str(value), ()
+        if hasattr(expr, "to_sql"):
+            return expr.to_sql()
+        return str(expr), ()
 
     def format_as_of_clause(self, expr: "OracleAsOfClause") -> Tuple[str, tuple]:
         if self.version < (10, 0, 0):

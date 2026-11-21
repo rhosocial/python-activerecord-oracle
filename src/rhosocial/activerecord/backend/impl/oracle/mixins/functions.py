@@ -97,6 +97,50 @@ class OracleFunctionFormatMixin:
         """``JSON_QUERY(json_doc, path [RETURNING type])``."""
         return self._format_oracle_json_scalar("JSON_QUERY", expr)
 
+    def _coerce_returning_type(self, returning):
+        """Validate and coerce a raw RETURNING argument at render time."""
+        from rhosocial.activerecord.backend.expression.types._base import DataType
+
+        if isinstance(returning, DataType):
+            return returning
+        if not isinstance(returning, str):
+            raise TypeError(
+                f"returning must be a DataType instance or type-name string, "
+                f"got {type(returning).__name__}"
+            )
+        from ..functions.json import _PARAM_RE, _RETURNING_WHITELIST
+
+        m = _PARAM_RE.match(returning.strip())
+        if not m:
+            raise TypeError(
+                f"Unsupported Oracle RETURNING type: {returning!r}. "
+                f"Use a DataType instance or one of: "
+                f"{', '.join(sorted(_RETURNING_WHITELIST))}."
+            )
+        base_name = m.group(1).upper()
+        spec = _RETURNING_WHITELIST.get(base_name)
+        if spec is None:
+            raise TypeError(
+                f"Unsupported Oracle RETURNING type: {returning!r}. "
+                f"Allowed: {', '.join(sorted(_RETURNING_WHITELIST))}."
+            )
+        cls_name, kwargs = spec
+        from rhosocial.activerecord.backend.expression import types as _types
+
+        cls = getattr(_types, cls_name, None)
+        if cls is None:
+            from ..expression import types as _oracle_types
+
+            cls = getattr(_oracle_types, cls_name)
+        if m.group(2):
+            if cls_name == "VarCharType":
+                kwargs = {"length": int(m.group(2))}
+            elif cls_name == "DecimalType":
+                p = int(m.group(2))
+                s = int(m.group(3)) if m.group(3) else None
+                kwargs = {"precision": p, "scale": s}
+        return cls(dialect=self, **kwargs)
+
     def _format_oracle_json_scalar(
         self,
         name: str,
@@ -107,7 +151,8 @@ class OracleFunctionFormatMixin:
         args_sql, all_params = self._render_call_args(expr)
         func_sql = f"{name}({', '.join(args_sql)}"
         if expr.returning_type is not None:
-            type_sql, _ = self.format_data_type(expr.returning_type)
+            returning = self._coerce_returning_type(expr.returning_type)
+            type_sql, _ = self.format_data_type(returning)
             func_sql += f" RETURNING {type_sql}"
         func_sql += ")"
         return self._finish_function_call(func_sql, all_params, expr)

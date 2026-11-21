@@ -224,7 +224,7 @@ class TestSubpartitionDefinitionExpressionValidation:
             ],
         )
         with pytest.raises(ValueError, match="mutually exclusive"):
-            d.format_partition_definition(definition, strategy="RANGE")
+            d.build_partition_definition(definition, strategy="RANGE")
 
     def test_count_must_be_positive(self):
         d = _dialect()
