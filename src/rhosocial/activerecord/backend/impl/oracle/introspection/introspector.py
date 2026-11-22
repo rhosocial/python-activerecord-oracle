@@ -69,6 +69,7 @@ from rhosocial.activerecord.backend.introspection.types import (
     ProfileSource,
 )
 from rhosocial.activerecord.backend.expression.types import DataType
+from .type_parser import OracleTypeParser
 from .status_introspector import (
     OracleStatusIntrospector,
     AsyncOracleStatusIntrospector,
@@ -471,10 +472,17 @@ class OracleIntrospectorMixin(IntrospectorMixin):
             # SchemaDiffer._columns_equivalent can compare two DataType
             # instances with `!=` — class plus the fields named by PARAMETERS —
             # instead of raw string comparison (core #108).
+            #
+            # Type-spelling parsing is a backend-local, introspection-only
+            # concern. Core's DataType.parse_data_type_str is a fallback that
+            # returns CustomType for every spelling (there is deliberately no
+            # dialect.parse_type shim in the post-refactor core), so Oracle's
+            # own parser is the one that turns a catalog spelling into the
+            # same core type node a declaration would have produced.
             parsed_data_type: Optional[DataType] = None
             try:
-                parsed_data_type = DataType.parse_data_type_str(
-                    self._backend.dialect, data_type_full
+                parsed_data_type = OracleTypeParser(self._backend.dialect).parse(
+                    data_type_full
                 )
             except Exception:
                 # Unparseable type strings fall back to None; the differ

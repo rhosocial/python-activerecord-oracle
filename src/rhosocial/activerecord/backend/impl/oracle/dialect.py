@@ -42,6 +42,7 @@ from rhosocial.activerecord.backend.dialect.protocols import (
     ConstraintSupport,
     TransactionControlSupport,
     SQLFunctionSupport,
+    ColumnAttributeSupport,
 )
 from rhosocial.activerecord.backend.dialect.mixins import (
     SQLXMLMixin,
@@ -86,6 +87,7 @@ from rhosocial.activerecord.backend.dialect.mixins import (
     ConstraintMixin,
     IntrospectionMixin,
     DDLColumnMixin,
+    ColumnAttributeMixin,
     # Column mechanisms: the parameterised identity clause and the bare
     # AUTO_INCREMENT marker. Oracle declares the probes in
     # OracleFeaturesMixin, which precedes these generic formatters.
@@ -317,6 +319,7 @@ class OracleDialect(
     ConstraintMixin,
     IntrospectionMixin,
     DDLColumnMixin,
+    ColumnAttributeMixin,
     IdentityColumnMixin,
     AutoIncrementColumnMixin,
     PredicateMixin,
@@ -372,6 +375,7 @@ class OracleDialect(
     IntrospectionSupport,
     TransactionControlSupport,
     SQLFunctionSupport,
+    ColumnAttributeSupport,
     OraclePartitionSupport,
     OracleDataTypeSupport,
     OracleTypeDDLSupport,
