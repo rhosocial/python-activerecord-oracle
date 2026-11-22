@@ -10,10 +10,10 @@ release it never learned which features exist.
 """
 
 import argparse
-import inspect
 import json
 from typing import Any, Dict, List, Optional, Tuple
 
+from rhosocial.activerecord.backend.dialect import capabilities as _cap
 from rhosocial.activerecord.backend.dialect.exceptions import DialectNotAdaptedException
 from rhosocial.activerecord.logging.defaults import get_logger
 
@@ -35,6 +35,7 @@ def handle(args):
     is_connected = False
     dialect = None
     version_display = None
+    server_variables: Dict[str, Any] = {}
 
     if connection_named(args):
         try:
@@ -49,6 +50,15 @@ def handle(args):
             if version_tuple:
                 version_display = f"{version_tuple[0]}.{version_tuple[1]}.{version_tuple[2]}"
             is_connected = True
+            # Read V$PARAMETER through the existing status introspector while the
+            # session is still open. ``info`` adds no server queries of its own;
+            # without a named connection there is no session and the map stays
+            # empty rather than opening one against a placeholder service.
+            try:
+                for item in backend.introspector.status.list_configuration():
+                    server_variables[item.name] = item.value
+            except Exception as e:
+                logger.warning("Could not read server variables: %s", e)
             backend.disconnect()
         except Exception as e:
             logger.warning("Could not connect to database for introspection: %s", e)
@@ -101,11 +111,30 @@ def handle(args):
         except DialectNotAdaptedException:
             return None
 
+    # Build the capability matrix through the shared core helper. Origin
+    # classification and suggestion detection live there, not in this command.
+    capabilities = _cap.build_capability_report(
+        dialect,
+        family_groups=PROTOCOL_FAMILY_GROUPS,
+        dialect_specific_groups=DIALECT_SPECIFIC_GROUPS,
+        all_args=SUPPORT_METHOD_ALL_ARGS,
+        verbose=args.verbose,
+    )
+
     info = {
         "database": {
             "type": "oracle",
             "version": version_display,
             "version_tuple": list(effective_version) if effective_version else None,
+            "connected": is_connected,
+        },
+        "server": {
+            "version": version_display,
+            "variables": server_variables,
+            "source": (
+                "V$PARAMETER via OracleStatusIntrospector.list_configuration "
+                "(empty when no connection was requested)"
+            ),
             "connected": is_connected,
         },
         "features": {
@@ -128,14 +157,11 @@ def handle(args):
             "fetch_first": _since((12, 0, 0)),
             "rownum": True,
         },
-        "protocols": {},
+        "capabilities": capabilities,
+        "suggestions": _cap.build_suggestion_report(dialect, args.verbose),
+        # compatibility alias for one release cycle
+        "protocols": capabilities,
     }
-
-    # Protocol family support probe (consistent with other backends)
-    for group_name, protocols in PROTOCOL_FAMILY_GROUPS.items():
-        info["protocols"][group_name] = _build_protocol_info(
-            dialect, group_name, protocols, args.verbose
-        )
 
     if args.output == "json" or not RICH_AVAILABLE:
         print(json.dumps(info, indent=2))
@@ -247,7 +273,7 @@ DIALECT_SPECIFIC_GROUPS = {
 }
 
 # Candidate arguments probed for the ``supports_*`` methods that require one.
-# ``check_protocol_support`` reports a method not listed here as unsupported
+# ``_cap.check_protocol_support`` reports a method not listed here as unsupported
 # without calling it, so an entry has to name a method this dialect actually
 # takes an argument for. ``supports_explain_format`` is currently the only one
 # that does; the JSON-function and spatial probes that used to sit here named
@@ -325,66 +351,6 @@ def create_parser(subparsers):
 # ---------------------------------------------------------------------------
 
 
-def get_protocol_support_methods(protocol_class: type) -> List[str]:
-    """Get all support check methods from a protocol class.
-
-    Supports both 'supports_*' and 'is_*_available' naming patterns.
-    """
-    methods = []
-    for name, member in inspect.getmembers(protocol_class):
-        is_supports = name.startswith("supports_")
-        is_available = name.startswith("is_") and name.endswith("_available")
-        if callable(member) and (is_supports or is_available):
-            methods.append(name)
-    return sorted(methods)
-
-
-def check_protocol_support(dialect, protocol_class: type) -> Dict[str, Any]:
-    """Check all support methods for a protocol against the dialect.
-
-    For methods requiring parameters, tests all possible arguments.
-
-    Returns:
-        Dict with method names as keys. For no-arg methods: bool value.
-        For methods with parameters: dict with 'supported', 'total', 'args' keys.
-    """
-    results = {}
-    methods = get_protocol_support_methods(protocol_class)
-    for method_name in methods:
-        if hasattr(dialect, method_name):
-            try:
-                method = getattr(dialect, method_name)
-                # Check if method requires arguments (beyond self)
-                sig = inspect.signature(method)
-                params = [p for p in sig.parameters.values() if p.default == inspect.Parameter.empty]
-                required_params = [p for p in params if p.name != "self"]
-
-                if len(required_params) == 0:
-                    result = method()
-                    results[method_name] = bool(result)
-                elif method_name in SUPPORT_METHOD_ALL_ARGS:
-                    all_args = SUPPORT_METHOD_ALL_ARGS[method_name]
-                    arg_results = {}
-                    for arg in all_args:
-                        try:
-                            arg_results[arg] = bool(method(arg))
-                        except Exception:
-                            arg_results[arg] = False
-                    supported_count = sum(1 for v in arg_results.values() if v)
-                    results[method_name] = {
-                        "supported": supported_count,
-                        "total": len(all_args),
-                        "args": arg_results,
-                    }
-                else:
-                    results[method_name] = False
-            except Exception:
-                results[method_name] = False
-        else:
-            results[method_name] = False
-    return results
-
-
 def parse_version(version_str: str) -> Tuple[int, int, int]:
     """Parse version string like '19.0.0' to tuple."""
     parts = version_str.split(".")
@@ -392,66 +358,6 @@ def parse_version(version_str: str) -> Tuple[int, int, int]:
     minor = int(parts[1]) if len(parts) > 1 else 0
     patch = int(parts[2]) if len(parts) > 2 else 0
     return (major, minor, patch)
-
-
-def _calculate_protocol_stats(support_methods: Dict[str, Any]) -> Tuple[int, int]:
-    """Calculate supported and total counts from support methods.
-
-    Args:
-        support_methods: Dict with method names as keys.
-            For no-arg methods: bool value.
-            For methods with parameters: dict with 'supported', 'total', 'args' keys.
-
-    Returns:
-        Tuple of (supported_count, total_count)
-    """
-    supported_count = 0
-    total_count = 0
-    for value in support_methods.values():
-        if isinstance(value, dict):
-            supported_count += value["supported"]
-            total_count += value["total"]
-        else:
-            total_count += 1
-            if value:
-                supported_count += 1
-    return supported_count, total_count
-
-
-def _build_protocol_info(dialect, group_name: str, protocols: List[type], verbose: int) -> Dict[str, Dict[str, Any]]:
-    """Build protocol support information for a single group.
-
-    Args:
-        dialect: OracleDialect instance to check against
-        group_name: Name of the protocol group
-        protocols: List of protocol classes in this group
-        verbose: Verbosity level for output detail
-
-    Returns:
-        Dict mapping protocol names to their support statistics
-    """
-    group_info = {}
-    for protocol in protocols:
-        protocol_name = protocol.__name__
-        support_methods = check_protocol_support(dialect, protocol)
-        supported_count, total_count = _calculate_protocol_stats(support_methods)
-
-        percentage = round(supported_count / total_count * 100, 1) if total_count > 0 else 0
-
-        if verbose >= 2:
-            group_info[protocol_name] = {
-                "supported": supported_count,
-                "total": total_count,
-                "percentage": percentage,
-                "methods": support_methods,
-            }
-        else:
-            group_info[protocol_name] = {
-                "supported": supported_count,
-                "total": total_count,
-                "percentage": percentage,
-            }
-    return group_info
 
 
 def _get_status_style(pct: float) -> Tuple[str, str]:
@@ -496,8 +402,11 @@ def _display_protocol_item(console: Any, protocol_name: str, stats: Dict[str, An
 
     sup = stats["supported"]
     tot = stats["total"]
+    origin = stats.get("origin", "")
+    origin_tag = f" [dim][{origin}][/dim]" if origin else ""
     console.print(
-        f"    [{color}]{symbol}[/{color}] {protocol_name}: [{color}]{progress_bar}[/{color}] {pct:.0f}% ({sup}/{tot})"
+        f"    [{color}]{symbol}[/{color}] {protocol_name}{origin_tag}: "
+        f"[{color}]{progress_bar}[/{color}] {pct:.0f}% ({sup}/{tot})"
     )
 
     if verbose >= 2 and "methods" in stats:
@@ -539,5 +448,15 @@ def _display_info_rich(info: Dict, verbose: int, version_display: str, is_connec
 
     for group_name, protocols in info["protocols"].items():
         _display_protocol_group(console, group_name, protocols, verbose)
+
+    # Suggestion support is independent of capability support.
+    suggestions = info.get("suggestions", {})
+    if suggestions:
+        console.print("\n[bold green]Suggestion Support:[/bold green]")
+        for proto_name, entry in suggestions.items():
+            supported = entry.get("supported", False)
+            symbol = "[OK]" if supported else "[X]"
+            color = "green" if supported else "red"
+            console.print(f"    [{color}]{symbol}[/{color}] {proto_name}")
 
     console.print()
