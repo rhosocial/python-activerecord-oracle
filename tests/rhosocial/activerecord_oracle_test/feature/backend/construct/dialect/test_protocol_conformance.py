@@ -141,7 +141,7 @@ ORACLE_PROTOCOLS = [
     dialect_protocols.CreateTableUsingTemplateSupport,
     dialect_protocols.CreateTypeSupport,
     dialect_protocols.CreateViewSupport,
-    # DDLTypeSupport is deliberately absent: it is an alias for this entry, and
+    # DataTypeSupport is deliberately absent: it is an alias for this entry, and
     # listing both would parametrize the same protocol twice. The alias itself
     # is asserted in test_ddl_type_support_is_an_alias_of_data_type_support.
     dialect_protocols.DataTypeSupport,
@@ -220,7 +220,7 @@ def get_all_generic_protocols() -> dict:
     """Discover every generic dialect protocol, once, under its own name.
 
     ``protocols`` re-exports the protocols from the submodules that declare
-    them, and it also re-exports retired spellings -- ``DDLTypeSupport`` is
+    them, and it also re-exports retired spellings -- ``DataTypeSupport`` is
     literally ``DataTypeSupport``. Keying discovery on the class's own
     ``__name__`` drops the alias without a hand-maintained exclusion list: a
     protocol is discovered under the name it was declared with, so an alias
@@ -254,7 +254,7 @@ class TestDialectNegativeProtocolConformance:
         )
 
     def test_ddl_type_support_is_an_alias_of_data_type_support(self) -> None:
-        """``DDLTypeSupport`` is a retired spelling of ``DataTypeSupport``.
+        """``DataTypeSupport`` is a retired spelling of ``DataTypeSupport``.
 
         The core collapsed the two: a dialect is typed by its data types, not by
         whether it declares DDL for them, so there is one protocol under two
@@ -262,16 +262,16 @@ class TestDialectNegativeProtocolConformance:
         which is why discovery keys on ``__name__`` and an alias cannot be
         counted as a second protocol still awaiting a verdict.
         """
-        assert dialect_protocols.DDLTypeSupport is dialect_protocols.DataTypeSupport
+        assert dialect_protocols.DataTypeSupport is dialect_protocols.DataTypeSupport
         discovered = get_all_generic_protocols()
-        assert "DDLTypeSupport" not in discovered
+        assert "DataTypeSupport" not in discovered
         assert discovered["DataTypeSupport"] is dialect_protocols.DataTypeSupport
 
     def test_declaring_a_user_defined_type_is_a_separate_protocol(self) -> None:
         """Naming a column's type is not declaring a type.
 
         The distinction this file used to draw -- ``DataTypeSupport`` versus
-        ``DDLTypeSupport`` -- no longer exists, but the concern behind it does:
+        ``DataTypeSupport`` -- no longer exists, but the concern behind it does:
         a dialect must not be able to satisfy "I can type a column" and thereby
         claim "I can CREATE TYPE". That claim lives on the per-statement
         protocols, which Oracle reaches through its own OracleTypeDDLSupport.

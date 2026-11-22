@@ -1,7 +1,7 @@
 # src/rhosocial/activerecord/backend/impl/oracle/mixins/namespace.py
 """Oracle's override of the one place a qualified name becomes SQL.
 
-The core :class:`~rhosocial.activerecord.backend.dialect.mixins.object_table_name.TableNameMixin`
+The core :class:`~rhosocial.activerecord.backend.dialect.mixins.object_table_name.TableObjectMixin`
 already does everything Oracle needs for a table: render the namespace slots the
 object carries, then append its own name. Oracle's whole difference is one extra
 token on the end of the name, the ``@"DBLINK"`` suffix, so the override is
@@ -32,7 +32,7 @@ against a different object, and the caller would never learn why.
 from typing import List, Tuple, TYPE_CHECKING
 
 from rhosocial.activerecord.backend.dialect.mixins.object_table_name import (
-    TableNameMixin,
+    TableObjectMixin,
 )
 from rhosocial.activerecord.backend.expression.objects import Table
 
@@ -44,7 +44,7 @@ if TYPE_CHECKING:  # pragma: no cover
 __all__ = ["OracleNamespaceMixin"]
 
 
-class OracleNamespaceMixin(TableNameMixin):
+class OracleNamespaceMixin(TableObjectMixin):
     """Renders schema objects, including the Oracle ``@dblink`` name suffix."""
 
     def supports_schema_qualification(self) -> bool:

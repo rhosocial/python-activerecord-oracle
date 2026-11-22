@@ -26,9 +26,9 @@ from rhosocial.activerecord.backend.dialect.exceptions import (
     UnsupportedFeatureError,
 )
 from rhosocial.activerecord.backend.dialect.mixins import (
-    DDLTypeMixin,
+    DataTypeMixin,
 )
-from rhosocial.activerecord.backend.dialect.protocols import DDLTypeSupport
+from rhosocial.activerecord.backend.dialect.protocols import DataTypeSupport
 from rhosocial.activerecord.backend.expression.types import (
     BigIntType,
     BlobType,
@@ -124,7 +124,7 @@ _ORACLE_INTERVAL_DAY_PRECISION = 2
 _ORACLE_INTERVAL_SECOND_PRECISION = 6
 
 
-class OracleTypeSupportMixin(DDLTypeMixin, DDLTypeSupport):
+class OracleTypeSupportMixin(DataTypeMixin, DataTypeSupport):
     """Oracle data-type rendering and parsing.
 
     Two families of formatter live here, and they are the same family:

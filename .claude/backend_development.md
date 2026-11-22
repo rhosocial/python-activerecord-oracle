@@ -317,12 +317,12 @@ Naming protocols are served by the `*NameMixin` family, not by the DDL mixins:
 | Protocol | Mixin | Per-object method |
 |----------|-------|-------------------|
 | `NamespaceSupport` | `NamespaceMixin` | `format_qualified_name`, `validate_namespace` |
-| `TableObjectSupport` | `TableNameMixin` | `format_table_object` |
-| `ViewObjectSupport` | `ViewNameMixin` | `format_view_object` |
-| `IndexObjectSupport` | `IndexNameMixin` | `format_index_object` |
-| `SequenceObjectSupport` | `SequenceNameMixin` | `format_sequence_object` |
-| `TriggerObjectSupport` | `TriggerNameMixin` | `format_trigger_object` |
-| `RoutineObjectSupport` | `FunctionNameMixin` | `format_function_object`, `format_procedure_object` |
+| `TableObjectSupport` | `TableObjectMixin` | `format_table_object` |
+| `ViewObjectSupport` | `ViewObjectMixin` | `format_view_object` |
+| `IndexObjectSupport` | `IndexObjectMixin` | `format_index_object` |
+| `SequenceObjectSupport` | `SequenceObjectMixin` | `format_sequence_object` |
+| `TriggerObjectSupport` | `TriggerObjectMixin` | `format_trigger_object` |
+| `RoutineObjectSupport` | `RoutineObjectMixin` | `format_function_object`, `format_procedure_object` |
 
 Each `*ObjectSupport` protocol declares the full namespace surface — `validate_catalog_name`,
 `validate_schema_name`, `supports_schema_qualification`, `supports_catalog`,
