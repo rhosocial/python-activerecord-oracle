@@ -14,6 +14,47 @@ from rhosocial.activerecord.backend.suggestion.definitions import (
 )
 
 
+class _OracleAdapterTable(dict):
+    """Adapter table that enumerates as sparse but still resolves native keys.
+
+    The backend-agnostic contract says native scalar types (``str``/``int``/
+    ``float``/``bytes``) are absent from the suggestion table: absence is the
+    "pass through untouched" signal. Oracle is the one backend where a native
+    type still needs a correction adapter -- the server stores ``''`` as NULL,
+    so a non-Optional ``str`` field reads back ``None`` unless the Oracle string
+    adapter restores ``''``. That adapter has to be reachable through the
+    field-level ``suggestions.get(str)`` lookup (it needs the field's declared
+    annotation to tell ``Optional[str]`` from ``str``), but it is not a *suggested*
+    declaration for the ``str`` type.
+
+    This dict therefore hides the native keys from enumeration (``__iter__``,
+    ``keys``, ``items``, ``values``, ``len``) while leaving ``get``/``__getitem__``
+    at plain-dict semantics so the model layer still finds the correction
+    adapter. Explicitly registered native adapters remain in the registry for
+    ``UseAdapter`` declarations; only the implicit default is special-cased.
+    """
+
+    _NATIVE = frozenset({str, int, float, bytes})
+
+    def _public_keys(self):
+        return [key for key in dict.keys(self) if key not in self._NATIVE]
+
+    def __iter__(self):
+        return iter(self._public_keys())
+
+    def __len__(self):
+        return len(self._public_keys())
+
+    def keys(self):
+        return self._public_keys()
+
+    def items(self):
+        return [(key, dict.__getitem__(self, key)) for key in self._public_keys()]
+
+    def values(self):
+        return [dict.__getitem__(self, key) for key in self._public_keys()]
+
+
 class OracleBackendMixin:
     """Mixin providing Oracle-specific backend functionality."""
 
@@ -193,13 +234,13 @@ class OracleBackendMixin:
 
         The framework defaults (``PORTABLE_TYPE_MAPPINGS``) are the base;
         Oracle merges its own pairs on top, including the neutral families it
-        carries as ``VARCHAR2``/``CLOB`` text. Native scalar types
-        (``str``/``int``/``float``/``bytes``) are deliberately absent: absence
-        is the sparse table's "pass through untouched" signal. The Oracle
-        adapters for those Python types stay registered in the registry and can
-        still be selected explicitly, but they are not backend *defaults*.
+        carries as ``VARCHAR2``/``CLOB`` text. The returned table enumerates as
+        sparse -- native scalar types are absent, which is the "pass through
+        untouched" contract -- while still resolving them on lookup, because
+        Oracle's ``''``-as-NULL quirk needs a correction adapter for ``str``
+        fields. See :class:`_OracleAdapterTable`.
         """
-        if hasattr(self, '_default_suggestions_cache') and self._default_suggestions_cache is not None:
+        if getattr(self, '_default_suggestions_cache', None) is not None:
             return DataAdapterSuggestion(table=self._default_suggestions_cache)
 
         from rhosocial.activerecord.backend.adapters.bitstring import BitString
@@ -212,10 +253,6 @@ class OracleBackendMixin:
             merge_adapter_suggestions,
         )
 
-        # Native scalar types (str/int/float/bytes) are intentionally NOT listed:
-        # the driver binds them natively, and their absence is the sparse-table
-        # contract's "pass through untouched" signal. Their adapters remain
-        # registered in ``adapter_registry`` for explicit ``UseAdapter`` use.
         type_mappings = [
             (bool, int),
             (datetime, str),
@@ -228,6 +265,12 @@ class OracleBackendMixin:
             # storage is selected per column with ``storage_format='bytes'``,
             # not as a default for every UUID field.
             (UUID, str),
+            # ``str`` is a native type, but Oracle stores ``''`` as NULL, so a
+            # non-Optional ``str`` field reads back ``None`` without its
+            # correction adapter. It stays reachable through ``.get(str)``
+            # while remaining out of the table's enumeration (see
+            # :class:`_OracleAdapterTable`).
+            (str, str),
             # Neutral families: Oracle carries them as text (the native
             # SDO_GEOMETRY / VECTOR / RAW forms are backend-specific topics).
             (Geometry, str),
@@ -248,8 +291,8 @@ class OracleBackendMixin:
                     "Suggestion will not be provided for this type.",
                 )
 
-        self._default_suggestions_cache = suggestions
-        return DataAdapterSuggestion(table=suggestions)
+        self._default_suggestions_cache = _OracleAdapterTable(suggestions)
+        return DataAdapterSuggestion(table=self._default_suggestions_cache)
 
     def suggest_extra_data_adapters(self) -> Dict[Type, Tuple[SQLTypeAdapter, Type]]:
         """No backend-owned extra adapter types."""
