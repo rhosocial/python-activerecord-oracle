@@ -2,7 +2,7 @@
 """Oracle table-clause expression wrappers.
 
 This module defines backend-specific expressions that wrap the mixin
-format methods ``format_table_compression_clause_expression`` and
+format functions ``format_table_compression_clause_expression`` and
 ``format_tablespace_clause_expression`` into proper :class:`BaseExpression`
 subclasses, making them composable within the expression tree and
 renderable through the unified :meth:`BaseExpression.to_sql` entry

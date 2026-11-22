@@ -1,7 +1,7 @@
 # src/rhosocial/activerecord/backend/impl/oracle/mixins/features.py
 """Oracle feature-capability mixin.
 
-Collects remaining ``supports_*`` capability switches that are not
+Collects remaining ``supports_*`` support switches that are not
 already covered by a dedicated per-domain mixin.  Follows the pattern
 of ``PostgresFeaturesMixin``.
 """

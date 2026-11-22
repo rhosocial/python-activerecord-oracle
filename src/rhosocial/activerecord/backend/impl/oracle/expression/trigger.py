@@ -2,7 +2,7 @@
 """Oracle TRIGGER DDL expression wrappers.
 
 This module defines backend-specific expressions that wrap the mixin
-format methods ``format_disable_trigger_statement`` and
+format functions ``format_disable_trigger_statement`` and
 ``format_enable_trigger_statement`` into proper
 :class:`BaseExpression` subclasses, making them composable within the
 expression tree and renderable through the unified

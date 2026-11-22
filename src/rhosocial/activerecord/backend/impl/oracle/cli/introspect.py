@@ -8,7 +8,7 @@ standard set -- a family the dialect has always declared and the command
 line could not ask for.
 
 The operational and data families the core introspector answers are offered
-too: a type is advertised exactly when a dialect capability switch answers
+too: a type is advertised exactly when a dialect support switch answers
 for it, and the switch is read against the connected server, so a family
 Oracle cannot answer *here* is refused rather than run and answered with an
 empty listing. That refusal is most of the eight: on today's servers only the
@@ -51,7 +51,7 @@ from rhosocial.activerecord.backend.introspection.types import ProfileSource
 from .connection import add_connection_args, resolve_connection_config_from_args
 from .output import OUTPUT_CHOICES, create_provider
 
-#: CLI type -> the dialect capability switch that answers for it.
+#: CLI type -> the dialect support switch that answers for it.
 #:
 #: The advertised list is derived from this mapping, so a family cannot be
 #: added in one place and forgotten in the other. A type whose switch is False

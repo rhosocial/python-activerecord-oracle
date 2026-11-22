@@ -2,7 +2,7 @@
 """Oracle VECTOR data type expression wrappers.
 
 This module defines backend-specific expressions that wrap the mixin
-format methods ``format_vector_literal_expression`` and ``format_vector_operand_expression``
+format functions ``format_vector_literal_expression`` and ``format_vector_operand_expression``
 into proper :class:`BaseExpression` subclasses, making them composable
 within the expression tree and renderable through the unified
 :meth:`BaseExpression.to_sql` entry point.
