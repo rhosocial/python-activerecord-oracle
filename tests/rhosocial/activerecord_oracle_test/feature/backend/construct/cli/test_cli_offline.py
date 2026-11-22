@@ -18,6 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, mock_open, patch
 
 import pytest
 
+from rhosocial.activerecord.backend.dialect import capabilities as cap
 from rhosocial.activerecord.backend.dialect.exceptions import DialectNotAdaptedException
 from rhosocial.activerecord.backend.errors import ConnectionError, QueryError
 from rhosocial.activerecord.backend.impl.oracle.cli import (
@@ -92,7 +93,7 @@ class TestInfoHelpers:
             def unrelated(self) -> None:
                 pass
 
-        assert info.get_protocol_support_methods(FakeProtocol) == [
+        assert cap.get_support_methods(FakeProtocol) == [
             "is_gadgets_available",
             "supports_widgets",
         ]
@@ -127,7 +128,9 @@ class TestInfoHelpers:
             def supports_raises(self) -> bool:
                 raise RuntimeError("boom")
 
-        result = info.check_protocol_support(FakeDialect(), FakeProtocol)
+        result = cap.check_protocol_support(
+            FakeDialect(), FakeProtocol, info.SUPPORT_METHOD_ALL_ARGS
+        )
         assert result["supports_bool"] is True
         assert result["is_thing_available"] is False
         assert result["supports_raises"] is False
@@ -143,7 +146,7 @@ class TestInfoHelpers:
             def supports_missing(self) -> bool:
                 return True
 
-        assert info.check_protocol_support(object(), FakeProtocol) == {
+        assert cap.check_protocol_support(object(), FakeProtocol) == {
             "supports_missing": False
         }
 
@@ -156,7 +159,7 @@ class TestInfoHelpers:
         ],
     )
     def test_calculate_protocol_stats(self, support: dict, expected: tuple) -> None:
-        assert info._calculate_protocol_stats(support) == expected
+        assert cap._support_stats(support) == expected
 
     @pytest.mark.parametrize(
         "pct,expected",
@@ -199,15 +202,22 @@ class TestInfoHelpers:
         text = " ".join(str(c) for c in console.print.call_args_list)
         assert "JSON" in text and "TEXT" in text
 
-    def test_build_protocol_info_verbose_levels(self) -> None:
+    def test_capability_report_verbose_levels(self) -> None:
         class FakeProtocol:
             def supports_one(self) -> bool:
                 return True
 
-        brief = info._build_protocol_info(FakeProtocol(), "g", [FakeProtocol], 0)
-        detailed = info._build_protocol_info(FakeProtocol(), "g", [FakeProtocol], 2)
-        assert brief["FakeProtocol"] == {"supported": 1, "total": 1, "percentage": 100.0}
-        assert "methods" in detailed["FakeProtocol"]
+        dialect = FakeProtocol()
+        brief = cap.build_capability_report(dialect, {"g": [FakeProtocol]})
+        detailed = cap.build_capability_report(dialect, {"g": [FakeProtocol]}, verbose=2)
+        assert set(brief["g"]["FakeProtocol"]) == {
+            "supported",
+            "total",
+            "percentage",
+            "origin",
+        }
+        assert "methods" in detailed["g"]["FakeProtocol"]
+        assert "method_origins" in detailed["g"]["FakeProtocol"]
 
     def test_display_protocol_item_and_group(self) -> None:
         console = MagicMock()
@@ -284,7 +294,34 @@ class TestInfoHandle:
             "for_update_skip_locked",
         }
         assert result["protocols"]
+        assert result["capabilities"]
         assert json.loads(capsys.readouterr().out)["database"]["version"] == "19.0.0"
+
+    def test_capability_suggestion_and_server_sections(self) -> None:
+        result = info.handle(_info_args(version="19.0.0"))
+        assert result["protocols"] is result["capabilities"]
+        assert result["server"]["version"] == "19.0.0"
+        assert result["server"]["variables"] == {}
+        assert result["server"]["connected"] is False
+        assert "V$PARAMETER" in result["server"]["source"]
+        origins = {
+            entry["origin"]
+            for group in result["capabilities"].values()
+            for entry in group.values()
+        }
+        assert origins <= {"reuse", "override", "proprietary", "not-supported"}
+        assert all(
+            entry["origin"] == "proprietary"
+            for entry in result["capabilities"]["Oracle-specific"].values()
+        )
+        assert result["suggestions"]
+        assert all({"supported"} <= set(entry) for entry in result["suggestions"].values())
+
+    def test_verbose_capability_report_has_method_origins(self) -> None:
+        result = info.handle(_info_args(version="19.0.0", verbose=2))
+        first = next(iter(next(iter(result["capabilities"].values())).values()))
+        assert "methods" in first and "method_origins" in first
+        assert all({"supported"} <= set(entry) for entry in result["suggestions"].values())
 
     def test_offline_without_version_marks_unknown(self) -> None:
         result = info.handle(_info_args(version=None))
