@@ -45,6 +45,9 @@ from rhosocial.activerecord.backend.dialect.protocols import (
     ColumnAttributeSupport,
     PivotSupport,
 )
+from rhosocial.activerecord.backend.suggestion.protocols import (
+    StringConcatenationSuggestionSupport,
+)
 from rhosocial.activerecord.backend.dialect.mixins import (
     SQLXMLMixin,
     CollationMixin,
@@ -159,6 +162,7 @@ from .mixins import (
     OracleExplainMixin,
 )
 from .suggestion import (
+    OracleStringConcatenationSuggestionMixin,
     OracleDataTypeSuggestionsMixin,
     OracleIntegerAutoIncrementColumnSuggestionMixin,
     OraclePartitionAddSuggestionMixin,
@@ -182,6 +186,7 @@ if TYPE_CHECKING:
 
 class OracleDialect(
     # Backend suggestions first: no core mixin may shadow their answers.
+    OracleStringConcatenationSuggestionMixin,
     # The eight partition suggestions are split one-per-file and all inherit
     # the shared base from ._common; listed together the common base lands
     # last in their C3 merge and never conflicts with another base here.
@@ -330,6 +335,7 @@ class OracleDialect(
     DQLMixin,
     DMLMixin,
     PartitionMixin,
+    PivotMixin,
     GraphTableMixin,
     # TRIM/LPAD/RPAD are nodes with default formatters, and Oracle spells all
     # three natively -- ``TRIM([LEADING|TRAILING|BOTH] [chars] FROM s)``
@@ -379,6 +385,7 @@ class OracleDialect(
     SQLFunctionSupport,
     ColumnAttributeSupport,
     PivotSupport,
+    StringConcatenationSuggestionSupport,
     OraclePartitionSupport,
     OracleDataTypeSupport,
     OracleTypeDDLSupport,

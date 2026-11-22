@@ -450,12 +450,14 @@ class TestDialectSupport:
 
         These nodes predate the format_method dispatch and override
         ``to_sql`` directly, so the dialect declares no ``format_connect_by``
-        / ``format_pivot`` / ``format_unpivot`` / ``format_hint`` for them --
-        the stubs that used to sit here called ``expr.to_sql()`` back, which
-        is not a formatter (an infinite loop for any node that does dispatch,
-        dead code for ones that do not). What is asserted instead is what
-        the callers actually rely on: the classes render, and the loop
-        formatters are gone.
+        / ``format_hint`` for them -- the stubs that used to sit here called
+        ``expr.to_sql()`` back, which is not a formatter (an infinite loop for
+        any node that does dispatch, dead code for ones that do not). The
+        Oracle-specific ``format_pivot``/``format_unpivot`` stubs were likewise
+        removed; the core PivotMixin now answers those names for the generic
+        Pivot/Unpivot nodes while these backend-owned nodes keep rendering
+        themselves. What is asserted is what callers rely on: the classes
+        render, and the loop formatters are gone.
         """
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
         from rhosocial.activerecord.backend.impl.oracle.expression import (
@@ -488,7 +490,6 @@ class TestDialectSupport:
             dialect, hints=["FULL(t)"]
         ).to_sql()[0]
         for gone in (
-            "format_connect_by", "format_pivot", "format_unpivot",
-            "format_hint", "format_for_update",
+            "format_connect_by", "format_hint", "format_for_update",
         ):
             assert not hasattr(dialect, gone), gone

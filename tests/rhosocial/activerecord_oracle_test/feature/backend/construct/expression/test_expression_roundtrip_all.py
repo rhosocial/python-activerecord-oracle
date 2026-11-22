@@ -1642,8 +1642,9 @@ UNCONSTRUCTIBLE: tuple = (
 #
 # Oracle has no CREATE/DROP/ALTER DATABASE (an Oracle database is an instance),
 # no DOMAIN, no FULLTEXT, and no ILIKE -- case-insensitive matching goes through
-# UPPER() + LIKE. PIVOT and UNPIVOT go through this backend's own Pivot
-# and its format_pivot, so the core PivotMixin is not composed.
+# UPPER() + LIKE. PIVOT and UNPIVOT now go through the core PivotMixin
+# (Oracle supports them from 11g on); the backend's own OraclePivot
+# expression keeps its specialised format_oracle_pivot.
 LEGITIMATE_NON_RENDERS: Dict[str, tuple] = {
     # ---- core join-coverage family this dialect does not answer ----
     #  The profile and the value listing now render from `all_tab_columns`
@@ -1655,8 +1656,8 @@ LEGITIMATE_NON_RENDERS: Dict[str, tuple] = {
     #  double scan of both tables -- so the probe stays False rather than
     #  promising a formatter that does not exist.
     "rhosocial.activerecord.backend.expression.introspection.JoinCoverageQueryStatement": (
-        ProtocolNotImplementedError,
-        "does not implement ",
+        UnsupportedFeatureError,
+        "does not support format_join_coverage_query_statement",
     ),
     # ---- core operational families this dialect does not answer ----
     #  Oracle exposes these through GV$/V$ dynamic performance views and
@@ -1664,20 +1665,20 @@ LEGITIMATE_NON_RENDERS: Dict[str, tuple] = {
     #  schema-scoped catalogue -- a shape the dialect layer has no slot for.
     #  The probes answer False pending that decision.
     "rhosocial.activerecord.backend.expression.introspection.RuntimeMetricsQueryStatement": (
-        ProtocolNotImplementedError,
-        "does not implement ",
+        UnsupportedFeatureError,
+        "does not support format_runtime_metrics_query_statement",
     ),
     "rhosocial.activerecord.backend.expression.introspection.IndexUsageStatsQueryStatement": (
-        ProtocolNotImplementedError,
-        "does not implement ",
+        UnsupportedFeatureError,
+        "does not support format_index_usage_stats_query_statement",
     ),
     "rhosocial.activerecord.backend.expression.introspection.ObjectDependencyQueryStatement": (
-        ProtocolNotImplementedError,
-        "does not implement ",
+        UnsupportedFeatureError,
+        "does not support format_object_dependency_query_statement",
     ),
     "rhosocial.activerecord.backend.expression.introspection.DDLStatementQueryStatement": (
-        ProtocolNotImplementedError,
-        "does not implement ",
+        UnsupportedFeatureError,
+        "does not support format_ddl_statement_query_statement",
     ),
     # Oracle exposes index and table use through GV$/V$ dynamic performance
     # views, which name a live instance's state rather than a schema-scoped
@@ -1685,20 +1686,12 @@ LEGITIMATE_NON_RENDERS: Dict[str, tuple] = {
     # probes answer False, and these stay a declared gap until that decision
     # is made.
     "rhosocial.activerecord.backend.expression.introspection.UnusedIndexesQueryStatement": (
-        ProtocolNotImplementedError,
-        "does not implement ",
+        UnsupportedFeatureError,
+        "does not support format_unused_indexes_query_statement",
     ),
     "rhosocial.activerecord.backend.expression.introspection.TableUsageStatsQueryStatement": (
-        ProtocolNotImplementedError,
-        "does not implement ",
-    ),
-    "rhosocial.activerecord.backend.expression.pivot.Pivot": (
         UnsupportedFeatureError,
-        "does not support the 'format_pivot' statement",
-    ),
-    "rhosocial.activerecord.backend.expression.pivot.Unpivot": (
-        UnsupportedFeatureError,
-        "does not support the 'format_unpivot' statement",
+        "does not support format_table_usage_stats_query_statement",
     ),
     "rhosocial.activerecord.backend.expression.predicates.ILikePredicate": (
         UnsupportedFeatureError,
@@ -1818,15 +1811,13 @@ LEGITIMATE_NON_RENDERS: Dict[str, tuple] = {
         AttributeError,
         "has no attribute 'alias'",
     ),
-    # query_sources.JSONTableExpression used to sit here: it dispatched to a
-    # formatter built for this backend's own JSON_TABLE expression and died
-    # reading a field it does not have. It renders now -- the dispatch and
-    # the core node found each other -- so the pin is gone and the matrix
-    # asserts the round-trip.
-    "rhosocial.activerecord.backend.expression.sources.json."
-    "JsonTableSource": (TypeError, "missing 2 required positional arguments"),
+    # query_sources.JSONTableExpression and sources.json.JsonTableSource used
+    # to sit here: they dispatched to a formatter built for this backend's own
+    # JSON_TABLE expression and died reading a field they do not have. Both
+    # render now -- the dispatch and the core node found each other -- so the
+    # pins are gone and the matrix asserts the round-trip.
     "rhosocial.activerecord.backend.expression.statements.dml."
-    "MergeStatement": (TypeError, "missing 5 required positional arguments"),
+    "MergeStatement": (AttributeError, "'str' object has no attribute 'to_sql'"),
     # --- group three was the SHOW query layer: the eight OracleQuery*
     # --- expressions were pinned because OracleShowDialectMixin was exported
     # --- and documented as composed but never listed in OracleDialect's bases,
@@ -2197,12 +2188,6 @@ UNMODELLED_FORMATTERS = {
     "no formatter for the core statement)": ("format_drop_function_statement",),
     "ILIKE (Oracle has no ILIKE operator; case-insensitive matching goes "
     "through UPPER() + LIKE)": ("format_ilike_predicate",),
-    "the core PIVOT / UNPIVOT expressions (PIVOT goes through this backend's "
-    "own Pivot and its format_pivot, so the core mixin is not "
-    "composed)": (
-        "format_pivot",
-        "format_unpivot",
-    ),
     "REPEAT (Oracle has no REPEAT function; the node exists for the backends "
     "that spell it natively, and this dialect declares no formatter to "
     "emulate it)": ("format_repeat_expression",),
