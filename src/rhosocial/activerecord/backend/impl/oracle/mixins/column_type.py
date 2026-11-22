@@ -50,7 +50,10 @@ from rhosocial.activerecord.backend.adapters import (
     Range,
     Vector,
 )
-from rhosocial.activerecord.backend.dialect.mixins import ColumnTypeMixin
+from rhosocial.activerecord.backend.suggestion.definitions import (
+    ColumnTypeSuggestion,
+    ExtraColumnTypeSuggestion,
+)
 from rhosocial.activerecord.backend.expression.column_types import (
     BinaryColumn,
     BitStringColumn,
@@ -108,7 +111,7 @@ from ..type_values import (
 #:     and both must be a *named type* created first (``CREATE TYPE order_ids_t
 #:     AS VARRAY(10) OF NUMBER``) and then referred to by name -- so the
 #:     substitute for an array concept is the named-type door that
-#:     :meth:`~...types.OracleTypeSupportMixin.suggested_data_types` already
+#:     :meth:`~...types.OracleTypeSupportMixin.suggest_data_types` already
 #:     declares under ``"array"``, not a serialised list. This table answers
 #:     the other half of that same decision: the column a Python list means is
 #:     a JSON document, and the operations available on it are the JSON ones.
@@ -146,7 +149,7 @@ from ..type_values import (
 #:     **type** in any release either -- 23ai added the ``UUID()`` *function*
 #:     returning ``RAW(16)`` -- so the ``RAW(16)`` storage is the DDL layer's
 #:     answer
-#:     (:meth:`~...types.OracleTypeSupportMixin.suggested_data_types`,
+#:     (:meth:`~...types.OracleTypeSupportMixin.suggest_data_types`,
 #:     ``"uuid"``), and the column class says only that the value is a
 #:     comparable one.
 #:
@@ -210,7 +213,7 @@ ORACLE_EXTRA_COLUMN_TYPES: Dict[Any, Type[ColumnBase]] = {
 }
 
 
-class OracleColumnTypeMixin(ColumnTypeMixin):
+class OracleColumnTypeMixin:
     """Oracle's 24-entry column-type table.
 
     The table does not vary by version, which is a finding rather than a
@@ -223,7 +226,7 @@ class OracleColumnTypeMixin(ColumnTypeMixin):
     in it.
     """
 
-    def suggested_column_types(self) -> Dict[Any, Type[ColumnBase]]:
+    def suggest_column_types(self) -> Dict[Any, Type[ColumnBase]]:
         """Oracle's answer for each of the common Python types.
 
         Every entry is answered with a :class:`ColumnBase` subclass; no entry
@@ -233,9 +236,9 @@ class OracleColumnTypeMixin(ColumnTypeMixin):
             A fresh copy of the table, so a caller mutating the answer cannot
             reach the table every later resolution reads.
         """
-        return dict(ORACLE_COLUMN_TYPES)
+        return ColumnTypeSuggestion(table=dict(ORACLE_COLUMN_TYPES))
 
-    def suggested_extra_column_types(self) -> Dict[Any, Type[ColumnBase]]:
+    def suggest_extra_column_types(self) -> Dict[Any, Type[ColumnBase]]:
         """This server's own value classes -> their column classes.
 
         A field annotated with an Oracle value class (``SDOGeometry``,
@@ -248,7 +251,7 @@ class OracleColumnTypeMixin(ColumnTypeMixin):
         version = self.version_or_none
         if version is None or tuple(version) < (23, 0, 0):
             table.pop(OracleVector, None)
-        return table
+        return ExtraColumnTypeSuggestion(table=table)
 
 
 __all__ = [

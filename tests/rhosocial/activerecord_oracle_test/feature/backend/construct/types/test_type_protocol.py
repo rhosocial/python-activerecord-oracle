@@ -3,8 +3,7 @@
 
 Covers:
 - format_data_type_* / supports_data_type_* 1:1 correspondence
-- supports_data_types() includes oracle_* and core types
-- substitute_data_types() class types, disjoint keys
+- substitute suggestion mapping: class types, disjoint keys
 - dialect_options forwarding and equality
 - Precision validation (NUMBER, FLOAT, TIMESTAMP)
 """
@@ -12,6 +11,7 @@ import re
 
 import pytest
 
+from rhosocial.activerecord.backend.suggestion.definitions import SubstituteTypeSuggestion
 from rhosocial.activerecord.backend.dialect.exceptions import (
     UnsupportedFeatureError,
 )
@@ -41,6 +41,7 @@ from rhosocial.activerecord.backend.expression.types import (
     XmlType,
 )
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
+from rhosocial.activerecord.backend.impl.oracle.introspection.type_parser import OracleTypeParser
 from rhosocial.activerecord.backend.impl.oracle.expression.types import (
     OracleRawType,
 )
@@ -53,6 +54,40 @@ from rhosocial.activerecord.backend.impl.oracle.protocols import (
 def dialect():
     return OracleDialect(version=(23, 0, 0))
 
+
+
+def _supported_data_types(dialect):
+    """Derive the formatter-backed support map (core retired the old support map).
+
+    A formatter is the declaration of support; a ``supports_data_type_<name>``
+    probe is the only thing that can opt a rendered name out (version gates).
+    """
+    by_name = {}
+    stack = [DataType]
+    seen = set()
+    while stack:
+        klass = stack.pop()
+        if klass in seen:
+            continue
+        seen.add(klass)
+        name = getattr(klass, "name", None)
+        if name:
+            by_name.setdefault(name, klass)
+        stack.extend(klass.__subclasses__())
+
+    result = {}
+    for member in dir(type(dialect)):
+        match = re.match(r"^format_data_type_([a-z][a-z0-9_]*)$", member)
+        if not match:
+            continue
+        name = match.group(1)
+        probe = getattr(dialect, f"supports_data_type_{name}", None)
+        if probe is not None and not probe():
+            continue
+        klass = by_name.get(name)
+        if klass is not None:
+            result[name] = klass
+    return result
 
 # --- W2: format/supports 1:1 correspondence ---
 
@@ -87,11 +122,11 @@ class TestFormatSupportsOneToOne:
         assert isinstance(dialect, OracleDataTypeSupport)
 
 
-# --- W2: supports_data_types() coverage ---
+# --- support coverage (formatter family) ---
 
 class TestSupportsDataTypes:
     def test_includes_core_types(self, dialect):
-        supported = dialect.supports_data_types()
+        supported = _supported_data_types(dialect)
         expected_core = [
             "integer", "bigint", "smallint", "float", "real", "double",
             "decimal", "boolean", "varchar", "char", "text", "blob",
@@ -101,10 +136,10 @@ class TestSupportsDataTypes:
             "interval", "xml", "custom",
         ]
         for name in expected_core:
-            assert name in supported, f"core type {name!r} missing from supports_data_types()"
+            assert name in supported, f"core type {name!r} missing from the formatter-backed support map"
 
     def test_includes_oracle_types(self, dialect):
-        supported = dialect.supports_data_types()
+        supported = _supported_data_types(dialect)
         # The eight words no core formatter here writes, and nothing else.
         expected_oracle = [
             "oracle_nvarchar2", "oracle_nclob", "oracle_long",
@@ -113,13 +148,13 @@ class TestSupportsDataTypes:
             "oracle_timestamp_ltz",
         ]
         for name in expected_oracle:
-            assert name in supported, f"oracle type {name!r} missing from supports_data_types()"
+            assert name in supported, f"oracle type {name!r} missing from the formatter-backed support map"
         assert set(expected_oracle) == {
             name for name in supported if name.startswith("oracle_")
         }, supported
 
     def test_values_are_data_type_classes(self, dialect):
-        supported = dialect.supports_data_types()
+        supported = _supported_data_types(dialect)
         for name, cls in supported.items():
             assert isinstance(cls, type), f"{name}: value is not a class"
             assert hasattr(cls, "name"), f"{name}: class has no name attribute"
@@ -137,7 +172,7 @@ class TestSupportsDataTypes:
         ``oracle_clob`` (CLOB is TextType's ``clob`` spelling), ``oracle_xml``
         (XMLTYPE is the XML concept), and the six above.
         """
-        supported = dialect.supports_data_types()
+        supported = _supported_data_types(dialect)
         for gone in (
             "oracle_clob", "oracle_xml",
             "oracle_integer", "oracle_smallint", "oracle_bigint",
@@ -191,32 +226,33 @@ class TestSupportsDataTypes:
                            "format_data_type_varbinary")
 
 
-# --- W3: substitute_data_types() ---
+# --- substitute suggestion mapping ---
 
 class TestSuggestedDataTypes:
     def test_returns_dict(self, dialect):
-        result = dialect.substitute_data_types()
-        assert isinstance(result, dict)
+        suggestion = dialect.suggest_substitute_types()
+        assert isinstance(suggestion, SubstituteTypeSuggestion)
+        assert isinstance(suggestion.mapping, dict)
 
     def test_keys_disjoint_from_supported(self, dialect):
-        supported_keys = set(dialect.supports_data_types().keys())
-        suggested_keys = set(dialect.substitute_data_types().keys())
+        supported_keys = set(_supported_data_types(dialect).keys())
+        suggested_keys = set(dialect.suggest_substitute_types().mapping.keys())
         overlap = supported_keys & suggested_keys
         assert not overlap, f"overlap between supported and suggested: {overlap}"
 
     def test_values_are_classes(self, dialect):
-        for name, cls in dialect.substitute_data_types().items():
+        for name, cls in dialect.suggest_substitute_types().mapping.items():
             assert isinstance(cls, type), f"{name}: value is not a class"
 
     def test_values_are_data_type_subclasses(self, dialect):
-        for name, cls in dialect.substitute_data_types().items():
+        for name, cls in dialect.suggest_substitute_types().mapping.items():
             assert issubclass(cls, DataType), f"{name}: {cls} is not a DataType"
 
     def test_substitutes_are_themselves_rendered(self, dialect):
         """Suggesting a class this dialect cannot write would trade a clear
         "not supported" for one whose advice does not work."""
-        supported = dialect.supports_data_types()
-        for name, cls in dialect.substitute_data_types().items():
+        supported = _supported_data_types(dialect)
+        for name, cls in dialect.suggest_substitute_types().mapping.items():
             assert cls.name in supported, (
                 f"suggested[{name!r}] = {cls.__name__}, whose name "
                 f"{cls.name!r} this dialect does not render"
@@ -232,7 +268,7 @@ class TestSuggestedDataTypes:
         assert "OracleRawType" in str(excinfo.value)
 
     def test_array_is_a_named_oracle_type_not_a_serialised_list(self, dialect):
-        assert dialect.substitute_data_types()["array"] is CustomType
+        assert dialect.suggest_substitute_types().mapping["array"] is CustomType
 
     def test_binary_is_a_bounded_raw_not_a_blob(self, dialect):
         """``binary`` is fixed-length, so its substitute must be the *bounded*
@@ -245,7 +281,7 @@ class TestSuggestedDataTypes:
         ``VARCHAR2``" and it does not pad. ``BLOB`` would be further away
         still, because it also drops the declared bound.
         """
-        assert dialect.substitute_data_types()["binary"] is OracleRawType
+        assert dialect.suggest_substitute_types().mapping["binary"] is OracleRawType
 
     @pytest.mark.parametrize("width", [1, 8, 16, 32, 64, 2000])
     def test_binary_renders_the_width_the_caller_declared(self, dialect, width):
@@ -272,14 +308,14 @@ class TestSuggestedDataTypes:
 
         https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/Data-Types.html
         """
-        assert dialect.substitute_data_types()["varbinary"] is BlobType
+        assert dialect.suggest_substitute_types().mapping["varbinary"] is BlobType
         assert dialect.format_data_type(
-            dialect.substitute_data_types()["varbinary"](dialect))[0] == "BLOB"
+            dialect.suggest_substitute_types().mapping["varbinary"](dialect))[0] == "BLOB"
 
     def test_the_two_byte_string_concepts_land_on_different_types(self, dialect):
         """``binary`` is bounded and ``varbinary`` is not; one substitute for
         both made them indistinguishable and gave the unbounded one a ceiling."""
-        sub = dialect.substitute_data_types()
+        sub = dialect.suggest_substitute_types().mapping
         assert sub["binary"] is not sub["varbinary"]
         assert sub["varbinary"] is not OracleRawType
 
@@ -289,8 +325,8 @@ class TestSuggestedDataTypes:
         and a declared ``blob`` and an introspected ``BLOB`` are the same object.
         A substitute class that rendered the same SQL under a second name would
         have made every ``blob`` column look changed."""
-        assert dialect.substitute_data_types()["varbinary"](dialect) == \
-            dialect.parse_type("BLOB")
+        assert dialect.suggest_substitute_types().mapping["varbinary"](dialect) == \
+            OracleTypeParser(dialect).parse("BLOB")
 
     def test_uuid_is_raw_16(self, dialect):
         """Oracle has **no** ``UUID`` data type in any release — 23ai added the
@@ -298,7 +334,7 @@ class TestSuggestedDataTypes:
         version 4 variant 1 UUID as a ``RAW(16)`` value". So the substitute is
         ``RAW(16)``, the width this backend already stores the 16 RFC 4122 bytes
         in."""
-        assert dialect.substitute_data_types()["uuid"] is OracleRawType
+        assert dialect.suggest_substitute_types().mapping["uuid"] is OracleRawType
 
     def test_the_uuid_substitute_renders_16_bytes_with_no_arguments(self, dialect):
         """The defect this replaces: the substitute used to render ``RAW(2000)``
@@ -309,7 +345,7 @@ class TestSuggestedDataTypes:
 
         https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/uuid.html
         """
-        substitute = dialect.substitute_data_types()["uuid"]
+        substitute = dialect.suggest_substitute_types().mapping["uuid"]
         assert dialect.format_data_type(substitute(dialect))[0] == "RAW(16)"
 
     def test_the_uuid_substitute_still_takes_an_explicit_width(self, dialect):
@@ -323,13 +359,13 @@ class TestSuggestedDataTypes:
         """One width, one answer: the Python-type route and the substitution
         route must not drift apart."""
         import uuid as _uuid
-        suggested = dialect.substitute_data_types()["uuid"]
+        suggested = dialect.suggest_substitute_types().mapping["uuid"]
         assert dialect.format_data_type(
             dialect.suggest_column_type(_uuid.UUID)
         )[0] == dialect.format_data_type(suggested(dialect))[0] == "RAW(16)"
 
     def test_enum_is_varchar(self, dialect):
-        assert dialect.substitute_data_types()["enum"] is VarCharType
+        assert dialect.suggest_substitute_types().mapping["enum"] is VarCharType
 
 
 # --- unsigned is a field, so it must be honoured or refused ---
@@ -406,7 +442,7 @@ class TestUnsignedIsRefused:
         either the flag changes the rendered SQL or it raises. Byte-identical
         SQL for both signs is the violation."""
         for name in ("integer", "smallint", "bigint", "tinyint"):
-            klass = dialect.supports_data_types()[name]
+            klass = _supported_data_types(dialect)[name]
             signed = dialect.format_data_type(klass(dialect))[0]
             try:
                 unsigned = dialect.format_data_type(
@@ -426,7 +462,7 @@ class TestUnsignedIsRefused:
         single row — ``NUMBER(38)`` — which is the whole of what it says about
         integers, and ``BIGINT`` is not an ANSI type at all."""
         for name in ("oracle_integer", "oracle_smallint", "oracle_bigint"):
-            assert name not in dialect.supports_data_types()
+            assert name not in _supported_data_types(dialect)
             assert not hasattr(dialect, f"format_data_type_{name}")
 
 
@@ -524,7 +560,7 @@ class TestUnsignedNumericIsRefused:
         changes the rendered SQL or it raises. Byte-identical SQL for both signs
         is the violation — and it is exactly what these four formatters used to do
         before the refusal was added."""
-        for name, klass, signed_sql, word in self._NUMERICS:
+        for name, klass, _signed_sql, _word in self._NUMERICS:
             signed = dialect.format_data_type(klass(dialect))[0]
             try:
                 unsigned = dialect.format_data_type(
@@ -592,7 +628,7 @@ class TestUnsignedNumericIsRefused:
             self, dialect):
         """The same rule in the *reading* direction.
 
-        ``parse_type`` reads Oracle's ``user_tab_columns`` rows and also
+        the introspection type parser reads Oracle's ``user_tab_columns`` rows and also
         caller-supplied DDL, and every branch below matches on the word in front
         of the attribute — so without a check here ``"NUMBER(10,2) UNSIGNED"``
         would come back as a *signed* ``DecimalType(10, 2)`` that ``==`` calls
@@ -602,10 +638,10 @@ class TestUnsignedNumericIsRefused:
         for raw in ("NUMBER(10,2) UNSIGNED", "FLOAT(126) UNSIGNED",
                     "NUMBER UNSIGNED", "BINARY_DOUBLE UNSIGNED"):
             with pytest.raises(UnsupportedFeatureError) as excinfo:
-                dialect.parse_type(raw)
+                OracleTypeParser(dialect).parse(raw)
             assert "UNSIGNED" in str(excinfo.value), raw
         # ... and an unsigned-free string of the same shapes is untouched.
-        assert dialect.parse_type("NUMBER(10,2)") == DecimalType(
+        assert OracleTypeParser(dialect).parse("NUMBER(10,2)") == DecimalType(
             dialect, 10, 2)
 
     def test_the_refusal_is_not_a_value_error(self, dialect):
@@ -680,12 +716,13 @@ class TestIntegerWidthsAgainstOraclesAnsiTable:
         assert len(set(rendered.values())) == len(self._WIDTHS), rendered
 
     def test_a_declared_integer_equals_the_introspected_one(self, dialect):
-        """``parse_type`` reads ``NUMBER(5)``/``NUMBER(10)``/``NUMBER(19)`` back
+        """the introspection type parser reads ``NUMBER(5)``/``NUMBER(10)``/``NUMBER(19)`` back
         as the **core** concepts, so a declared column and the catalog row it
         produced are the same object. This is the assertion the round trip is
         worth anything for: ``DataType.__eq__`` is class identity, so returning
         an Oracle-namespaced subclass here made ``IntegerType() !=
-        parse_type("NUMBER(10)")`` — the same column, reported as changed. The
+        introspection parser reads ``NUMBER(10)`` — the same column,
+        reported as changed. The
         deletion of ``OracleIntegerType`` / ``OracleSmallIntType`` /
         ``OracleBigIntType`` is what makes this hold."""
         for klass, raw in (
@@ -694,7 +731,7 @@ class TestIntegerWidthsAgainstOraclesAnsiTable:
             (BigIntType, "NUMBER(19)"),
         ):
             declared = klass(dialect)
-            parsed = dialect.parse_type(raw)
+            parsed = OracleTypeParser(dialect).parse(raw)
             assert type(parsed) is klass, raw
             assert declared == parsed, raw
             assert dialect.format_data_type(parsed)[0] == raw
@@ -702,7 +739,7 @@ class TestIntegerWidthsAgainstOraclesAnsiTable:
     def test_number_3_is_not_read_back_as_a_tinyint(self, dialect):
         """An asymmetry that is *not* fixed here, recorded so it is visible.
 
-        ``format_data_type_tinyint`` writes ``NUMBER(3)`` but ``parse_type``
+        ``format_data_type_tinyint`` writes ``NUMBER(3)`` but the introspection type parser
         reads ``NUMBER(3)`` back as ``DecimalType(precision=3)``. Oracle's
         catalog cannot tell the two apart — ``NUMBER(p)`` is one type — so the
         forward map has to pick a side and the reverse map picks a side too, and
@@ -716,8 +753,8 @@ class TestIntegerWidthsAgainstOraclesAnsiTable:
         to record that resolution is a decision covering all four widths at
         once, not one width at a time. So this asserts the current behaviour.
         """
-        assert type(dialect.parse_type("NUMBER(3)")) is DecimalType
-        assert dialect.parse_type("NUMBER(3)").precision == 3
+        assert type(OracleTypeParser(dialect).parse("NUMBER(3)")) is DecimalType
+        assert OracleTypeParser(dialect).parse("NUMBER(3)").precision == 3
 
     def test_a_width_is_a_function_of_the_range_not_of_the_word(self, dialect):
         """Two ``NUMBER`` precisions, chosen by range: ``NUMBER(5)`` covers
@@ -726,8 +763,8 @@ class TestIntegerWidthsAgainstOraclesAnsiTable:
         possible at all."""
         assert dialect.format_data_type(SmallIntType(dialect))[0] == "NUMBER(5)"
         assert dialect.format_data_type(IntegerType(dialect))[0] == "NUMBER(10)"
-        assert type(dialect.parse_type("NUMBER(5)")) is SmallIntType
-        assert type(dialect.parse_type("NUMBER(10)")) is IntegerType
+        assert type(OracleTypeParser(dialect).parse("NUMBER(5)")) is SmallIntType
+        assert type(OracleTypeParser(dialect).parse("NUMBER(10)")) is IntegerType
 
 
 class TestIntegerSpellingsOracleDoesNotHave:
@@ -804,7 +841,7 @@ class TestFloatSpellingsAgainstOraclesAnsiTable:
         """The point of writing the default out: what Oracle stores for a bare
         ``FLOAT`` is read back as ``FLOAT(126)``, and rendering that again must
         produce the same word, not a shorter one."""
-        parsed = dialect.parse_type("FLOAT(126)")
+        parsed = OracleTypeParser(dialect).parse("FLOAT(126)")
         assert type(parsed) is FloatType
         assert parsed.precision == 126
         assert dialect.format_data_type(parsed)[0] == "FLOAT(126)"
@@ -823,7 +860,7 @@ class TestFloatSpellingsAgainstOraclesAnsiTable:
 
     def test_every_double_spelling_round_trips_byte_identically(self, dialect):
         sql = dialect.format_data_type(DoubleType(dialect))[0]
-        parsed = dialect.parse_type(sql)
+        parsed = OracleTypeParser(dialect).parse(sql)
         assert dialect.format_data_type(parsed)[0] == sql
 
     def test_a_double_column_introspects_as_a_float_of_that_precision(self, dialect):
@@ -833,244 +870,10 @@ class TestFloatSpellingsAgainstOraclesAnsiTable:
         23c), so claiming it is the double concept would be a claim about the
         column the catalog does not support. It is Oracle's own ``FLOAT`` with
         Oracle's own precision, and that is what it parses to."""
-        parsed = dialect.parse_type("FLOAT(126)")
+        parsed = OracleTypeParser(dialect).parse("FLOAT(126)")
         assert type(parsed) is FloatType
         assert parsed.precision == 126
         assert dialect.format_data_type(parsed)[0] == "FLOAT(126)"
-
-
-class TestWhatOracleSuppliesForAnUndeclaredParameter:
-    """``type_parameter_defaults()`` — one entry, and the three refusals beside it.
-
-    The measurements behind this class were taken against **both** wired
-    servers — 21c (21.0.0.0.0) and 26ai Free (23.26.1.0.0) — which agree on
-    every row, so nothing here rests on one release:
-
-    ==================================  =========================  =====================
-    ``CREATE TABLE t (c …)``            reported                  declaration
-    ==================================  =========================  =====================
-    ``FLOAT``                           ``FLOAT``, prec **126**   **declared**
-    ``FLOAT(126)``                      ``FLOAT``, prec 126        —
-    ``REAL``                            ``FLOAT``, prec **63**    not declared
-    ``DOUBLE PRECISION``                ``FLOAT``, prec **126**   not declared
-    ``CHAR``                            ``CHAR``, len **1**       measured, not declared
-    ``VARCHAR2``                        ``ORA-00906``             not declared
-    ``INTERVAL``                        ``ORA-30089``             not a declaration at all
-    ==================================  =========================  =====================
-
-    The interesting content is the second column: three of the five unsized
-    forms **do not exist** on this server, which is what makes silence the right
-    answer for them and a documented number the right answer for ``FLOAT``.
-    """
-
-    def test_float_is_the_only_declared_entry(self, dialect):
-        assert dialect.type_parameter_defaults() == {
-            "float": {"precision": 126},
-        }
-
-    def test_the_declared_precision_is_what_the_catalog_reports(self, dialect):
-        """126, and it is **measured**, not read off the rendered literal.
-
-        The number the dialect already wrote as a literal is documented twice by
-        Oracle — the built-in summary gives the range ("The precision ``p`` can
-        range from 1 to 126 binary digits") and the ANSI conversion table's
-        note 2 gives the default ("The default precision for this data type is
-        126 binary, or 38 decimal"). Documented is not the same as *stored*,
-        which is why the probe created the column and read ``DATA_PRECISION``
-        back rather than assuming: on 21c and on 26ai a bare ``FLOAT`` reports
-        ``DATA_TYPE='FLOAT'`` and ``DATA_PRECISION=126``. It agrees, and that is
-        what licenses the entry.
-        https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/Data-Types.html
-        """
-        assert dialect.type_parameter_defaults()["float"]["precision"] == 126
-        doc = (type(dialect).type_parameter_defaults.__doc__ or "").replace("\n", " ")
-        assert "126 binary, or 38 decimal" in doc, doc
-
-    def test_no_rendering_changed(self, dialect):
-        """Before and after are byte-identical, which is why this step is safe.
-
-        ``float`` and ``double`` both rendered ``FLOAT(126)`` and ``real``
-        rendered ``FLOAT(63)`` before the declaration existed. Reading the number
-        from the one place it is written down is what keeps the declaration and
-        the formatters from drifting apart; it does not move any output.
-        """
-        assert dialect.format_data_type(FloatType(dialect))[0] == "FLOAT(126)"
-        assert dialect.format_data_type(DoubleType(dialect))[0] == "FLOAT(126)"
-        assert dialect.format_data_type(RealType(dialect))[0] == "FLOAT(63)"
-        assert dialect.format_data_type(CharType(dialect))[0] == "CHAR"
-        assert dialect.format_data_type(
-            IntervalType(dialect))[0] == "INTERVAL DAY(2) TO SECOND(6)"
-
-    def test_the_entry_is_live_and_closes_the_float_gap(self, dialect):
-        """Core resolves ``precision`` the way it resolves ``length``, so the
-        declaration now reaches the type.
-
-        ``FloatType(d).precision`` is 126 rather than ``None``, which makes a
-        bare declaration and the ``FloatType(d, precision=126)`` the catalog
-        yields **the same value object** — exactly the gap this entry was
-        written for.  The rendering did not move: ``FLOAT(126)`` is what the
-        formatter wrote before and what it writes now, so this is equality and
-        rendering becoming one story rather than a change to the DDL.
-        """
-        assert FloatType(dialect).precision == 126
-        assert FloatType(dialect) == FloatType(dialect, precision=126)
-        assert hash(FloatType(dialect)) == hash(FloatType(dialect, precision=126))
-        doc = type(dialect).type_parameter_defaults.__doc__ or ""
-        assert "no longer inert" in doc, doc
-
-    def test_char_is_measured_and_still_not_declared(self, dialect):
-        """Oracle documents 1 and the server stores it — and declaring it would
-        change DDL that already works.
-
-        ``CREATE TABLE t (c CHAR)`` is accepted on both servers and reports
-        ``DATA_LENGTH = 1`` and ``CHAR_LENGTH = 1``, exactly what ``CHAR(1)``
-        reports. So the declaration would be truthful. It is **not** written
-        because resolving ``length`` to 1 makes ``format_data_type_char`` render
-        ``CHAR(1)`` instead of the bare ``CHAR``: the same column in different
-        bytes, which rule 6 of the cross-repo contract does not permit for its
-        own sake. The asymmetry is recorded in that method's docstring and is one
-        line to close if the maintainer wants it.
-        """
-        declared = dialect.type_parameter_defaults()
-        assert "char" not in declared
-        assert dialect.parse_type("CHAR").length == 1
-        assert dialect.format_data_type(
-            CharType(dialect))[0] != dialect.format_data_type(
-            CharType(dialect, length=1))[0]
-        doc = type(dialect).format_data_type_char.__doc__ or ""
-        assert "one line to reverse" in doc, doc
-
-    def test_varchar_is_refused_by_the_server_so_nothing_is_declared(self, dialect):
-        """``VARCHAR2`` bare is ``ORA-00906`` on both servers.
-
-        Oracle's own summary is "You must specify size for a ``VARCHAR2``" and
-        the server agrees, so there is no bare ``VARCHAR2`` column for a catalog
-        to report a width for. The ``VARCHAR2(4000)`` this dialect writes is its
-        own ``MAX_STRING_SIZE = STANDARD`` ceiling, chosen so the concept still
-        renders — a decision, not a fact read back — which is why it must not
-        appear as a server default.
-        """
-        assert "varchar" not in dialect.type_parameter_defaults()
-        assert dialect.format_data_type(
-            VarCharType(dialect))[0] == "VARCHAR2(4000)"
-        with pytest.raises(ValueError, match="ORA-00906"):
-            dialect.parse_type("VARCHAR2")
-
-    def test_interval_is_not_a_declaration_and_the_reason_is_the_shape(self,
-                                                                       dialect):
-        """Three measurements say it does not fit, and the third is the real one.
-
-        * a bare ``INTERVAL`` is ``ORA-30089`` on both servers, so there is no
-          unsized interval for Oracle to have supplied anything for;
-        * ``INTERVAL DAY TO SECOND`` **is** accepted and reports
-          ``DATA_PRECISION=2``, ``DATA_SCALE=6`` — so the two numbers are
-          genuinely documented (``day_precision`` "The default is 2",
-          ``fractional_seconds_precision`` "The default is 6"; NLSPG 4.2.2.2);
-        * and yet the value is a whole qualifier ``DAY(2) TO SECOND(6)``, not a
-          parameter. ``fields`` is a member of the closed SQL:2016
-          :class:`IntervalQualifier` vocabulary, so a declaration would need a
-          key standing for a qualifier and the two precisions inside it would
-          have nowhere to land.
-
-        Oracle also has two interval types and this dialect picks the wider one
-        for an unqualified declaration — ``DAY TO SECOND`` over ``YEAR TO
-        MONTH`` — which is a choice made here rather than a value read back. That
-        is the difference between ``FLOAT`` (a server default, declarable) and
-        ``INTERVAL`` (a backend decision, not declarable), and it is why this
-        concept is documentation rather than an entry.
-        https://docs.oracle.com/en/database/oracle/oracle-database/26/nlspg/datetime-data-types-and-time-zone-support.html
-        """
-        assert "interval" not in dialect.type_parameter_defaults()
-        doc = type(dialect).format_data_type_interval.__doc__ or ""
-        assert "ORA-30089" in doc, doc
-        assert "ORA-00963" in doc, doc
-        assert "day_precision" in doc and "The default is 2" in doc, doc
-        assert "fractional_seconds_precision" in doc, doc
-        assert "The default is 6" in doc, doc
-        # ... and the choice is visible in the rendered SQL, which is unchanged.
-        assert dialect.format_data_type(
-            IntervalType(dialect))[0] == "INTERVAL DAY(2) TO SECOND(6)"
-        assert dialect.format_data_type(
-            IntervalType(dialect, fields="YEAR TO MONTH")
-        )[0] == "INTERVAL YEAR TO MONTH"
-
-    def test_real_declares_nothing_but_does_take_unsigned(self, dialect):
-        """``REAL`` declares no **parameter**, and the one field it does carry —
-        ``unsigned`` — is refused.
-
-        Its ``FLOAT(63)`` is the ANSI conversion table's *mapping* of one concept
-        onto Oracle's word (note 4), not a default for an absent parameter:
-        ``type_parameter_defaults()`` has no ``real`` entry, so there is nothing
-        for a declaration to fill in and nothing for a server default to resolve
-        into. The server confirms the point, reporting a ``REAL`` column back as
-        ``DATA_TYPE='FLOAT'``, ``DATA_PRECISION = 63`` (measured on 21c and on
-        26ai Free, which agree).
-
-        ``PARAMETERS`` is **not** empty, and saying otherwise would be a false
-        claim about a class: core's ``numeric.py`` gives ``RealType`` exactly one
-        field, ``unsigned``, because MySQL and MariaDB document ``UNSIGNED`` in
-        this word's slot (``REAL[(M,D)] [SIGNED | UNSIGNED | ZEROFILL]``). Oracle
-        does not, so the honest answer is a refusal rather than a bare
-        ``FLOAT(63)`` that silently discards the declaration — see
-        ``_refuse_unsigned_numeric``.
-        """
-        assert RealType.PARAMETERS == ("unsigned",)
-        assert not hasattr(RealType(dialect), "precision")
-        assert dialect.format_data_type(RealType(dialect))[0] == "FLOAT(63)"
-        assert "real" not in dialect.type_parameter_defaults()
-
-    def test_double_declares_nothing_though_it_takes_unsigned(self, dialect):
-        """``DoubleType`` **does** carry a parameter — ``unsigned`` — and that is
-        a reason not to declare it, not a licence to.
-
-        ``DOUBLE PRECISION``'s ``FLOAT(126)`` is the ANSI conversion table's
-        mapping of the concept (note 3), the same as ``float``'s, and the class
-        has no precision field to resolve into. Declaring ``double`` would
-        therefore assert something about a field it does not have, while
-        ``double``'s actual identity field is ``unsigned`` — which Oracle has no
-        way to store (``FLOAT`` takes no ``UNSIGNED`` modifier), so there is no
-        server answer to declare for that one either.
-
-        Worth pinning in this direction because the empty-``PARAMETERS`` claim
-        would otherwise look like a good generalisation from ``RealType``, and it
-        is false: core's ``numeric.py`` gives ``DoubleType`` an ``unsigned``.
-
-        The second half is the paradigm rule: the field is in ``PARAMETERS``, so
-        it is part of the type's identity, and this dialect must therefore either
-        honour it or refuse it. Oracle cannot express it, so it is **refused**
-        with a message naming it — writing ``FLOAT(126)`` for an unsigned request
-        would hand back a signed column and report success, which is the silent
-        loss the refusal exists to prevent. This assertion is what changed when
-        the field arrived on ``double``; it used to assert the *same* rendered SQL
-        either way, which was the violation.
-        """
-        assert "double" not in dialect.type_parameter_defaults()
-        assert dialect.format_data_type(DoubleType(dialect))[0] == "FLOAT(126)"
-        with pytest.raises(UnsupportedFeatureError) as caught:
-            dialect.format_data_type(DoubleType(dialect, unsigned=True))
-        message = str(caught.value)
-        assert "unsigned" in message, message
-        assert "ORA-00907" in message, message          # measured on 21c
-        assert "ORA-03062" in message, message          # measured on 26ai
-        assert caught.value.suggestion and "CHECK" in caught.value.suggestion
-
-    def test_the_declaration_reads_the_same_number_the_range_check_bounds(
-            self, dialect):
-        """One fact, one home.
-
-        The upper bound of the ``FLOAT`` range check and the value written for an
-        absent precision are both 126 because both read
-        :meth:`type_parameter_defaults`. A future edit to one and not the other
-        would let this backend accept a precision its own fallback would never
-        write, or write one it would refuse — which is exactly the drift this
-        mechanism exists to remove.
-        """
-        sql, _ = dialect.format_data_type(FloatType(dialect))
-        assert sql == f"FLOAT({dialect.type_parameter_defaults()['float']['precision']})"
-        assert dialect.format_data_type(
-            FloatType(dialect, precision=126))[0] == sql
-        with pytest.raises(ValueError, match="1-126"):
-            dialect.format_data_type(FloatType(dialect, precision=127))
 
 
 # --- Oracle has no UUID data type, in any release ---
@@ -1078,7 +881,7 @@ class TestWhatOracleSuppliesForAnUndeclaredParameter:
 class TestOracleHasNoUUIDType:
     """A wrong statement about a vendor is worse than a missing one, because
     it gets relied upon. An earlier revision of this backend's
-    ``substitute_data_types()`` docstring said "Oracle added a native ``UUID``
+    ``suggest_substitute_types()`` docstring said "Oracle added a native ``UUID``
     data type only in 23ai". That was false: 23ai added the ``UUID()``
     *function*, and Oracle has no ``UUID`` data type through 26ai. What the
     backend needs from these tests is not that the sentence is gone but that
@@ -1086,10 +889,10 @@ class TestOracleHasNoUUIDType:
 
     def test_the_uuid_substitute_is_not_a_native_uuid_type(self, dialect):
         """Oracle's substitute is ``RAW``, never a word Oracle does not have."""
-        assert dialect.substitute_data_types()["uuid"].name == "oracle_raw"
-        assert "uuid" not in dialect.supports_data_types()
+        assert dialect.suggest_substitute_types().mapping["uuid"].name == "oracle_raw"
+        assert "uuid" not in _supported_data_types(dialect)
 
-    def test_uuid_comes_from_substitute_data_types_not_a_formatter(self, dialect):
+    def test_uuid_comes_from_substitute_suggestion_not_a_formatter(self, dialect):
         """No ``format_data_type_uuid``: writing it would emit DDL Oracle's
         grammar cannot parse."""
         assert not hasattr(dialect, "format_data_type_uuid")
@@ -1112,8 +915,8 @@ class TestCoreConceptsAreDeclared:
                     and klass.__module__.startswith(
                         "rhosocial.activerecord.backend.expression.types"):
                 core_classes.append(klass)
-        rendered = set(dialect.supports_data_types())
-        suggested = set(dialect.substitute_data_types())
+        rendered = set(_supported_data_types(dialect))
+        suggested = set(dialect.suggest_substitute_types().mapping)
         undeclared = sorted(
             c.name for c in core_classes
             if c.name not in rendered and c.name not in suggested
@@ -1123,20 +926,20 @@ class TestCoreConceptsAreDeclared:
     def test_xml_is_rendered_not_substituted(self, dialect):
         """Oracle has a native XML type, so it renders the XML concept rather
         than substituting text for it."""
-        assert "xml" in dialect.supports_data_types()
-        assert "xml" not in dialect.substitute_data_types()
+        assert "xml" in _supported_data_types(dialect)
+        assert "xml" not in dialect.suggest_substitute_types().mapping
         assert dialect.format_data_type(XmlType(dialect))[0] == "XMLTYPE"
 
     def test_interval_is_rendered_not_substituted(self, dialect):
-        assert "interval" in dialect.supports_data_types()
-        assert "interval" not in dialect.substitute_data_types()
+        assert "interval" in _supported_data_types(dialect)
+        assert "interval" not in dialect.suggest_substitute_types().mapping
         assert dialect.format_data_type(
             IntervalType(dialect, fields="YEAR TO MONTH"))[0] == "INTERVAL YEAR TO MONTH"
 
     def test_custom_is_rendered(self, dialect):
-        """parse_type yields CustomType for every unmodelled name, so it must
+        """The introspection parser yields CustomType for an unmodelled name, so it must
         be renderable for an introspected schema to be written back."""
-        assert "custom" in dialect.supports_data_types()
+        assert "custom" in _supported_data_types(dialect)
 
 
 # --- D9: spelling gates ---
@@ -1219,7 +1022,7 @@ class TestReParentedIdentities:
         assert dialect.format_data_type(
             VarCharType(dialect, length=8))[0] == "VARCHAR2(8)"
         assert not isinstance(CharType(length=8), VarCharType)
-        assert dialect.parse_type("CHAR(8)") != dialect.parse_type("VARCHAR2(8)")
+        assert OracleTypeParser(dialect).parse("CHAR(8)") != OracleTypeParser(dialect).parse("VARCHAR2(8)")
 
     def test_a_declared_string_equals_the_introspected_one(self, dialect):
         """The reason ``OracleCharType`` / ``OracleVarChar2Type`` are gone. Both
@@ -1228,7 +1031,7 @@ class TestReParentedIdentities:
         identity — reported a fixed-length column as changed against the very
         declaration that produced it."""
         for klass, raw in ((CharType, "CHAR(10)"), (VarCharType, "VARCHAR2(10)")):
-            assert klass(dialect, length=10) == dialect.parse_type(raw), raw
+            assert klass(dialect, length=10) == OracleTypeParser(dialect).parse(raw), raw
 
     def test_long_is_not_clob(self, dialect):
         """LONG has no LOB locator and a 2GB ceiling; it is the deprecated
@@ -1336,17 +1139,17 @@ class TestNativeBooleanColumnType:
     @pytest.mark.parametrize("raw", ["BOOLEAN", "BOOL", "boolean"])
     def test_parse_reads_the_native_column_type(self, dialect, raw):
         """A ``BOOLEAN`` column introspects as ``DATA_TYPE = 'BOOLEAN'`` and
-        ``parse_type`` has to reach the boolean concept from it — not
+        the introspection type parser has to reach the boolean concept from it — not
         ``CustomType``, which is where every unmodelled name lands and which
         would render the bare word back by accident rather than by
         understanding. ``BOOL`` is Oracle's documented abbreviation of
         ``BOOLEAN``."""
-        parsed = dialect.parse_type(raw)
+        parsed = OracleTypeParser(dialect).parse(raw)
         assert type(parsed) is BooleanType, raw
 
     def test_a_native_boolean_column_round_trips(self, dialect):
         sql = dialect.format_data_type(BooleanType(dialect))[0]
-        assert dialect.format_data_type(dialect.parse_type(sql))[0] == sql
+        assert dialect.format_data_type(OracleTypeParser(dialect).parse(sql))[0] == sql
 
 
 class TestNativeJsonColumnType:

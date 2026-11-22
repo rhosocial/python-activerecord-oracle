@@ -21,6 +21,7 @@ elif sys.version_info >= (3, 12):
 
 import pytest
 from rhosocial.activerecord.backend.dialect import protocols as dialect_protocols
+from rhosocial.activerecord.backend.suggestion import protocols as suggestion_protocols
 from rhosocial.activerecord.backend.impl.oracle import dialect as oracle_dialect
 
 
@@ -53,14 +54,14 @@ def get_all_protocol_methods(proto: type) -> set:
 # Both are listed here -- satisfying one without the other is a real and
 # interesting state, not an accident.
 ORACLE_PROTOCOLS = [
-    dialect_protocols.PartitionBuildSuggestionSupport,
-    dialect_protocols.PartitionTableDropSuggestionSupport,
-    dialect_protocols.PartitionTableAlterSuggestionSupport,
-    dialect_protocols.PartitionAddSuggestionSupport,
-    dialect_protocols.PartitionDropSuggestionSupport,
-    dialect_protocols.PartitionSplitSuggestionSupport,
-    dialect_protocols.PartitionMergeSuggestionSupport,
-    dialect_protocols.PartitionRetentionSuggestionSupport,
+    suggestion_protocols.PartitionBuildSuggestionSupport,
+    suggestion_protocols.PartitionTableDropSuggestionSupport,
+    suggestion_protocols.PartitionTableAlterSuggestionSupport,
+    suggestion_protocols.PartitionAddSuggestionSupport,
+    suggestion_protocols.PartitionDropSuggestionSupport,
+    suggestion_protocols.PartitionSplitSuggestionSupport,
+    suggestion_protocols.PartitionMergeSuggestionSupport,
+    suggestion_protocols.PartitionRetentionSuggestionSupport,
     # --- Named objects: which namespace levels a name may carry ---
     dialect_protocols.ForeignTableObjectSupport,
     dialect_protocols.IndexObjectSupport,
@@ -100,7 +101,7 @@ ORACLE_PROTOCOLS = [
     # The column-class table: which column a common Python type resolves
     # to. OracleColumnTypeMixin supplies the table; the storage half is
     # DataTypeSupport, classified with the DDL protocols below.
-    dialect_protocols.ColumnTypeSupport,
+    suggestion_protocols.ColumnTypeSuggestionSupport,
     # --- SQL/XML ---
     dialect_protocols.SQLXMLAggregationSupport,
     dialect_protocols.SQLXMLConstructionSupport,
@@ -127,7 +128,7 @@ ORACLE_PROTOCOLS = [
     # latter, and declares it True from 12c on.
     dialect_protocols.AutoIncrementColumnSupport,
     dialect_protocols.IdentityColumnSupport,
-    dialect_protocols.IntegerAutoIncrementColumnSuggestionSupport,
+    suggestion_protocols.IntegerAutoIncrementColumnSuggestionSupport,
     dialect_protocols.ColumnAttributeSupport,
     dialect_protocols.CommentSupport,
     dialect_protocols.ConstraintSupport,

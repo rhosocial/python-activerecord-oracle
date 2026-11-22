@@ -70,7 +70,7 @@ a declaration and the catalog row it produced compare **unequal** — measured o
 this backend before the deletion:
 
 ===================== =========================== =================== ========
-declared              what ``parse_type`` returned ``==``                SQL equal
+declared              what the introspection type parser returned ``==``                SQL equal
 ===================== =========================== =================== ========
 ``IntegerType()``     ``OracleIntegerType()``      ``False``            ``True``
 ``SmallIntType()``    ``OracleSmallIntType()``     ``False``            ``True``
@@ -81,7 +81,7 @@ declared              what ``parse_type`` returned ``==``                SQL equ
 ===================== =========================== =================== ========
 
 Six columns that render identical SQL and are the same column, reported by the
-schema differ as changed. ``parse_type`` now returns the core class, the
+schema differ as changed. the introspection type parser now returns the core class, the
 declaration and the introspection agree, and the round trip is byte-identical as
 well as equal.
 
@@ -209,7 +209,7 @@ class OracleRawType(VarBinaryType):
     they are one type would be false about storage.
 
     Prefixed because core ``varbinary`` is **substituted** on this backend
-    rather than rendered (``substitute_data_types()`` names this class for it):
+    rather than rendered (``suggest_substitute_types()`` names this class for it):
     there is no ``format_data_type_varbinary``, so this class is the only way
     to write a bounded byte string at all.
 
@@ -237,7 +237,7 @@ class OracleRawType(VarBinaryType):
             ``MAX_STRING_SIZE = STANDARD`` ceiling: a substitute that renders
             a 2 KB column for a 128-bit identifier is a column that does not
             match what the caller declared, and this class is what
-            ``substitute_data_types()`` points a caller at for ``uuid``.
+            ``suggest_substitute_types()`` points a caller at for ``uuid``.
 
             It is **not** a default for ``binary``, the other concept this
             class substitutes for: 16 is the width a UUID needs and nothing
@@ -246,7 +246,7 @@ class OracleRawType(VarBinaryType):
             caller declared. ``varbinary`` is not this class at all — a
             variable-length byte string with no ceiling is core
             :class:`~...expression.types.BlobType` (``BLOB``). See
-            ``mixins/types.py``'s ``substitute_data_types`` for the reasoning
+            ``mixins/types.py``'s ``suggest_substitute_types`` for the reasoning
             and the measurements.
 
             A byte string of any other width is spelled out —
@@ -307,7 +307,7 @@ class OracleBinaryFloatType(FloatType):
     ``DATA_TYPE = 'FLOAT'`` with ``DATA_PRECISION = 63``.
 
     Core ``FloatType`` renders ``FLOAT(p)`` (126 by default), so before this
-    class ``parse_type`` answered the catalog word with
+    class the introspection type parser answered the catalog word with
     ``FloatType(precision=63)`` and re-rendered it as ``FLOAT(63)`` — a
     write-back named a different storage type, and object equality made the
     schema differ treat the 4-byte IEEE column and the NUMBER-based one as
@@ -335,7 +335,7 @@ class OracleBinaryDoubleType(DoubleType):
     collapse was measured for it: the catalog reports ``DATA_TYPE =
     'BINARY_DOUBLE'`` with ``DATA_LENGTH = 8`` on all three wired servers,
     while a ``DOUBLE PRECISION`` column reports ``DATA_TYPE = 'FLOAT'`` with
-    ``DATA_PRECISION = 126``. Before this class ``parse_type`` answered
+    ``DATA_PRECISION = 126``. Before this class the introspection type parser answered
     ``BINARY_DOUBLE`` with core :class:`DoubleType` and re-rendered
     ``FLOAT(126)``, so the differ could not distinguish the IEEE column from
     the NUMBER-based one and a write-back named the other type (finding
@@ -373,7 +373,7 @@ class OracleTimestampLtzType(TimestampTzType):
     ``'TIMESTAMP(6) WITH TIME ZONE'``.
 
     Core :class:`TimestampTzType` renders ``TIMESTAMP(n) WITH TIME ZONE``, so
-    before this class ``parse_type`` answered the LOCAL word with the core one
+    before this class the introspection type parser answered the LOCAL word with the core one
     and re-rendered it **without** ``LOCAL``: a write-back silently changed the
     column's storage semantics, and object equality made the schema differ
     treat the two columns as one. That is finding F.4-3 of the plan appendix

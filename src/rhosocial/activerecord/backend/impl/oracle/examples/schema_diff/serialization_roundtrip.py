@@ -8,7 +8,7 @@ live database.
 
 Supported versions: Oracle 12c+
 """
-from rhosocial.activerecord.backend.suggestion import IntegerAutoIncrementSuggestionRenderer  # noqa: E402
+from rhosocial.activerecord.base.derivation import integer_auto_increment_parts  # noqa: E402
 
 import json
 
@@ -47,10 +47,10 @@ backend.execute(sql, params)
 
 expr = CreateTableStatement(
     dialect=dialect, table=Table(dialect, "USERS"), columns=[
-        ColumnDefinition(dialect, "ID"[0], IntegerAutoIncrementSuggestionRenderer().parts(dialect, IntegerType(dialect))[0],
+        ColumnDefinition(dialect, "ID"[0], integer_auto_increment_parts(dialect, IntegerType(dialect))[0],
             constraints=[
                 ColumnConstraint(dialect, branch=ColumnPrimaryKeyConstraint(dialect)),
-            ], attributes=IntegerAutoIncrementSuggestionRenderer().parts(dialect, IntegerType(dialect))[1]),
+            ], attributes=integer_auto_increment_parts(dialect, IntegerType(dialect))[1]),
         ColumnDefinition(dialect, "NAME", VarCharType(length=100, dialect=dialect)),
     ]
 )

@@ -15,7 +15,7 @@ that convention.
 Type usage follows issue #108: each column is given a concrete
 ``DataType`` instance rather than a free-form ``data_type`` string.
 """
-from rhosocial.activerecord.backend.suggestion import IntegerAutoIncrementSuggestionRenderer  # noqa: E402
+from rhosocial.activerecord.base.derivation import integer_auto_increment_parts  # noqa: E402
 
 from rhosocial.activerecord.backend.expression.objects import Table
 from rhosocial.activerecord.backend.expression.statements.ddl_table import (
@@ -40,14 +40,14 @@ def create_users_table(dialect):
             ColumnDefinition(
                 dialect,
                 "id"[0],
-                IntegerAutoIncrementSuggestionRenderer().parts(dialect, IntegerType(dialect))[0],
+                integer_auto_increment_parts(dialect, IntegerType(dialect))[0],
                 constraints=[
                     ColumnConstraint(
                         dialect,
                         branch=ColumnPrimaryKeyConstraint(dialect),
                     ),
                 ],
-             attributes=IntegerAutoIncrementSuggestionRenderer().parts(dialect, IntegerType(dialect))[1]),
+             attributes=integer_auto_increment_parts(dialect, IntegerType(dialect))[1]),
             ColumnDefinition(dialect, "name", VarCharType(length=255, dialect=dialect)),
             ColumnDefinition(dialect, "email", VarCharType(length=255, dialect=dialect)),
         ],
@@ -68,14 +68,14 @@ def create_posts_table(dialect):
             ColumnDefinition(
                 dialect,
                 "id"[0],
-                IntegerAutoIncrementSuggestionRenderer().parts(dialect, IntegerType(dialect))[0],
+                integer_auto_increment_parts(dialect, IntegerType(dialect))[0],
                 constraints=[
                     ColumnConstraint(
                         dialect,
                         branch=ColumnPrimaryKeyConstraint(dialect),
                     ),
                 ],
-             attributes=IntegerAutoIncrementSuggestionRenderer().parts(dialect, IntegerType(dialect))[1]),
+             attributes=integer_auto_increment_parts(dialect, IntegerType(dialect))[1]),
             ColumnDefinition(dialect, "title", VarCharType(length=255, dialect=dialect)),
             ColumnDefinition(dialect, "user_id", IntegerType(dialect)),
         ],
@@ -100,14 +100,14 @@ def create_custom_table(dialect, table_name: str = "custom_table"):
             ColumnDefinition(
                 dialect,
                 "id"[0],
-                IntegerAutoIncrementSuggestionRenderer().parts(dialect, IntegerType(dialect))[0],
+                integer_auto_increment_parts(dialect, IntegerType(dialect))[0],
                 constraints=[
                     ColumnConstraint(
                         dialect,
                         branch=ColumnPrimaryKeyConstraint(dialect),
                     ),
                 ],
-             attributes=IntegerAutoIncrementSuggestionRenderer().parts(dialect, IntegerType(dialect))[1]),
+             attributes=integer_auto_increment_parts(dialect, IntegerType(dialect))[1]),
             ColumnDefinition(dialect, "value", VarCharType(length=255, dialect=dialect)),
         ],
     )

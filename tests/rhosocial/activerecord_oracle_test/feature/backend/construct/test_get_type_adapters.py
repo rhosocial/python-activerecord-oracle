@@ -63,9 +63,12 @@ class TestGetTypeAdapters:
         assert first == second
 
     def test_default_adapter_suggestions_are_still_provided(self, backend):
-        suggestions = backend.get_default_adapter_suggestions()
-        assert isinstance(suggestions, dict)
-        assert suggestions
+        from rhosocial.activerecord.backend.suggestion.definitions import DataAdapterSuggestion
+
+        suggestion = backend.suggest_data_adapters()
+        assert isinstance(suggestion, DataAdapterSuggestion)
+        assert isinstance(suggestion.table, dict)
+        assert suggestion.table
 
 def test_every_extra_value_class_has_an_adapter(backend):
     """An extra suggestion is only usable if the value can also be adapted.
@@ -75,7 +78,7 @@ def test_every_extra_value_class_has_an_adapter(backend):
     entry without an adapter would build a column nothing can carry a value
     into, which is worse than refusing the type outright.
     """
-    extras = backend.dialect.suggested_extra_data_types()
+    extras = backend.dialect.suggest_extra_data_types().table
     registered = {py for (py, _db) in backend.adapter_registry.get_all_adapters()}
 
     missing = [entry.__name__ for entry in extras if entry not in registered]

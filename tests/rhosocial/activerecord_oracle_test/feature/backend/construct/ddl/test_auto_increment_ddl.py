@@ -17,7 +17,7 @@ dialect has neither, so the DEFAULT is *refused* with a message naming the
 Both directions are pinned, because a case that only ever exercises the working
 side cannot notice the refusal going away.
 """
-from rhosocial.activerecord.backend.suggestion import IntegerAutoIncrementSuggestionRenderer  # noqa: E402
+from rhosocial.activerecord.base.derivation import integer_auto_increment_parts  # noqa: E402
 
 import pytest
 
@@ -59,7 +59,7 @@ def dialect_with_boolean():
 
 
 def _id_column(dialect, data_type):
-    suggested_type, attributes = IntegerAutoIncrementSuggestionRenderer().parts(dialect, data_type)
+    suggested_type, attributes = integer_auto_increment_parts(dialect, data_type)
     return ColumnDefinition(
         dialect, "id", suggested_type,
         constraints=[ColumnConstraint(dialect, branch=ColumnPrimaryKeyConstraint(dialect))],

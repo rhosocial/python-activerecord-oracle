@@ -39,6 +39,42 @@ def _core_concepts():
     )
 
 
+
+def _supported_data_types(dialect):
+    """Derive the formatter-backed support map (core retired the old support map).
+
+    A formatter is the declaration of support; a ``supports_data_type_<name>``
+    probe is the only thing that can opt a rendered name out (version gates).
+    """
+    import re
+
+    by_name = {}
+    stack = [DataType]
+    seen = set()
+    while stack:
+        klass = stack.pop()
+        if klass in seen:
+            continue
+        seen.add(klass)
+        name = getattr(klass, "name", None)
+        if name:
+            by_name.setdefault(name, klass)
+        stack.extend(klass.__subclasses__())
+
+    result = {}
+    for member in dir(type(dialect)):
+        match = re.match(r"^format_data_type_([a-z][a-z0-9_]*)$", member)
+        if not match:
+            continue
+        name = match.group(1)
+        probe = getattr(dialect, f"supports_data_type_{name}", None)
+        if probe is not None and not probe():
+            continue
+        klass = by_name.get(name)
+        if klass is not None:
+            result[name] = klass
+    return result
+
 def _renderable_substitute(dialect, klass):
     """Minimum valid construction for substitutes that carry parameters.
 
@@ -58,8 +94,8 @@ def _renderable_substitute(dialect, klass):
 def test_every_core_concept_is_declared(version):
     """D9: rendered or substituted -- silence is not an answer."""
     dialect = _dialect(version)
-    supported = set(dialect.supports_data_types())
-    substitutes = dialect.substitute_data_types()
+    supported = set(_supported_data_types(dialect))
+    substitutes = dialect.suggest_substitute_types().mapping
     undeclared = [
         name for name in _core_concepts() if name not in supported and name not in substitutes
     ]
@@ -70,8 +106,8 @@ def test_every_core_concept_is_declared(version):
 def test_substitutes_are_disjoint_and_renderable(version):
     """A substitute must be a DataType class this dialect really writes."""
     dialect = _dialect(version)
-    supported = set(dialect.supports_data_types())
-    substitutes = dialect.substitute_data_types()
+    supported = set(_supported_data_types(dialect))
+    substitutes = dialect.suggest_substitute_types().mapping
     assert not supported & set(substitutes)
 
     for key, klass in substitutes.items():
@@ -84,7 +120,7 @@ def test_substitutes_are_disjoint_and_renderable(version):
 def test_formatter_and_probe_families_are_one_to_one(version):
     """D10: a formatter has a probe, and an absent answer is an explicit probe.
 
-    ``supports_data_types()`` may omit a version-gated concept; that is an
+    the formatter family may omit a version-gated concept; that is an
     answer only when its probe says False. A formatter with no probe at all,
     or a supported key with no formatter, breaks the 1:1 discipline.
     """
@@ -105,7 +141,7 @@ def test_formatter_and_probe_families_are_one_to_one(version):
         f"probe-only: {sorted(probe_names - format_names)}"
     )
 
-    supported = set(dialect.supports_data_types())
+    supported = set(_supported_data_types(dialect))
     assert supported <= format_names
     for name in sorted(format_names - supported):
         probe = getattr(dialect, f"supports_data_type_{name}")

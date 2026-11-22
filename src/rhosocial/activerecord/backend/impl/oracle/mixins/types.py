@@ -11,17 +11,21 @@ Two halves of one contract, both keyed on ``DataType.name``:
   has no name for, and it only holds when the formatter writes a word no core
   formatter here writes — see the class docstring;
 * **stance** — ``supports_data_type_<name>`` for each of those, plus
-  ``substitute_data_types()`` for the core concepts Oracle stores some other
+  ``suggest_substitute_types()`` for the core concepts Oracle stores some other
   way. Nothing is left undeclared: a concept this dialect cannot spell still
   names its substitute, because "unsupported" on its own tells the caller
   nothing they can act on.
+
+Parsing a server-reported type spelling back into a ``DataType`` is an
+introspection-only concern (``introspection/type_parser.py``), not a dialect
+protocol member; this mixin deliberately has no ``parse_type`` method.
 """
 
 from __future__ import annotations
 
-import re
-from typing import Dict, Optional, Tuple
+from typing import Optional, Tuple
 
+from rhosocial.activerecord.backend.suggestion.definitions import SubstituteTypeSuggestion
 from rhosocial.activerecord.backend.dialect.exceptions import (
     UnsupportedFeatureError,
 )
@@ -113,8 +117,8 @@ _ORACLE_JSON_TYPE_MIN_VERSION: Tuple[int, int, int] = (21, 0, 0)
 #:
 #: They live here rather than inside the SQL string because they are two
 #: *different* facts about two *different* fields, and neither is a
-#: ``type_parameter_defaults`` entry — see
-#: :meth:`OracleTypeSupportMixin.type_parameter_defaults` and
+#: per-parameter default — see
+#: :meth:`OracleTypeSupportMixin.format_data_type_interval` and
 #: :meth:`OracleTypeSupportMixin.format_data_type_interval` for why a whole
 #: ``DAY(2) TO SECOND(6)`` qualifier is not a per-parameter declaration. Measured:
 #: ``CREATE TABLE t (c INTERVAL DAY TO SECOND)`` reports ``DATA_PRECISION = 2``
@@ -212,7 +216,8 @@ class OracleTypeSupportMixin(DataTypeMixin, DataTypeSupport):
     * It would erase the distinction the framework exists to model: a schema
       diff could no longer tell a smallint column from an integer one,
       because on the server they would be one column.
-    * The reverse mapping is load-bearing. :meth:`parse_type` reads
+    * The reverse mapping is load-bearing. The introspection type parser
+      (``introspection/type_parser.py``) reads
       ``NUMBER(5)`` / ``NUMBER(10)`` / ``NUMBER(19)`` back as the three
       concepts that write them, which is what makes a declared column and an
       introspected column compare equal. Under ``NUMBER(38)`` all three
@@ -231,7 +236,7 @@ class OracleTypeSupportMixin(DataTypeMixin, DataTypeSupport):
 
     # --- Core type formatters (render standard types to Oracle SQL) ---
 
-    def substitute_data_types(self) -> Dict[str, type]:
+    def suggest_substitute_types(self) -> SubstituteTypeSuggestion:
         """Core concepts Oracle stores some other way.
 
         Oracle renders most core concepts natively — ``NUMBER`` for the
@@ -355,13 +360,13 @@ class OracleTypeSupportMixin(DataTypeMixin, DataTypeSupport):
             because it would have had somebody writing ``UUID`` DDL against a
             server that has no such type.
         """
-        return {
+        return SubstituteTypeSuggestion(mapping={
             "array": CustomType,
             "binary": OracleRawType,
             "varbinary": BlobType,
             "enum": VarCharType,
             "uuid": OracleRawType,
-        }
+        })
 
     def format_data_type_integer(self, expr: IntegerType) -> Tuple[str, tuple]:
         """``INTEGER`` and ``INT`` are one 4-byte signed integer, written as
@@ -376,7 +381,7 @@ class OracleTypeSupportMixin(DataTypeMixin, DataTypeSupport):
         the refusal is written down. For why the width is ten digits — and why
         it is not the ``NUMBER(38)`` Oracle's ANSI table gives the word
         ``INTEGER`` — see this class's docstring."""
-        self.check_spelling(expr, IntegerType)
+        self._check_spelling(expr, IntegerType)
         self._refuse_unsigned_integer(expr, "INTEGER", "NUMBER(10)")
         return "NUMBER(10)", ()
 
@@ -396,7 +401,7 @@ class OracleTypeSupportMixin(DataTypeMixin, DataTypeSupport):
         ``unsigned`` is refused rather than ignored; see
         :meth:`_refuse_unsigned_integer`, and this class's docstring for the
         width."""
-        self.check_spelling(expr, BigIntType)
+        self._check_spelling(expr, BigIntType)
         self._refuse_unsigned_integer(expr, "BIGINT", "NUMBER(19)")
         return "NUMBER(19)", ()
 
@@ -416,7 +421,7 @@ class OracleTypeSupportMixin(DataTypeMixin, DataTypeSupport):
 
         ``unsigned`` is refused rather than ignored; see
         :meth:`_refuse_unsigned_integer`."""
-        self.check_spelling(expr, SmallIntType)
+        self._check_spelling(expr, SmallIntType)
         self._refuse_unsigned_integer(expr, "SMALLINT", "NUMBER(5)")
         return "NUMBER(5)", ()
 
@@ -573,7 +578,7 @@ class OracleTypeSupportMixin(DataTypeMixin, DataTypeSupport):
         exceptions do not share a base class.
 
         **Where this is called matters as much as what it raises.**  It runs
-        *before* ``check_spelling`` and before every precision and scale check,
+        *before* ``_check_spelling`` and before every precision and scale check,
         so a request that is wrong in two ways is told about this one first — the
         caller asked for something this grammar cannot express at all, which is
         a stronger and less recoverable statement than a misspelled word or an
@@ -630,7 +635,7 @@ class OracleTypeSupportMixin(DataTypeMixin, DataTypeSupport):
         bare ``FLOAT`` comes back as ``FLOAT(126)``.
 
         That measurement is what licenses the fallback below, and it is why the
-        number is read from :meth:`type_parameter_defaults` rather than written
+        number is read from :attr:`_FLOAT_DEFAULT_PRECISION` rather than written
         here: it is one fact about this server, and the declaration and this
         formatter must not be able to drift apart on it.  ``FloatType.precision``
         resolves against that declaration at read time, exactly as
@@ -641,7 +646,7 @@ class OracleTypeSupportMixin(DataTypeMixin, DataTypeSupport):
 
         So a bare ``FLOAT`` was already a false claim about the round trip: the
         declaration said one word and the catalog said another, and
-        :meth:`parse_type` gave the two different objects. Writing the documented
+        introspection parser gave the two different objects. Writing the documented
         default out makes the declaration and the catalog byte-identical, which
         is the same reason the sibling ``double`` writes ``FLOAT(126)`` and
         ``real`` writes ``FLOAT(63)`` instead of the bare words Oracle's table
@@ -672,7 +677,7 @@ class OracleTypeSupportMixin(DataTypeMixin, DataTypeSupport):
                     f"got {expr.precision}"
                 )
             return f"FLOAT({expr.precision})", ()
-        return f"FLOAT({self.type_parameter_defaults()['float']['precision']})", ()
+        return f"FLOAT({self._FLOAT_DEFAULT_PRECISION})", ()
 
     def supports_data_type_float(self) -> bool:
         return True
@@ -710,7 +715,7 @@ class OracleTypeSupportMixin(DataTypeMixin, DataTypeSupport):
         what keeps the round trip byte-identical.
 
         The 126 is read from the one place this server's number is written down,
-        :meth:`type_parameter_defaults`, for the same reason
+        :attr:`_FLOAT_DEFAULT_PRECISION`, for the same reason
         :meth:`format_data_type_float` reads it there: the ANSI conversion table
         maps ``FLOAT``, ``DOUBLE PRECISION`` and ``REAL`` to three *different*
         precisions (126 / 126 / 63) from one table, so the numbers have to be
@@ -719,8 +724,8 @@ class OracleTypeSupportMixin(DataTypeMixin, DataTypeSupport):
         ``unsigned`` is refused rather than ignored, **before** the spelling
         check; see :meth:`_refuse_unsigned_numeric`."""
         self._refuse_unsigned_numeric(expr, "FLOAT")
-        self.check_spelling(expr, DoubleType)
-        return f"FLOAT({self.type_parameter_defaults()['float']['precision']})", ()
+        self._check_spelling(expr, DoubleType)
+        return f"FLOAT({self._FLOAT_DEFAULT_PRECISION})", ()
 
     def supports_data_type_double(self) -> bool:
         return True
@@ -730,13 +735,13 @@ class OracleTypeSupportMixin(DataTypeMixin, DataTypeSupport):
         and Oracle calls it ``NUMBER``; all three are accepted and all three
         render as ``NUMBER``.
 
-        ``unsigned`` is refused rather than ignored, **before** ``check_spelling``
+        ``unsigned`` is refused rather than ignored, **before** ``_check_spelling``
         and before both ``ValueError`` range checks below; see
         :meth:`_refuse_unsigned_numeric`, which is where the reason and the
         measurements live.  Those two checks, and the ``-84..127`` scale bound,
         are untouched and still fire for a signed declaration."""
         self._refuse_unsigned_numeric(expr, "NUMBER")
-        self.check_spelling(expr, DecimalType)
+        self._check_spelling(expr, DecimalType)
         if expr.precision is not None:
             if not (1 <= expr.precision <= 38):
                 raise ValueError(
@@ -830,7 +835,7 @@ class OracleTypeSupportMixin(DataTypeMixin, DataTypeSupport):
         ``tests/.../test_introspector_deep.py::TestDialectCarriesTheServersOwnVersion``
         pins the agreement per server so it cannot go back to being inert.
         """
-        self.check_spelling(expr, BooleanType)
+        self._check_spelling(expr, BooleanType)
         version = getattr(self, "_version", None)
         if version is not None and version >= _ORACLE_BOOLEAN_TYPE_MIN_VERSION:
             return "BOOLEAN", ()
@@ -859,8 +864,9 @@ class OracleTypeSupportMixin(DataTypeMixin, DataTypeSupport):
         VARCHAR2"``). It stays on this side only: on the *parse* side the same
         absence is refused, because there the width would be a claim about a
         catalog row that never existed
-        (:meth:`_require_declared_length`). The consequence is recorded rather
-        than hidden: ``VarCharType(d)`` and ``parse_type("VARCHAR2(4000)")``
+        (the introspection parser's ``_require_declared_length``). The
+        consequence is recorded rather than hidden: ``VarCharType(d)`` and a
+        parsed ``VARCHAR2(4000)``
         render identical SQL and are **not** ``==``, because ``length`` is in
         :attr:`~VarCharType.PARAMETERS` and ``None`` is not ``4000``. That
         asymmetry is a property of "no width stated" being unrepresentable in a
@@ -869,7 +875,7 @@ class OracleTypeSupportMixin(DataTypeMixin, DataTypeSupport):
         ``nvarchar2`` (2000).
         https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/Data-Types.html
         """
-        self.check_spelling(expr, VarCharType)
+        self._check_spelling(expr, VarCharType)
         return (f"VARCHAR2({expr.length})" if expr.length is not None else "VARCHAR2(4000)"), ()
 
     def supports_data_type_varchar(self) -> bool:
@@ -886,29 +892,29 @@ class OracleTypeSupportMixin(DataTypeMixin, DataTypeSupport):
         spelling of the column rather than an invented width.
 
         **The bare word is deliberate, and it is the one case where a
-        ``type_parameter_defaults`` entry was measured, written down and then
-        not made.** Oracle documents the 1 twice ("You can omit size from the
+        per-parameter default was measured, written down and then not
+        made.** Oracle documents the 1 twice ("You can omit size from the
         column definition. The default value is 1"; "Default and minimum size is
         1 byte") and the server honours it: ``CREATE TABLE t (c CHAR)`` is
         accepted on both wired servers and reports ``DATA_LENGTH = 1`` and
         ``CHAR_LENGTH = 1``, byte-for-byte what ``CHAR(1)`` reports. So the
         declaration would be true and it would close a real asymmetry —
         ``CharType(d)`` currently renders ``CHAR`` while
-        ``parse_type("CHAR")`` yields ``CharType(length=1)``, and those two are
+        parsing ``CHAR`` yields ``CharType(length=1)``, and those two are
         not ``==`` even though they render the same SQL.
 
         Declaring it would change that SQL, because resolving ``length`` to 1
         makes this formatter write ``CHAR(1)``. Same column, different bytes,
         and the cross-repo contract's rule 6 — rendered SQL does not change for
         an existing rendering — is not worth spending on it. So the entry is
-        absent on purpose, :attr:`_CHAR_DEFAULT_LENGTH` holds the number for the
-        two places that genuinely need it (:meth:`parse_type` and
-        :meth:`_require_declared_length`'s message), and the asymmetry is written
+        absent on purpose; the introspection parser's
+        ``_CHAR_DEFAULT_LENGTH`` holds the number for the two places that
+        genuinely need it, and the asymmetry is written
         down here instead. **It is one line to reverse** if the maintainer wants
         the identity closed: add ``"char": {"length": 1}`` to
-        :meth:`type_parameter_defaults` and drop the bare-word branch below.
+        a per-parameter default and drop the bare-word branch below.
         """
-        self.check_spelling(expr, CharType)
+        self._check_spelling(expr, CharType)
         return (f"CHAR({expr.length})" if expr.length is not None else "CHAR"), ()
 
     def supports_data_type_char(self) -> bool:
@@ -921,7 +927,7 @@ class OracleTypeSupportMixin(DataTypeMixin, DataTypeSupport):
         which is what every plain ``TextType(d)`` carries; and refusing
         ``clob`` would refuse the one word Oracle does write. The two arms
         collapse, so there is nothing left to distinguish between them."""
-        self.check_spelling(expr, TextType)
+        self._check_spelling(expr, TextType)
         return "CLOB", ()
 
     def supports_data_type_text(self) -> bool:
@@ -932,7 +938,7 @@ class OracleTypeSupportMixin(DataTypeMixin, DataTypeSupport):
         calls it ``BLOB``. ``BYTEA`` is not an Oracle word at all, but it is
         a spelling of the concept and the column Oracle produces is a
         ``BLOB``, so it is accepted and normalised rather than refused."""
-        self.check_spelling(expr, BlobType)
+        self._check_spelling(expr, BlobType)
         return "BLOB", ()
 
     def supports_data_type_blob(self) -> bool:
@@ -1016,7 +1022,7 @@ class OracleTypeSupportMixin(DataTypeMixin, DataTypeSupport):
         written is what Oracle reports back.
 
         **Which qualifier, and why it is not a
-        :meth:`type_parameter_defaults` entry.** Measured on both wired servers
+        per-parameter default.** Measured on both wired servers
         (21c 21.0.0.0.0 and 26ai Free 23.26.1.0.0), which agree on every row::
 
             CREATE TABLE t (c INTERVAL)               -> ORA-30089:
@@ -1059,7 +1065,7 @@ class OracleTypeSupportMixin(DataTypeMixin, DataTypeSupport):
 
         The rendering is therefore unchanged and is right to stay so: writing the
         full qualifier means the column Oracle creates is exactly the column this
-        declared, and :meth:`parse_type` reads that same string back, so the
+        declared, and the introspection parser reads that same string back, so the
         rendered round trip is already byte-identical. What is *not* closed —
         and cannot be closed by any number — is the object identity:
         ``IntervalType(d)`` carries ``fields=None`` and the introspected
@@ -1110,7 +1116,7 @@ class OracleTypeSupportMixin(DataTypeMixin, DataTypeSupport):
     def format_data_type_custom(self, expr: CustomType) -> Tuple[str, tuple]:
         """Write a type name the framework has no class for, verbatim.
 
-        ``CustomType`` is what :meth:`parse_type` returns for every name the
+        ``CustomType`` is what the introspection parser returns for every name the
         framework does not model, so without this formatter a column
         introspected as, say, ``SDO_GEOMETRY`` could not be turned back into
         DDL at all — the round trip would stop at the parse. It is also how a
@@ -1168,7 +1174,7 @@ class OracleTypeSupportMixin(DataTypeMixin, DataTypeSupport):
         earlier revision invented Oracle's 2000-byte
         ``MAX_STRING_SIZE = STANDARD`` *ceiling* for the un-sized case, which
         turned every suggested UUID column into a 2 KB binary column — and,
-        through :meth:`parse_type`, turned every introspected ``RAW(16)`` into a
+        through the introspection parser, turned every introspected ``RAW(16)`` into a
         2000-byte column too.
 
         ``n`` is a ceiling and not a fixed width: Oracle calls ``RAW`` "a
@@ -1238,7 +1244,7 @@ class OracleTypeSupportMixin(DataTypeMixin, DataTypeSupport):
         The same reasoning picks the other widths; see this class's docstring.
         Widening the column does not make it unsigned, so ``unsigned`` is still
         refused rather than ignored; see :meth:`_refuse_unsigned_integer`."""
-        self.check_spelling(expr, TinyIntType)
+        self._check_spelling(expr, TinyIntType)
         self._refuse_unsigned_integer(expr, "TINYINT", "NUMBER(3)")
         return "NUMBER(3)", ()
 
@@ -1314,67 +1320,6 @@ class OracleTypeSupportMixin(DataTypeMixin, DataTypeSupport):
     def supports_data_type_jsonb(self) -> bool:
         return True
 
-    # --- Parsing ---
-    #
-    # Canonical in the sense the hierarchy requires: one name in, one concept
-    # out. Where a word can be read two ways it is disambiguated here rather
-    # than by a second class — LONG RAW is matched as binary before the LONG
-    # string rule can take it, NCLOB before CLOB, and ``CHARACTER VARYING``
-    # / ``CHAR VARYING`` before ``CHARACTER``/``CHAR`` — and every spelling a
-    # concept declares (``CHARACTER`` for CHAR, ``CHARACTER VARYING`` for
-    # VARCHAR2, ``CLOB`` for TEXT, ``YEAR TO MONTH`` / ``DAY TO SECOND`` for
-    # INTERVAL) reaches the class that owns it.
-    #
-    # **The classes it returns are the core ones wherever the core formatter
-    # already writes the same word.** ``NUMBER(10)``/``NUMBER(5)``/``NUMBER(19)``
-    # come back as ``IntegerType``/``SmallIntType``/``BigIntType``,
-    # ``VARCHAR2(n)`` as ``VarCharType``, ``CHAR(n)`` as ``CharType`` and ``BLOB``
-    # as ``BlobType``, because a declared column and the catalog row it produced
-    # must be ``==`` and ``DataType.__eq__`` is class identity. Only the eight
-    # words no core formatter here writes — ``NVARCHAR2``, ``NCLOB``, ``LONG``,
-    # ``RAW(n)``, ``LONG RAW``, ``BINARY_FLOAT``, ``BINARY_DOUBLE``,
-    # ``TIMESTAMP WITH LOCAL TIME ZONE`` — get an ``oracle_``-named class, plus
-    # ``BOOLEAN`` from 23ai, which is this backend's own rendering of the core
-    # ``boolean`` concept and not a class of its own.
-
-    _ORACLE_NUMBER_TYPES = re.compile(r"^(?:NUMBER|FLOAT|BINARY_FLOAT|BINARY_DOUBLE)\b", re.IGNORECASE)
-    # ``UNSIGNED`` as a whole word anywhere in a type string.  Oracle's parser
-    # rejects the string outright, so this can only fire on caller-supplied DDL --
-    # which ``parse_type`` is a documented reader of -- and the point is to refuse
-    # it rather than read the attribute off and return a signed type.  See
-    # ``_refuse_unsigned_type_string``.
-    _UNSIGNED_ATTRIBUTE = re.compile(r"\bUNSIGNED\b", re.IGNORECASE)
-    # NOTE: LONG RAW must be matched before LONG; _ORACLE_BLOB_TYPES is
-    # checked ahead of _ORACLE_STRING_TYPES in parse_type() for this reason.
-    # The longer forms come first for the same reason: ``CHARACTER`` would
-    # otherwise be read as a spelling of CHAR when it is really the head of
-    # ``CHARACTER VARYING``. The list is the set of words Oracle's own
-    # grammar accepts (verified against 21c), not the concepts' full
-    # SPELLINGS: ``TEXT`` and ``BYTEA`` are rejected by the server as invalid
-    # datatypes, so there is nothing for parse_type to read. (``BOOL`` *is* a
-    # word Oracle accepts — from 23ai, and reported back as ``BOOLEAN`` — so it
-    # is read by ``_ORACLE_BOOLEAN_TYPES`` below rather than being in this list.)
-    _ORACLE_STRING_TYPES = re.compile(
-        r"^(?:CHARACTER\s+VARYING|CHAR\s+VARYING|VARCHAR2|NVARCHAR2|VARCHAR|"
-        r"CHARACTER|NCHAR|CHAR|CLOB|NCLOB|LONG)\b",
-        re.IGNORECASE,
-    )
-    _ORACLE_BLOB_TYPES = re.compile(r"^(?:BLOB|RAW|LONG\s+RAW)\b", re.IGNORECASE)
-    _ORACLE_DATE_TYPES = re.compile(r"^(?:DATE|TIMESTAMP|INTERVAL)\b", re.IGNORECASE)
-    _ORACLE_XML_TYPES = re.compile(r"^(?:XMLTYPE|SYS\.XMLTYPE)\b", re.IGNORECASE)
-    _ORACLE_BOOLEAN_TYPES = re.compile(r"^(?:BOOLEAN|BOOL)\b", re.IGNORECASE)
-
-    #: Oracle's documented size for a ``CHAR``/``NCHAR`` declared without one:
-    #: "You can omit size from the column definition. The default value is 1"
-    #: (stated for both ``CHAR`` and ``NCHAR``, and the built-in summary repeats
-    #: it — "Default and minimum size is 1 byte" for ``CHAR``). Measured: a bare
-    #: ``CREATE TABLE t (a CHAR)`` is accepted on 21c and 23ai and reports
-    #: ``DATA_LENGTH = 1``, ``CHAR_LENGTH = 1``; ``NCHAR`` reports
-    #: ``CHAR_LENGTH = 1`` and ``DATA_LENGTH = 2`` (AL16UTF16). So one is a
-    #: documented default here, not an invented width — which is exactly what
-    #: ``VARCHAR2`` and ``NVARCHAR2`` do **not** have.
-    _CHAR_DEFAULT_LENGTH = 1
-
     #: Oracle's binary precision for the bare ``FLOAT``, and the number
     #: ``format_data_type_float`` writes for a declaration that named none.
     #:
@@ -1419,373 +1364,6 @@ class OracleTypeSupportMixin(DataTypeMixin, DataTypeSupport):
     #: https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/Data-Types.html
     _REAL_PRECISION = 63
 
-    def type_parameter_defaults(self) -> Dict[str, Dict[str, object]]:
-        """What Oracle supplies for a parameter a declaration left undeclared.
-
-        **One entry, and ``float`` rather than ``char`` is the deliberate
-        choice.** Both are documented defaults and both are stored and reported
-        back, so both *could* be declared; what separates them is what Oracle
-        does when the declaration is missing.
-
-        ``float`` → ``precision`` 126. Oracle documents it (ANSI conversion
-        table note 2: "The default precision for this data type is 126 binary, or
-        38 decimal") and both wired servers store and report it:
-        ``CREATE TABLE t (c FLOAT)`` gives ``DATA_TYPE='FLOAT'`` and
-        ``DATA_PRECISION = 126`` on 21c (21.0.0.0.0) and on 26ai Free
-        (23.26.1.0.0), which agree on every row of the probe. The introspector
-        reads ``DATA_PRECISION`` for a ``FLOAT`` (``introspection/
-        introspector.py``), so a bare ``FloatType(d)`` and the
-        ``FloatType(d, precision=126)`` the catalog yields are the same column
-        rather than two that render identically and compare unequal.
-
-        **This is no longer inert:** ``FloatType.precision`` resolves against
-        this declaration at read time, exactly as ``CharType.length`` resolves
-        against its entry, so ``FloatType(d)`` carries 126 and compares equal to
-        the ``FloatType(d, precision=126)`` the catalog yields.  The declaration
-        and the property read the same number from the same place, which is what
-        makes a bare ``FLOAT`` column and its own declaration one value object
-        rather than two that render identically and compare unequal.
-
-        ``char`` → **not declared, and that is a finding rather than an
-        oversight.** Oracle *does* document 1 ("You can omit size from the
-        column definition. The default value is 1"; "Default and minimum size is
-        1 byte") and the server *does* accept a bare ``CHAR`` and store one
-        character — measured, ``DATA_LENGTH = 1`` and ``CHAR_LENGTH = 1`` on both
-        servers. So the declaration would be truthful and it is deliberately
-        **not** written, because on Oracle it would change DDL that already
-        works: :meth:`format_data_type_char` renders the bare word ``CHAR``, and
-        resolving ``length`` to 1 makes it render ``CHAR(1)``. Those are the same
-        column — the server reports the same two numbers for both — so the change
-        is cosmetic, and rule 6 of the cross-repo contract ("rendered SQL must
-        not change for any existing rendering") is not worth paying for. The
-        asymmetry it would close is stated instead in
-        :meth:`format_data_type_char`: ``CharType(d)`` and ``parse_type("CHAR")``
-        render the same SQL and are not ``==``, which is a property of an absent
-        width being unrepresentable in a type's identity rather than an Oracle
-        fact. If the maintainer wants it, the entry is one line and the one
-        rendering it changes is one.
-
-        What is deliberately **not** declared, and why the three differ:
-
-        ``varchar`` / ``nvarchar2`` — Oracle has no default for these at all.
-        ``"You must specify size for a ``VARCHAR2``"``, and the server agrees
-        with the summary on every release: ``CREATE TABLE t (c VARCHAR2)`` is
-        ``ORA-00906: missing left parenthesis`` on both servers. The 4000 the
-        formatter writes is this backend's ``MAX_STRING_SIZE = STANDARD`` ceiling
-        chosen so the concept still renders — a decision, not a fact read back,
-        and :meth:`_require_declared_length` refuses the same absence on the
-        parse side for the mirror-image reason.
-
-        ``interval`` — **does not belong in this mechanism at all**, and the
-        reason is in the shape of the field rather than in the number. ``fields``
-        is not a parameter but a member of a closed SQL:2016 qualifier
-        vocabulary (:class:`~...expression.types.IntervalQualifier`), and there
-        is no bare ``INTERVAL`` for Oracle to supply one for: ``CREATE TABLE t
-        (c INTERVAL)`` is ``ORA-30089: missing or invalid <datetime field>`` on
-        both servers. Oracle's two interval types must be spelled —
-        ``INTERVAL YEAR TO MONTH`` and ``INTERVAL DAY TO SECOND`` — and each
-        carries its own *two* documented precisions (``day_precision`` "The
-        default is 2", ``fractional_seconds_precision`` "The default is 6"; NLSPG
-        4.2.2.2), which the catalog confirms as ``INTERVAL DAY(2) TO SECOND(6)``
-        and ``INTERVAL YEAR(2) TO MONTH``. So the value the renderer writes is a
-        **whole qualifier** this backend chose, not a default a server filled in,
-        and folding it into a mechanism whose entries are per-parameter would
-        pretend one parameter answers it. See :meth:`format_data_type_interval`,
-        which now says so with the measurements attached.
-        https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/Data-Types.html
-        https://docs.oracle.com/en/database/oracle/oracle-database/26/nlspg/datetime-data-types-and-time-zone-support.html
-        """
-        return {
-            "float": {"precision": self._FLOAT_DEFAULT_PRECISION},
-        }
-
-    @staticmethod
-    def _oracle_declared_length(stripped: str) -> Optional[int]:
-        """The ``(n)`` Oracle wrote after a type name, or ``None``.
-
-        Deliberately loose about what follows the digits: the catalog spells
-        the size ``VARCHAR2(4000 BYTE)`` as well as ``VARCHAR2(4000)``, and
-        the semantics suffix is not part of the length.
-        """
-        match = re.search(r"\((\d+)", stripped)
-        return int(match.group(1)) if match else None
-
-    def _require_declared_length(
-        self, stripped: str, word: str, example: str
-    ) -> int:
-        """The declared ``(n)``, or a refusal naming Oracle's requirement.
-
-        The standard this applies is the one ``RAW`` already meets. Oracle's
-        built-in summary says, in its own words for each type:
-
-        * ``RAW (size)`` — "You must specify size for a ``RAW`` value";
-        * ``VARCHAR2 (size [BYTE | CHAR])`` — "You must specify size for
-          ``VARCHAR2``";
-        * ``NVARCHAR2 (size)`` — "You must specify size for ``NVARCHAR2``";
-        * ``CHAR [(size [BYTE | CHAR])]`` — "Default and minimum size is 1 byte";
-        * ``NCHAR [(size)]`` — "Default and minimum size is 1 character".
-
-        The server agrees with the summary on every one of them, measured on 21c
-        and 23ai:
-
-        ====================================  ==========================  ===================
-        ``CREATE TABLE t (a …)``             21c                         23ai / 26ai
-        ====================================  ==========================  ===================
-        ``VARCHAR2``                         ``ORA-00906``               ``ORA-00906``
-        ``NVARCHAR2``                        ``ORA-00906``               ``ORA-00906``
-        ``RAW``                              ``ORA-00906``               ``ORA-00906``
-        ``CHAR``                             accepted, ``LENGTH 1``     accepted, ``LENGTH 1``
-        ``NCHAR``                            accepted, ``CHAR_LEN 1``   accepted, ``CHAR_LEN 1``
-        ====================================  ==========================  ===================
-
-        So three of the five have **no** default and a fallback there is a
-        width the catalog never reported — the same defect the ``RAW`` branch
-        above used to have, where Oracle's 2000-byte
-        ``MAX_STRING_SIZE = STANDARD`` *ceiling* was handed back as if it were a
-        declared ``RAW(16)``'s width. The fallback is gone rather than merely
-        unreachable: ``parse_columns`` spells the size out for every character
-        type (``introspection/introspector.py`` reads ``CHAR_LENGTH`` or
-        ``DATA_LENGTH``), so an un-sized string cannot arrive from
-        introspection, and a caller who writes one by hand has typed a column
-        Oracle will not create.
-
-        The fourth — ``CHAR``/``NCHAR`` — is different in kind rather than in
-        degree, and keeps its size: one is Oracle's *documented default*, so
-        returning it states what the column would be (``CHAR(1)``) instead of
-        guessing. That is why the same answer is right for ``CHAR`` and wrong
-        for ``VARCHAR2``.
-        https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/Data-Types.html
-        """
-        length = self._oracle_declared_length(stripped)
-        if length is not None:
-            return length
-        raise ValueError(
-            f"cannot parse an un-sized {word} (Oracle requires a size: "
-            f"'You must specify size for a {word} value', and the server "
-            f"rejects a bare {word} with ORA-00906 — a bare CHAR is different, "
-            f"Oracle documents a default size of "
-            f"{self._CHAR_DEFAULT_LENGTH} for it); pass the width, e.g. "
-            f"'{example}'"
-        )
-
-    def _refuse_unsigned_type_string(self, raw: str) -> None:
-        """Refuse a type string that carries an ``UNSIGNED`` attribute.
-
-        :meth:`_refuse_unsigned_numeric` closes the door on the way *in* — a
-        declaration.  This closes the door on the way *out*: a string.  The same
-        field, the same loss, in the other direction, and it is a real hole
-        because ``parse_type`` is the reader for three sources, not one — Oracle's
-        own ``user_tab_columns`` rows, **and** caller-supplied DDL such as a dump
-        or a hand-written migration that nobody has run against a server.
-
-        Dropping the attribute here would hand back a *signed* value object for a
-        declaration that says ``UNSIGNED``, and ``==`` would call it equal to the
-        signed one — the differ would report no change for the exact change the
-        string describes.  So it is refused by name, on the same reasoning as
-        :meth:`_refuse_unsigned_numeric`, which is where the vendor citation
-        lives.
-
-        Note what is *not* claimed here: no Oracle server can have written this
-        string. It was measured that the parser rejects it — ``CREATE TABLE t (c
-        NUMBER(10,2) UNSIGNED)`` is ``ORA-00907: missing right parenthesis`` on
-        21c and ``ORA-03062: missing comma or right parenthesis`` on 26ai Free —
-        so this branch guards the *caller-supplied* path, and says so rather than
-        pretending a catalog row is at stake.
-        """
-        raise UnsupportedFeatureError(
-            self.name,
-            f"an UNSIGNED attribute in a type string ({raw!r}) "
-            f"(Oracle has no unsigned numeric type, so no declaration and no "
-            f"catalog row can carry UNSIGNED: CREATE TABLE's column_definition "
-            f"admits no modifier after the type name, the reference chapter "
-            f"says the numeric types 'store positive and negative fixed and "
-            f"floating-point numbers', and the parser rejects the string at the "
-            f"word itself -- ORA-00907: missing right parenthesis on 21c, "
-            f"ORA-03062: missing comma or right parenthesis on 26ai Free. "
-            f"Reading the attribute off and returning a signed type would compare "
-            f"equal to the signed column, which is the silent loss this refuses.)",
-            suggestion=(
-                "Declare the column signed and enforce the range with a CHECK "
-                "constraint; Oracle accepts 'c NUMBER(10,2) CHECK (c >= 0)'."
-            ),
-        )
-
-    def parse_type(self, raw: str) -> DataType:
-        stripped = raw.strip()
-        upper = stripped.upper()
-
-        if self._UNSIGNED_ATTRIBUTE.search(stripped):
-            self._refuse_unsigned_type_string(stripped)
-
-        if self._ORACLE_NUMBER_TYPES.match(upper):
-            if upper.startswith("BINARY_FLOAT"):
-                # Oracle's two IEEE types are not the NUMBER family, so they
-                # are classes of their own rather than FloatType/DoubleType:
-                # those render FLOAT(p), the catalog keeps BINARY_FLOAT /
-                # BINARY_DOUBLE apart, and collapsing them made a write-back
-                # name different storage (finding F.4-4).
-                return OracleBinaryFloatType(dialect=self)
-            if upper.startswith("BINARY_DOUBLE"):
-                return OracleBinaryDoubleType(dialect=self)
-            if upper.startswith("FLOAT"):
-                nums = re.findall(r"\d+", stripped)
-                if nums:
-                    return FloatType(dialect=self, precision=int(nums[0]))
-                return FloatType(dialect=self)
-            nums = re.findall(r"\d+", stripped)
-            if len(nums) >= 2:
-                p, s = int(nums[0]), int(nums[1])
-                # NUMBER(10) -> integer, NUMBER(5) -> smallint,
-                # NUMBER(19) -> bigint. The *core* concepts, deliberately:
-                # ``format_data_type_integer`` / ``_smallint`` / ``_bigint``
-                # already write these three words, so an Oracle-namespaced class
-                # would render identical SQL under a second name — and
-                # ``DataType.__eq__`` is ``type(self) is type(other)``, so the
-                # declaration and the catalog row would compare unequal. See
-                # this class's docstring.
-                if s == 0 and p == 10:
-                    return IntegerType(dialect=self)
-                if s == 0 and p == 5:
-                    return SmallIntType(dialect=self)
-                if s == 0 and p == 19:
-                    return BigIntType(dialect=self)
-                return DecimalType(dialect=self, precision=p, scale=s)
-            if len(nums) == 1:
-                p = int(nums[0])
-                if p == 10:
-                    return IntegerType(dialect=self)
-                if p == 5:
-                    return SmallIntType(dialect=self)
-                if p == 19:
-                    return BigIntType(dialect=self)
-                return DecimalType(dialect=self, precision=p)
-            return DecimalType(dialect=self)
-
-        # BLOB types checked before string types so "LONG RAW" matches the
-        # binary branch rather than being consumed by the "LONG" string rule.
-        if self._ORACLE_BLOB_TYPES.match(upper):
-            if "LONG RAW" in upper:
-                return OracleLongRawType(dialect=self)
-            if "RAW" in upper:
-                # Oracle has no un-sized RAW at all: the built-in summary says
-                # "You must specify size for a RAW value", and the server agrees
-                # — ``CREATE TABLE t (a RAW)`` is ``ORA-00906: missing left
-                # parenthesis`` on 21c and 23c. So a bare ``RAW`` here is not a
-                # column Oracle could have stored, and every width this method
-                # could return would be one the catalog never reported.
-                #
-                # That used to be papered over with a guess. The introspector
-                # spelled out the length for NUMBER/FLOAT and the character
-                # types and not for RAW, so every RAW column arrived here
-                # unsized; the guess was Oracle's 2000-byte
-                # ``MAX_STRING_SIZE = STANDARD`` ceiling, which made an
-                # introspected ``RAW(16)`` report 2000 bytes. ``DATA_LENGTH`` is
-                # now read for RAW (``parse_columns`` in
-                # ``introspection/introspector.py``; it holds the declared width
-                # exactly — 16 for a ``RAW(16)``, 64 for a ``RAW(64)``), so the
-                # guess is gone rather than merely unreachable, and what is left
-                # is a refusal. A width that cannot be read must not be claimed.
-                length = self._oracle_declared_length(stripped)
-                if length is None:
-                    raise ValueError(
-                        "cannot parse an un-sized RAW (Oracle requires a size: "
-                        "'You must specify size for a RAW value', and the "
-                        "server rejects a bare RAW with ORA-00906); pass the "
-                        "width, e.g. 'RAW(16)'"
-                    )
-                return OracleRawType(dialect=self, length=length)
-            # BLOB is the word ``format_data_type_blob`` writes for core
-            # ``BlobType``, so the core class is what comes back. A second class
-            # for it rendered the same SQL under a prefixed name and made a
-            # declared ``blob`` and an introspected ``BLOB`` compare unequal.
-            return BlobType(dialect=self)
-
-        if self._ORACLE_STRING_TYPES.match(upper):
-            if "NCLOB" in upper:
-                return OracleNClobType(dialect=self)
-            if "CLOB" in upper:
-                # CLOB is the unbounded-string concept under Oracle's own
-                # name, i.e. the ``clob`` spelling of TextType — not a class
-                # of its own. Round-trips back to ``CLOB``.
-                return TextType(dialect=self, spelling="clob")
-            if upper.startswith("NVARCHAR2"):
-                return OracleNVarChar2Type(
-                    dialect=self,
-                    length=self._require_declared_length(
-                        stripped, "NVARCHAR2", "NVARCHAR2(30)"),
-                )
-            if upper.startswith(("VARCHAR2", "VARCHAR",
-                                "CHARACTER VARYING", "CHAR VARYING")):
-                return VarCharType(
-                    dialect=self,
-                    length=self._require_declared_length(
-                        stripped, "VARCHAR2", "VARCHAR2(4000)"),
-                )
-            if upper.startswith("LONG"):
-                return OracleLongType(dialect=self)
-            # NCHAR, CHARACTER and CHAR are all Oracle's fixed-length,
-            # blank-padded type — including the standard's long form, which
-            # Oracle's own grammar accepts as a synonym for CHAR. Unlike
-            # VARCHAR2/NVARCHAR2 the size here is genuinely optional: see
-            # ``_CHAR_DEFAULT_LENGTH``.
-            return CharType(
-                dialect=self,
-                length=self._oracle_declared_length(stripped)
-                or self._CHAR_DEFAULT_LENGTH,
-            )
-
-        if self._ORACLE_BOOLEAN_TYPES.match(upper):
-            # BOOLEAN arrived as a SQL column type in 23ai, so a catalog that
-            # says it is a 23ai-or-later catalog and the column is the boolean
-            # concept in full — not a number standing in for one. Both words
-            # Oracle accepts are read: ``CREATE TABLE t (a BOOL)`` and
-            # ``CREATE TABLE t (a BOOLEAN)`` both report ``DATA_TYPE =
-            # 'BOOLEAN'`` on 23ai/26ai (measured), and ``BOOL`` is documented
-            # as an abbreviation of ``BOOLEAN``. Both are ``ORA-00902`` on 21c,
-            # so neither can arrive from a pre-23ai catalog either.
-            # https://docs.oracle.com/en/learn/db23ai-sql-features/index.html
-            return BooleanType(dialect=self)
-
-        if self._ORACLE_DATE_TYPES.match(upper):
-            if "TIMESTAMP" in upper:
-                # The two time-zone forms are different columns — WITH TIME
-                # ZONE stores the offset with each value, WITH LOCAL TIME ZONE
-                # stores none and normalises to the database time zone — so
-                # they do not share a class: LOCAL renders through its own
-                # class (finding F.4-3) and the plain form stays on the core
-                # TimestampTzType.  "WITH LOCAL TIME ZONE" is checked first so
-                # a future edit cannot let the shorter phrase claim its word.
-                nums = re.findall(r"\d+", stripped)
-                precision = int(nums[0]) if nums else None
-                if "WITH LOCAL TIME ZONE" in upper:
-                    return OracleTimestampLtzType(dialect=self, precision=precision)
-                if "WITH TIME ZONE" in upper:
-                    return TimestampTzType(dialect=self, precision=precision)
-                return TimestampType(dialect=self, precision=precision)
-            if "INTERVAL" in upper:
-                # Oracle has two of them and they are different types:
-                # INTERVAL YEAR TO MONTH counts years and months and nothing
-                # smaller, INTERVAL DAY TO SECOND counts days, hours,
-                # minutes and fractional seconds and nothing larger. The
-                # qualifier is what says which, so it is carried into the
-                # core IntervalType rather than dropped — and it round-trips,
-                # so a column introspected as INTERVAL DAY(2) TO SECOND(6)
-                # renders back as exactly that.
-                fields = re.sub(r"^INTERVAL\s+", "", stripped,
-                                flags=re.IGNORECASE).strip()
-                return IntervalType(dialect=self, fields=fields or None)
-            return DateType(dialect=self)
-
-        if self._ORACLE_XML_TYPES.match(upper):
-            # Oracle's XML type is the XML concept, not text: the value is an
-            # infoset the server parses and can validate. It has exactly one
-            # spelling here, so there is no Oracle-namespaced class for it —
-            # core XmlType rendered by format_data_type_xml is the whole of it.
-            return XmlType(dialect=self)
-
-        return CustomType(dialect=self, raw=stripped)
-
-
 class OracleTypeSuggestionMixin:
     """Oracle-native ``suggest_column_type()``.
 
@@ -1798,7 +1376,7 @@ class OracleTypeSuggestionMixin:
     MySQL/MariaDB ``BINARY(16)``. That is also
     :attr:`OracleRawType.DEFAULT_LENGTH`, so the same answer comes back
     whether a caller spells the length out or not, and it is what
-    ``substitute_data_types()`` gives for the generic ``UUIDType``.
+    ``suggest_substitute_types()`` gives for the generic ``UUIDType``.
     https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/uuid.html
 
     ``dict``/``list`` are version-gated: native JSON requires Oracle 21c+

@@ -11,7 +11,7 @@ pattern the reader has to infer — is kept.
 
 from __future__ import annotations
 
-from typing import Dict, Protocol, Tuple, runtime_checkable
+from typing import Protocol, Tuple, runtime_checkable
 
 
 @runtime_checkable
@@ -28,10 +28,14 @@ class OracleDataTypeSupport(Protocol):
       the dispatch: :meth:`DataTypeMixin.format_data_type` looks the method up
       from ``type(data_type).name``, so a name without a formatter is a type
       that cannot be written.
-    * **Stance** — ``substitute_data_types()``, for the core concepts Oracle
+    * **Stance** — ``suggest_substitute_types()``, for the core concepts Oracle
       stores some other way. A concept that is neither rendered nor named as a
       substitute leaves the caller with "unsupported" and nothing to go on,
       which is indistinguishable from never having considered it.
+
+    Parsing a server-reported type spelling back into a ``DataType`` is an
+    introspection-only concern; it lives in ``introspection/type_parser.py``
+    and is deliberately not a member of this (or any dialect) protocol.
 
     The ``oracle_*`` half is exactly the set of types **no core formatter here
     writes**, and that is the whole of the test it has to pass: a prefixed key is
@@ -59,16 +63,8 @@ class OracleDataTypeSupport(Protocol):
         """Render any ``DataType`` through the ``format_data_type_<name>`` family."""
         ...
 
-    def parse_type(self, raw: str):
-        """Parse a raw Oracle type string into the ``DataType`` that owns it."""
-        ...
-
-    def supports_data_types(self) -> Dict[str, type]:
-        """``{generic name: concrete DataType class}`` for everything rendered."""
-        ...
-
-    def substitute_data_types(self) -> Dict[str, type]:
-        """``{core concept name: the DataType Oracle stores instead}``."""
+    def suggest_substitute_types(self):
+        """Oracle's concept-name -> class substitutions (a suggestion value)."""
         ...
 
     # --- core concepts with a distinct Oracle spelling ---

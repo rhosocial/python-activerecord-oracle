@@ -20,8 +20,7 @@ import typing
 import uuid
 
 import pytest
-from rhosocial.activerecord.backend.dialect.mixins import ColumnTypeMixin
-from rhosocial.activerecord.backend.dialect.protocols import ColumnTypeSupport
+from rhosocial.activerecord.backend.suggestion.protocols import ColumnTypeSuggestionSupport
 from rhosocial.activerecord.backend.expression.column_types import (
     ArrayColumn,
     BinaryColumn,
@@ -79,20 +78,19 @@ class TestProtocolComposition:
 
     def test_the_dialect_composes_the_column_type_mixin(self, dialect):
         assert isinstance(dialect, OracleColumnTypeMixin)
-        assert isinstance(dialect, ColumnTypeMixin)
-        assert isinstance(dialect, ColumnTypeSupport)
-        assert issubclass(OracleDialect, ColumnTypeMixin)
+        assert isinstance(dialect, ColumnTypeSuggestionSupport)
+        assert issubclass(OracleDialect, ColumnTypeSuggestionSupport)
 
     def test_the_table_is_overridden_not_inherited(self, dialect):
         # The core mixin has no table to inherit: an un-overridden
-        # suggested_column_types() raises. What the dialect answers instead is
+        # suggest_column_types().table raises. What the dialect answers instead is
         # this backend's own measured table.
-        assert dialect.suggested_column_types() == ORACLE_COLUMN_TYPES
-        assert dialect.suggested_column_types() is not ORACLE_COLUMN_TYPES
+        assert dialect.suggest_column_types().table == ORACLE_COLUMN_TYPES
+        assert dialect.suggest_column_types().table is not ORACLE_COLUMN_TYPES
 
     def test_the_mro_resolves_the_oracle_method(self):
-        assert OracleDialect.suggested_column_types is (
-            OracleColumnTypeMixin.suggested_column_types
+        assert OracleDialect.suggest_column_types is (
+            OracleColumnTypeMixin.suggest_column_types
         )
 
 
@@ -100,7 +98,7 @@ class TestTableCompleteness:
     """The protocol's one non-negotiable: every entry, answered."""
 
     def test_answers_every_common_entry(self, dialect):
-        table = dialect.suggested_column_types()
+        table = dialect.suggest_column_types().table
         assert set(table) == set(COMMON_TYPES)
 
     def test_no_entry_is_answered_with_none(self, dialect):
@@ -109,29 +107,29 @@ class TestTableCompleteness:
         # entry has a measured pairing, 18c included. Asserted so that adding
         # one later is a deliberate act with a reason attached, rather than a
         # way to make a completeness test pass by asserting something weaker.
-        for entry, column_class in dialect.suggested_column_types().items():
+        for entry, column_class in dialect.suggest_column_types().table.items():
             assert column_class is not None, entry
 
     def test_every_answer_is_a_column_class(self, dialect):
         # Also the guard against DataType-side facts leaking in: the Oracle
         # binary float classes and OracleTimestampLtzType are DataTypes, not
         # ColumnBase subclasses, so they cannot appear here.
-        for entry, column_class in dialect.suggested_column_types().items():
+        for entry, column_class in dialect.suggest_column_types().table.items():
             assert isinstance(column_class, type), entry
             assert issubclass(column_class, ColumnBase), entry
 
     def test_no_oracle_extension_entries(self, dialect):
         # The protocol allows extending the entry list; Oracle does not, and a
         # table that grew an undeclared key would silently change the answer.
-        assert set(dialect.suggested_column_types()) == set(COMMON_TYPES)
+        assert set(dialect.suggest_column_types().table) == set(COMMON_TYPES)
 
     def test_the_table_is_a_copy(self, dialect):
         # Mutating the returned mapping must not reach the module-level table
         # that every later resolution reads.
-        table = dialect.suggested_column_types()
+        table = dialect.suggest_column_types().table
         table[int] = StringColumn
         assert ORACLE_COLUMN_TYPES[int] is IntegerColumn
-        assert dialect.suggested_column_types()[int] is IntegerColumn
+        assert dialect.suggest_column_types().table[int] is IntegerColumn
 
     @pytest.mark.parametrize(
         "version", [ORACLE_18C, ORACLE_21C, ORACLE_23AI], ids=["18c", "21c", "23ai"]
@@ -139,7 +137,7 @@ class TestTableCompleteness:
     def test_the_table_does_not_vary_by_version(self, version):
         # The class an annotation means is the same on every measured release;
         # what varies is the storage behind it, which the DDL layer spells.
-        assert OracleDialect(version=version).suggested_column_types() == (ORACLE_COLUMN_TYPES)
+        assert OracleDialect(version=version).suggest_column_types().table == (ORACLE_COLUMN_TYPES)
 
 
 class TestBaselineEntries:
@@ -163,7 +161,7 @@ class TestBaselineEntries:
         ],
     )
     def test_entry(self, dialect, annotation, expected):
-        assert dialect.suggested_column_types()[annotation] is expected
+        assert dialect.suggest_column_types().table[annotation] is expected
         assert resolve_column_class(dialect, annotation) is expected
 
     def test_datetime_timedelta_is_an_interval(self, dialect):
@@ -171,10 +169,10 @@ class TestBaselineEntries:
         # now has the class that names the value. `IntervalColumn` promises no
         # arithmetic, so it is honest on both sides; Oracle's own interval
         # operations belong to an Oracle-named subclass.
-        assert dialect.suggested_column_types()[datetime.timedelta] is IntervalColumn
+        assert dialect.suggest_column_types().table[datetime.timedelta] is IntervalColumn
 
     def test_the_complex_families_answer_the_core_classes(self, dialect):
-        table = dialect.suggested_column_types()
+        table = dialect.suggest_column_types().table
         for entry, klass in (
             (Geometry, GeometryColumn),
             (Vector, VectorColumn),
@@ -190,9 +188,9 @@ class TestBaselineEntries:
         # storage width), not column facts: the operations on a float and on a
         # Decimal are the operations of the one numeric class, and the choice
         # between NUMBER, BINARY_FLOAT and BINARY_DOUBLE is the DDL layer's.
-        assert dialect.suggested_column_types()[float] is NumericColumn
-        assert dialect.suggested_column_types()[decimal.Decimal] is NumericColumn
-        assert dialect.suggested_column_types()[int] is IntegerColumn
+        assert dialect.suggest_column_types().table[float] is NumericColumn
+        assert dialect.suggest_column_types().table[decimal.Decimal] is NumericColumn
+        assert dialect.suggest_column_types().table[int] is IntegerColumn
 
 
 class TestOracleDeviations:
@@ -204,13 +202,13 @@ class TestOracleDeviations:
         # list/tuple/set/frozenset -> JSONColumn too: Oracle has no array column
         # type in any release, so ArrayColumn would offer array_length / unnest
         # on a server with nothing to unnest.
-        assert dialect.suggested_column_types()[annotation] is JSONColumn
+        assert dialect.suggest_column_types().table[annotation] is JSONColumn
         assert resolve_column_class(dialect, annotation) is JSONColumn
 
     def test_no_entry_answers_array_column(self, dialect):
         # The negative form of the same claim, so the reason it cannot change by
         # accident is on the test rather than only in the docstring.
-        assert ArrayColumn not in dialect.suggested_column_types().values()
+        assert ArrayColumn not in dialect.suggest_column_types().table.values()
 
 
 class TestResolution:
@@ -288,7 +286,7 @@ class TestExtraColumnTypes:
 
     def test_every_extra_answer_is_a_column_class(self):
         for version in (ORACLE_18C, ORACLE_21C, ORACLE_23AI):
-            extra = OracleDialect(version=version).suggested_extra_column_types()
+            extra = OracleDialect(version=version).suggest_extra_column_types().table
             for entry, column_class in extra.items():
                 assert isinstance(column_class, type), entry
                 assert issubclass(column_class, ColumnBase), entry
@@ -297,7 +295,7 @@ class TestExtraColumnTypes:
         from rhosocial.activerecord.backend.expression.column_types import ColumnBase
 
         dialect = OracleDialect(version=ORACLE_23AI)
-        for column_class in dialect.suggested_extra_column_types().values():
+        for column_class in dialect.suggest_extra_column_types().table.values():
             column = column_class(dialect, "c")
             assert isinstance(column, ColumnBase)
             # Oracle folds unquoted identifiers to upper case.
@@ -306,19 +304,19 @@ class TestExtraColumnTypes:
     def test_the_extra_table_does_not_overlap_the_common_one(self):
         dialect = OracleDialect(version=ORACLE_23AI)
         assert (
-            set(dialect.suggested_column_types()) & set(dialect.suggested_extra_column_types())
+            set(dialect.suggest_column_types().table) & set(dialect.suggest_extra_column_types().table)
             == set()
         )
 
     def test_vector_is_gated_on_23ai_like_its_adapter(self):
         from rhosocial.activerecord.backend.impl.oracle.type_values import OracleVector
 
-        assert OracleVector in OracleDialect(version=ORACLE_23AI).suggested_extra_column_types()
-        assert OracleVector not in OracleDialect(version=ORACLE_21C).suggested_extra_column_types()
+        assert OracleVector in OracleDialect(version=ORACLE_23AI).suggest_extra_column_types().table
+        assert OracleVector not in OracleDialect(version=ORACLE_21C).suggest_extra_column_types().table
         # No version at all: the adapter is not registered either, so the entry
         # is absent rather than naming a class for a type the server may not
         # have.
-        assert OracleVector not in OracleDialect().suggested_extra_column_types()
+        assert OracleVector not in OracleDialect().suggest_extra_column_types().table
 
     def test_an_oracle_value_class_resolves_without_a_declaration(self, dialect):
         from rhosocial.activerecord.backend.expression.column_types import (

@@ -42,6 +42,11 @@ import enum
 import uuid
 from typing import Any, Dict, Optional
 
+from rhosocial.activerecord.backend.suggestion.definitions import (
+    DataTypeSuggestion,
+    ExtraDataTypeSuggestion,
+)
+
 from rhosocial.activerecord.backend.adapters import (
     BitString,
     Geometry,
@@ -164,11 +169,11 @@ ORACLE_EXTRA_DATA_TYPE_SUGGESTIONS: Dict[Any, Optional[Any]] = {
 class OracleDataTypeSuggestionsMixin:
     """Oracle's answer to "what declaration does a bare field get here"."""
 
-    def suggested_data_types(self) -> Dict[Any, Optional[Any]]:
+    def suggest_data_types(self) -> Dict[Any, Optional[Any]]:
         table = dict(ORACLE_DATA_TYPE_SUGGESTIONS)
-        return table
+        return DataTypeSuggestion(table=table)
 
-    def suggested_extra_data_types(self) -> Dict[Any, Optional[Any]]:
+    def suggest_extra_data_types(self) -> Dict[Any, Optional[Any]]:
         table = dict(ORACLE_EXTRA_DATA_TYPE_SUGGESTIONS)
         # `VECTOR` exists on 23ai and later only, and the adapter that carries
         # the value is registered on the same condition. An unadapted dialect,
@@ -177,7 +182,7 @@ class OracleDataTypeSuggestionsMixin:
         version = self.version_or_none
         if version is None or tuple(version) < (23, 0, 0):
             table.pop(OracleVector, None)
-        return table
+        return ExtraDataTypeSuggestion(table=table)
 
 
 __all__ = [

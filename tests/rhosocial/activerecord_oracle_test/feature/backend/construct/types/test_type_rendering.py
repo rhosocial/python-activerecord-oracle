@@ -31,6 +31,7 @@ from rhosocial.activerecord.backend.impl.oracle.adapters import (
     OracleUUIDAdapter, OracleVectorAdapter, OracleXMLAdapter,
 )
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
+from rhosocial.activerecord.backend.impl.oracle.introspection.type_parser import OracleTypeParser
 from rhosocial.activerecord.backend.impl.oracle.expression.types import (
     OracleBinaryDoubleType, OracleBinaryFloatType, OracleLongRawType,
     OracleLongType, OracleNClobType, OracleNVarChar2Type, OracleRawType,
@@ -146,7 +147,7 @@ class TestOracleSpecificTypeRendering:
         ("RAW(16)", "RAW(16)"),
     ])
     def test_reparented_types_render_exactly_as_before(self, dialect, raw, rendered):
-        parsed = dialect.parse_type(raw)
+        parsed = OracleTypeParser(dialect).parse(raw)
         assert dialect.format_data_type(parsed)[0] == rendered
         assert dialect.format_data_type(parsed)[1] == ()
 
@@ -154,7 +155,7 @@ class TestOracleSpecificTypeRendering:
         """CLOB is the standard's name for unbounded text, so it is a
         *spelling* of TextType. It renders CLOB and there is no separate
         Oracle class for it."""
-        parsed = dialect.parse_type("CLOB")
+        parsed = OracleTypeParser(dialect).parse("CLOB")
         assert type(parsed) is TextType
         assert parsed.spelling == "clob"
         assert dialect.format_data_type(parsed)[0] == "CLOB"
@@ -163,7 +164,7 @@ class TestOracleSpecificTypeRendering:
         """Oracle's XMLType stores an infoset, so it is the XML concept and
         explicitly *not* a TextType — the opposite of what the old
         OracleXmlType(TextType) claimed."""
-        parsed = dialect.parse_type("XMLTYPE")
+        parsed = OracleTypeParser(dialect).parse("XMLTYPE")
         assert type(parsed) is XmlType
         assert not isinstance(parsed, TextType)
         assert dialect.format_data_type(parsed)[0] == "XMLTYPE"
@@ -185,22 +186,22 @@ class TestOracleTimestampLtzIsNotTheCoreTzType:
     """
 
     def test_parse_routes_each_word_to_its_own_class(self, dialect):
-        assert type(dialect.parse_type(
+        assert type(OracleTypeParser(dialect).parse(
             "TIMESTAMP WITH LOCAL TIME ZONE")) is OracleTimestampLtzType
-        assert type(dialect.parse_type(
+        assert type(OracleTypeParser(dialect).parse(
             "TIMESTAMP WITH TIME ZONE")) is TimestampTzType
 
     def test_the_local_word_round_trips_byte_identically(self, dialect):
         raw = "TIMESTAMP(6) WITH LOCAL TIME ZONE"
-        assert dialect.format_data_type(dialect.parse_type(raw))[0] == raw
+        assert dialect.format_data_type(OracleTypeParser(dialect).parse(raw))[0] == raw
 
     def test_a_declared_local_column_equals_the_introspected_one(self, dialect):
         assert OracleTimestampLtzType(dialect, precision=6) == (
-            dialect.parse_type("TIMESTAMP(6) WITH LOCAL TIME ZONE"))
+            OracleTypeParser(dialect).parse("TIMESTAMP(6) WITH LOCAL TIME ZONE"))
 
     def test_local_and_non_local_are_not_equal(self, dialect):
-        local = dialect.parse_type("TIMESTAMP(6) WITH LOCAL TIME ZONE")
-        plain = dialect.parse_type("TIMESTAMP(6) WITH TIME ZONE")
+        local = OracleTypeParser(dialect).parse("TIMESTAMP(6) WITH LOCAL TIME ZONE")
+        plain = OracleTypeParser(dialect).parse("TIMESTAMP(6) WITH TIME ZONE")
         assert local != plain
         assert OracleTimestampLtzType(dialect, precision=6) != (
             TimestampTzType(dialect, precision=6))
@@ -223,28 +224,28 @@ class TestOracleBinaryIeeeTypesAreNotTheNumberFamily:
     """
 
     def test_parse_routes_the_ieee_words_to_their_own_classes(self, dialect):
-        assert type(dialect.parse_type("BINARY_FLOAT")) is OracleBinaryFloatType
-        assert type(dialect.parse_type("BINARY_DOUBLE")) is OracleBinaryDoubleType
+        assert type(OracleTypeParser(dialect).parse("BINARY_FLOAT")) is OracleBinaryFloatType
+        assert type(OracleTypeParser(dialect).parse("BINARY_DOUBLE")) is OracleBinaryDoubleType
 
     @pytest.mark.parametrize("word,klass", [
         ("BINARY_FLOAT", OracleBinaryFloatType),
         ("BINARY_DOUBLE", OracleBinaryDoubleType),
     ])
     def test_the_word_round_trips_byte_identically(self, dialect, word, klass):
-        parsed = dialect.parse_type(word)
+        parsed = OracleTypeParser(dialect).parse(word)
         assert type(parsed) is klass
         assert dialect.format_data_type(parsed)[0] == word
 
     def test_no_parameters_and_equality_by_class(self, dialect):
         assert OracleBinaryFloatType.PARAMETERS == ()
         assert OracleBinaryDoubleType.PARAMETERS == ()
-        assert dialect.parse_type("BINARY_FLOAT") == OracleBinaryFloatType(dialect)
-        assert dialect.parse_type("BINARY_DOUBLE") == OracleBinaryDoubleType(dialect)
+        assert OracleTypeParser(dialect).parse("BINARY_FLOAT") == OracleBinaryFloatType(dialect)
+        assert OracleTypeParser(dialect).parse("BINARY_DOUBLE") == OracleBinaryDoubleType(dialect)
 
     def test_the_ieee_classes_are_not_the_number_family(self, dialect):
-        assert dialect.parse_type("BINARY_FLOAT") != FloatType(dialect, precision=63)
-        assert dialect.parse_type("BINARY_FLOAT") != FloatType(dialect)
-        assert dialect.parse_type("BINARY_DOUBLE") != DoubleType(dialect)
+        assert OracleTypeParser(dialect).parse("BINARY_FLOAT") != FloatType(dialect, precision=63)
+        assert OracleTypeParser(dialect).parse("BINARY_FLOAT") != FloatType(dialect)
+        assert OracleTypeParser(dialect).parse("BINARY_DOUBLE") != DoubleType(dialect)
         assert OracleBinaryFloatType(dialect) != FloatType(dialect)
         assert OracleBinaryDoubleType(dialect) != DoubleType(dialect)
 
@@ -273,33 +274,33 @@ class TestOracleCharIsFixedLength:
             dialect=OracleDialect(version=(23, 0, 0)), length=8)
 
     def test_parse_keeps_fixed_and_variable_apart(self, dialect):
-        assert type(dialect.parse_type("CHAR(10)")) is CharType
-        assert type(dialect.parse_type("VARCHAR2(10)")) is VarCharType
-        assert dialect.parse_type("CHAR(10)") != dialect.parse_type("VARCHAR2(10)")
+        assert type(OracleTypeParser(dialect).parse("CHAR(10)")) is CharType
+        assert type(OracleTypeParser(dialect).parse("VARCHAR2(10)")) is VarCharType
+        assert OracleTypeParser(dialect).parse("CHAR(10)") != OracleTypeParser(dialect).parse("VARCHAR2(10)")
 
     def test_a_declared_column_equals_the_introspected_one(self, dialect):
         for klass, raw in ((CharType, "CHAR(10)"), (VarCharType, "VARCHAR2(10)")):
-            assert klass(dialect, length=10) == dialect.parse_type(raw), raw
+            assert klass(dialect, length=10) == OracleTypeParser(dialect).parse(raw), raw
 
 
 class TestBlobIsTheCoreConcept:
     """``BLOB`` is the word ``format_data_type_blob`` writes, so core
-    ``BlobType`` is what ``parse_type`` returns and what ``substitute_data_types``
+    ``BlobType`` is what the introspection type parser returns and what ``suggest_substitute_types``
     names for ``varbinary``. The ``OracleBlobType`` that used to sit between them
     rendered identical SQL under a prefixed name — and a prefixed name with
     nothing behind it is the same defect this file's other deletions removed."""
 
     def test_blob_parses_to_the_core_class(self, dialect):
-        assert type(dialect.parse_type("BLOB")) is BlobType
+        assert type(OracleTypeParser(dialect).parse("BLOB")) is BlobType
 
     def test_a_declared_blob_equals_the_introspected_one(self, dialect):
-        assert BlobType(dialect) == dialect.parse_type("BLOB")
+        assert BlobType(dialect) == OracleTypeParser(dialect).parse("BLOB")
 
     def test_long_raw_is_still_namespaced(self, dialect):
         """``LONG RAW`` is *not* a spelling of ``BLOB``: Oracle tells you to
         convert it, so a column declared that way has to be written back that
         way, and no core formatter writes ``LONG RAW``."""
-        parsed = dialect.parse_type("LONG RAW")
+        parsed = OracleTypeParser(dialect).parse("LONG RAW")
         assert isinstance(parsed, OracleLongRawType)
         assert parsed != BlobType(dialect)
         assert dialect.format_data_type(parsed)[0] == "LONG RAW"
@@ -335,7 +336,7 @@ class TestOracleRawIsABoundedByteString:
 class TestRawWidthIsReadNotGuessed:
     """``RAW(n)``'s width is the whole identity of the column — it is in
     ``OracleRawType.PARAMETERS``, so two ``RAW`` columns of different widths are
-    different columns — and ``parse_type`` used to invent one.
+    different columns — and the introspection type parser used to invent one.
 
     The gap it invented it for is closed: the introspector now spells the size
     out for ``RAW`` (``parse_columns`` reads ``DATA_LENGTH``, which holds the
@@ -349,20 +350,20 @@ class TestRawWidthIsReadNotGuessed:
 
     @pytest.mark.parametrize("width", [1, 8, 16, 32, 64, 2000])
     def test_the_declared_width_is_what_comes_back(self, dialect, width):
-        parsed = dialect.parse_type(f"RAW({width})")
+        parsed = OracleTypeParser(dialect).parse(f"RAW({width})")
         assert isinstance(parsed, OracleRawType)
         assert parsed.length == width
 
     def test_two_widths_are_two_different_types(self, dialect):
-        assert dialect.parse_type("RAW(16)") != dialect.parse_type("RAW(64)")
-        assert dialect.parse_type("RAW(16)") != dialect.parse_type("RAW(32)")
+        assert OracleTypeParser(dialect).parse("RAW(16)") != OracleTypeParser(dialect).parse("RAW(64)")
+        assert OracleTypeParser(dialect).parse("RAW(16)") != OracleTypeParser(dialect).parse("RAW(32)")
 
     def test_a_declared_column_equals_the_introspected_one(self, dialect):
         """The point of the whole refactor: a declaration and the catalog row it
         produced are the same column, so ``==`` (what the differ uses) says so."""
-        assert OracleRawType(dialect, length=16) == dialect.parse_type("RAW(16)")
-        assert OracleRawType(dialect, length=64) == dialect.parse_type("RAW(64)")
-        assert OracleRawType(dialect, length=16) != dialect.parse_type("RAW(64)")
+        assert OracleRawType(dialect, length=16) == OracleTypeParser(dialect).parse("RAW(16)")
+        assert OracleRawType(dialect, length=64) == OracleTypeParser(dialect).parse("RAW(64)")
+        assert OracleRawType(dialect, length=16) != OracleTypeParser(dialect).parse("RAW(64)")
 
     @pytest.mark.parametrize("raw,rendered", [
         ("RAW(16)", "RAW(16)"),
@@ -371,7 +372,7 @@ class TestRawWidthIsReadNotGuessed:
         ("RAW (32)", "RAW(32)"),
     ])
     def test_round_trip_is_byte_identical(self, dialect, raw, rendered):
-        sql, params = dialect.format_data_type(dialect.parse_type(raw))
+        sql, params = dialect.format_data_type(OracleTypeParser(dialect).parse(raw))
         assert sql == rendered
         assert params == ()
 
@@ -388,14 +389,14 @@ class TestRawWidthIsReadNotGuessed:
         a false claim if it can be reached, so there is no fallback.
         """
         with pytest.raises(ValueError) as excinfo:
-            dialect.parse_type("RAW")
+            OracleTypeParser(dialect).parse("RAW")
         message = str(excinfo.value)
         assert "un-sized RAW" in message, message
         assert "RAW(16)" in message, message
 
     def test_long_raw_is_unaffected(self, dialect):
         """``LONG RAW`` needs no size, so the size rule does not touch it."""
-        parsed = dialect.parse_type("LONG RAW")
+        parsed = OracleTypeParser(dialect).parse("LONG RAW")
         assert isinstance(parsed, OracleLongRawType)
         assert dialect.format_data_type(parsed)[0] == "LONG RAW"
 
@@ -404,8 +405,8 @@ class TestIntervalAndCustomConcepts:
     def test_interval_is_rendered_not_substituted(self, dialect):
         """Oracle has both interval types natively, so an INTERVAL column must
         not round-trip as CLOB."""
-        assert "interval" in dialect.supports_data_types()
-        assert "interval" not in dialect.substitute_data_types()
+        assert hasattr(dialect, "format_data_type_interval")
+        assert "interval" not in dialect.suggest_substitute_types().mapping
 
     @pytest.mark.parametrize("fields,expected", [
         ("YEAR TO MONTH", "INTERVAL YEAR TO MONTH"),
@@ -420,12 +421,13 @@ class TestIntervalAndCustomConcepts:
         out is what makes it round-trip."""
         sql, _ = dialect.format_data_type(IntervalType())
         assert sql == "INTERVAL DAY(2) TO SECOND(6)"
-        assert dialect.format_data_type(dialect.parse_type(sql))[0] == sql
+        assert dialect.format_data_type(OracleTypeParser(dialect).parse(sql))[0] == sql
 
     def test_custom_is_rendered_not_substituted(self, dialect):
-        """parse_type returns CustomType for every unmodelled name, so it has
+        """The introspection parser returns CustomType for every unmodelled name,
+        so it has
         to be renderable or introspection could not be written back."""
-        assert "custom" in dialect.supports_data_types()
+        assert hasattr(dialect, "format_data_type_custom")
         assert dialect.format_data_type(CustomType(raw="SDO_GEOMETRY")) == (
             "SDO_GEOMETRY", (),
         )
@@ -496,7 +498,7 @@ class TestParseType:
         ("MY_CUSTOM_TYPE", CustomType),
     ])
     def test_parsed_type_kind(self, dialect, raw, expected_cls):
-        parsed = dialect.parse_type(raw)
+        parsed = OracleTypeParser(dialect).parse(raw)
         assert isinstance(parsed, expected_cls)
 
     @pytest.mark.parametrize("raw,expected_cls", [
@@ -512,10 +514,10 @@ class TestParseType:
         """``isinstance`` would pass for a subclass, and a subclass is exactly
         what makes ``==`` fail: ``type(self) is type(other)``. Asserted on the
         concrete class, not the base."""
-        assert type(dialect.parse_type(raw)) is expected_cls, raw
+        assert type(OracleTypeParser(dialect).parse(raw)) is expected_cls, raw
 
     def test_parse_preserves_precision_and_scale(self, dialect):
-        parsed = dialect.parse_type("NUMBER(12, 4)")
+        parsed = OracleTypeParser(dialect).parse("NUMBER(12, 4)")
         assert parsed.precision == 12
         assert parsed.scale == 4
 
@@ -526,17 +528,17 @@ class TestParseType:
         ("XMLTYPE", "XMLTYPE"),
     ])
     def test_round_trip(self, dialect, raw, rendered):
-        sql, _ = dialect.format_data_type(dialect.parse_type(raw))
+        sql, _ = dialect.format_data_type(OracleTypeParser(dialect).parse(raw))
         assert sql == rendered
 
 
     def test_long_raw_wins_over_long_prefix(self, dialect):
-        assert isinstance(dialect.parse_type("LONG RAW"), OracleLongRawType)
-        assert isinstance(dialect.parse_type("LONG"), OracleLongType)
+        assert isinstance(OracleTypeParser(dialect).parse("LONG RAW"), OracleLongRawType)
+        assert isinstance(OracleTypeParser(dialect).parse("LONG"), OracleLongType)
 
     def test_nclob_wins_over_clob_prefix(self, dialect):
-        assert isinstance(dialect.parse_type("NCLOB"), OracleNClobType)
-        assert type(dialect.parse_type("CLOB")) is TextType
+        assert isinstance(OracleTypeParser(dialect).parse("NCLOB"), OracleNClobType)
+        assert type(OracleTypeParser(dialect).parse("CLOB")) is TextType
 
     # --- every word that names a concept reaches the class that owns it ---
 
@@ -552,7 +554,7 @@ class TestParseType:
         # TextType.SPELLINGS
         ("CLOB", TextType),
         # BooleanType.SPELLINGS — core's second spelling is not an Oracle word
-        # for ``parse_type`` to see, but the native column type is.
+        # for the introspection type parser to see, but the native column type is.
         ("BOOLEAN", BooleanType),
         # IntervalType — both qualifiers, and both are the same concept with
         # different fields, which is exactly what `fields` is for.
@@ -562,13 +564,13 @@ class TestParseType:
         ("INTERVAL DAY(3) TO SECOND(6)", IntervalType),
     ])
     def test_spelling_words_reach_their_owning_class(self, dialect, raw, expected_cls):
-        assert isinstance(dialect.parse_type(raw), expected_cls)
+        assert isinstance(OracleTypeParser(dialect).parse(raw), expected_cls)
 
     def test_character_varying_is_not_read_as_character(self, dialect):
         """'CHARACTER' is a spelling of CHAR, so the head of
         'CHARACTER VARYING' must be matched first — otherwise a
         variable-length column is introspected as fixed-length."""
-        parsed = dialect.parse_type("CHARACTER VARYING(7)")
+        parsed = OracleTypeParser(dialect).parse("CHARACTER VARYING(7)")
         assert type(parsed) is VarCharType
         assert not isinstance(parsed, CharType)
         assert parsed.length == 7
@@ -579,7 +581,7 @@ class TestParseType:
         ("INTERVAL DAY(3) TO SECOND(6)", "DAY(3) TO SECOND(6)"),
     ])
     def test_interval_qualifier_is_carried_not_dropped(self, dialect, raw, fields):
-        parsed = dialect.parse_type(raw)
+        parsed = OracleTypeParser(dialect).parse(raw)
         assert parsed.fields == fields
         assert dialect.format_data_type(parsed)[0] == f"INTERVAL {fields}"
 
@@ -625,7 +627,7 @@ class TestUnSizedCharacterWidthsAreRefusedNotGuessed:
                                     "CHARACTER VARYING", "CHAR VARYING"])
     def test_an_unsized_varchar2_is_refused(self, dialect, raw):
         with pytest.raises(ValueError) as excinfo:
-            dialect.parse_type(raw)
+            OracleTypeParser(dialect).parse(raw)
         message = str(excinfo.value)
         assert "un-sized VARCHAR2" in message, message
         assert "You must specify size" in message, message
@@ -634,7 +636,7 @@ class TestUnSizedCharacterWidthsAreRefusedNotGuessed:
 
     def test_an_unsized_nvarchar2_is_refused(self, dialect):
         with pytest.raises(ValueError) as excinfo:
-            dialect.parse_type("NVARCHAR2")
+            OracleTypeParser(dialect).parse("NVARCHAR2")
         message = str(excinfo.value)
         assert "un-sized NVARCHAR2" in message, message
         assert "You must specify size" in message, message
@@ -652,7 +654,7 @@ class TestUnSizedCharacterWidthsAreRefusedNotGuessed:
         server accepts a bare ``CHAR``/``NCHAR`` and stores one character — so
         answering ``CHAR(1)`` says what the column *would be* rather than
         guessing at it."""
-        parsed = dialect.parse_type(raw)
+        parsed = OracleTypeParser(dialect).parse(raw)
         assert type(parsed) is CharType
         assert parsed.length == length
         assert dialect.format_data_type(parsed)[0] == f"CHAR({length})"
@@ -667,7 +669,7 @@ class TestUnSizedCharacterWidthsAreRefusedNotGuessed:
         ("NCHAR(10)", "CHAR(10)"),
     ])
     def test_a_sized_one_round_trips_byte_identically(self, dialect, raw, rendered):
-        sql, params = dialect.format_data_type(dialect.parse_type(raw))
+        sql, params = dialect.format_data_type(OracleTypeParser(dialect).parse(raw))
         assert sql == rendered
         assert params == ()
 
@@ -679,7 +681,7 @@ class TestUnSizedCharacterWidthsAreRefusedNotGuessed:
         """``length=0`` is falsy, so an ``or``-style fallback would silently
         replace it with a default. Oracle accepts ``VARCHAR2(0)``, so the value
         has to survive as written."""
-        parsed = dialect.parse_type(raw)
+        parsed = OracleTypeParser(dialect).parse(raw)
         assert parsed.length == length, raw
 
     def test_the_refusal_does_not_reach_the_formatters(self, dialect):

@@ -15,6 +15,7 @@ from typing import Any, ClassVar, Dict, List, Optional, Tuple
 import pytest
 
 from rhosocial.activerecord.backend.errors import DatabaseError
+from rhosocial.activerecord.backend.impl.oracle.introspection.type_parser import OracleTypeParser
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.introspection.introspector import (
     AsyncOracleIntrospector, OracleIntrospector,
@@ -238,7 +239,7 @@ class TestRawWidthSurvivesIntrospection:
     """``RAW``'s width used to be dropped here, which is a false identity claim
     produced by introspection rather than by a declaration: ``parse_columns``
     spelled out the size for ``NUMBER``/``FLOAT`` and the character types and
-    not for ``RAW``, so every ``RAW`` column reached ``parse_type`` as a bare
+    not for ``RAW``, so every ``RAW`` column reached the type parser as a bare
     ``"RAW"`` and came back as ``OracleRawType(length=2000)`` — Oracle's
     ``MAX_STRING_SIZE = STANDARD`` ceiling, which a ``RAW(16)`` column does not
     have.
@@ -290,7 +291,7 @@ class TestRawWidthSurvivesIntrospection:
         insp, backend, _ = make_sync_introspector()
         for raw in ("RAW", "raw"):
             with pytest.raises(ValueError):
-                backend.dialect.parse_type(raw)
+                OracleTypeParser(backend.dialect).parse(raw)
 
     def test_parse_foreign_keys_groups_columns(self):
         insp, _, _ = make_sync_introspector()
@@ -543,7 +544,7 @@ class TestLiveRawRoundTrip:
             "BLOB_HOLDERS", schema="AR_SHOP"
         )
         small = next(c for c in columns if c.name == "SMALL")
-        assert small.parsed_data_type == dialect.substitute_data_types()["uuid"](
+        assert small.parsed_data_type == dialect.suggest_substitute_types().mapping["uuid"](
             dialect)
 
     def test_a_declared_column_equals_the_introspected_one_for_the_core_types(self, provisioned):

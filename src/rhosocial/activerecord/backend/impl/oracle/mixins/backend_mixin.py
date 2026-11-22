@@ -8,6 +8,10 @@ from typing import Dict, List, Optional, Tuple, Type
 from uuid import UUID
 
 from rhosocial.activerecord.backend.type_adapter import SQLTypeAdapter
+from rhosocial.activerecord.backend.suggestion.definitions import (
+    DataAdapterSuggestion,
+    ExtraDataAdapterSuggestion,
+)
 
 
 class OracleBackendMixin:
@@ -184,26 +188,25 @@ class OracleBackendMixin:
 
         return [unique[key] for key in sorted(unique)]
 
-    def get_default_adapter_suggestions(self) -> Dict[Type, Tuple[SQLTypeAdapter, Type]]:
+    def suggest_data_adapters(self) -> Dict[Type, Tuple[SQLTypeAdapter, Type]]:
         """Provides default type adapter suggestions for Oracle.
 
-        The framework defaults (:meth:`TypeAdaptionMixin.get_default_adapter_suggestions`)
-        are the base; Oracle merges its own pairs on top, including the neutral
-        families it carries as ``VARCHAR2``/``CLOB`` text.
+        The framework defaults (``PORTABLE_TYPE_MAPPINGS``) are the base;
+        Oracle merges its own pairs on top, including the neutral families it
+        carries as ``VARCHAR2``/``CLOB`` text.
         """
         if hasattr(self, '_default_suggestions_cache') and self._default_suggestions_cache is not None:
-            return self._default_suggestions_cache
+            return DataAdapterSuggestion(table=self._default_suggestions_cache)
 
         from rhosocial.activerecord.backend.adapters.bitstring import BitString
         from rhosocial.activerecord.backend.adapters.geometry import Geometry
         from rhosocial.activerecord.backend.adapters.network import MacAddress
+        from rhosocial.activerecord.backend.adapters.portable import PORTABLE_TYPE_MAPPINGS
         from rhosocial.activerecord.backend.adapters.range import Multirange, Range
         from rhosocial.activerecord.backend.adapters.vector import Vector
         from rhosocial.activerecord.backend.base.type_adaption import (
             merge_adapter_suggestions,
         )
-
-        base = super().get_default_adapter_suggestions()
 
         type_mappings = [
             (bool, int),
@@ -237,7 +240,8 @@ class OracleBackendMixin:
             (MacAddress, str),
         ]
 
-        suggestions = merge_adapter_suggestions(base, type_mappings, self.adapter_registry)
+        overrides = list(PORTABLE_TYPE_MAPPINGS) + type_mappings
+        suggestions = merge_adapter_suggestions({}, overrides, self.adapter_registry)
         for py_type, db_type in type_mappings:
             if py_type not in suggestions:
                 self.log(
@@ -247,7 +251,11 @@ class OracleBackendMixin:
                 )
 
         self._default_suggestions_cache = suggestions
-        return suggestions
+        return DataAdapterSuggestion(table=suggestions)
+
+    def suggest_extra_data_adapters(self) -> Dict[Type, Tuple[SQLTypeAdapter, Type]]:
+        """No backend-owned extra adapter types."""
+        return ExtraDataAdapterSuggestion(table={})
 
     def _get_oracle_version_string(self) -> str:
         """A human label for the configured version, or an honest "unknown".
