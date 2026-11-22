@@ -193,7 +193,11 @@ class OracleBackendMixin:
 
         The framework defaults (``PORTABLE_TYPE_MAPPINGS``) are the base;
         Oracle merges its own pairs on top, including the neutral families it
-        carries as ``VARCHAR2``/``CLOB`` text.
+        carries as ``VARCHAR2``/``CLOB`` text. Native scalar types
+        (``str``/``int``/``float``/``bytes``) are deliberately absent: absence
+        is the sparse table's "pass through untouched" signal. The Oracle
+        adapters for those Python types stay registered in the registry and can
+        still be selected explicitly, but they are not backend *defaults*.
         """
         if hasattr(self, '_default_suggestions_cache') and self._default_suggestions_cache is not None:
             return DataAdapterSuggestion(table=self._default_suggestions_cache)
@@ -208,28 +212,22 @@ class OracleBackendMixin:
             merge_adapter_suggestions,
         )
 
+        # Native scalar types (str/int/float/bytes) are intentionally NOT listed:
+        # the driver binds them natively, and their absence is the sparse-table
+        # contract's "pass through untouched" signal. Their adapters remain
+        # registered in ``adapter_registry`` for explicit ``UseAdapter`` use.
         type_mappings = [
             (bool, int),
             (datetime, str),
             (date, str),
             (time, str),
             (Decimal, float),
-            (float, float),
             (dict, str),
             (list, str),
-            (bytes, bytes),
             # Generic UUID columns are the conventional hyphenated text; RAW(16)
             # storage is selected per column with ``storage_format='bytes'``,
             # not as a default for every UUID field.
             (UUID, str),
-            # ``str`` is absent from the core table because a driver that
-            # round-trips text needs no adapter.  Oracle's does not: it stores
-            # ``''`` as ``NULL``, so a non-Optional ``str`` field that was written
-            # as ``''`` reads back as ``None`` and the model rejects it.  The
-            # adapter restores ``''`` for those fields and leaves ``Optional[str]``
-            # NULLs alone; the model's declared annotation reaches it through
-            # ``original_type``, which is what tells the two apart.
-            (str, str),
             # Neutral families: Oracle carries them as text (the native
             # SDO_GEOMETRY / VECTOR / RAW forms are backend-specific topics).
             (Geometry, str),
