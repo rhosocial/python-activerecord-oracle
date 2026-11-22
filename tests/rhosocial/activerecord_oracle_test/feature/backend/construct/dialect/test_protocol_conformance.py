@@ -155,6 +155,26 @@ ORACLE_PROTOCOLS = [
     dialect_protocols.DropViewSupport,
     dialect_protocols.MaterializedViewSupport,
     dialect_protocols.TruncateSupport,
+    # --- Core additions from the migration refactor ---
+    # These are the shared implementation protocols the core split out into
+    # their own modules. OracleDialect composes the corresponding mixins (via
+    # SQLDialectBase and the per-feature generic mixins), so each is satisfied;
+    # REPEAT is the one deliberate exception, classified below.
+    dialect_protocols.AsyncIntrospectionSupport,
+    dialect_protocols.DDLColumnSupport,
+    dialect_protocols.DMLSupport,
+    dialect_protocols.DQLSupport,
+    dialect_protocols.DatabaseNameSupport,
+    dialect_protocols.DateTimeSupport,
+    dialect_protocols.ExpressionSupport,
+    dialect_protocols.FunctionCallSupport,
+    dialect_protocols.LpadSupport,
+    dialect_protocols.PredicateSupport,
+    dialect_protocols.PropertyGraphNameSupport,
+    dialect_protocols.RelationSourceSupport,
+    dialect_protocols.RpadSupport,
+    dialect_protocols.SchemaNameSupport,
+    dialect_protocols.TrimSupport,
 ]
 
 
@@ -214,6 +234,9 @@ ORACLE_NOT_IMPLEMENTED = [
     # Oracle has no ILIKE operator; case-insensitive matching goes through
     # UPPER()/LOWER() + LIKE (documented in the ILIKESupport protocol docstring).
     dialect_protocols.ILIKESupport,
+    # Oracle has no REPEAT function (ORA-00904, live-verified 2026-10-09), so
+    # the generic RepeatSupport is deliberately not composed.
+    dialect_protocols.RepeatSupport,
 ]
 
 
@@ -254,19 +277,16 @@ class TestDialectNegativeProtocolConformance:
             f"(and implement the behaviour fully)."
         )
 
-    def test_ddl_type_support_is_an_alias_of_data_type_support(self) -> None:
-        """``DataTypeSupport`` is a retired spelling of ``DataTypeSupport``.
+    def test_data_type_support_is_the_single_canonical_protocol(self) -> None:
+        """Core collapsed DDL/data type support into one ``DataTypeSupport``.
 
-        The core collapsed the two: a dialect is typed by its data types, not by
-        whether it declares DDL for them, so there is one protocol under two
-        names. Oracle classifies it once, under the name it is declared with --
-        which is why discovery keys on ``__name__`` and an alias cannot be
-        counted as a second protocol still awaiting a verdict.
+        A dialect is typed by its data types, not by whether it declares DDL for
+        them, so there is a single protocol discovered under its own name and no
+        retired ``DDLTypeSupport`` alias left to classify a second time.
         """
-        assert dialect_protocols.DataTypeSupport is dialect_protocols.DataTypeSupport
         discovered = get_all_generic_protocols()
-        assert "DataTypeSupport" not in discovered
         assert discovered["DataTypeSupport"] is dialect_protocols.DataTypeSupport
+        assert not hasattr(dialect_protocols, "DDLTypeSupport")
 
     def test_declaring_a_user_defined_type_is_a_separate_protocol(self) -> None:
         """Naming a column's type is not declaring a type.

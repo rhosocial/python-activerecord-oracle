@@ -43,6 +43,7 @@ from rhosocial.activerecord.backend.dialect.protocols import (
     TransactionControlSupport,
     SQLFunctionSupport,
     ColumnAttributeSupport,
+    PivotSupport,
 )
 from rhosocial.activerecord.backend.dialect.mixins import (
     SQLXMLMixin,
@@ -99,6 +100,7 @@ from rhosocial.activerecord.backend.dialect.mixins import (
     DQLMixin,
     DMLMixin,
     PartitionMixin,
+    PivotMixin,
     UserDefinedTypeMixin,
     # TRIM/LPAD/RPAD are nodes with default formatters, and Oracle spells all
     # three natively -- ``TRIM([LEADING|TRAILING|BOTH] [chars] FROM s)``
@@ -376,6 +378,7 @@ class OracleDialect(
     TransactionControlSupport,
     SQLFunctionSupport,
     ColumnAttributeSupport,
+    PivotSupport,
     OraclePartitionSupport,
     OracleDataTypeSupport,
     OracleTypeDDLSupport,
