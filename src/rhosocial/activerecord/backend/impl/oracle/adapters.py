@@ -618,6 +618,7 @@ oracle_adapters = [
 from .neutral_adapters import (  # noqa: E402  (re-export after the native set)
     OracleNeutralBitStringAdapter,  # noqa: F401
     OracleNeutralGeometryAdapter,  # noqa: F401
+    OracleNeutralIPAddressAdapter,  # noqa: F401
     OracleNeutralMacAddressAdapter,  # noqa: F401
     OracleNeutralRangeAdapter,  # noqa: F401
     OracleNeutralVectorAdapter,  # noqa: F401

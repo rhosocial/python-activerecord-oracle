@@ -26,9 +26,9 @@ Four facts about this server shape the answers:
   ``OracleRawType()`` -- whose ``DEFAULT_LENGTH`` is 16 -- is what the
   backend's adapter writes and what a bare ``uuid.UUID`` gets.
 
-No key answers ``None``. The twenty-four entries are ``FRAMEWORK_PYTHON_TYPES``,
-and every one is answered: a suggestion is what a bare field gets, so taking
-the table away from the caller is not an answer.
+No key answers ``None``. The entries are ``FRAMEWORK_PYTHON_TYPES``, and every
+one is answered: a suggestion is what a bare field gets, so taking the table
+away from the caller is not an answer.
 
 Each call returns a **fresh dict** whose values are this module's read-only
 templates; the derivation binds a dialect on a copy of the single entry it uses.
@@ -48,8 +48,10 @@ from rhosocial.activerecord.backend.suggestion.definitions import (
 )
 
 from rhosocial.activerecord.backend.adapters import (
+    AwareDatetime,
     BitString,
     Geometry,
+    IPAddress,
     MacAddress,
     Multirange,
     Range,
@@ -67,6 +69,7 @@ from rhosocial.activerecord.backend.expression.types import (
     TimeType,
     XmlType,
     TimestampType,
+    TimestampTzType,
     VarCharType,
 )
 from rhosocial.activerecord.backend.impl.oracle.expression.types import OracleRawType
@@ -111,6 +114,9 @@ ORACLE_DATA_TYPE_SUGGESTIONS: Dict[Any, Optional[Any]] = {
     # microsecond support, so a bare ``datetime`` must keep all six fractional
     # digits. TIMESTAMP(3) silently truncated writes and broke round-trips for
     # values carrying microseconds.
+    # An instant carries its own offset; Oracle's native TIMESTAMP WITH TIME
+    # ZONE stores it. Six digits match the naked datetime's resolution above.
+    AwareDatetime: TimestampTzType(precision=6),
     datetime.datetime: TimestampType(precision=6),
     # ``INTERVAL DAY TO SECOND`` is native and renders here; the adapter writes
     # its text form, and this is the declaration a bare duration gets. (MySQL
@@ -144,6 +150,9 @@ ORACLE_DATA_TYPE_SUGGESTIONS: Dict[Any, Optional[Any]] = {
     Multirange: TextType(),
     # The canonical 17-character form (six pairs plus five separators).
     MacAddress: VarCharType(length=17),
+    # Oracle has no IP type; canonical text covers both families, and 45
+    # characters hold an IPv4 dotted quad (15) or an IPv6 address (39).
+    IPAddress: VarCharType(length=45),
 }
 
 

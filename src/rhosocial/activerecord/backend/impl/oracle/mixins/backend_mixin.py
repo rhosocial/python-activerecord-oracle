@@ -143,6 +143,7 @@ class OracleBackendMixin:
             OracleNeutralBitStringAdapter,
             OracleNeutralRangeAdapter,
             OracleNeutralMacAddressAdapter,
+            OracleNeutralIPAddressAdapter,
         )
 
         self._default_suggestions_cache = None
@@ -202,6 +203,7 @@ class OracleBackendMixin:
             OracleNeutralBitStringAdapter(),
             OracleNeutralRangeAdapter(),
             OracleNeutralMacAddressAdapter(),
+            OracleNeutralIPAddressAdapter(),
         ]
         for adapter in neutral:
             for py_type, db_types in adapter.supported_types.items():

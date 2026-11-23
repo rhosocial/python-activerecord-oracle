@@ -30,6 +30,7 @@ from rhosocial.activerecord.backend.expression.column_types import (
     GeometryColumn,
     IntegerColumn,
     IntervalColumn,
+    IPAddressColumn,
     JSONColumn,
     MacAddressColumn,
     MultirangeColumn,
@@ -41,8 +42,10 @@ from rhosocial.activerecord.backend.expression.column_types import (
     VectorColumn,
 )
 from rhosocial.activerecord.backend.adapters import (
+    AwareDatetime,
     BitString,
     Geometry,
+    IPAddress,
     MacAddress,
     Multirange,
     Range,
@@ -141,7 +144,7 @@ class TestTableCompleteness:
 
 
 class TestBaselineEntries:
-    """The eleven entries every backend agrees on."""
+    """The portable entries every backend agrees on."""
 
     @pytest.mark.parametrize(
         "annotation, expected",
@@ -155,6 +158,7 @@ class TestBaselineEntries:
             (bytearray, BinaryColumn),
             (datetime.date, TimestampColumn),
             (datetime.time, TimestampColumn),
+            (AwareDatetime, TimestampColumn),
             (datetime.datetime, TimestampColumn),
             (uuid.UUID, UUIDColumn),
             (enum.Enum, StringColumn),
@@ -180,6 +184,7 @@ class TestBaselineEntries:
             (Range, RangeColumn),
             (Multirange, MultirangeColumn),
             (MacAddress, MacAddressColumn),
+            (IPAddress, IPAddressColumn),
         ):
             assert table[entry] is klass
 

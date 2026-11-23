@@ -15,6 +15,7 @@ from rhosocial.activerecord.backend.adapters import (
     BitString,
     Geometry,
     GeometryCollection,
+    IPAddress,
     LineString,
     MacAddress,
     MultiPolygon,
@@ -33,6 +34,7 @@ from rhosocial.activerecord.backend.impl.oracle.config import OracleConnectionCo
 from rhosocial.activerecord.backend.impl.oracle.neutral_adapters import (
     OracleNeutralBitStringAdapter,
     OracleNeutralGeometryAdapter,
+    OracleNeutralIPAddressAdapter,
     OracleNeutralMacAddressAdapter,
     OracleNeutralRangeAdapter,
     OracleNeutralVectorAdapter,
@@ -45,6 +47,7 @@ from rhosocial.activerecord.backend.impl.oracle.type_values import (
 _NEUTRAL_CLASSES = (
     OracleNeutralBitStringAdapter,
     OracleNeutralGeometryAdapter,
+    OracleNeutralIPAddressAdapter,
     OracleNeutralMacAddressAdapter,
     OracleNeutralRangeAdapter,
     OracleNeutralVectorAdapter,
@@ -466,6 +469,26 @@ class TestMacAddressAdapter:
         with pytest.raises(TypeConversionError):
             adapter.to_database(MacAddress.parse("08:00:2b:01:02:03"), int)
 
+
+class TestIPAddressAdapter:
+    @pytest.mark.parametrize(
+        "text", ["192.0.2.1", "2001:db8::1", "::1", "2001:db8::ffff:192.0.2.1"]
+    )
+    def test_canonical_text_round_trip(self, text):
+        adapter = OracleNeutralIPAddressAdapter()
+        address = IPAddress.parse(text)
+        wire = adapter.to_database(address, str)
+        assert wire == str(address)
+        assert adapter.from_database(wire, IPAddress) == address
+
+    def test_invalid_input_is_wrapped(self):
+        adapter = OracleNeutralIPAddressAdapter()
+        with pytest.raises(TypeConversionError):
+            adapter.from_database("not-an-ip", IPAddress)
+        with pytest.raises(TypeConversionError):
+            adapter.from_database(42, IPAddress)
+
+
 # ---------------------------------------------------------------------------
 # Remaining branches: the refusals and pass-throughs the suites above do not
 # reach. Each is a value the adapter must reject, or an already-neutral value
@@ -601,6 +624,13 @@ class TestMacAddressRefusals:
         adapter = OracleNeutralMacAddressAdapter()
         with pytest.raises(TypeConversionError, match="must decode from text or bytes"):
             adapter.from_database(42, MacAddress)
+
+
+class TestIPAddressRefusals:
+    def test_a_non_text_value_is_refused(self):
+        adapter = OracleNeutralIPAddressAdapter()
+        with pytest.raises(TypeConversionError):
+            adapter.from_database(b"192.0.2.1", IPAddress)
 
 
 # ---------------------------------------------------------------------------

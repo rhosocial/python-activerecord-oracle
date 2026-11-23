@@ -18,7 +18,7 @@ not in operations.
 
 Nothing here answers ``None``
 -----------------------------
-All twenty-four of the framework's Python types get a column class on every Oracle
+All of the framework's committed Python types get a column class on every Oracle
 release this backend targets, including 18c. That is a measured claim rather
 than an optimistic one: the release whose storage genuinely lacks something is
 18c's JSON -- there is no ``JSON`` type before 21c and the value goes in a
@@ -43,8 +43,10 @@ import uuid
 from typing import Any, Dict, Type
 
 from rhosocial.activerecord.backend.adapters import (
+    AwareDatetime,
     BitString,
     Geometry,
+    IPAddress,
     MacAddress,
     Multirange,
     Range,
@@ -62,6 +64,7 @@ from rhosocial.activerecord.backend.expression.column_types import (
     GeometryColumn,
     IntegerColumn,
     IntervalColumn,
+    IPAddressColumn,
     JSONColumn,
     MacAddressColumn,
     MultirangeColumn,
@@ -168,6 +171,9 @@ ORACLE_COLUMN_TYPES: Dict[Any, Type[ColumnBase]] = {
     bytearray: BinaryColumn,
     datetime.date: TimestampColumn,
     datetime.time: TimestampColumn,
+    # Declared before ``datetime`` so the exact-match resolution step wins
+    # over the subclass walk; an instant is still a datetime column here.
+    AwareDatetime: TimestampColumn,
     datetime.datetime: TimestampColumn,
     datetime.timedelta: IntervalColumn,
     uuid.UUID: UUIDColumn,
@@ -192,6 +198,7 @@ ORACLE_COLUMN_TYPES: Dict[Any, Type[ColumnBase]] = {
     Range: RangeColumn,
     Multirange: MultirangeColumn,
     MacAddress: MacAddressColumn,
+    IPAddress: IPAddressColumn,
 }
 
 
@@ -214,7 +221,7 @@ ORACLE_EXTRA_COLUMN_TYPES: Dict[Any, Type[ColumnBase]] = {
 
 
 class OracleColumnTypeMixin:
-    """Oracle's 24-entry column-type table.
+    """Oracle's framework-committed column-type table.
 
     The table does not vary by version, which is a finding rather than a
     shortcut: on Oracle the version-dependent part of this protocol is *not*

@@ -31,6 +31,8 @@ Storage choices, and their honest limits:
   ``options={"bit_length": n}``; the text carrier keeps the bit length itself.
 - range / multirange: JSON text in ``VARCHAR2``/``CLOB``.
 - MAC address: canonical lowercase colon-separated text.
+- IP address: canonical text (``192.0.2.1`` / ``2001:db8::1``) in a
+  ``VARCHAR2(45)`` column -- Oracle has no native IP type.
 """
 
 from __future__ import annotations
@@ -45,6 +47,8 @@ from rhosocial.activerecord.backend.adapters import (
     Geometry,
     GeometryAdapterBase,
     GeometryCollection,
+    IPAddress,
+    IPAddressAdapterBase,
     LineString,
     MacAddress,
     MacAddressAdapterBase,
@@ -660,6 +664,25 @@ class OracleNeutralMacAddressAdapter(MacAddressAdapterBase):
         )
 
 
+# --- IP address ------------------------------------------------------------
+
+
+class OracleNeutralIPAddressAdapter(IPAddressAdapterBase):
+    """Encode neutral IP addresses as canonical text (``VARCHAR2``)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.register_type(IPAddress, str)
+
+    def _encode(
+        self, ip_addr: IPAddress, target_type: Type, options: Optional[Dict[str, Any]]
+    ) -> str:
+        return str(ip_addr)
+
+    def _decode(self, value: Any, options: Optional[Dict[str, Any]]) -> IPAddress:
+        return IPAddress.parse(self._require_text(value))
+
+
 #: Neutral adapters registered by the Oracle backend alongside the legacy set.
 neutral_adapters = [
     OracleNeutralGeometryAdapter,
@@ -667,11 +690,13 @@ neutral_adapters = [
     OracleNeutralBitStringAdapter,
     OracleNeutralRangeAdapter,
     OracleNeutralMacAddressAdapter,
+    OracleNeutralIPAddressAdapter,
 ]
 
 __all__ = [
     "OracleNeutralBitStringAdapter",
     "OracleNeutralGeometryAdapter",
+    "OracleNeutralIPAddressAdapter",
     "OracleNeutralMacAddressAdapter",
     "OracleNeutralRangeAdapter",
     "OracleNeutralVectorAdapter",
