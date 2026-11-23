@@ -247,7 +247,7 @@ class OracleBackendMixin:
 
         from rhosocial.activerecord.backend.adapters.bitstring import BitString
         from rhosocial.activerecord.backend.adapters.geometry import Geometry
-        from rhosocial.activerecord.backend.adapters.network import MacAddress
+        from rhosocial.activerecord.backend.adapters.network import IPAddress, MacAddress
         from rhosocial.activerecord.backend.adapters.portable import PORTABLE_TYPE_MAPPINGS
         from rhosocial.activerecord.backend.adapters.range import Multirange, Range
         from rhosocial.activerecord.backend.adapters.vector import Vector
@@ -281,6 +281,7 @@ class OracleBackendMixin:
             (Range, str),
             (Multirange, str),
             (MacAddress, str),
+            (IPAddress, str),
         ]
 
         overrides = list(PORTABLE_TYPE_MAPPINGS) + type_mappings
