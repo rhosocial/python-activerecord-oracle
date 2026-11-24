@@ -333,13 +333,12 @@ def build_coalesce_hash(
 ) -> Tuple[DdlStatement, ...]:
     """Render the HASH-only in-place shrink.
 
-    Oracle cannot add a hash partition by name, but it can remove the last
-    one through ``COALESCE PARTITION``. The case's policy says how many
-    buckets exist; the builder coalesces all but two of them.
+    The clause is count-less: Oracle coalesces one hash partition per
+    statement and takes no target count, so the case pins the bare keyword
+    form rather than a number.
     """
     table = Table(dialect, plan.parent, schema_name=plan.schema)
-    count = max(1, getattr(plan.policy, "modulus", 1) - 2)
-    return (OracleCoalescePartitionExpression(dialect, table, count).to_sql(),)
+    return (OracleCoalescePartitionExpression(dialect, table).to_sql(),)
 
 
 CASES: Tuple[PartitionSyntaxCase, ...] = (
@@ -417,7 +416,7 @@ CASES: Tuple[PartitionSyntaxCase, ...] = (
             'PARTITION BY HASH ("ID")',
             'PARTITION "BUCKETS_P0"',
             'PARTITION "BUCKETS_P3"',
-            'ALTER TABLE "BUCKETS" COALESCE PARTITION 2',
+            'ALTER TABLE "BUCKETS" COALESCE PARTITION',
         ),
         forbidden_fragments=("VALUES", "PARTITIONS 4", "SUBPARTITION"),
         ddl_builders=(build_coalesce_hash,),

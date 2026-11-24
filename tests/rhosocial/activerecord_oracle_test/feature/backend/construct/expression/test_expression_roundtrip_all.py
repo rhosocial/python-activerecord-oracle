@@ -1363,13 +1363,6 @@ def _register_oracle_specials():
     def truncate_partition_expression(d):
         return pl_mod.OracleTruncatePartitionStatement(d, table=_table_obj(d), partition_name="p1")
 
-    def coalesce_partition_expression(d):
-        # `count` is an int, and this module's annotations are postponed
-        # strings, so the introspective guess hands the slot a Literal. The
-        # formatter's count check is the only place that can tell them apart,
-        # so the constructor is supplied here.
-        return pl_mod.OracleCoalescePartitionExpression(d, table=_table_obj(d), count=2)
-
     def partition_maintenance_base(d):
         return pl_mod._OraclePartitionMaintenanceExpression(d, table=_table_obj(d))
 
@@ -1523,7 +1516,6 @@ def _register_oracle_specials():
         ("partition_lifecycle.OracleExchangePartitionStatement", exchange_partition_expression),
         ("partition_lifecycle.OracleMovePartitionStatement", move_partition_expression),
         ("partition_lifecycle.OracleTruncatePartitionStatement", truncate_partition_expression),
-        ("partition_lifecycle.OracleCoalescePartitionExpression", coalesce_partition_expression),
         ("sequence.OracleCreateSequenceStatement", create_sequence),
         ("sequence.OracleDropSequenceStatement", drop_sequence),
         ("trigger.DisableTriggerStatement", disable_trigger),

@@ -199,11 +199,12 @@ class OraclePartitionMixin:
     def supports_coalesce_partition(self) -> bool:
         """COALESCE PARTITION applies to hash-partitioned tables only.
 
-        Oracle can shrink a table in place only by coalescing hash partitions:
-        it selects the last hash partition, redistributes its rows by the hash
-        function and drops it. RANGE and LIST tables have no such operation,
-        so this probe answers for the mechanism Oracle does have rather than
-        for every strategy. It follows the base partition floor (11g).
+        Oracle's clause is count-less: it selects the last hash partition,
+        redistributes its rows by the hash function and drops it, one
+        partition per statement. RANGE and LIST tables have no such
+        operation, so this probe answers for the mechanism Oracle does have
+        rather than for every strategy. It follows the base partition floor
+        (11g).
         """
         return self.version_at_least(_ORACLE_PARTITION_MIN_VERSION)
 
@@ -726,13 +727,12 @@ class OraclePartitionMixin:
     def format_coalesce_partition_statement(
         self, expr: OracleCoalescePartitionExpression
     ) -> Tuple[str, tuple]:
-        """Format ``ALTER TABLE t COALESCE PARTITION n``.
+        """Format ``ALTER TABLE t COALESCE PARTITION``.
 
-        COALESCE only applies to hash partitions, so the request is refused
-        by name when :meth:`supports_coalesce_partition` answers ``False``.
-        ``count`` is the number of hash partitions to coalesce away; a
-        non-positive or non-integer count is refused by name as well, because
-        it asks for a shrink Oracle cannot perform.
+        The clause is count-less in Oracle's grammar: it takes no target
+        count, coalescing exactly one hash partition per execution. COALESCE
+        only applies to hash partitions, so the request is refused by name
+        when :meth:`supports_coalesce_partition` answers ``False``.
 
         Returns:
             Tuple of (SQL string, empty parameters tuple).
@@ -740,7 +740,6 @@ class OraclePartitionMixin:
         Raises:
             UnsupportedFeatureError: the dialect version does not support
                 COALESCE PARTITION.
-            ValueError: ``expr.count`` is not a positive integer.
             TypeError: ``expr.table`` is not a
                 :class:`~rhosocial.activerecord.backend.expression.objects.Table`.
         """
@@ -750,14 +749,8 @@ class OraclePartitionMixin:
                 "COALESCE PARTITION",
                 f"Oracle {self.version} does not support COALESCE PARTITION.",
             )
-        count = expr.count
-        if isinstance(count, bool) or not isinstance(count, int) or count <= 0:
-            raise ValueError(
-                "COALESCE PARTITION requires a positive integer partition "
-                f"count, got {count!r}"
-            )
         table_sql = self._partition_table_sql(expr)
-        return f"ALTER TABLE {table_sql} COALESCE PARTITION {count}", ()
+        return f"ALTER TABLE {table_sql} COALESCE PARTITION", ()
 
     def format_move_partition_statement(
         self, expr: OracleMovePartitionStatement

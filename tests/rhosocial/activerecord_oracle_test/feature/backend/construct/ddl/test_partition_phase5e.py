@@ -306,36 +306,32 @@ class TestOracleExchangePartition:
 
 class TestOracleCoalescePartition:
     def test_coalesce_hash_partitions(self):
-        """A HASH table shrinks in place by coalescing partitions."""
+        """A HASH table shrinks in place by coalescing a partition.
+
+        Oracle's clause is count-less: one statement drops one hash
+        partition, so no integer follows the keyword.
+        """
         d = _dialect()
-        e = OracleCoalescePartitionExpression(d, Table(d, "buckets"), 2)
+        e = OracleCoalescePartitionExpression(d, Table(d, "buckets"))
         sql, params = e.to_sql()
-        assert sql == 'ALTER TABLE "BUCKETS" COALESCE PARTITION 2'
+        assert sql == 'ALTER TABLE "BUCKETS" COALESCE PARTITION'
         assert params == ()
 
     def test_coalesce_keeps_owner(self):
         d = _dialect()
-        e = OracleCoalescePartitionExpression(d, Table(d, "buckets", schema_name="app"), 1)
+        e = OracleCoalescePartitionExpression(d, Table(d, "buckets", schema_name="app"))
         sql, _ = e.to_sql()
-        assert sql == 'ALTER TABLE "APP"."BUCKETS" COALESCE PARTITION 1'
-
-    @pytest.mark.parametrize("count", [0, -1, 1.5, "2", True])
-    def test_coalesce_rejects_a_count_that_is_not_positive(self, count):
-        """A non-positive count names the operation it cannot perform."""
-        d = _dialect()
-        e = OracleCoalescePartitionExpression(d, Table(d, "buckets"), count)
-        with pytest.raises(ValueError, match="COALESCE PARTITION"):
-            e.to_sql()
+        assert sql == 'ALTER TABLE "APP"."BUCKETS" COALESCE PARTITION'
 
     def test_coalesce_pre_11g_raises(self):
         d = OracleDialect(version=(10, 0, 0))
-        e = OracleCoalescePartitionExpression(d, Table(d, "buckets"), 2)
+        e = OracleCoalescePartitionExpression(d, Table(d, "buckets"))
         with pytest.raises(UnsupportedFeatureError, match="COALESCE PARTITION"):
             e.to_sql()
 
     def test_coalesce_rejects_a_non_table_target(self):
         d = _dialect()
-        e = OracleCoalescePartitionExpression(d, "buckets", 2)
+        e = OracleCoalescePartitionExpression(d, "buckets")
         with pytest.raises(TypeError, match="must be a Table"):
             e.to_sql()
 

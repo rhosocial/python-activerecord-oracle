@@ -1,10 +1,10 @@
 # src/rhosocial/activerecord/backend/impl/oracle/suggestion/partition_table_alter_suggestion.py
 """Oracle's partition table-alter suggestion.
 
-Oracle cannot change a table's partitioning scheme in place, but a
-hash-partitioned table can be shrunk by coalescing partitions. That is the
-one in-place table-alter mechanism this backend can suggest; every other
-strategy answers the explicit "no mechanism" state (``False``).
+Oracle's ``COALESCE PARTITION`` clause carries no target count: each
+statement coalesces exactly one hash partition. A plan that asks for any
+other count cannot be expressed by this DDL, so it is declined explicitly
+rather than silently reduced to a single coalesce.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 from rhosocial.activerecord.backend.suggestion import PartitionTableAlterSuggestion
 
 from ..expression.partition_lifecycle import OracleCoalescePartitionExpression
-from ._common import OraclePartitionSuggestionBase, _count, _word
+from ._common import OraclePartitionSuggestionBase, _get, _word
 
 if TYPE_CHECKING:  # pragma: no cover
     from ....expression.statements import PartitionByClause
@@ -30,20 +30,29 @@ class OraclePartitionTableAlterSuggestionMixin(OraclePartitionSuggestionBase):
         strategy: "PartitionByClause",
         plan: object,
     ) -> PartitionTableAlterSuggestion:
-        """Suggest coalescing hash partitions, or report no mechanism.
+        """Suggest coalescing a hash partition, or report no mechanism.
 
         ``HASH`` is the only strategy Oracle can shrink in place: the
-        suggestion renders ``ALTER TABLE ... COALESCE PARTITION n`` and is
-        gated on :meth:`supports_coalesce_partition`. RANGE, LIST, INTERVAL,
-        REFERENCE and composite tables cannot change their scheme in place,
-        so changing them is a rebuild (new table, copy, swap) and the honest
-        answer is the explicit "no mechanism" state.
+        suggestion renders the count-less ``ALTER TABLE ... COALESCE
+        PARTITION`` and is gated on :meth:`supports_coalesce_partition`.
+        Oracle's statement coalesces one partition at a time and takes no
+        target count, so a plan asking for a count other than 1 is declined
+        (``False``) instead of being silently collapsed to one coalesce.
+        RANGE, LIST, INTERVAL, REFERENCE and composite tables cannot change
+        their scheme in place, so changing them is a rebuild (new table,
+        copy, swap) and the honest answer is the explicit "no mechanism"
+        state.
         """
         if _word(strategy) != "HASH" or not self.supports_coalesce_partition():
             return PartitionTableAlterSuggestion(False)
         table = self._suggestion_table(plan)
         if table is None:
             return PartitionTableAlterSuggestion(False)
-        return PartitionTableAlterSuggestion(
-            (OracleCoalescePartitionExpression(self, table, _count(plan)),)
-        )
+        count = _get(plan, "count")
+        if count is None:
+            count = _get(plan, "partitions_count")
+        if count is not None and (
+            isinstance(count, bool) or not isinstance(count, int) or count != 1
+        ):
+            return PartitionTableAlterSuggestion(False)
+        return PartitionTableAlterSuggestion((OracleCoalescePartitionExpression(self, table),))

@@ -72,7 +72,7 @@ class OraclePartitionSupport(PartitionSupport):
         ...  # pragma: no cover
 
     def supports_coalesce_partition(self) -> bool:
-        """Whether COALESCE PARTITION (hash partitions only) is supported."""
+        """Whether the count-less COALESCE PARTITION (hash tables) is supported."""
         ...  # pragma: no cover
 
     # ------------------------------------------------------------------
@@ -146,7 +146,7 @@ class OraclePartitionSupport(PartitionSupport):
     def format_coalesce_partition_statement(
         self, expr: "OracleCoalescePartitionExpression"
     ) -> Tuple[str, tuple]:
-        """Format ``ALTER TABLE ... COALESCE PARTITION ...``."""
+        """Format count-less ``ALTER TABLE ... COALESCE PARTITION``."""
         ...  # pragma: no cover
 
     def format_truncate_partition_statement(

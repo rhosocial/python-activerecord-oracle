@@ -198,16 +198,23 @@ def test_table_drop_is_drop_table_statement(dialect):
 def test_table_alter_coalesces_hash_and_declines_the_rest(dialect):
     """HASH is the one strategy Oracle can shrink in place."""
     suggestion = dialect.suggest_partition_table_alter(
-        _strategy(dialect, "HASH"), {"table": "BUCKETS", "count": 2}
+        _strategy(dialect, "HASH"), {"table": "BUCKETS"}
     )
     assert len(suggestion.operations) == 1
     assert isinstance(suggestion.operations[0], OracleCoalescePartitionExpression)
-    assert _sql(suggestion.operations) == 'ALTER TABLE "BUCKETS" COALESCE PARTITION 2'
+    assert _sql(suggestion.operations) == 'ALTER TABLE "BUCKETS" COALESCE PARTITION'
 
-    defaulted = dialect.suggest_partition_table_alter(
-        _strategy(dialect, "HASH"), {"table": "BUCKETS"}
+    single = dialect.suggest_partition_table_alter(
+        _strategy(dialect, "HASH"), {"table": "BUCKETS", "count": 1}
     )
-    assert _sql(defaulted.operations) == 'ALTER TABLE "BUCKETS" COALESCE PARTITION 1'
+    assert _sql(single.operations) == 'ALTER TABLE "BUCKETS" COALESCE PARTITION'
+
+    # Oracle's clause takes no target count, so any other count is declined
+    # rather than silently reduced to a single coalesce.
+    for count in (2, 0, -1, 1.5, "2", True):
+        assert dialect.suggest_partition_table_alter(
+            _strategy(dialect, "HASH"), {"table": "BUCKETS", "count": count}
+        ).operations is False
 
     for word in ("RANGE", "LIST", "INTERVAL", "REFERENCE"):
         assert dialect.suggest_partition_table_alter(

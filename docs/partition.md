@@ -141,7 +141,7 @@ Oracle has no mechanism for the strategy, or `None` when nothing needs doing:
 |---|---|
 | `suggest_partition_build` | `PARTITION BY RANGE/LIST/HASH`, or `INTERVAL` / `REFERENCE` clause for CREATE TABLE |
 | `suggest_partition_table_drop` | `DROP TABLE` for the whole table (not one partition) |
-| `suggest_partition_table_alter` | `COALESCE PARTITION` for HASH — the only in-place shrink Oracle has; `False` for every other strategy |
+| `suggest_partition_table_alter` | `COALESCE PARTITION` for HASH — the only in-place shrink Oracle has, one partition per statement and with no target count; `False` for every other strategy or a count-qualified plan |
 | `suggest_partition_add` | `ALTER TABLE ... ADD PARTITION <name>` per definition; no `IF NOT EXISTS` |
 | `suggest_partition_drop` | `ALTER TABLE ... DROP PARTITION <name>` (drops its subpartitions too) |
 | `suggest_partition_split` | `ALTER TABLE ... SPLIT PARTITION ... AT (...) INTO (...)` |

@@ -9,7 +9,7 @@ maintenance statements:
 * ``ALTER TABLE ... SPLIT PARTITION p AT (...) INTO (p1, p2)``
 * ``ALTER TABLE ... MERGE PARTITIONS p1, p2 INTO p3``
 * ``ALTER TABLE ... EXCHANGE PARTITION p WITH TABLE other``
-* ``ALTER TABLE ... COALESCE PARTITION n``
+* ``ALTER TABLE ... COALESCE PARTITION``
 * ``ALTER TABLE ... MOVE PARTITION p``
 * ``ALTER TABLE ... TRUNCATE PARTITION p``
 
@@ -264,27 +264,29 @@ class OracleExchangePartitionStatement(_OraclePartitionMaintenanceExpression):
 
 
 class OracleCoalescePartitionExpression(BaseExpression):
-    """``ALTER TABLE ... COALESCE PARTITION n`` expression.
+    """``ALTER TABLE ... COALESCE PARTITION`` expression.
 
-    Oracle shrinks a hash-partitioned table in place only through coalescing
-    partitions: each coalesce drops one hash partition after redistributing
-    its rows. No other strategy can be shrunk this way, which is what
-    ``supports_coalesce_partition`` states on the dialect.
+    Oracle's clause carries no partition count: each execution coalesces the
+    last hash partition into the remaining ones and drops it, so shrinking by
+    more than one partition means issuing the statement again. A target count
+    is therefore not part of this DDL.
+
+    Oracle can shrink a table in place only this way, and only a
+    hash-partitioned table; ``supports_coalesce_partition`` states that on the
+    dialect.
 
     Args:
         table: the target table, carrying its owner.
-        count: the number of hash partitions to coalesce away.
 
-    The constructor only collects the parameters. ``count`` and the table's
-    kind are validated in
+    The constructor only collects the parameter. The table's kind and the
+    capability are validated in
     :meth:`~rhosocial.activerecord.backend.impl.oracle.mixins.partition.OraclePartitionMixin.format_coalesce_partition_statement`,
     so a node can be built before a dialect is bound.
     """
 
-    def __init__(self, dialect: "OracleDialect", table: Table, count: int):
+    def __init__(self, dialect: "OracleDialect", table: Table):
         super().__init__(dialect)
         self.table = table
-        self.count = count
 
     @property
     def format_method(self) -> str:
