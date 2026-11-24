@@ -7,6 +7,7 @@ if TYPE_CHECKING:
     from rhosocial.activerecord.backend.expression.statements import AlterTableStatement
     from rhosocial.activerecord.backend.expression.statements.ddl_alter import (
         AddColumn,
+        AlterColumnAction,
         DropColumn,
         ModifyColumn,
         RenameObject,
@@ -68,6 +69,47 @@ class OracleModifyColumnMixin:
 
     def supports_modify_type_with_data(self) -> bool:
         return True
+
+    def format_alter_column_action(
+        self, expr: "AlterColumnAction"
+    ) -> Tuple[str, tuple]:
+        """Format an ``ALTER COLUMN`` action for Oracle.
+
+        Oracle has no ``SET DATA TYPE`` spelling: a type change is a column
+        redefinition rendered as ``MODIFY (col type)``. The SET DATA TYPE
+        operation is routed through the same MODIFY rendering path used by
+        :meth:`format_modify_column_action`; every other column-property
+        operation (SET/DROP DEFAULT, SET/DROP NOT NULL) keeps the core
+        behavior.
+
+        Args:
+            expr: The ALTER COLUMN action carrying the column name and the
+                requested operation.
+
+        Returns:
+            A ``(sql, params)`` tuple.
+
+        Raises:
+            UnsupportedFeatureError: If the dialect refuses a data-type change.
+        """
+        from rhosocial.activerecord.backend.expression.statements.ddl_alter import (
+            ModifyColumnAction,
+            operation_spelling,
+        )
+        from rhosocial.activerecord.backend.expression.statements.ddl_table import (
+            ColumnDefinition,
+        )
+
+        if operation_spelling(expr.operation) == "SET DATA TYPE":
+            if not self.supports_alter_column_type():
+                raise UnsupportedFeatureError(
+                    self.name,
+                    "ALTER COLUMN SET DATA TYPE",
+                    f"{self.name} does not support changing a column data type.",
+                )
+            col = ColumnDefinition(self, expr.column_name, expr.new_value)
+            return self.format_modify_column_action(ModifyColumnAction(self, col))
+        return super().format_alter_column_action(expr)
 
     def format_modify_column_action(self, expr: "ModifyColumn") -> Tuple[str, tuple]:
         """Format MODIFY action for ALTER TABLE.
