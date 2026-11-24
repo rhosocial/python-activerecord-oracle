@@ -3,7 +3,8 @@
 
 Verifies expression construction (SQL shape + parameter order) and
 capability gating for the Oracle partition maintenance expressions
-(ADD / DROP / SPLIT / MERGE / EXCHANGE / MOVE / TRUNCATE PARTITION).
+(ADD / DROP / SPLIT / MERGE / EXCHANGE / COALESCE / MOVE / TRUNCATE
+PARTITION).
 
 Real Oracle execution is covered in ``test_oracle_partition_phase5_real.py``.
 """
@@ -22,6 +23,7 @@ from rhosocial.activerecord.backend.impl.oracle.expression.partition import (
 )
 from rhosocial.activerecord.backend.impl.oracle.expression.partition_lifecycle import (
     OracleAddPartitionStatement,
+    OracleCoalescePartitionExpression,
     OracleDropPartitionStatement,
     OracleExchangePartitionStatement,
     OracleMergePartitionsStatement,
@@ -298,6 +300,47 @@ class TestOracleExchangePartition:
 
 
 # ---------------------------------------------------------------------------
+# COALESCE PARTITION (hash only)
+# ---------------------------------------------------------------------------
+
+
+class TestOracleCoalescePartition:
+    def test_coalesce_hash_partitions(self):
+        """A HASH table shrinks in place by coalescing partitions."""
+        d = _dialect()
+        e = OracleCoalescePartitionExpression(d, Table(d, "buckets"), 2)
+        sql, params = e.to_sql()
+        assert sql == 'ALTER TABLE "BUCKETS" COALESCE PARTITION 2'
+        assert params == ()
+
+    def test_coalesce_keeps_owner(self):
+        d = _dialect()
+        e = OracleCoalescePartitionExpression(d, Table(d, "buckets", schema_name="app"), 1)
+        sql, _ = e.to_sql()
+        assert sql == 'ALTER TABLE "APP"."BUCKETS" COALESCE PARTITION 1'
+
+    @pytest.mark.parametrize("count", [0, -1, 1.5, "2", True])
+    def test_coalesce_rejects_a_count_that_is_not_positive(self, count):
+        """A non-positive count names the operation it cannot perform."""
+        d = _dialect()
+        e = OracleCoalescePartitionExpression(d, Table(d, "buckets"), count)
+        with pytest.raises(ValueError, match="COALESCE PARTITION"):
+            e.to_sql()
+
+    def test_coalesce_pre_11g_raises(self):
+        d = OracleDialect(version=(10, 0, 0))
+        e = OracleCoalescePartitionExpression(d, Table(d, "buckets"), 2)
+        with pytest.raises(UnsupportedFeatureError, match="COALESCE PARTITION"):
+            e.to_sql()
+
+    def test_coalesce_rejects_a_non_table_target(self):
+        d = _dialect()
+        e = OracleCoalescePartitionExpression(d, "buckets", 2)
+        with pytest.raises(TypeError, match="must be a Table"):
+            e.to_sql()
+
+
+# ---------------------------------------------------------------------------
 # MOVE PARTITION (Oracle-specific)
 # ---------------------------------------------------------------------------
 
@@ -373,6 +416,7 @@ class TestOracleMaintenanceCapabilityGating:
             "supports_merge_partition",
             "supports_exchange_partition",
             "supports_move_partition",
+            "supports_coalesce_partition",
         ],
     )
     def test_supported_for_11g(self, method):
@@ -390,6 +434,7 @@ class TestOracleMaintenanceCapabilityGating:
             "supports_merge_partition",
             "supports_exchange_partition",
             "supports_move_partition",
+            "supports_coalesce_partition",
         ],
     )
     def test_unsupported_pre_11g(self, method):

@@ -38,6 +38,7 @@ from rhosocial.activerecord.backend.impl.oracle.expression.partition import (
 )
 from rhosocial.activerecord.backend.impl.oracle.expression.partition_lifecycle import (
     OracleAddPartitionStatement,
+    OracleCoalescePartitionExpression,
     OracleDropPartitionStatement,
     OracleExchangePartitionStatement,
     OracleMergePartitionsStatement,
@@ -326,6 +327,21 @@ def build_move(
     return (move.to_sql(),)
 
 
+def build_coalesce_hash(
+    dialect: OracleDialect,
+    plan: OraclePartitionPlan,
+) -> Tuple[DdlStatement, ...]:
+    """Render the HASH-only in-place shrink.
+
+    Oracle cannot add a hash partition by name, but it can remove the last
+    one through ``COALESCE PARTITION``. The case's policy says how many
+    buckets exist; the builder coalesces all but two of them.
+    """
+    table = Table(dialect, plan.parent, schema_name=plan.schema)
+    count = max(1, getattr(plan.policy, "modulus", 1) - 2)
+    return (OracleCoalescePartitionExpression(dialect, table, count).to_sql(),)
+
+
 CASES: Tuple[PartitionSyntaxCase, ...] = (
     PartitionSyntaxCase(
         name="single_range",
@@ -382,7 +398,8 @@ CASES: Tuple[PartitionSyntaxCase, ...] = (
         name="single_hash",
         description=(
             "HASH policy names every bucket. Oracle has no per-bucket ADD, so "
-            "this case pins the CREATE-TABLE fragment only."
+            "this case pins the CREATE-TABLE fragment and the HASH-only "
+            "COALESCE shrink."
         ),
         plan=OraclePartitionPlan(
             parent="BUCKETS",
@@ -400,9 +417,10 @@ CASES: Tuple[PartitionSyntaxCase, ...] = (
             'PARTITION BY HASH ("ID")',
             'PARTITION "BUCKETS_P0"',
             'PARTITION "BUCKETS_P3"',
+            'ALTER TABLE "BUCKETS" COALESCE PARTITION 2',
         ),
         forbidden_fragments=("VALUES", "PARTITIONS 4", "SUBPARTITION"),
-        ddl_builders=(),
+        ddl_builders=(build_coalesce_hash,),
     ),
     PartitionSyntaxCase(
         name="composite_range_hash",

@@ -181,10 +181,19 @@ class TestAlterTableVersionBoundary:
         with pytest.raises(UnsupportedFeatureError, match="READ ONLY"):
             alter.to_sql()
 
-    def test_read_only_at_11g_works(self):
-        d11 = OracleDialect(version=(11, 0, 0))
+    def test_read_only_below_11_1_raises(self):
+        """Oracle introduced READ ONLY in 11.1, not 11.0."""
+        d110 = OracleDialect(version=(11, 0, 0))
         alter = AlterTableStatement(
-            d11, Table(d11, "t"), actions=[OracleReadOnlyAction(d11, read_only=True)]
+            d110, Table(d110, "t"), actions=[OracleReadOnlyAction(d110, read_only=True)]
+        )
+        with pytest.raises(UnsupportedFeatureError, match="READ ONLY"):
+            alter.to_sql()
+
+    def test_read_only_at_11_1_works(self):
+        d111 = OracleDialect(version=(11, 1, 0))
+        alter = AlterTableStatement(
+            d111, Table(d111, "t"), actions=[OracleReadOnlyAction(d111, read_only=True)]
         )
         sql, params = alter.to_sql()
         assert sql == 'ALTER TABLE "T" READ ONLY'

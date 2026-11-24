@@ -23,7 +23,7 @@ Phase 5 scope (this module):
 * ``OracleReferencePartitionClause`` — REFERENCE partitioning.
 
 Maintenance DDL expressions (ADD / DROP / SPLIT / MERGE / EXCHANGE /
-MOVE / TRUNCATE PARTITION) live in :mod:`.partition_lifecycle`.
+COALESCE / MOVE / TRUNCATE PARTITION) live in :mod:`.partition_lifecycle`.
 
 All expressions delegate SQL generation to the dialect through public
 ``format_*`` formatters declared in

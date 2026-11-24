@@ -9,6 +9,7 @@ maintenance statements:
 * ``ALTER TABLE ... SPLIT PARTITION p AT (...) INTO (p1, p2)``
 * ``ALTER TABLE ... MERGE PARTITIONS p1, p2 INTO p3``
 * ``ALTER TABLE ... EXCHANGE PARTITION p WITH TABLE other``
+* ``ALTER TABLE ... COALESCE PARTITION n``
 * ``ALTER TABLE ... MOVE PARTITION p``
 * ``ALTER TABLE ... TRUNCATE PARTITION p``
 
@@ -260,6 +261,35 @@ class OracleExchangePartitionStatement(_OraclePartitionMaintenanceExpression):
     def format_method(self) -> str:
         """The dialect formatting method that renders this expression."""
         return "format_exchange_partition_statement"
+
+
+class OracleCoalescePartitionExpression(BaseExpression):
+    """``ALTER TABLE ... COALESCE PARTITION n`` expression.
+
+    Oracle shrinks a hash-partitioned table in place only through coalescing
+    partitions: each coalesce drops one hash partition after redistributing
+    its rows. No other strategy can be shrunk this way, which is what
+    ``supports_coalesce_partition`` states on the dialect.
+
+    Args:
+        table: the target table, carrying its owner.
+        count: the number of hash partitions to coalesce away.
+
+    The constructor only collects the parameters. ``count`` and the table's
+    kind are validated in
+    :meth:`~rhosocial.activerecord.backend.impl.oracle.mixins.partition.OraclePartitionMixin.format_coalesce_partition_statement`,
+    so a node can be built before a dialect is bound.
+    """
+
+    def __init__(self, dialect: "OracleDialect", table: Table, count: int):
+        super().__init__(dialect)
+        self.table = table
+        self.count = count
+
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_coalesce_partition_statement"
 
 
 class OracleMovePartitionStatement(_OraclePartitionMaintenanceExpression):

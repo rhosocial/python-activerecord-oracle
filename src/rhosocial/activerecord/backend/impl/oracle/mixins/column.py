@@ -250,7 +250,8 @@ class OracleModifyColumnMixin:
         return True
 
     def supports_read_only(self) -> bool:
-        return self.version_at_least((11, 0, 0))
+        """Oracle introduced ``ALTER TABLE ... READ ONLY`` in 11.1."""
+        return self.version_at_least((11, 1, 0))
 
     def supports_row_movement(self) -> bool:
         return True
@@ -313,7 +314,7 @@ class OracleModifyColumnMixin:
 
     def format_read_only_statement(self, expr) -> Tuple[str, tuple]:
         """Format ``READ ONLY`` / ``READ WRITE`` for ALTER TABLE."""
-        if self.version < (11, 0, 0):
+        if self.version < (11, 1, 0):
             raise UnsupportedFeatureError(
                 self.name,
                 "ALTER TABLE READ ONLY",

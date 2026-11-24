@@ -4,7 +4,8 @@
 This protocol extends the core ``PartitionSupport`` protocol with Oracle-
 specific partition strategies (INTERVAL, REFERENCE, composite
 subpartitioning) and Oracle partition maintenance statements
-(ADD / DROP / SPLIT / MERGE / EXCHANGE / MOVE / TRUNCATE PARTITION).
+(ADD / DROP / SPLIT / MERGE / EXCHANGE / COALESCE / MOVE / TRUNCATE
+PARTITION).
 
 All formatters are public (no leading underscore) and declared here per
 expression-dialect-architecture §8 (no pseudo-private SQL formatters).
@@ -25,6 +26,7 @@ if TYPE_CHECKING:  # pragma: no cover
     )
     from ..expression.partition_lifecycle import (
         OracleAddPartitionStatement,
+        OracleCoalescePartitionExpression,
         OracleDropPartitionStatement,
         OracleExchangePartitionStatement,
         OracleMergePartitionsStatement,
@@ -67,6 +69,10 @@ class OraclePartitionSupport(PartitionSupport):
 
     def supports_move_partition(self) -> bool:
         """Whether MOVE PARTITION is supported."""
+        ...  # pragma: no cover
+
+    def supports_coalesce_partition(self) -> bool:
+        """Whether COALESCE PARTITION (hash partitions only) is supported."""
         ...  # pragma: no cover
 
     # ------------------------------------------------------------------
@@ -135,6 +141,12 @@ class OraclePartitionSupport(PartitionSupport):
         self, expr: "OracleMovePartitionStatement"
     ) -> Tuple[str, tuple]:
         """Format ``ALTER TABLE ... MOVE PARTITION ...``."""
+        ...  # pragma: no cover
+
+    def format_coalesce_partition_statement(
+        self, expr: "OracleCoalescePartitionExpression"
+    ) -> Tuple[str, tuple]:
+        """Format ``ALTER TABLE ... COALESCE PARTITION ...``."""
         ...  # pragma: no cover
 
     def format_truncate_partition_statement(

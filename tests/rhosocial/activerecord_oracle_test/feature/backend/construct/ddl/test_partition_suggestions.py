@@ -57,6 +57,7 @@ from rhosocial.activerecord.backend.impl.oracle.expression.partition import (
 )
 from rhosocial.activerecord.backend.impl.oracle.expression.partition_lifecycle import (
     OracleAddPartitionStatement,
+    OracleCoalescePartitionExpression,
     OracleDropPartitionStatement,
     OracleMergePartitionsStatement,
     OracleSplitPartitionStatement,
@@ -82,8 +83,6 @@ def _strategy(dialect, word):
         "HASH": PartitionByHashClause(dialect, keys),
     }.get(word, word)
 
-
-_ALL_STRATEGIES = ("RANGE", "LIST", "HASH", "INTERVAL", "REFERENCE")
 
 PROTOCOLS = (
     ("build", PartitionBuildSuggestionSupport, PartitionBuildSuggestion),
@@ -196,9 +195,29 @@ def test_table_drop_is_drop_table_statement(dialect):
     assert dialect.suggest_partition_table_drop(_strategy(dialect, "RANGE"), {}).operations is False
 
 
-def test_table_alter_reports_no_mechanism(dialect):
-    for strategy in _ALL_STRATEGIES:
-        assert dialect.suggest_partition_table_alter(strategy, {"table": "T"}).operations is False
+def test_table_alter_coalesces_hash_and_declines_the_rest(dialect):
+    """HASH is the one strategy Oracle can shrink in place."""
+    suggestion = dialect.suggest_partition_table_alter(
+        _strategy(dialect, "HASH"), {"table": "BUCKETS", "count": 2}
+    )
+    assert len(suggestion.operations) == 1
+    assert isinstance(suggestion.operations[0], OracleCoalescePartitionExpression)
+    assert _sql(suggestion.operations) == 'ALTER TABLE "BUCKETS" COALESCE PARTITION 2'
+
+    defaulted = dialect.suggest_partition_table_alter(
+        _strategy(dialect, "HASH"), {"table": "BUCKETS"}
+    )
+    assert _sql(defaulted.operations) == 'ALTER TABLE "BUCKETS" COALESCE PARTITION 1'
+
+    for word in ("RANGE", "LIST", "INTERVAL", "REFERENCE"):
+        assert dialect.suggest_partition_table_alter(
+            _strategy(dialect, word), {"table": "BUCKETS"}
+        ).operations is False
+
+    old = OracleDialect(version=(10, 0, 0))
+    assert old.suggest_partition_table_alter(
+        _strategy(old, "HASH"), {"table": "BUCKETS"}
+    ).operations is False
 
 
 def test_add_returns_one_add_partition_per_definition(dialect):

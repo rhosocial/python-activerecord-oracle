@@ -190,3 +190,18 @@ class OraclePartitionSuggestionBase:
         if value is None or isinstance(value, OracleSubpartitionClause):
             return value
         return None
+
+
+def _count(plan: Any, default: int = 1) -> int:
+    """Return a positive partition count for a COALESCE request.
+
+    ``plan`` may be a mapping or an attribute-shaped object; a plan that
+    carries no usable count still coalesces, so the answer is the default
+    rather than a refusal -- the count only says how many partitions go.
+    """
+    count = _get(plan, "count")
+    if count is None:
+        count = _get(plan, "partitions_count")
+    if isinstance(count, bool) or not isinstance(count, int) or count <= 0:
+        return default
+    return count
