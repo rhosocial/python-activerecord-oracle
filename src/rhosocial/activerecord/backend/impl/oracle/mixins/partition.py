@@ -789,3 +789,28 @@ class OraclePartitionMixin:
             "date, datetime, or None, got "
             f"{type(expr).__name__}"
         )
+
+    # -- protocol-named entries -------------------------------------------------
+    # Core's PartitionDefinitionExpression / SubpartitionDefinitionExpression /
+    # PartitionOptionsExpression dispatch by ``format_method`` to the names
+    # below. This backend renders them through its own ``build_*`` /
+    # ``format_*`` methods (whose signatures carry extra strategy context), so
+    # the node's own ``to_sql()`` reaches the implementation via these entries.
+
+    def format_partition_definition_expression(
+        self, expr: "PartitionDefinitionExpression"
+    ) -> Tuple[str, tuple]:
+        """Node entry for a single ``PARTITION ... VALUES ...`` definition."""
+        return self.build_partition_definition(expr)
+
+    def format_subpartition_definition_expression(
+        self, expr: "SubpartitionDefinitionExpression"
+    ) -> Tuple[str, tuple]:
+        """Node entry for a single ``SUBPARTITION ...`` definition."""
+        return self.format_subpartition_definition(expr)
+
+    def format_partition_options_expression(
+        self, expr: "PartitionOptionsExpression"
+    ) -> Tuple[str, tuple]:
+        """Node entry for a definition's options."""
+        return self.format_partition_definition_options(expr)
