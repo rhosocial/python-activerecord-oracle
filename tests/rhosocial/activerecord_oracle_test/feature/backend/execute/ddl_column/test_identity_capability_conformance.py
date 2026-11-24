@@ -153,7 +153,12 @@ def _create_table_with_identity(dialect, table_name, clause_kwargs):
     kwargs = dict(clause_kwargs)
     if "cycle" in kwargs:
         cycle = kwargs.pop("cycle")
-        kwargs["cycle" if cycle else "no_cycle"] = bool(cycle)
+        # IdentityAttribute(cycle=True/False) translated to cycle/no_cycle
+        # booleans (both True when selected), not to a single tri-state value.
+        if cycle:
+            kwargs["cycle"] = True
+        else:
+            kwargs["no_cycle"] = True
     return CreateTableStatement(
         dialect=dialect,
         table=Table(dialect, table_name),
