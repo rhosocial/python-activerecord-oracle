@@ -144,11 +144,20 @@ def _pk_constraint(dialect):
 
 
 def _create_table_with_identity(dialect, table_name, clause_kwargs):
-    """The model-shaped path: an IdentityClause is built from the case kwargs."""
+    """The model-shaped path: an IdentityClause is built from the case kwargs.
+
+    The deriver used to translate ``IdentityAttribute(cycle=False)`` into the
+    expression layer's ``no_cycle`` parameter, so a directly-built clause has
+    to make that mapping itself to preserve the NOCYCLE spelling.
+    """
+    kwargs = dict(clause_kwargs)
+    if "cycle" in kwargs:
+        cycle = kwargs.pop("cycle")
+        kwargs["cycle" if cycle else "no_cycle"] = bool(cycle)
     return CreateTableStatement(
         dialect=dialect,
         table=Table(dialect, table_name),
-        columns=[_column(dialect, attribute=IdentityClause(dialect, **clause_kwargs))],
+        columns=[_column(dialect, attribute=IdentityClause(dialect, **kwargs))],
     )
 
 
