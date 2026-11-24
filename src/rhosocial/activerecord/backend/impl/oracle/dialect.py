@@ -46,6 +46,7 @@ from rhosocial.activerecord.backend.dialect.protocols import (
     PivotSupport,
 )
 from rhosocial.activerecord.backend.suggestion.protocols import (
+    CreateTableLayoutSuggestionSupport,
     StringConcatenationSuggestionSupport,
 )
 from rhosocial.activerecord.backend.dialect.mixins import (
@@ -162,6 +163,7 @@ from .mixins import (
     OracleExplainMixin,
 )
 from .suggestion import (
+    OracleCreateTableLayoutSuggestionMixin,
     OracleStringConcatenationSuggestionMixin,
     OracleDataTypeSuggestionsMixin,
     OracleIntegerAutoIncrementColumnSuggestionMixin,
@@ -186,6 +188,7 @@ if TYPE_CHECKING:
 
 class OracleDialect(
     # Backend suggestions first: no core mixin may shadow their answers.
+    OracleCreateTableLayoutSuggestionMixin,
     OracleStringConcatenationSuggestionMixin,
     # The eight partition suggestions are split one-per-file and all inherit
     # the shared base from ._common; listed together the common base lands
@@ -385,6 +388,7 @@ class OracleDialect(
     SQLFunctionSupport,
     ColumnAttributeSupport,
     PivotSupport,
+    CreateTableLayoutSuggestionSupport,
     StringConcatenationSuggestionSupport,
     OraclePartitionSupport,
     OracleDataTypeSupport,

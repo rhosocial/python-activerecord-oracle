@@ -7,6 +7,7 @@ composed first on ``OracleDialect`` so no core mixin can shadow their answers.
 """
 
 from ._common import OraclePartitionSuggestionBase
+from .create_table_layout_suggestion import OracleCreateTableLayoutSuggestionMixin
 from .general_suggestions import OracleStringConcatenationSuggestionMixin
 from .data_type_suggestions import (
     ORACLE_DATA_TYPE_SUGGESTIONS,
@@ -28,6 +29,7 @@ from .partition_table_drop_suggestion import OraclePartitionTableDropSuggestionM
 __all__ = [
     "ORACLE_DATA_TYPE_SUGGESTIONS",
     "ORACLE_EXTRA_DATA_TYPE_SUGGESTIONS",
+    "OracleCreateTableLayoutSuggestionMixin",
     "OracleDataTypeSuggestionsMixin",
     "OracleIntegerAutoIncrementColumnSuggestionMixin",
     "OraclePartitionAddSuggestionMixin",
