@@ -14,9 +14,7 @@ from .data_type_suggestions import (
     ORACLE_EXTRA_DATA_TYPE_SUGGESTIONS,
     OracleDataTypeSuggestionsMixin,
 )
-from .integer_auto_increment_column_suggestion import (
-    OracleIntegerAutoIncrementColumnSuggestionMixin,
-)
+from .generated_value_suggestion import OracleGeneratedValueSuggestionMixin
 from .partition_add_suggestion import OraclePartitionAddSuggestionMixin
 from .partition_build_suggestion import OraclePartitionBuildSuggestionMixin
 from .partition_drop_suggestion import OraclePartitionDropSuggestionMixin
@@ -31,7 +29,7 @@ __all__ = [
     "ORACLE_EXTRA_DATA_TYPE_SUGGESTIONS",
     "OracleCreateTableLayoutSuggestionMixin",
     "OracleDataTypeSuggestionsMixin",
-    "OracleIntegerAutoIncrementColumnSuggestionMixin",
+    "OracleGeneratedValueSuggestionMixin",
     "OraclePartitionAddSuggestionMixin",
     "OraclePartitionBuildSuggestionMixin",
     "OraclePartitionDropSuggestionMixin",

@@ -166,7 +166,7 @@ from .suggestion import (
     OracleCreateTableLayoutSuggestionMixin,
     OracleStringConcatenationSuggestionMixin,
     OracleDataTypeSuggestionsMixin,
-    OracleIntegerAutoIncrementColumnSuggestionMixin,
+    OracleGeneratedValueSuggestionMixin,
     OraclePartitionAddSuggestionMixin,
     OraclePartitionBuildSuggestionMixin,
     OraclePartitionDropSuggestionMixin,
@@ -201,7 +201,7 @@ class OracleDialect(
     OraclePartitionSplitSuggestionMixin,
     OraclePartitionTableAlterSuggestionMixin,
     OraclePartitionTableDropSuggestionMixin,
-    OracleIntegerAutoIncrementColumnSuggestionMixin,
+    OracleGeneratedValueSuggestionMixin,
     # The bases below come in bundles: a backend mixin, then the core bundle
     # it stands in for. The backend's answer has to come first -- a mixin
     # placed after the class it overrides never wins -- so a new mixin goes
