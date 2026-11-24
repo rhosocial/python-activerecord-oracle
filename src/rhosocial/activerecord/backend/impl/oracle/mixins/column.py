@@ -100,7 +100,8 @@ class OracleModifyColumnMixin:
             ColumnDefinition,
         )
 
-        if operation_spelling(expr.operation) == "SET DATA TYPE":
+        operation = operation_spelling(expr.operation)
+        if operation == "SET DATA TYPE":
             if not self.supports_alter_column_type():
                 raise UnsupportedFeatureError(
                     self.name,
@@ -109,6 +110,29 @@ class OracleModifyColumnMixin:
                 )
             col = ColumnDefinition(self, expr.column_name, expr.new_value)
             return self.format_modify_column_action(ModifyColumnAction(self, col))
+        # Oracle expresses column-property changes through MODIFY (col ...), not
+        # the SQL-standard ALTER COLUMN ... SET/DROP clauses.
+        if operation in ("SET DEFAULT", "DROP DEFAULT"):
+            if not self.supports_alter_column_default():
+                raise UnsupportedFeatureError(
+                    self.name, f"ALTER COLUMN {operation}",
+                    f"{self.name} does not support ALTER COLUMN SET/DROP DEFAULT.",
+                )
+            col = self.format_identifier(expr.column_name)
+            if operation == "DROP DEFAULT":
+                return f"MODIFY ({col} DEFAULT NULL)", ()
+            # DDL accepts no bind parameters, so the default is inlined.
+            value = getattr(expr.new_value, "value", expr.new_value)
+            return f"MODIFY ({col} DEFAULT {self.inline_sql_literal(value)})", ()
+        if operation in ("SET NOT NULL", "DROP NOT NULL"):
+            if not self.supports_alter_column_nullability():
+                raise UnsupportedFeatureError(
+                    self.name, "ALTER COLUMN",
+                    f"{self.name} does not support ALTER COLUMN SET/DROP NOT NULL.",
+                )
+            col = self.format_identifier(expr.column_name)
+            suffix = "NOT NULL" if operation == "SET NOT NULL" else "NULL"
+            return f"MODIFY ({col} {suffix})", ()
         return super().format_alter_column_action(expr)
 
     def format_modify_column_action(self, expr: "ModifyColumn") -> Tuple[str, tuple]:

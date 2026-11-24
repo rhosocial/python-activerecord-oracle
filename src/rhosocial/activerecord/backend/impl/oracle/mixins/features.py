@@ -598,6 +598,14 @@ class OracleFeaturesMixin:
         """
         return False
 
+    def supports_alter_column_default(self) -> bool:
+        """Oracle expresses defaults through ``MODIFY (col DEFAULT ...)``."""
+        return True
+
+    def supports_alter_column_nullability(self) -> bool:
+        """Oracle expresses nullability through ``MODIFY (col [NOT] NULL)``."""
+        return True
+
     def supports_alter_constraint_enforced(self) -> bool:
         """Oracle has no ``ALTER CONSTRAINT ... [NOT] ENFORCED`` statement.
 

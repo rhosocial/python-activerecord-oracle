@@ -11,7 +11,6 @@ Pure-construction tests: no database connection is required.
 
 import pytest
 
-from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 from rhosocial.activerecord.backend.expression.objects import Table
 from rhosocial.activerecord.backend.expression.statements import AlterTableStatement
 from rhosocial.activerecord.backend.expression.statements.ddl_alter import (
@@ -59,11 +58,17 @@ class TestAlterColumnTypeRendering:
         )
         assert action.to_sql()[0] == 'MODIFY ("C" NUMBER(10))'
 
-    def test_non_type_properties_keep_the_core_gate(self, dialect):
-        # SET/DROP DEFAULT and SET/DROP NOT NULL are not offered through this
-        # action on Oracle; the delegated core formatter still refuses them.
-        action = AlterColumnAction(
-            dialect, "c", ColumnAlterOperation.SET_DEFAULT, new_value="'x'"
-        )
-        with pytest.raises(UnsupportedFeatureError):
-            action.to_sql()
+    def test_column_default_and_nullability_render_through_modify(self, dialect):
+        # Oracle expresses these through MODIFY (col ...), not ALTER COLUMN clauses.
+        assert AlterColumnAction(
+            dialect, "c", ColumnAlterOperation.SET_DEFAULT, new_value=5
+        ).to_sql()[0] == 'MODIFY ("C" DEFAULT 5)'
+        assert AlterColumnAction(
+            dialect, "c", ColumnAlterOperation.DROP_DEFAULT
+        ).to_sql()[0] == 'MODIFY ("C" DEFAULT NULL)'
+        assert AlterColumnAction(
+            dialect, "c", ColumnAlterOperation.SET_NOT_NULL
+        ).to_sql()[0] == 'MODIFY ("C" NOT NULL)'
+        assert AlterColumnAction(
+            dialect, "c", ColumnAlterOperation.DROP_NOT_NULL
+        ).to_sql()[0] == 'MODIFY ("C" NULL)'
