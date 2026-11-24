@@ -9,6 +9,8 @@ capability checks that were previously inlined in the monolithic
 
 from typing import Tuple, TYPE_CHECKING
 
+from .if_exists import supports_statement_if_exists
+
 if TYPE_CHECKING:  # pragma: no cover
     from ....expression.statements import DropTableStatement
 
@@ -17,10 +19,23 @@ class OracleTableCapabilityMixin:
     """Oracle table operation capability checks."""
 
     def supports_if_not_exists_table(self) -> bool:
-        return False
+        """Whether CREATE TABLE accepts the native ``IF NOT EXISTS`` clause.
+
+        Oracle added it with 19c Release Update 19.28 and ships it in the 23ai
+        base release; the 21c line has no such spelling. See
+        :func:`~.if_exists.supports_statement_if_exists` for the two anchors.
+        Below that capability the CREATE TABLE formatter keeps its documented
+        PL/SQL existence-check fallback, so the request is not silently lost.
+        """
+        return supports_statement_if_exists(self)
 
     def supports_if_exists_table(self) -> bool:
-        return False
+        """Whether DROP TABLE accepts the native ``IF EXISTS`` clause.
+
+        Same two anchors as :meth:`supports_if_not_exists_table` (19c RU 19.28
+        and 23ai+); 21c and older lines are refused by name by the formatter.
+        """
+        return supports_statement_if_exists(self)
 
     def supports_temporary_table(self) -> bool:
         return True
@@ -57,19 +72,28 @@ class OracleTableCapabilityMixin:
     ) -> Tuple[str, tuple]:
         """Format DROP TABLE for Oracle.
 
-        Oracle has no IF EXISTS clause and no bare CASCADE/RESTRICT keyword;
-        instead, the dialect-specific ``CASCADE CONSTRAINTS`` form (optionally
-        followed by ``PURGE``) is emitted when ``expr.cascade is True``.  The
-        SQL-standard ``expr.restrict`` has no Oracle spelling, so it is
-        refused by name through :meth:`supports_drop_table_restrict` rather
-        than dropped. The typed ``expr.purge`` flag appends PURGE.
+        Oracle accepts the statement-level ``IF EXISTS`` clause from 19c
+        Release Update 19.28 and in the 23ai base release; below that
+        capability the request is refused by name rather than dropped (21c,
+        for instance, rejects it). Oracle has no bare CASCADE/RESTRICT
+        keyword; instead, the dialect-specific ``CASCADE CONSTRAINTS`` form
+        (optionally followed by ``PURGE``) is emitted when ``expr.cascade``
+        is True. The typed ``expr.purge`` flag appends PURGE.
+
+        Args:
+            expr: the drop statement, carrying the table, ``if_exists``,
+                ``cascade`` / ``restrict`` and ``purge`` flags.
+
+        Returns:
+            Tuple of (SQL string, table parameters tuple).
 
         Raises:
             TypeError: ``expr.table`` is not a
                 :class:`~rhosocial.activerecord.backend.expression.objects.Table`.
                 Another catalogue object renders its own name, so the statement
                 would drop an index and name a table.
-            UnsupportedFeatureError: ``expr.restrict`` was requested and the
+            UnsupportedFeatureError: ``expr.if_exists`` was requested below the
+                documented capability, ``expr.restrict`` was requested and the
                 probe is ``False``, or CASCADE CONSTRAINTS is unavailable.
         """
         from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
@@ -82,6 +106,15 @@ class OracleTableCapabilityMixin:
             )
 
         parts = ["DROP TABLE"]
+        if expr.if_exists:
+            if not self.supports_if_exists_table():
+                raise UnsupportedFeatureError(
+                    self.name,
+                    "DROP TABLE IF EXISTS",
+                    "Oracle has no DROP TABLE IF EXISTS before 19c Release "
+                    "Update 19.28 / 23ai (21c has no such spelling).",
+                )
+            parts.append("IF EXISTS")
         table_sql, table_params = expr.table.to_sql()
         parts.append(table_sql)
         if expr.cascade:

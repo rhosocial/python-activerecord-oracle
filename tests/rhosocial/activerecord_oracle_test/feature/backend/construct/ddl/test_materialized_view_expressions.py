@@ -168,6 +168,18 @@ class TestCreateMaterializedViewExpression:
         assert sql.startswith('CREATE MATERIALIZED VIEW IF NOT EXISTS "MV"')
         assert params == ()
 
+    def test_if_not_exists_19_28_ru(self):
+        d1928 = OracleDialect(version=(19, 0, 0), version_full=(19, 28, 0, 0, 0))
+        expr = OracleCreateMaterializedViewStatement(
+            d1928,
+            view=MaterializedView(d1928, "mv"),
+            query=build_query(d1928),
+            if_not_exists=True,
+        )
+        sql, params = expr.to_sql()
+        assert sql.startswith('CREATE MATERIALIZED VIEW IF NOT EXISTS "MV"')
+        assert params == ()
+
 
 class TestCreateMaterializedViewLogExpression:
     def test_with_primary_key(self, dialect):
@@ -231,6 +243,15 @@ class TestDropMaterializedViewExpression:
     def test_if_exists_23ai(self):
         d23 = OracleDialect(version=(23, 0, 0))
         expr = OracleDropMaterializedViewStatement(d23, view=MaterializedView(d23, "mv"), if_exists=True)
+        sql, params = expr.to_sql()
+        assert sql == 'DROP MATERIALIZED VIEW IF EXISTS "MV"'
+        assert params == ()
+
+    def test_if_exists_19_28_ru(self):
+        d1928 = OracleDialect(version=(19, 0, 0), version_full=(19, 28, 0, 0, 0))
+        expr = OracleDropMaterializedViewStatement(
+            d1928, view=MaterializedView(d1928, "mv"), if_exists=True
+        )
         sql, params = expr.to_sql()
         assert sql == 'DROP MATERIALIZED VIEW IF EXISTS "MV"'
         assert params == ()

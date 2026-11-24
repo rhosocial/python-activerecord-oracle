@@ -1,4 +1,4 @@
-# tests/rhosocial/activerecord_oracle_test/feature/backend/execute/oracle/property_graph/test_property_graph_query_scenarios.py
+# tests/rhosocial/activerecord_oracle_test/feature/backend/execute/oracle/property_graph/test_property_graph_query_scenarios.py  # noqa: E501
 """
 Real-world PGQ scenario tests for Oracle 23c+ using the expression system.
 
@@ -54,8 +54,9 @@ def social_graph_data(oracle_backend):
     dialect = backend.dialect
     _skip_if_unsupported(dialect)
 
-    # Oracle does not support DROP TABLE ... IF EXISTS syntax directly.
-    # Wrap drops in a PL/SQL anonymous block to silently ignore missing tables.
+    # DROP TABLE IF EXISTS is native from 19c RU 19.28 / 23ai, but this PGQ
+    # fixture also runs against servers where an existing table must be
+    # removed defensively, so the PL/SQL block stays the portable spelling.
     drop_block_tpl = (
         "BEGIN EXECUTE IMMEDIATE 'DROP TABLE {t} CASCADE CONSTRAINTS'; "
         "EXCEPTION WHEN OTHERS THEN NULL; END;"

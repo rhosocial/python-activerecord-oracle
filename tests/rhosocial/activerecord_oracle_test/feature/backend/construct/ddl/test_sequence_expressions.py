@@ -200,6 +200,15 @@ class TestCreateSequenceExpression:
         assert sql == 'CREATE SEQUENCE IF NOT EXISTS "SEQ"'
         assert params == ()
 
+    def test_if_not_exists_19_28_ru(self):
+        d1928 = OracleDialect(version=(19, 0, 0), version_full=(19, 28, 0, 0, 0))
+        expr = OracleCreateSequenceStatement(
+            d1928, sequence=Sequence(d1928, "seq"), if_not_exists=True
+        )
+        sql, params = expr.to_sql()
+        assert sql == 'CREATE SEQUENCE IF NOT EXISTS "SEQ"'
+        assert params == ()
+
     def test_negative_cache_rejected(self, dialect):
         with pytest.raises(ValueError, match="cache must be a positive integer"):
             OracleCreateSequenceStatement(dialect, sequence=Sequence(dialect, "seq"), cache=-1)
@@ -383,6 +392,15 @@ class TestDropSequenceExpression:
     def test_if_exists_23ai(self):
         d23 = OracleDialect(version=(23, 0, 0))
         expr = OracleDropSequenceStatement(d23, sequence=Sequence(d23, "seq"), if_exists=True)
+        sql, params = expr.to_sql()
+        assert sql == 'DROP SEQUENCE IF EXISTS "SEQ"'
+        assert params == ()
+
+    def test_if_exists_19_28_ru(self):
+        d1928 = OracleDialect(version=(19, 0, 0), version_full=(19, 28, 0, 0, 0))
+        expr = OracleDropSequenceStatement(
+            d1928, sequence=Sequence(d1928, "seq"), if_exists=True
+        )
         sql, params = expr.to_sql()
         assert sql == 'DROP SEQUENCE IF EXISTS "SEQ"'
         assert params == ()

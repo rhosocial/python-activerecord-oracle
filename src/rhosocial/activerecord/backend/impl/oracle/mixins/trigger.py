@@ -1,6 +1,8 @@
 # src/rhosocial/activerecord/backend/impl/oracle/mixins/trigger.py
 from typing import Tuple, TYPE_CHECKING
 
+from .if_exists import supports_statement_if_exists
+
 if TYPE_CHECKING:  # pragma: no cover
     from ..expression.trigger import DisableTriggerStatement, EnableTriggerStatement
 
@@ -13,6 +15,15 @@ class OracleTriggerMixin(object):
     pioneered this feature), compound triggers (11g+), ENABLE/DISABLE controls,
     and DDL/database event (system) triggers.
     """
+
+    def supports_drop_trigger_if_exists(self) -> bool:
+        """Whether DROP TRIGGER accepts the native ``IF EXISTS`` clause.
+
+        Oracle added it with 19c Release Update 19.28 and ships it in the 23ai
+        base release; 21c has no such spelling. See
+        :func:`~.if_exists.supports_statement_if_exists`.
+        """
+        return supports_statement_if_exists(self)
 
     def _trigger_name_sql(self, expr) -> str:
         """Render a trigger name through its own object protocol."""
@@ -136,15 +147,23 @@ class OracleTriggerMixin(object):
         return " ".join(parts), ()
 
     def format_drop_trigger_statement(self, expr) -> Tuple[str, tuple]:
-        """Format DROP TRIGGER statement (Oracle syntax)."""
+        """Format ``DROP TRIGGER [IF EXISTS]`` (Oracle syntax)."""
+        from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
+
         if not self.supports_trigger():
-            from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
             raise UnsupportedFeatureError(self.name, "triggers")
 
         parts = ["DROP TRIGGER"]
 
         if getattr(expr, 'if_exists', False):
-            raise NotImplementedError("Oracle does not support IF EXISTS on DROP TRIGGER")
+            if not self.supports_drop_trigger_if_exists():
+                raise UnsupportedFeatureError(
+                    self.name,
+                    "DROP TRIGGER IF EXISTS",
+                    "Oracle has no DROP TRIGGER IF EXISTS before 19c Release "
+                    "Update 19.28 / 23ai (21c has no such spelling).",
+                )
+            parts.append("IF EXISTS")
 
         parts.append(self._trigger_name_sql(expr))
 

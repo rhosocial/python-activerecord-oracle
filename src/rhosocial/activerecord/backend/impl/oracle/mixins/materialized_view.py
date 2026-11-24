@@ -5,6 +5,8 @@ from typing import Tuple, TYPE_CHECKING
 
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 
+from .if_exists import supports_statement_if_exists
+
 if TYPE_CHECKING:  # pragma: no cover
     from rhosocial.activerecord.backend.expression.statements import (
         CreateMaterializedViewStatement,
@@ -76,7 +78,8 @@ class OracleMaterializedViewMixin:
                 A plain view would render its own name, producing a well-formed
                 CREATE MATERIALIZED VIEW over that view's name.
             UnsupportedFeatureError: The Oracle version is below 9i, or a
-                graceful-DDL option was asked for below 23ai.
+                graceful-DDL option was asked for below 19c Release Update
+                19.28 / 23ai.
         """
         from rhosocial.activerecord.backend.expression.objects import MaterializedView
         from ..expression.materialized_view import OracleCreateMaterializedViewStatement
@@ -104,13 +107,13 @@ class OracleMaterializedViewMixin:
         # contract that declares it, dispatched by class rather than probed.
         if isinstance(expr, OracleCreateMaterializedViewStatement):
             if expr.if_not_exists:
-                if self.version < (23, 0, 0):
+                if not supports_statement_if_exists(self):
                     raise UnsupportedFeatureError(
                         self.name,
                         "CREATE MATERIALIZED VIEW IF NOT EXISTS",
                         suggestion=(
-                            f"Oracle {self.version} does not support IF NOT "
-                            "EXISTS; graceful DDL requires Oracle 23ai or later."
+                            "Oracle has no CREATE MATERIALIZED VIEW IF NOT "
+                            "EXISTS before 19c Release Update 19.28 / 23ai."
                         ),
                     )
                 parts.append("IF NOT EXISTS")
@@ -198,7 +201,7 @@ class OracleMaterializedViewMixin:
                 A plain view would render its own name, so the statement would
                 drop a view and name a materialized one.
             UnsupportedFeatureError: The Oracle version is below 9i, or IF
-                EXISTS was asked for below 23ai.
+                EXISTS was asked for below 19c Release Update 19.28 / 23ai.
         """
         from rhosocial.activerecord.backend.expression.objects import MaterializedView
         from ..expression.materialized_view import OracleDropMaterializedViewStatement
@@ -220,13 +223,13 @@ class OracleMaterializedViewMixin:
             )
         parts = ["DROP MATERIALIZED VIEW"]
         if expr.if_exists:
-            if self.version < (23, 0, 0):
+            if not supports_statement_if_exists(self):
                 raise UnsupportedFeatureError(
                     self.name,
                     "DROP MATERIALIZED VIEW IF EXISTS",
                     suggestion=(
-                        f"Oracle {self.version} does not support IF EXISTS; "
-                        "graceful DDL requires Oracle 23ai or later."
+                        "Oracle has no DROP MATERIALIZED VIEW IF EXISTS before "
+                        "19c Release Update 19.28 / 23ai."
                     ),
                 )
             parts.append("IF EXISTS")

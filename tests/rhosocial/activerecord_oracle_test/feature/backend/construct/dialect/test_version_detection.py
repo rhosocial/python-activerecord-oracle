@@ -25,7 +25,7 @@ connection and that file already has the fixtures.
 
 import logging
 from types import SimpleNamespace
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import pytest
 
@@ -437,7 +437,7 @@ class TestTheFallbackIsNotAVersion:
 
         unadapted = OracleDialect()
         with pytest.raises(DialectNotAdaptedException):
-            unadapted.version
+            _ = unadapted.version
         assert unadapted.version_or_none is None
         assert unadapted.supports_boolean_type() is False
         assert unadapted.supports_vector_type() is False
@@ -456,7 +456,7 @@ class TestTheFallbackIsNotAVersion:
         backend._ru_version = None
         backend._dialect = None
         with pytest.raises(DialectNotAdaptedException):
-            backend.dialect.version
+            _ = backend.dialect.version
         assert backend.get_cached_server_version() is None
 
     def test_the_one_deliberate_tolerance_still_holds(self):
@@ -743,22 +743,50 @@ FLIPPED_CAPABILITIES: Dict[str, Tuple[Any, str]] = {
         "CREATE JSON VIEW: ORA-00901 on 21c, a JSON-relational-specific "
         "ORA-40941 on 26ai",
     ),
-    # The two sequence clauses arrived with the release that this branch
-    # rebased onto (5383811 moved the boundaries into these probes), after
-    # this table was written, so the audit found them rather than the author
-    # recording them. The boundary is the one the probes state: 23ai. The
-    # clauses are the 23ai IF [NOT] EXISTS DDL family; the measured 26ai
-    # server (23.26.1.0.0) is where the audit sees them answer True, and the
-    # broken (19,0,0) fallback predates the family entirely.
+    # The sequence clauses belong to the statement-level IF [NOT] EXISTS
+    # family. Oracle dates that family to 19c Release Update 19.28 and ships
+    # it in the 23ai base release (the 21c line has no spelling). The probes
+    # now use the shared two-anchor gate, so the 23ai reading below still
+    # holds and the 19.28 release update is answered as well.
     "supports_sequence_if_exists": (
         True,
-        "DROP SEQUENCE IF EXISTS: gated at (23,0,0) - the 23ai IF [NOT] EXISTS "
-        "DDL family; absent before 23, answered on the measured 26ai server",
+        "DROP SEQUENCE IF EXISTS: 19c RU 19.28 and the 23ai base release; "
+        "absent on 21c, answered on the measured 26ai server",
     ),
     "supports_sequence_if_not_exists": (
         True,
-        "CREATE SEQUENCE IF NOT EXISTS: gated at (23,0,0) - the same 23ai "
-        "family; absent before 23, answered on the measured 26ai server",
+        "CREATE SEQUENCE IF NOT EXISTS: the same 19c RU 19.28 / 23ai "
+        "anchors; absent on 21c, answered on the measured 26ai server",
+    ),
+    "supports_if_not_exists_table": (
+        True,
+        "CREATE TABLE IF NOT EXISTS: new in 19c Release Update 19.28 and in "
+        "the 23ai base release (21c rejects it with ORA-00922)",
+    ),
+    "supports_if_exists_table": (
+        True,
+        "DROP TABLE IF EXISTS: the same 19c RU 19.28 / 23ai anchors",
+    ),
+    "supports_if_not_exists_view": (
+        True,
+        "CREATE VIEW IF NOT EXISTS: the same 19c RU 19.28 / 23ai anchors; "
+        "OR REPLACE and IF NOT EXISTS cannot coexist (ORA-11541)",
+    ),
+    "supports_if_exists_view": (
+        True,
+        "DROP VIEW IF EXISTS: the same 19c RU 19.28 / 23ai anchors",
+    ),
+    "supports_index_if_not_exists": (
+        True,
+        "CREATE INDEX IF NOT EXISTS: the same 19c RU 19.28 / 23ai anchors",
+    ),
+    "supports_index_if_exists": (
+        True,
+        "DROP INDEX IF EXISTS: the same 19c RU 19.28 / 23ai anchors",
+    ),
+    "supports_drop_trigger_if_exists": (
+        True,
+        "DROP TRIGGER IF EXISTS: the same 19c RU 19.28 / 23ai anchors",
     ),
 }
 
@@ -1007,7 +1035,9 @@ class TestBlastRadiusIsPinned:
 # Release 19.28 and up."  That is the right number for the 19c line and it is the
 # wrong *shape* for the gate as a whole, because ``major == 19`` also answered
 # "no" on 23ai and on 26ai - and on 26ai the clause works.  These tests pin both
-# halves against what the two wired servers actually do.
+# halves against what the two wired servers actually do.  The two-anchor rule now
+# lives in ``mixins/if_exists.py`` and every statement-level IF [NOT] EXISTS
+# family shares it.
 # --------------------------------------------------------------------------- #
 
 #: The five ``IF [NOT] EXISTS`` gates, all of which are one threshold because all

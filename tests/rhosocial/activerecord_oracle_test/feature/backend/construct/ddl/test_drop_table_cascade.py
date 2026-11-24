@@ -2,15 +2,16 @@
 """Tests for DROP TABLE rendering on Oracle.
 
 Oracle uses the backend-specific ``CASCADE CONSTRAINTS`` form (narrower than
-SQL-standard CASCADE) and supports ``PURGE``. The dialect never emits an
-``IF EXISTS`` token (Oracle lacks the syntax), nor the bare ``CASCADE`` /
-``RESTRICT`` keywords. This tests covers:
+SQL-standard CASCADE) and supports ``PURGE``. ``IF EXISTS`` is a native
+statement-level clause from 19c Release Update 19.28 and from 23ai; below
+that capability it is refused by name, never silently dropped. The bare
+``CASCADE`` / ``RESTRICT`` keywords are illegal and are handled separately.
+This test covers:
 - ``supports_drop_table_cascade() / restrict()`` are False (bare tokens illegal).
 - ``supports_cascade_constraints() / supports_purge_on_drop_table()`` are True.
 - ``cascade=True`` renders ``CASCADE CONSTRAINTS`` (with optional ``PURGE``).
 - ``restrict=True`` raises ``UnsupportedFeatureError`` (Oracle has no RESTRICT).
-- neither ``cascade`` nor ``restrict`` omits the clause; ``if_exists=True`` is
-  NOT emitted.
+- ``if_exists=True`` renders at the floor and refuses below it.
 """
 
 import pytest
@@ -74,10 +75,21 @@ class TestDropTableRendering:
         assert "RESTRICT" not in sql
         assert params == ()
 
-    def test_if_exists_not_emitted(self, dialect):
-        """Oracle has no IF EXISTS clause; the flag must be dropped silently."""
-        expr = DropTableStatement(dialect, table=Table(dialect, "users"), if_exists=True)
+    def test_if_exists_renders_from_19_28_ru(self, dialect):
+        """The 19c line carries the clause from Release Update 19.28."""
+        d1928 = OracleDialect(version=(19, 0, 0), version_full=(19, 28, 0, 0, 0))
+        expr = DropTableStatement(d1928, table=Table(d1928, "users"), if_exists=True)
         sql, params = expr.to_sql()
-        assert "IF EXISTS" not in sql
-        assert sql.startswith("DROP TABLE")
+        assert sql == 'DROP TABLE IF EXISTS "USERS"'
         assert params == ()
+
+    def test_if_exists_renders_from_23ai(self):
+        d23 = OracleDialect(version=(23, 0, 0))
+        expr = DropTableStatement(d23, table=Table(d23, "users"), if_exists=True)
+        assert expr.to_sql() == ('DROP TABLE IF EXISTS "USERS"', ())
+
+    def test_if_exists_below_floor_refused(self, dialect):
+        """A pre-floor request is refused by name, not silently dropped."""
+        expr = DropTableStatement(dialect, table=Table(dialect, "users"), if_exists=True)
+        with pytest.raises(UnsupportedFeatureError, match="DROP TABLE IF EXISTS"):
+            expr.to_sql()

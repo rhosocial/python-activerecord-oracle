@@ -5,6 +5,8 @@ from typing import Tuple, TYPE_CHECKING
 
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 
+from .if_exists import supports_statement_if_exists
+
 if TYPE_CHECKING:  # pragma: no cover
     from rhosocial.activerecord.backend.expression.statements import (
         AlterSequenceStatement,
@@ -25,7 +27,8 @@ class OracleSequenceMixin:
     Oracle 8i and earlier have no sequence object at all, so
     :meth:`supports_sequence` is a version check rather than an unconditional
     ``True``; ``CREATE`` / ``DROP`` / ``ALTER SEQUENCE`` inherit that answer.
-    ``IF NOT EXISTS`` / ``IF EXISTS`` arrived in 23ai. Every other option --
+    ``IF NOT EXISTS`` / ``IF EXISTS`` arrived with 19c Release Update 19.28
+    and are base syntax from 23ai. Every other option --
     ``START WITH``, ``INCREMENT BY``, ``MINVALUE``, ``MAXVALUE``, ``CYCLE``,
     ``CACHE`` and ``ORDER`` -- has been accepted since 9i. ``OWNED BY`` has no
     Oracle form at all.
@@ -59,12 +62,21 @@ class OracleSequenceMixin:
         return self.supports_sequence()
 
     def supports_sequence_if_not_exists(self) -> bool:
-        """``CREATE SEQUENCE IF NOT EXISTS`` arrived in Oracle 23ai."""
-        return self.version_at_least((23, 0, 0))
+        """Whether CREATE SEQUENCE accepts the native ``IF NOT EXISTS``.
+
+        Oracle's statement-level ``IF [NOT] EXISTS`` family arrived with 19c
+        Release Update 19.28 and ships in the 23ai base release; the 21c line
+        has no such spelling. See
+        :func:`~.if_exists.supports_statement_if_exists`.
+        """
+        return supports_statement_if_exists(self)
 
     def supports_sequence_if_exists(self) -> bool:
-        """``DROP SEQUENCE IF EXISTS`` arrived in Oracle 23ai."""
-        return self.version_at_least((23, 0, 0))
+        """Whether DROP SEQUENCE accepts the native ``IF EXISTS``.
+
+        Same two anchors as :meth:`supports_sequence_if_not_exists`.
+        """
+        return supports_statement_if_exists(self)
 
     def supports_sequence_start(self) -> bool:
         """``START WITH`` is a ``CREATE SEQUENCE`` clause in Oracle.

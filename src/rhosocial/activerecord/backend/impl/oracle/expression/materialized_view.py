@@ -72,7 +72,7 @@ class OracleCreateMaterializedViewStatement(BaseExpression):
             here.
         query: a ``BaseExpression`` (typically a ``QueryStatement``) whose
             SQL becomes the ``AS subquery`` clause.
-        if_not_exists: if True, emit ``IF NOT EXISTS`` (Oracle 23ai+).
+        if_not_exists: if True, emit ``IF NOT EXISTS`` (19c RU 19.28 / 23ai+).
         column_aliases: optional column alias list rendered in parentheses
             after the view name.
         tablespace: optional ``TABLESPACE`` clause.
@@ -186,7 +186,7 @@ class OracleDropMaterializedViewStatement(BaseExpression):
         dialect: the Oracle dialect instance.
         view: the materialized view to drop. The object carries its owner, so
             the name is rendered by the dialect rather than concatenated here.
-        if_exists: if True, emit ``IF EXISTS`` (Oracle 23ai+).
+        if_exists: if True, emit ``IF EXISTS`` (19c RU 19.28 / 23ai+).
         preserve_table: if True, append ``PRESERVE TABLE`` to keep the
             underlying container table.
 

@@ -25,10 +25,15 @@ class OracleModifyColumnMixin:
 
     Oracle (<= 19c) does **not** support the vendor extensions
     ``ADD COLUMN IF NOT EXISTS``, ``DROP COLUMN IF EXISTS`` or
-    ``DROP CONSTRAINT IF EXISTS`` (table-level ``IF EXISTS`` only
-    arrives in 19.28+). Requesting any of these modifiers raises
-    ``UnsupportedFeatureError``; applications should pre-check
-    ``USER_TAB_COLUMNS`` / ``USER_CONSTRAINTS`` instead.
+    ``DROP CONSTRAINT IF EXISTS``: Oracle's grammar has no column- or
+    constraint-level ``IF [NOT] EXISTS`` on any line, 23ai included (its
+    ``drop_column_clause`` / ``drop_constraint_clause`` grammar carries none).
+    The statement-level clause is a different thing: ``DROP TABLE``, ``DROP
+    VIEW``, ``DROP INDEX``, ``DROP SEQUENCE``, ``DROP TYPE`` and their CREATE
+    counterparts accept ``IF [NOT] EXISTS`` from 19c Release Update 19.28 and
+    in the 23ai base release (not on 21c). Requesting any of these column
+    modifiers raises ``UnsupportedFeatureError``; applications should
+    pre-check ``USER_TAB_COLUMNS`` / ``USER_CONSTRAINTS`` instead.
     """
 
     def supports_add_column_if_not_exists(self) -> bool:

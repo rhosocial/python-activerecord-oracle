@@ -18,6 +18,8 @@ from rhosocial.activerecord.backend.expression.statements.ddl_type import (
     TypeDefinition,
 )
 
+from .if_exists import supports_statement_if_exists
+
 from ..expression.ddl.type import (
     DropTypeBodyStatement,
     OracleAlterTypeAddAttributeAction,
@@ -105,18 +107,6 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
     _TYPE_MIN_VERSION = (9, 0, 0)
     _TYPE_PERSISTABLE_MIN_VERSION = (18, 0, 0)
 
-    #: The line the ``IF [NOT] EXISTS`` clause was *backported* to, and the
-    #: release update on that line that carries it.  Oracle dates this one in
-    #: its own words, so the threshold is a release update and has to be read
-    #: from ``VERSION_FULL`` - see :meth:`_supports_type_if_exists`.
-    _TYPE_IF_EXISTS_LINE = 19
-    _TYPE_IF_EXISTS_RU = 28
-
-    #: The line from which the clause is in the **base release**, so on and
-    #: after it the base version alone decides and the release update is not
-    #: consulted.  The reference documents it there with no release note at all.
-    _TYPE_IF_EXISTS_BASE_LINE = 23
-
     def _has_type_support(self) -> bool:
         version = getattr(self, "_version", None)
         return version is not None and tuple(version) >= self._TYPE_MIN_VERSION
@@ -129,7 +119,7 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
         """Whether this server accepts ``IF [NOT] EXISTS`` on TYPE DDL.
 
         The clause has **two** documented anchors and they are not the same
-        shape, which is why one constant cannot express it:
+        shape, which is why one base-version tuple cannot express it:
 
         * **19c, release update 28** — the 19c SQL Language Reference's
           ``CREATE TYPE`` page documents ``IF NOT EXISTS`` and dates it in the
@@ -180,29 +170,12 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
         and the direction of the error is the safe one: refusing a statement a
         server would have honoured is recoverable, silently dropping a type is
         not.
+
+        The rule is shared with every other statement-level ``IF [NOT]
+        EXISTS`` family through
+        :func:`~.if_exists.supports_statement_if_exists`.
         """
-        version = getattr(self, "_version", None)
-        if version is None:
-            return False
-        version = cast(Tuple[int, ...], tuple(version))
-        if not version:
-            return False
-        if version[0] >= self._TYPE_IF_EXISTS_BASE_LINE:
-            # Base release: the clause is in it, with no release-update note.
-            return True
-        if version[0] != self._TYPE_IF_EXISTS_LINE:
-            return False
-        full_version = getattr(self, "version_full", None)
-        configured_ru = cast(Optional[int], getattr(self, "_ru_version", None))
-        ru_version = configured_ru
-        if full_version and len(full_version) >= 2:
-            full_version = cast(Tuple[int, ...], tuple(full_version))
-            if full_version[0] != self._TYPE_IF_EXISTS_LINE:
-                return False
-            if configured_ru is not None and configured_ru != full_version[1]:
-                return False
-            ru_version = full_version[1]
-        return ru_version is not None and ru_version >= self._TYPE_IF_EXISTS_RU
+        return supports_statement_if_exists(self)
 
     def supports_type_objects(self) -> bool:
         return self._has_type_support()

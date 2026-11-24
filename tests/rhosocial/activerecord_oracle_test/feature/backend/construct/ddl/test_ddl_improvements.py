@@ -79,10 +79,23 @@ class TestViewCapabilityGating:
         dialect = OracleDialect()
         assert dialect.supports_create_or_replace_view() is True
 
-    def test_drop_view_if_exists_not_supported(self):
-        """Oracle does not support DROP VIEW IF EXISTS."""
-        dialect = OracleDialect()
-        assert dialect.supports_if_exists_view() is False
+    def test_drop_view_if_exists_floor(self):
+        """19c RU 19.28 and 23ai carry the clause; 21c and older do not."""
+        assert OracleDialect(version=(19, 0, 0)).supports_if_exists_view() is False
+        assert (
+            OracleDialect(
+                version=(19, 0, 0), version_full=(19, 27, 0, 0, 0)
+            ).supports_if_exists_view()
+            is False
+        )
+        assert (
+            OracleDialect(
+                version=(19, 0, 0), version_full=(19, 28, 0, 0, 0)
+            ).supports_if_exists_view()
+            is True
+        )
+        assert OracleDialect(version=(21, 3, 0)).supports_if_exists_view() is False
+        assert OracleDialect(version=(23, 0, 0)).supports_if_exists_view() is True
 
     def test_materialized_view_supported(self):
         """Oracle supports materialized views."""

@@ -102,7 +102,7 @@ class OracleCreateSequenceStatement(BaseExpression):
         dialect: the Oracle dialect instance.
         sequence: the sequence to create, carrying its owner when it is not
             the caller's own.
-        if_not_exists: if True, emit ``IF NOT EXISTS`` (Oracle 23ai+).
+        if_not_exists: if True, emit ``IF NOT EXISTS`` (19c RU 19.28 / 23ai+).
         start: ``START WITH`` value.
         increment: ``INCREMENT BY`` value.
         minvalue: ``MINVALUE`` value.
@@ -185,7 +185,7 @@ class OracleDropSequenceStatement(BaseExpression):
         dialect: the Oracle dialect instance.
         sequence: the sequence to drop, carrying its owner when it is not the
             caller's own.
-        if_exists: if True, emit ``IF EXISTS`` (Oracle 23ai+).
+        if_exists: if True, emit ``IF EXISTS`` (19c RU 19.28 / 23ai+).
 
     Raises:
         TypeError: if ``sequence`` is not a ``Sequence``.

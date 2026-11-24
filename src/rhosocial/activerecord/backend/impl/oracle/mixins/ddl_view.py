@@ -3,6 +3,8 @@
 
 from typing import Tuple, TYPE_CHECKING
 
+from .if_exists import supports_statement_if_exists
+
 if TYPE_CHECKING:
     from rhosocial.activerecord.backend.expression.statements import (
         CreateViewStatement,
@@ -18,8 +20,20 @@ class OracleViewMixin:
         return True
 
     def supports_if_not_exists_view(self) -> bool:
-        """Oracle does not support IF NOT EXISTS for views."""
-        return False
+        """Whether CREATE VIEW accepts the native ``IF NOT EXISTS`` clause.
+
+        Oracle added it with 19c Release Update 19.28 and ships it in the 23ai
+        base release; 21c has no such spelling. See
+        :func:`~.if_exists.supports_statement_if_exists`.
+        """
+        return supports_statement_if_exists(self)
+
+    def supports_if_exists_view(self) -> bool:
+        """Whether DROP VIEW accepts the native ``IF EXISTS`` clause.
+
+        Same two anchors as :meth:`supports_if_not_exists_view`.
+        """
+        return supports_statement_if_exists(self)
 
     def supports_view_check_option(self) -> bool:
         """Oracle supports ``WITH [LOCAL|CASCADED] CHECK OPTION`` on views."""
@@ -37,14 +51,22 @@ class OracleViewMixin:
     def format_create_view_statement(
         self, expr: "CreateViewStatement"
     ) -> Tuple[str, tuple]:
-        """Format ``CREATE [OR REPLACE] VIEW`` for Oracle.
+        """Format ``CREATE [OR REPLACE] VIEW [IF NOT EXISTS]`` for Oracle.
+
+        ``IF NOT EXISTS`` is rendered from 19c Release Update 19.28 and from
+        23ai; below that capability, and when combined with ``OR REPLACE``
+        (ORA-11541 forbids the pair on every release), the request is refused
+        by name rather than dropped.
 
         Raises:
             TypeError: ``expr.view`` is not a
                 :class:`~rhosocial.activerecord.backend.expression.objects.View`.
                 A materialized view or a table would each render its own name,
                 producing a well-formed CREATE VIEW over that object's name.
+            UnsupportedFeatureError: ``IF NOT EXISTS`` was requested below the
+                documented capability, or together with ``OR REPLACE``.
         """
+        from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
         from rhosocial.activerecord.backend.expression.objects import View
 
         if not isinstance(expr.view, View):
@@ -57,6 +79,22 @@ class OracleViewMixin:
         if expr.replace and self.supports_create_or_replace_view():
             parts.append("OR REPLACE")
         parts.append("VIEW")
+        if expr.if_not_exists:
+            if expr.replace:
+                raise UnsupportedFeatureError(
+                    self.name,
+                    "CREATE VIEW OR REPLACE IF NOT EXISTS",
+                    "ORA-11541: REPLACE and IF NOT EXISTS cannot coexist in the "
+                    "same DDL statement.",
+                )
+            if not self.supports_if_not_exists_view():
+                raise UnsupportedFeatureError(
+                    self.name,
+                    "CREATE VIEW IF NOT EXISTS",
+                    "Oracle has no CREATE VIEW IF NOT EXISTS before 19c Release "
+                    "Update 19.28 / 23ai (21c has no such spelling).",
+                )
+            parts.append("IF NOT EXISTS")
         # The view is a catalogue object on the expression, so an owner -- when
         # it carries one -- is quoted by its own protocol, the same rules as
         # every other Oracle schema object.
@@ -82,15 +120,19 @@ class OracleViewMixin:
     def format_drop_view_statement(
         self, expr: "DropViewStatement"
     ) -> Tuple[str, tuple]:
-        """Format ``DROP VIEW`` for Oracle.
+        """Format ``DROP VIEW [IF EXISTS]`` for Oracle.
+
+        Oracle accepts ``IF EXISTS`` from 19c Release Update 19.28 and from
+        23ai; below that capability it is refused by name rather than dropped.
 
         Raises:
             TypeError: ``expr.view`` is not a
                 :class:`~rhosocial.activerecord.backend.expression.objects.View`.
                 Another catalogue object would render its own name, so the
                 statement would drop something else and name a view.
-            UnsupportedFeatureError: CASCADE or RESTRICT was requested; Oracle
-                declares neither probe, so the modifier is refused by name
+            UnsupportedFeatureError: ``IF EXISTS`` was requested below the
+                documented capability, or CASCADE / RESTRICT was requested;
+                Oracle declares neither modifier, so it is refused by name
                 rather than dropped.
         """
         from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
@@ -102,6 +144,13 @@ class OracleViewMixin:
                 f"got {type(expr.view).__name__}"
             )
 
+        if expr.if_exists and not self.supports_if_exists_view():
+            raise UnsupportedFeatureError(
+                self.name,
+                "DROP VIEW IF EXISTS",
+                "Oracle has no DROP VIEW IF EXISTS before 19c Release Update "
+                "19.28 / 23ai (21c has no such spelling).",
+            )
         if expr.cascade and not self.supports_cascade_view():
             raise UnsupportedFeatureError(
                 self.name,
@@ -116,6 +165,8 @@ class OracleViewMixin:
             )
 
         parts = ["DROP VIEW"]
+        if expr.if_exists:
+            parts.append("IF EXISTS")
         parts.append(expr.view.to_sql()[0])
         if expr.cascade:
             parts.append("CASCADE")

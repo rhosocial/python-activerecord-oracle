@@ -43,10 +43,14 @@ class OracleDDLMixin:
     ) -> Tuple[str, tuple]:
         """Format CREATE TABLE statement for Oracle.
 
-        Oracle has no ``CREATE TABLE IF NOT EXISTS`` syntax. When
-        ``if_not_exists`` is True, the statement is wrapped in an anonymous
-        PL/SQL block that checks ``user_tables`` and only executes the DDL
-        when the table does not exist, making creation idempotent.
+        Oracle accepts the native ``IF NOT EXISTS`` clause from 19c Release
+        Update 19.28 and in the 23ai base release, so on those servers the
+        clause is rendered as written. Below that capability the request is
+        still honoured through the documented fallback: an anonymous PL/SQL
+        block that checks ``user_tables`` and only executes the DDL when the
+        table does not exist. The fallback cannot wrap a global temporary
+        table or a statement carrying bind parameters, and those combinations
+        are refused by name rather than silently losing the flag.
 
         Raises:
             TypeError: ``expr.table`` is not a
@@ -54,6 +58,8 @@ class OracleDDLMixin:
                 Any other catalogue object carries its own ``format_method``, so
                 it would render its own name here and the statement would
                 silently create a table named after, say, an index.
+            UnsupportedFeatureError: ``expr.if_not_exists`` was requested below
+                the native capability in a shape the fallback cannot express.
         """
         from rhosocial.activerecord.backend.expression.objects import Table
 
@@ -88,10 +94,15 @@ class OracleDDLMixin:
                 "options clause.",
             )
         all_params: List[Any] = []
+        native_if_not_exists = bool(
+            expr.if_not_exists and self.supports_if_not_exists_table()
+        )
         parts = ["CREATE"]
         if expr.temporary:
             parts.append("GLOBAL TEMPORARY")
         parts.append("TABLE")
+        if native_if_not_exists:
+            parts.append("IF NOT EXISTS")
         # The table is a catalogue object on the expression, so it is rendered
         # by its own protocol -- an owner, when the expression carries one, is
         # quoted by the same rules as everywhere else in the backend.
@@ -128,11 +139,25 @@ class OracleDDLMixin:
 
         statement = " ".join(parts)
 
-        if expr.if_not_exists and not expr.temporary and not all_params:
-            # Oracle has no IF NOT EXISTS for CREATE TABLE; guard with a
-            # user_tables existence check inside an anonymous block. The DDL
-            # is dynamic SQL, so any embedded single quotes must be doubled.
-            # Only applied when the statement carries no bind parameters.
+        if expr.if_not_exists and not native_if_not_exists:
+            if expr.temporary or all_params:
+                # The fallback wraps the statement in dynamic SQL, which cannot
+                # be done for a global temporary table (the block would not
+                # control the session's temporary segment) or for a statement
+                # carrying bind parameters (EXECUTE IMMEDIATE has no binds
+                # here). Refuse by name rather than silently drop the flag.
+                raise UnsupportedFeatureError(
+                    self.name,
+                    "CREATE TABLE IF NOT EXISTS",
+                    "Oracle has no native CREATE TABLE IF NOT EXISTS below 19c "
+                    "Release Update 19.28 / 23ai, and the PL/SQL existence-check "
+                    "fallback cannot wrap a global temporary table or a statement "
+                    "carrying bind parameters.",
+                )
+            # Oracle has no IF NOT EXISTS for CREATE TABLE before that
+            # capability; guard with a user_tables existence check inside an
+            # anonymous block. The DDL is dynamic SQL, so any embedded single
+            # quotes must be doubled.
             embedded = statement.replace("'", "''")
             table_upper = expr.table.name.upper()
             statement = (

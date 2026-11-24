@@ -113,9 +113,18 @@ class TestDropAndToggleTriggers:
         assert sql == 'DROP TRIGGER "TRG_X"'
         assert params == ()
 
-    def test_drop_if_exists_rejected(self, dialect):
+    def test_drop_if_exists_renders_from_23ai(self, dialect):
         expr = DropTriggerStatement(dialect, Trigger(dialect, "trg_x"), if_exists=True)
-        with pytest.raises(NotImplementedError):
+        assert expr.to_sql() == ('DROP TRIGGER IF EXISTS "TRG_X"', ())
+
+    def test_drop_if_exists_below_floor_refused(self):
+        from rhosocial.activerecord.backend.dialect.exceptions import (
+            UnsupportedFeatureError,
+        )
+
+        old = OracleDialect(version=(19, 0, 0))
+        expr = DropTriggerStatement(old, Trigger(old, "trg_x"), if_exists=True)
+        with pytest.raises(UnsupportedFeatureError, match="DROP TRIGGER IF EXISTS"):
             expr.to_sql()
 
     def test_disable_and_enable(self, dialect):
