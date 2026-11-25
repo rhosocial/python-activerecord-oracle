@@ -9,6 +9,7 @@ if TYPE_CHECKING:
         AddColumn,
         AlterColumnAction,
         DropColumn,
+        DropTableConstraintAction,
         ModifyColumn,
         RenameObject,
     )
@@ -199,12 +200,44 @@ class OracleModifyColumnMixin:
             )
         return super().format_add_column_action(expr)
 
-    def format_drop_table_constraint_action(self, expr) -> Tuple[str, tuple]:
+    def format_drop_table_constraint_action(
+        self, expr: "DropTableConstraintAction"
+    ) -> Tuple[str, tuple]:
         """Format DROP CONSTRAINT action for ALTER TABLE.
 
-        Oracle does not support ``DROP CONSTRAINT IF EXISTS``. Guard the
-        modifier and delegate the plain form to the base implementation.
+        This dialect spells the drop **by name only**: ``ALTER TABLE ... DROP
+        CONSTRAINT <name>``. A ``DropTableConstraintAction`` can also carry the
+        constraint's *declaration* so a dialect that spells kinds can render
+        ``DROP PRIMARY KEY`` / ``DROP UNIQUE (<cols>)``, but Oracle composes no
+        such formatter and its constraint probe does not advertise one --
+        ``supports_drop_constraint_by_kind()`` stays at the core default
+        ``False``.
+
+        The declaration is refused here rather than left to the shared
+        formatter, and refused *whenever it is present*, even beside a name:
+        dropping the declaration and rendering the name would answer a
+        question the caller did not ask, and Oracle cannot verify that the
+        declaration matches the named constraint.
+
+        Args:
+            expr: The action carrying the constraint name, and possibly the
+                declaration it cannot render.
+
+        Returns:
+            A ``(sql, params)`` tuple for the name form, with empty parameters.
+
+        Raises:
+            UnsupportedFeatureError: If the action carries a constraint
+                declaration (``DROP CONSTRAINT by kind``), or if ``IF EXISTS``
+                is requested, which Oracle rejects with ``ORA-01735``.
         """
+        if getattr(expr, "constraint", None) is not None:
+            raise UnsupportedFeatureError(
+                self.name,
+                "DROP CONSTRAINT by kind",
+                "Oracle drops a constraint by name only. Pass constraint_name; "
+                "a declaration carrying the constraint's kind is not honoured.",
+            )
         if getattr(expr, "if_exists", None):
             raise UnsupportedFeatureError(
                 self.name,

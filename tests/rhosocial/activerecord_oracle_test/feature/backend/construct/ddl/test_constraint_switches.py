@@ -457,6 +457,18 @@ class TestAlterConstraintLifecycle:
         """A missing constraint raises ``ORA-02443`` instead; there is no IF EXISTS."""
         assert _dialect().supports_drop_constraint_if_exists() is False
 
+    def test_drop_constraint_by_kind_is_not_advertised(self):
+        """The by-kind probe stays at core's default; the name form is all there is.
+
+        ``supports_drop_constraint_by_kind()`` answers whether the dialect renders
+        ``DROP PRIMARY KEY`` / ``DROP UNIQUE (<cols>)`` / ``DROP FOREIGN KEY
+        (<cols>)``. This backend composes none of them -- every drop goes through
+        ``DROP CONSTRAINT <name>`` -- so the probe must not claim one, and
+        :meth:`format_drop_table_constraint_action` refuses a declaration by
+        naming ``DROP CONSTRAINT by kind``.
+        """
+        assert _dialect().supports_drop_constraint_by_kind() is False
+
 
 class TestUsingIndexIsPerKindNotGlobal:
     """``USING INDEX`` is accepted for UNIQUE and PRIMARY KEY, refused for CHECK.
@@ -525,6 +537,63 @@ class TestRenderedDdlStillMatchesTheSwitches:
         assert "DROP CONSTRAINT" in sql
         assert "IF EXISTS" not in sql
         assert params == ()
+        # Byte-identical: core now lets an action carry a declaration as well,
+        # and this dialect still spells exactly the name form it always did.
+        assert sql == 'DROP CONSTRAINT "CK"'
+
+    def test_drop_table_constraint_refuses_a_declaration_by_name(self):
+        """A kind-addressed drop is refused by feature name, not rendered.
+
+        Core's action can carry the constraint's *declaration* so a dialect that
+        spells ``DROP PRIMARY KEY`` / ``DROP UNIQUE (<cols>)`` can honour it.
+        Oracle composes the name form only, so a declaration-only action has no
+        address this dialect can use -- and it says so as
+        ``DROP CONSTRAINT by kind`` rather than letting core's generic refusal
+        or a ``None`` name speak for the dialect.
+        """
+        from rhosocial.activerecord.backend.dialect.exceptions import (
+            UnsupportedFeatureError,
+        )
+        from rhosocial.activerecord.backend.expression.statements import (
+            DropTableConstraintAction,
+            TableConstraint,
+            TableUniqueConstraint,
+        )
+
+        dialect = _dialect()
+        constraint = TableConstraint(
+            dialect, branch=TableUniqueConstraint(dialect, ["a"]), name="CK"
+        )
+        action = DropTableConstraintAction(dialect, constraint=constraint)
+        with pytest.raises(UnsupportedFeatureError, match="DROP CONSTRAINT by kind") as exc_info:
+            action.to_sql()
+        assert exc_info.value.feature_name == "DROP CONSTRAINT by kind"
+
+    def test_drop_table_constraint_refuses_a_declaration_beside_a_name(self):
+        """Stricter than core's name-wins rule, deliberately.
+
+        With both a name and a declaration present, core's shared formatter
+        renders the name. This dialect refuses instead: rendering the name would
+        silently drop the declaration the caller made, and Oracle cannot verify
+        that the two describe the same constraint. The refusal is pinned so the
+        choice is visible rather than an accident of ordering.
+        """
+        from rhosocial.activerecord.backend.dialect.exceptions import (
+            UnsupportedFeatureError,
+        )
+        from rhosocial.activerecord.backend.expression.statements import (
+            DropTableConstraintAction,
+            TableConstraint,
+            TableUniqueConstraint,
+        )
+
+        dialect = _dialect()
+        constraint = TableConstraint(
+            dialect, branch=TableUniqueConstraint(dialect, ["a"]), name="CK"
+        )
+        action = DropTableConstraintAction(dialect, "CK", constraint=constraint)
+        with pytest.raises(UnsupportedFeatureError, match="DROP CONSTRAINT by kind"):
+            action.to_sql()
 
     def test_rename_constraint_has_no_core_render_path_yet(self):
         """Documents the gap instead of pretending it is closed.

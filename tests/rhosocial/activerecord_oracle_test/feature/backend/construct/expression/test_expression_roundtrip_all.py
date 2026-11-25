@@ -477,6 +477,17 @@ def _register_core_specials():
         ),
     )
 
+    # DROP TABLE CONSTRAINT. Core made ``constraint_name`` optional so an action
+    # can address the constraint by its declaration instead; the generic
+    # constructor therefore now builds one with *no address at all*, which this
+    # dialect refuses and which says nothing about the name form it does spell.
+    # Supply the name -- the only address Oracle accepts -- so the matrix
+    # observes the render path that exists rather than a malformed action.
+    register_special_constructor(
+        "statements.ddl_alter.DropTableConstraintAction",
+        lambda d: ddl_alter.DropTableConstraintAction(d, "c"),
+    )
+
     # ENUM type. `values` is keyword-only behind a defaulted positional, so the
     # introspective constructor skips it and the type declares no members.
     register_special_constructor(

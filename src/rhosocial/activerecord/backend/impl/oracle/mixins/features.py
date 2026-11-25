@@ -942,6 +942,13 @@ class OracleFeaturesMixin:
         ``IF EXISTS``, which Oracle does not spell (see
         :meth:`supports_drop_constraint_if_exists`, ``False``, measured
         ``ORA-01735``).
+
+        Only the *name* form is composed here: ``supports_drop_constraint_by_kind()``
+        stays at core's default ``False``, and
+        :meth:`OracleModifyColumnMixin.format_drop_table_constraint_action`
+        refuses an action carrying a declaration by naming ``DROP CONSTRAINT by
+        kind``.  The probe answers for a path this dialect renders, not for a
+        server spelling nobody wired in.
         """
         return True
 
