@@ -213,30 +213,36 @@ class OracleModifyColumnMixin:
         ``supports_drop_constraint_by_kind()`` stays at the core default
         ``False``.
 
-        The declaration is refused here rather than left to the shared
-        formatter, and refused *whenever it is present*, even beside a name:
-        dropping the declaration and rendering the name would answer a
-        question the caller did not ask, and Oracle cannot verify that the
-        declaration matches the named constraint.
+        The address is decided first by the shared resolver,
+        :meth:`_resolve_drop_constraint_address`, rather than by a local
+        preference: the name form is used when only a name is given, and a
+        declaration may sit beside a name *only* to confirm it -- when the
+        declaration carries that same name. A declaration that disagrees with
+        the name, or carries no name at all, is an ambiguous address and is
+        refused by the resolver; a declaration alone has no address this
+        dialect can spell and is refused there as ``DROP CONSTRAINT by kind``.
 
         Args:
             expr: The action carrying the constraint name, and possibly the
-                declaration it cannot render.
+                declaration confirming it.
 
         Returns:
             A ``(sql, params)`` tuple for the name form, with empty parameters.
 
         Raises:
-            UnsupportedFeatureError: If the action carries a constraint
-                declaration (``DROP CONSTRAINT by kind``), or if ``IF EXISTS``
-                is requested, which Oracle rejects with ``ORA-01735``.
+            UnsupportedFeatureError: If the action carries a declaration without
+                a matching name (``DROP CONSTRAINT by kind`` or ``DROP
+                CONSTRAINT address``), or if ``IF EXISTS`` is requested, which
+                Oracle rejects with ``ORA-01735``.
+            NotImplementedError: If the resolver ever answers a kind address
+                here; this dialect has no kind formatter to spell it.
         """
-        if getattr(expr, "constraint", None) is not None:
-            raise UnsupportedFeatureError(
-                self.name,
-                "DROP CONSTRAINT by kind",
-                "Oracle drops a constraint by name only. Pass constraint_name; "
-                "a declaration carrying the constraint's kind is not honoured.",
+        address = self._resolve_drop_constraint_address(expr)
+        if address != "name":
+            raise NotImplementedError(
+                f"{self.name} resolved a declaration-only drop to the kind "
+                f"address, but Oracle spells DROP CONSTRAINT by name only and "
+                f"composes no kind formatter."
             )
         if getattr(expr, "if_exists", None):
             raise UnsupportedFeatureError(

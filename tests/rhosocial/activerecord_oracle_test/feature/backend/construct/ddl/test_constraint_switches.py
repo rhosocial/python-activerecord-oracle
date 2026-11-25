@@ -546,10 +546,10 @@ class TestRenderedDdlStillMatchesTheSwitches:
 
         Core's action can carry the constraint's *declaration* so a dialect that
         spells ``DROP PRIMARY KEY`` / ``DROP UNIQUE (<cols>)`` can honour it.
-        Oracle composes the name form only, so a declaration-only action has no
-        address this dialect can use -- and it says so as
-        ``DROP CONSTRAINT by kind`` rather than letting core's generic refusal
-        or a ``None`` name speak for the dialect.
+        Oracle composes the name form only and advertises no kind drops, so the
+        shared resolver refuses a declaration-only action as
+        ``DROP CONSTRAINT by kind`` -- the refusal names the address that is
+        missing, rather than rendering a ``None`` name.
         """
         from rhosocial.activerecord.backend.dialect.exceptions import (
             UnsupportedFeatureError,
@@ -569,14 +569,37 @@ class TestRenderedDdlStillMatchesTheSwitches:
             action.to_sql()
         assert exc_info.value.feature_name == "DROP CONSTRAINT by kind"
 
-    def test_drop_table_constraint_refuses_a_declaration_beside_a_name(self):
-        """Stricter than core's name-wins rule, deliberately.
+    def test_drop_table_constraint_renders_a_declaration_that_confirms_the_name(self):
+        """A declaration beside the *same* name only confirms it, so it renders.
 
-        With both a name and a declaration present, core's shared formatter
-        renders the name. This dialect refuses instead: rendering the name would
-        silently drop the declaration the caller made, and Oracle cannot verify
-        that the two describe the same constraint. The refusal is pinned so the
-        choice is visible rather than an accident of ordering.
+        The shared resolver answers ``"name"`` when ``constraint_name`` and the
+        declaration's own name agree: the declaration adds no second address,
+        it just agrees with the one being used. The SQL is byte-identical to
+        the name-only render -- the declaration is not spelled, and nothing
+        about it leaks into the clause.
+        """
+        from rhosocial.activerecord.backend.expression.statements import (
+            DropTableConstraintAction,
+            TableConstraint,
+            TableUniqueConstraint,
+        )
+
+        dialect = _dialect()
+        constraint = TableConstraint(
+            dialect, branch=TableUniqueConstraint(dialect, ["a"]), name="CK"
+        )
+        action = DropTableConstraintAction(dialect, "CK", constraint=constraint)
+        sql, params = action.to_sql()
+        assert sql == 'DROP CONSTRAINT "CK"'
+        assert params == ()
+
+    def test_drop_table_constraint_refuses_a_differing_declaration_name(self):
+        """Two addresses that disagree are ambiguous, never resolved by choice.
+
+        Core refuses this rather than preferring the name, and Oracle must not
+        paper over it: the caller made a declaration Oracle cannot verify
+        against the named constraint, so the honest answer is the resolver's
+        ``DROP CONSTRAINT address`` refusal.
         """
         from rhosocial.activerecord.backend.dialect.exceptions import (
             UnsupportedFeatureError,
@@ -589,11 +612,35 @@ class TestRenderedDdlStillMatchesTheSwitches:
 
         dialect = _dialect()
         constraint = TableConstraint(
-            dialect, branch=TableUniqueConstraint(dialect, ["a"]), name="CK"
+            dialect, branch=TableUniqueConstraint(dialect, ["a"]), name="CK_OTHER"
         )
         action = DropTableConstraintAction(dialect, "CK", constraint=constraint)
-        with pytest.raises(UnsupportedFeatureError, match="DROP CONSTRAINT by kind"):
+        with pytest.raises(UnsupportedFeatureError) as exc_info:
             action.to_sql()
+        assert exc_info.value.feature_name == "DROP CONSTRAINT address"
+        message = str(exc_info.value)
+        assert "'CK'" in message
+        assert "'CK_OTHER'" in message
+        assert "ambiguous address is refused" in message
+
+    def test_drop_table_constraint_refuses_an_unnamed_declaration_beside_a_name(self):
+        """An unnamed declaration cannot confirm a name, so it is ambiguous too."""
+        from rhosocial.activerecord.backend.dialect.exceptions import (
+            UnsupportedFeatureError,
+        )
+        from rhosocial.activerecord.backend.expression.statements import (
+            DropTableConstraintAction,
+            TableConstraint,
+            TableUniqueConstraint,
+        )
+
+        dialect = _dialect()
+        constraint = TableConstraint(dialect, branch=TableUniqueConstraint(dialect, ["a"]))
+        action = DropTableConstraintAction(dialect, "CK", constraint=constraint)
+        with pytest.raises(UnsupportedFeatureError) as exc_info:
+            action.to_sql()
+        assert exc_info.value.feature_name == "DROP CONSTRAINT address"
+        assert "ambiguous address is refused" in str(exc_info.value)
 
     def test_rename_constraint_has_no_core_render_path_yet(self):
         """Documents the gap instead of pretending it is closed.
