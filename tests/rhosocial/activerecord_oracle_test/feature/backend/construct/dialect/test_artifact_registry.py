@@ -106,3 +106,41 @@ def test_raw_sql_opt_in_is_a_copy_not_the_shared_table():
     assert "raw_sql" in twin.node_kinds()
     assert "raw_sql" not in registry.node_kinds()
     assert "raw_sql" not in backend_registry().node_kinds()
+
+
+def test_formatter_declaring_nodes_are_auto_discovered():
+    """A node is a kind because it names a formatter, not because it was listed.
+
+    The registry walk admits a concrete expression class only when it resolves
+    a ``format_method``; adding Oracle's hierarchical, hint, sequence and SHOW
+    nodes to the table is therefore a consequence of each class naming the
+    dialect formatter that renders it. No manual registration exists for them,
+    and the kinds resolve back to the classes that declared the names.
+    """
+    from rhosocial.activerecord.backend.impl.oracle.expression.hierarchical import (
+        LevelExpression,
+        PriorExpression,
+    )
+    from rhosocial.activerecord.backend.impl.oracle.expression.hint import (
+        OracleHintExpression,
+    )
+    from rhosocial.activerecord.backend.impl.oracle.expression.sequence import (
+        OracleSequenceValueExpression,
+    )
+    from rhosocial.activerecord.backend.impl.oracle.expression.show import (
+        OracleQueryLocksExpression,
+    )
+
+    registry = backend_registry()
+    kinded = (
+        ("level_expression", LevelExpression),
+        ("prior_expression", PriorExpression),
+        ("oracle_hint_expression", OracleHintExpression),
+        ("oracle_sequence_value_expression", OracleSequenceValueExpression),
+        ("oracle_query_locks_expression", OracleQueryLocksExpression),
+    )
+    for kind, cls in kinded:
+        assert kind in registry.node_kinds()
+        assert registry.resolve_node(kind) is cls
+        assert isinstance(cls.format_method, property)
+

@@ -7,7 +7,7 @@ UNPIVOT rotates columns to rows, the inverse of PIVOT.
 
 These operations are useful for reporting and data transformation.
 
-The two self-rendering clauses are Oracle's own nodes and carry the backend
+The Oracle-owned clauses are Oracle's own nodes and carry the backend
 prefix in their class names (rules §3: a backend-specific node's name starts
 with the backend's), which is what keeps their kinds -- ``oracle_pivot`` /
 ``oracle_unpivot`` -- distinct from core's classed ``pivot`` / ``unpivot``
@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import List, Union, Optional, TYPE_CHECKING
 
-from rhosocial.activerecord.backend.expression.bases import BaseExpression, SQLQueryAndParams
+from rhosocial.activerecord.backend.expression.bases import BaseExpression
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
@@ -119,17 +119,10 @@ class PivotXMLExpression(BaseExpression):
         self.pivot_column = pivot_column
         self.subquery = subquery
 
-    def to_sql(self) -> SQLQueryAndParams:
-        """Generate PIVOT XML SQL."""
-        dialect = self.dialect
-        sql = (
-            f"PIVOT XML ("
-            f"{self.aggregate_function}({dialect.format_identifier(self.value_column)}) "
-            f"FOR {dialect.format_identifier(self.pivot_column)} "
-            f"IN ({self.subquery})"
-            f")"
-        )
-        return (sql, ())
+    @property
+    def format_method(self) -> str:
+        """The dialect method that renders the PIVOT XML clause."""
+        return "format_pivot_xml_expression"
 
 
 class OracleUnpivot(BaseExpression):
@@ -175,23 +168,10 @@ class OracleUnpivot(BaseExpression):
         self.include_nulls = bool(include_nulls)
         self.alias = alias
 
-    def to_sql(self) -> SQLQueryAndParams:
-        """Generate UNPIVOT SQL."""
-        dialect = self.dialect
-        include = "INCLUDE NULLS " if self.include_nulls else "EXCLUDE NULLS "
-        columns_str = ", ".join(dialect.format_identifier(c) for c in self.columns)
-
-        sql = (
-            f"UNPIVOT {include}"
-            f"({dialect.format_identifier(self.value_column)} "
-            f"FOR {dialect.format_identifier(self.pivot_column)} "
-            f"IN ({columns_str}))"
-        )
-
-        if self.alias:
-            sql = f"{sql} {dialect.format_identifier(self.alias)}"
-
-        return (sql, ())
+    @property
+    def format_method(self) -> str:
+        """The dialect method that renders an UNPIVOT clause."""
+        return "format_oracle_unpivot"
 
 
 class UnpivotColumnsExpression(BaseExpression):
@@ -221,21 +201,7 @@ class UnpivotColumnsExpression(BaseExpression):
         self.column_aliases = dict(column_aliases) if column_aliases else {}
         self.include_nulls = bool(include_nulls)
 
-    def to_sql(self) -> SQLQueryAndParams:
-        """Generate UNPIVOT SQL with aliases."""
-        dialect = self.dialect
-        include = "INCLUDE NULLS " if self.include_nulls else "EXCLUDE NULLS "
-
-        alias_parts = []
-        for col, alias in self.column_aliases.items():
-            alias_parts.append(f"{dialect.format_identifier(col)} AS '{alias}'")
-        columns_str = ", ".join(alias_parts)
-
-        sql = (
-            f"UNPIVOT {include}"
-            f"({dialect.format_identifier(self.value_column)} "
-            f"FOR {dialect.format_identifier(self.pivot_column)} "
-            f"IN ({columns_str}))"
-        )
-
-        return (sql, ())
+    @property
+    def format_method(self) -> str:
+        """The dialect method that renders UNPIVOT with column aliases."""
+        return "format_unpivot_columns_expression"

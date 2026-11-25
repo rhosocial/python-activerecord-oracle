@@ -133,6 +133,21 @@ class OracleSequenceMixin:
         """Oracle has no ``OWNED BY`` clause on sequences."""
         return False
 
+    def format_oracle_sequence_value_expression(
+        self, expr
+    ) -> Tuple[str, tuple]:
+        """Render ``seq.NEXTVAL`` or ``seq.CURRVAL`` for the node's mode.
+
+        The two pseudo-columns are distinct spellings with their own version
+        gates, so the mode the node carries selects the formatter that answers
+        for it rather than duplicating either refusal here.
+        """
+        from ..expression.sequence import OracleSequenceValueMode
+
+        if expr.mode is OracleSequenceValueMode.NEXTVAL:
+            return self.format_nextval(expr)
+        return self.format_currval(expr)
+
     def format_nextval(self, expr) -> Tuple[str, tuple]:
         if self.version < (9, 0, 0):
             raise UnsupportedFeatureError(

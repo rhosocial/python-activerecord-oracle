@@ -135,6 +135,29 @@ class OracleLockingMixin(object):
         return " ".join(sql_parts), tuple(all_params)
     # endregion
 
+    def format_oracle_for_update_expression(self, expr) -> Tuple[str, tuple]:
+        """Render an ``OracleForUpdateExpression``.
+
+        Oracle's options are mutually exclusive and ordered ``FOR UPDATE [OF
+        cols] [NOWAIT | WAIT n | SKIP LOCKED]``; the constructor is what
+        refuses a combination Oracle cannot spell, so this formatter emits the
+        one option the node carries.
+        """
+        parts = ["FOR UPDATE"]
+
+        if expr.columns:
+            cols = ", ".join(self.format_identifier(c) for c in expr.columns)
+            parts.append(f"OF {cols}")
+
+        if expr.nowait:
+            parts.append("NOWAIT")
+        elif expr.wait_seconds is not None:
+            parts.append(f"WAIT {expr.wait_seconds}")
+        elif expr.skip_locked:
+            parts.append("SKIP LOCKED")
+
+        return (" ".join(parts), ())
+
     def format_oracle_lock_table_statement(self, expr) -> Tuple[str, tuple]:
         """Render an ``OracleLockTableStatement``.
 

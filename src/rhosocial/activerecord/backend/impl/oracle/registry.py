@@ -8,7 +8,10 @@ cross-backend merge anywhere.
 
 The registry is built on first use, cached, and frozen. Freezing is what lets
 the dialect hand the same table to every reader without one caller's
-registration changing what another caller resolves.
+registration changing what another caller resolves. Its contents are the
+classes the package declares: the walk admits a concrete expression class only
+when it resolves a ``format_method``, so a node that names the dialect
+formatter rendering it is a kind with no separate registration to keep in step.
 """
 
 from rhosocial.activerecord.backend.expression.registry import ExpressionRegistry

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Optional, List, TYPE_CHECKING
 
-from rhosocial.activerecord.backend.expression.bases import BaseExpression, SQLQueryAndParams
+from rhosocial.activerecord.backend.expression.bases import BaseExpression
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
@@ -51,23 +51,10 @@ class ConnectByExpression(BaseExpression):
         self.start_with = start_with
         self.nocycle = bool(nocycle)
 
-    def to_sql(self) -> SQLQueryAndParams:
-        """Generate SQL for CONNECT BY clause."""
-        parts = []
-        params = []
-
-        if self.start_with:
-            start_sql, start_params = self.start_with.to_sql()
-            parts.append(f"START WITH {start_sql}")
-            params.extend(start_params)
-
-        nocycle_str = "NOCYCLE " if self.nocycle else ""
-        if self.condition:
-            cond_sql, cond_params = self.condition.to_sql()
-            parts.append(f"CONNECT BY {nocycle_str}{cond_sql}")
-            params.extend(cond_params)
-
-        return (" ".join(parts), tuple(params))
+    @property
+    def format_method(self) -> str:
+        """The dialect method that assembles the START WITH / CONNECT BY clause."""
+        return "format_connect_by_expression"
 
 
 class PriorExpression(BaseExpression):
@@ -92,8 +79,10 @@ class PriorExpression(BaseExpression):
         super().__init__(dialect)
         self.column = column
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return (f"PRIOR {self.dialect.format_identifier(self.column)}", ())
+    @property
+    def format_method(self) -> str:
+        """The dialect method that renders this as ``PRIOR <column>``."""
+        return "format_prior_expression"
 
 
 class ConnectByRootExpression(BaseExpression):
@@ -119,8 +108,10 @@ class ConnectByRootExpression(BaseExpression):
         super().__init__(dialect)
         self.column = column
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return (f"CONNECT_BY_ROOT {self.dialect.format_identifier(self.column)}", ())
+    @property
+    def format_method(self) -> str:
+        """The dialect method that renders ``CONNECT_BY_ROOT <column>``."""
+        return "format_connect_by_root_expression"
 
 
 class SysConnectByPathExpression(BaseExpression):
@@ -151,11 +142,10 @@ class SysConnectByPathExpression(BaseExpression):
         self.column = column
         self.separator = separator
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return (
-            f"SYS_CONNECT_BY_PATH({self.dialect.format_identifier(self.column)}, '{self.separator}')",
-            (),
-        )
+    @property
+    def format_method(self) -> str:
+        """The dialect method that renders ``SYS_CONNECT_BY_PATH(col, sep)``."""
+        return "format_sys_connect_by_path_expression"
 
 
 class ConnectByIsLeafExpression(BaseExpression):
@@ -171,8 +161,10 @@ class ConnectByIsLeafExpression(BaseExpression):
         CONNECT BY PRIOR employee_id = manager_id
     """
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return ("CONNECT_BY_ISLEAF", ())
+    @property
+    def format_method(self) -> str:
+        """The dialect method that renders the ``CONNECT_BY_ISLEAF`` pseudo-column."""
+        return "format_connect_by_is_leaf_expression"
 
 
 class ConnectByIsCycleExpression(BaseExpression):
@@ -188,8 +180,10 @@ class ConnectByIsCycleExpression(BaseExpression):
         CONNECT BY NOCYCLE PRIOR employee_id = manager_id
     """
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return ("CONNECT_BY_ISCYCLE", ())
+    @property
+    def format_method(self) -> str:
+        """The dialect method that renders the ``CONNECT_BY_ISCYCLE`` pseudo-column."""
+        return "format_connect_by_is_cycle_expression"
 
 
 class LevelExpression(BaseExpression):
@@ -209,8 +203,10 @@ class LevelExpression(BaseExpression):
         level_expr = LevelExpression(dialect)
     """
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return ("LEVEL", ())
+    @property
+    def format_method(self) -> str:
+        """The dialect method that renders the ``LEVEL`` pseudo-column."""
+        return "format_level_expression"
 
 
 class SiblingsExpression(BaseExpression):
@@ -240,14 +236,7 @@ class SiblingsExpression(BaseExpression):
         self.columns = list(columns) if columns else []
         self.ascending = list(ascending) if ascending is not None else [True]
 
-    def to_sql(self) -> SQLQueryAndParams:
-        if not self.columns:
-            return ("", ())
-
-        dialect = self.dialect
-        order_parts = []
-        for i, col in enumerate(self.columns):
-            asc = self.ascending[i] if i < len(self.ascending) else True
-            order_parts.append(f"{dialect.format_identifier(col)} {'ASC' if asc else 'DESC'}")
-
-        return (f"ORDER SIBLINGS BY {', '.join(order_parts)}", ())
+    @property
+    def format_method(self) -> str:
+        """The dialect method that renders the ``ORDER SIBLINGS BY`` clause."""
+        return "format_siblings_expression"

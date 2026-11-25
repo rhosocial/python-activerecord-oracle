@@ -2,8 +2,9 @@
 """
 Oracle data dictionary expression classes.
 
-Each expression class collects parameters and delegates SQL generation
-to the OracleShowDialectMixin's compose_query_* methods.
+Each expression class collects parameters; SQL generation is declared as a
+``format_method`` that the OracleShowDialectMixin implements by delegating to
+its ``compose_query_*`` methods.
 
 Inheritance pattern mirrors MySQL's ShowExpression:
 - OracleQueryExpression is the base, accepting an OracleDialect.
@@ -23,10 +24,7 @@ no parameter an artifact can name (expression-dialect §7).
 
 from typing import Optional, TYPE_CHECKING
 
-from rhosocial.activerecord.backend.expression.bases import (
-    BaseExpression,
-    SQLQueryAndParams,
-)
+from rhosocial.activerecord.backend.expression.bases import BaseExpression
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
@@ -58,9 +56,6 @@ class OracleQueryExpression(BaseExpression):
         self.owner: Optional[str] = owner
         self.name_pattern: Optional[str] = name_pattern
 
-    def to_sql(self) -> SQLQueryAndParams:
-        raise NotImplementedError("Subclasses must implement to_sql()")
-
     # Convenience for type checker
     @property
     def dialect_(self) -> "OracleDialect":
@@ -84,8 +79,10 @@ class OracleQuerySessionsExpression(OracleQueryExpression):
         )
         self.active_only: bool = active_only
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self._dialect.compose_query_sessions_sql(self)  # type: ignore[attr-defined]
+    @property
+    def format_method(self) -> str:
+        """The dialect method that composes the V$SESSION query."""
+        return "format_oracle_query_sessions_expression"
 
 
 class OracleQueryRunningSQLExpression(OracleQueryExpression):
@@ -105,22 +102,28 @@ class OracleQueryRunningSQLExpression(OracleQueryExpression):
         )
         self.limit: int = limit
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self._dialect.compose_query_running_sql_sql(self)  # type: ignore[attr-defined]
+    @property
+    def format_method(self) -> str:
+        """The dialect method that composes the V$SQL query."""
+        return "format_oracle_query_running_sql_expression"
 
 
 class OracleQueryDatabaseInfoExpression(OracleQueryExpression):
     """Query V$DATABASE for database details."""
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self._dialect.compose_query_database_info_sql(self)  # type: ignore[attr-defined]
+    @property
+    def format_method(self) -> str:
+        """The dialect method that composes the V$DATABASE query."""
+        return "format_oracle_query_database_info_expression"
 
 
 class OracleQueryInstanceInfoExpression(OracleQueryExpression):
     """Query V$INSTANCE for instance details."""
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self._dialect.compose_query_instance_info_sql(self)  # type: ignore[attr-defined]
+    @property
+    def format_method(self) -> str:
+        """The dialect method that composes the V$INSTANCE query."""
+        return "format_oracle_query_instance_info_expression"
 
 
 class OracleQueryObjectsExpression(OracleQueryExpression):
@@ -142,22 +145,28 @@ class OracleQueryObjectsExpression(OracleQueryExpression):
         self.object_type: Optional[str] = object_type
         self.include_invalid: bool = include_invalid
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self._dialect.compose_query_objects_sql(self)  # type: ignore[attr-defined]
+    @property
+    def format_method(self) -> str:
+        """The dialect method that composes the object-catalogue query."""
+        return "format_oracle_query_objects_expression"
 
 
 class OracleQueryLocksExpression(OracleQueryExpression):
     """Query V$LOCK for current lock state."""
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self._dialect.compose_query_locks_sql(self)  # type: ignore[attr-defined]
+    @property
+    def format_method(self) -> str:
+        """The dialect method that composes the V$LOCK query."""
+        return "format_oracle_query_locks_expression"
 
 
 class OracleQueryWaitEventsExpression(OracleQueryExpression):
     """Query V$SESSION_WAIT for active wait events."""
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self._dialect.compose_query_wait_events_sql(self)  # type: ignore[attr-defined]
+    @property
+    def format_method(self) -> str:
+        """The dialect method that composes the V$SESSION_WAIT query."""
+        return "format_oracle_query_wait_events_expression"
 
 
 class OracleQueryNlsParametersExpression(OracleQueryExpression):
@@ -177,8 +186,10 @@ class OracleQueryNlsParametersExpression(OracleQueryExpression):
         )
         self.scope: str = scope.upper()
 
-    def to_sql(self) -> SQLQueryAndParams:
-        return self._dialect.compose_query_nls_parameters_sql(self)  # type: ignore[attr-defined]
+    @property
+    def format_method(self) -> str:
+        """The dialect method that composes the NLS parameter query."""
+        return "format_oracle_query_nls_parameters_expression"
 
 
 __all__ = [

@@ -445,19 +445,16 @@ class TestDialectSupport:
         dialect = OracleDialect(version=(19, 0, 0))
         assert dialect.supports_for_update_wait() is True
 
-    def test_legacy_self_rendering_expressions_render(self):
-        """The hierarchical / pivot / hint expressions render themselves.
+    def test_legacy_expressions_now_render_through_dispatch(self):
+        """The hierarchical / pivot / hint nodes render through their formatters.
 
-        These nodes predate the format_method dispatch and override
-        ``to_sql`` directly, so the dialect declares no ``format_connect_by``
-        / ``format_hint`` for them -- the stubs that used to sit here called
-        ``expr.to_sql()`` back, which is not a formatter (an infinite loop for
-        any node that does dispatch, dead code for ones that do not). The
-        Oracle-specific ``format_pivot``/``format_unpivot`` stubs were likewise
-        removed; the core PivotMixin now answers those names for the generic
-        Pivot/Unpivot nodes while these backend-owned nodes keep rendering
-        themselves. What is asserted is what callers rely on: the classes
-        render, and the loop formatters are gone.
+        These nodes predate the format_method dispatch and used to override
+        ``to_sql`` directly, so the dialect declared no formatter for them. The
+        self-rendering overrides are gone: each node now declares a single
+        ``format_method`` and the Oracle dialect spells the SQL. The old
+        loop-shaped names (``format_connect_by`` / ``format_hint`` /
+        ``format_for_update``) stay removed -- calling ``expr.to_sql()`` back
+        from a formatter is not a formatter.
         """
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
         from rhosocial.activerecord.backend.impl.oracle.expression import (
@@ -473,23 +470,51 @@ class TestDialectSupport:
         from rhosocial.activerecord.backend.expression.predicates import IsNullPredicate
 
         dialect = OracleDialect(version=(19, 0, 0))
-        assert "CONNECT BY" in ConnectByExpression(
+        connect_by = ConnectByExpression(
             dialect,
             condition=PriorExpression(dialect, column="employee_id"),
             start_with=IsNullPredicate(dialect, Column(dialect, "manager_id")),
-        ).to_sql()[0]
-        assert "PIVOT" in OraclePivot(
+        )
+        assert "CONNECT BY" in connect_by.to_sql()[0]
+        assert connect_by.format_method == "format_connect_by_expression"
+        pivot = OraclePivot(
             dialect, aggregate_function="SUM", value_column="amount",
             pivot_column="month", values=["Jan"],
-        ).to_sql()[0]
-        assert "UNPIVOT" in OracleUnpivot(
+        )
+        assert "PIVOT" in pivot.to_sql()[0]
+        assert pivot.format_method == "format_oracle_pivot"
+        unpivot = OracleUnpivot(
             dialect, value_column="amount", pivot_column="month",
             columns=["jan_sales"],
-        ).to_sql()[0]
-        assert "/*+" in OracleHintExpression(
-            dialect, hints=["FULL(t)"]
-        ).to_sql()[0]
+        )
+        assert "UNPIVOT" in unpivot.to_sql()[0]
+        assert unpivot.format_method == "format_oracle_unpivot"
+        hint = OracleHintExpression(dialect, hints=["FULL(t)"])
+        assert "/*+" in hint.to_sql()[0]
+        assert hint.format_method == "format_oracle_hint_expression"
         for gone in (
             "format_connect_by", "format_hint", "format_for_update",
         ):
             assert not hasattr(dialect, gone), gone
+
+    def test_dialect_free_construction_renders_through_explicit_dialect(self):
+        """A node built with no dialect renders when one is passed to ``to_sql``.
+
+        Rendering is a dialect operation, so a node assembled before a backend
+        exists (a declaration-time tree, for example) must render once the
+        caller supplies the dialect at the render call rather than at
+        construction.
+        """
+        from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
+        from rhosocial.activerecord.backend.impl.oracle.expression import (
+            ConnectByIsLeafExpression,
+        )
+
+        dialect = OracleDialect(version=(19, 0, 0))
+        expr = ConnectByIsLeafExpression()
+        sql, params = expr.to_sql(dialect)
+
+        assert sql == "CONNECT_BY_ISLEAF"
+        assert params == ()
+        assert expr._dialect is None
+

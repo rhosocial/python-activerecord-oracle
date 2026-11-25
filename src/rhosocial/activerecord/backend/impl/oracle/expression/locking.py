@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Optional, List, TYPE_CHECKING
 
-from rhosocial.activerecord.backend.expression.bases import BaseExpression, SQLQueryAndParams
+from rhosocial.activerecord.backend.expression.bases import BaseExpression
 from rhosocial.activerecord.backend.expression.query_parts import (
     ForUpdateClause,
     LockStrength,
@@ -116,22 +116,10 @@ class OracleForUpdateExpression(BaseExpression):
         self.wait_seconds = wait_seconds
         self.skip_locked = bool(skip_locked)
 
-    def to_sql(self) -> SQLQueryAndParams:
-        """Generate FOR UPDATE SQL."""
-        parts = ["FOR UPDATE"]
-
-        if self.columns:
-            cols = ", ".join(self.dialect.format_identifier(c) for c in self.columns)
-            parts.append(f"OF {cols}")
-
-        if self.nowait:
-            parts.append("NOWAIT")
-        elif self.wait_seconds is not None:
-            parts.append(f"WAIT {self.wait_seconds}")
-        elif self.skip_locked:
-            parts.append("SKIP LOCKED")
-
-        return (" ".join(parts), ())
+    @property
+    def format_method(self) -> str:
+        """The dialect method that renders this FOR UPDATE variant."""
+        return "format_oracle_for_update_expression"
 
 
 def for_update(dialect: "OracleDialect") -> OracleForUpdateExpression:

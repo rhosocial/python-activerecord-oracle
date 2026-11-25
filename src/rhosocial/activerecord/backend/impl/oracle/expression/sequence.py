@@ -19,7 +19,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Optional, TYPE_CHECKING, Union
 
-from rhosocial.activerecord.backend.expression.bases import BaseExpression, SQLQueryAndParams
+from rhosocial.activerecord.backend.expression.bases import BaseExpression
 from rhosocial.activerecord.backend.expression.objects import Sequence
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -82,10 +82,10 @@ class OracleSequenceValueExpression(BaseExpression):
         self.sequence = sequence
         self.mode = normalize_sequence_value_mode(mode)
 
-    def to_sql(self) -> SQLQueryAndParams:
-        if self.mode is OracleSequenceValueMode.NEXTVAL:
-            return self.dialect.format_nextval(self)
-        return self.dialect.format_currval(self)
+    @property
+    def format_method(self) -> str:
+        """The dialect method that renders the sequence pseudo-column."""
+        return "format_oracle_sequence_value_expression"
 
 
 class OracleCreateSequenceStatement(BaseExpression):

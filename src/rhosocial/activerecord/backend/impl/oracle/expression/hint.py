@@ -15,7 +15,7 @@ Note: Use hints sparingly and only when necessary.
 
 from typing import List, Optional, TYPE_CHECKING
 
-from rhosocial.activerecord.backend.expression.bases import BaseExpression, SQLQueryAndParams
+from rhosocial.activerecord.backend.expression.bases import BaseExpression
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
@@ -46,12 +46,10 @@ class OracleHintExpression(BaseExpression):
         super().__init__(dialect)
         self.hints = list(hints) if hints else []
 
-    def to_sql(self) -> SQLQueryAndParams:
-        """Generate hint SQL."""
-        if not self.hints:
-            return ("", ())
-        hints_str = " ".join(self.hints)
-        return (f"/*+ {hints_str} */", ())
+    @property
+    def format_method(self) -> str:
+        """The dialect method that wraps the hints in an optimizer comment."""
+        return "format_oracle_hint_expression"
 
     def __add__(self, other: 'OracleHintExpression') -> 'OracleHintExpression':
         """Combine two hint expressions."""

@@ -434,6 +434,63 @@ class OracleShowDialectMixin:
             order_by=OrderByClause(self, [self._show_column("parameter")]),
         ).to_sql()
 
+    # ============================================================
+    # Dispatch entry points
+    # ============================================================
+    #
+    # Every ``OracleQuery*Expression`` node declares one of these as its
+    # ``format_method``; each composes the read through the matching
+    # ``compose_query_*`` method above. The node names the query it is, and the
+    # formatter is where that choice becomes SQL.
+
+    def format_oracle_query_sessions_expression(
+        self, expr: "OracleQuerySessionsExpression"
+    ) -> Tuple[str, tuple]:
+        """Render the ``V$SESSION`` read for a sessions query node."""
+        return self.compose_query_sessions_sql(expr)
+
+    def format_oracle_query_running_sql_expression(
+        self, expr: "OracleQueryRunningSQLExpression"
+    ) -> Tuple[str, tuple]:
+        """Render the ``V$SQL`` read for a running-SQL query node."""
+        return self.compose_query_running_sql_sql(expr)
+
+    def format_oracle_query_database_info_expression(
+        self, expr: "OracleQueryDatabaseInfoExpression"
+    ) -> Tuple[str, tuple]:
+        """Render the ``V$DATABASE`` read for a database-info query node."""
+        return self.compose_query_database_info_sql(expr)
+
+    def format_oracle_query_instance_info_expression(
+        self, expr: "OracleQueryInstanceInfoExpression"
+    ) -> Tuple[str, tuple]:
+        """Render the ``V$INSTANCE`` read for an instance-info query node."""
+        return self.compose_query_instance_info_sql(expr)
+
+    def format_oracle_query_objects_expression(
+        self, expr: "OracleQueryObjectsExpression"
+    ) -> Tuple[str, tuple]:
+        """Render the object-catalogue read for an objects query node."""
+        return self.compose_query_objects_sql(expr)
+
+    def format_oracle_query_locks_expression(
+        self, expr: "OracleQueryLocksExpression"
+    ) -> Tuple[str, tuple]:
+        """Render the ``V$LOCK`` read for a locks query node."""
+        return self.compose_query_locks_sql(expr)
+
+    def format_oracle_query_wait_events_expression(
+        self, expr: "OracleQueryWaitEventsExpression"
+    ) -> Tuple[str, tuple]:
+        """Render the ``V$SESSION_WAIT`` read for a wait-events query node."""
+        return self.compose_query_wait_events_sql(expr)
+
+    def format_oracle_query_nls_parameters_expression(
+        self, expr: "OracleQueryNlsParametersExpression"
+    ) -> Tuple[str, tuple]:
+        """Render the NLS parameter read for an NLS query node."""
+        return self.compose_query_nls_parameters_sql(expr)
+
     def _select_objects_view(self, owner: Optional[str]) -> str:
         """Choose USER_/ALL_/DBA_OBJECTS based on filter intent.
 
