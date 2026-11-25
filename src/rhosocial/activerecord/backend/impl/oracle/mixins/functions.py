@@ -49,7 +49,12 @@ class OracleFunctionFormatMixin:
         the ones that fit worked and looked right.
         """
         self.check_function_version(expr.func_name)
-        args_sql, all_params = self._render_call_args(expr)
+        args_sql: List[str] = []
+        all_params: List[Any] = []
+        for arg in expr.args:
+            sql_part, params_part = arg.to_sql()
+            args_sql.append(sql_part)
+            all_params.extend(params_part)
         arg_list = ", ".join(args_sql)
         distinct = "DISTINCT " if expr.is_distinct else ""
         if expr.on_overflow:
@@ -62,25 +67,40 @@ class OracleFunctionFormatMixin:
     def format_oracle_percentile_cont_function(
         self, expr: "OraclePercentileContFunction"
     ) -> Tuple[str, tuple]:
-        """``PERCENTILE_CONT(fraction) WITHIN GROUP (ORDER BY ...)``."""
-        return self._format_oracle_percentile("PERCENTILE_CONT", expr)
+        """``PERCENTILE_CONT(fraction) WITHIN GROUP (ORDER BY ...)``.
+
+        An ordered-set aggregate: the fraction inside, the ordering after.
+        """
+        self.check_function_version(expr.func_name)
+        args_sql: List[str] = []
+        all_params: List[Any] = []
+        for arg in expr.args:
+            sql_part, params_part = arg.to_sql()
+            args_sql.append(sql_part)
+            all_params.extend(params_part)
+        distinct = "DISTINCT " if expr.is_distinct else ""
+        func_sql = f"PERCENTILE_CONT({distinct}{', '.join(args_sql)})"
+        if expr.within_group_order_by:
+            func_sql += f" WITHIN GROUP (ORDER BY {expr.within_group_order_by})"
+        return self._finish_function_call(func_sql, all_params, expr)
 
     def format_oracle_percentile_disc_function(
         self, expr: "OraclePercentileDiscFunction"
     ) -> Tuple[str, tuple]:
-        """``PERCENTILE_DISC(fraction) WITHIN GROUP (ORDER BY ...)``."""
-        return self._format_oracle_percentile("PERCENTILE_DISC", expr)
+        """``PERCENTILE_DISC(fraction) WITHIN GROUP (ORDER BY ...)``.
 
-    def _format_oracle_percentile(
-        self,
-        name: str,
-        expr: "BaseExpression",
-    ) -> Tuple[str, tuple]:
-        """An ordered-set aggregate: the fraction inside, the ordering after."""
+        The discrete-value mirror of :class:`OraclePercentileContFunction`:
+        the same ordered-set shape, a different reduction.
+        """
         self.check_function_version(expr.func_name)
-        args_sql, all_params = self._render_call_args(expr)
+        args_sql: List[str] = []
+        all_params: List[Any] = []
+        for arg in expr.args:
+            sql_part, params_part = arg.to_sql()
+            args_sql.append(sql_part)
+            all_params.extend(params_part)
         distinct = "DISTINCT " if expr.is_distinct else ""
-        func_sql = f"{name}({distinct}{', '.join(args_sql)})"
+        func_sql = f"PERCENTILE_DISC({distinct}{', '.join(args_sql)})"
         if expr.within_group_order_by:
             func_sql += f" WITHIN GROUP (ORDER BY {expr.within_group_order_by})"
         return self._finish_function_call(func_sql, all_params, expr)
@@ -88,14 +108,49 @@ class OracleFunctionFormatMixin:
     def format_oracle_json_value_function(
         self, expr: "OracleJsonValueFunction"
     ) -> Tuple[str, tuple]:
-        """``JSON_VALUE(json_doc, path [RETURNING type])``."""
-        return self._format_oracle_json_scalar("JSON_VALUE", expr)
+        """``JSON_VALUE(json_doc, path [RETURNING type])``.
+
+        Extracts a scalar from a JSON document; the optional ``RETURNING``
+        type names what the scalar is read back as.
+        """
+        self.check_function_version(expr.func_name)
+        args_sql: List[str] = []
+        all_params: List[Any] = []
+        for arg in expr.args:
+            sql_part, params_part = arg.to_sql()
+            args_sql.append(sql_part)
+            all_params.extend(params_part)
+        func_sql = f"JSON_VALUE({', '.join(args_sql)}"
+        if expr.returning_type is not None:
+            returning = self._coerce_returning_type(expr.returning_type)
+            type_sql, _ = self.format_data_type(returning)
+            func_sql += f" RETURNING {type_sql}"
+        func_sql += ")"
+        return self._finish_function_call(func_sql, all_params, expr)
 
     def format_oracle_json_query_function(
         self, expr: "OracleJsonQueryFunction"
     ) -> Tuple[str, tuple]:
-        """``JSON_QUERY(json_doc, path [RETURNING type])``."""
-        return self._format_oracle_json_scalar("JSON_QUERY", expr)
+        """``JSON_QUERY(json_doc, path [RETURNING type])``.
+
+        Extracts a JSON object or array from a document -- the same shape
+        :class:`OracleJsonValueFunction` has, answering with a document
+        instead of a scalar.
+        """
+        self.check_function_version(expr.func_name)
+        args_sql: List[str] = []
+        all_params: List[Any] = []
+        for arg in expr.args:
+            sql_part, params_part = arg.to_sql()
+            args_sql.append(sql_part)
+            all_params.extend(params_part)
+        func_sql = f"JSON_QUERY({', '.join(args_sql)}"
+        if expr.returning_type is not None:
+            returning = self._coerce_returning_type(expr.returning_type)
+            type_sql, _ = self.format_data_type(returning)
+            func_sql += f" RETURNING {type_sql}"
+        func_sql += ")"
+        return self._finish_function_call(func_sql, all_params, expr)
 
     def _coerce_returning_type(self, returning):
         """Validate and coerce a raw RETURNING argument at render time."""
@@ -141,28 +196,17 @@ class OracleFunctionFormatMixin:
                 kwargs = {"precision": p, "scale": s}
         return cls(dialect=self, **kwargs)
 
-    def _format_oracle_json_scalar(
-        self,
-        name: str,
-        expr: "BaseExpression",
-    ) -> Tuple[str, tuple]:
-        """A JSON scalar/document extraction, with the optional RETURNING."""
-        self.check_function_version(expr.func_name)
-        args_sql, all_params = self._render_call_args(expr)
-        func_sql = f"{name}({', '.join(args_sql)}"
-        if expr.returning_type is not None:
-            returning = self._coerce_returning_type(expr.returning_type)
-            type_sql, _ = self.format_data_type(returning)
-            func_sql += f" RETURNING {type_sql}"
-        func_sql += ")"
-        return self._finish_function_call(func_sql, all_params, expr)
-
     def format_oracle_json_table_function(
         self, expr: "OracleJsonTableFunction"
     ) -> Tuple[str, tuple]:
         """``JSON_TABLE(json_doc, path [COLUMNS (...)])``."""
         self.check_function_version(expr.func_name)
-        args_sql, all_params = self._render_call_args(expr)
+        args_sql: List[str] = []
+        all_params: List[Any] = []
+        for arg in expr.args:
+            sql_part, params_part = arg.to_sql()
+            args_sql.append(sql_part)
+            all_params.extend(params_part)
         func_sql = f"JSON_TABLE({', '.join(args_sql)}"
         if expr.columns:
             func_sql += f" COLUMNS ({expr.columns}))"
@@ -173,16 +217,6 @@ class OracleFunctionFormatMixin:
     # ------------------------------------------------------------------
     # Shared helpers
     # ------------------------------------------------------------------
-
-    def _render_call_args(self, expr: "BaseExpression") -> Tuple[List[str], List[Any]]:
-        """Render the call's argument list, keeping SQL and parameters in step."""
-        args_sql: List[str] = []
-        all_params: List[Any] = []
-        for arg in expr.args:
-            sql_part, params_part = arg.to_sql()
-            args_sql.append(sql_part)
-            all_params.extend(params_part)
-        return args_sql, all_params
 
     def _finish_function_call(
         self,
