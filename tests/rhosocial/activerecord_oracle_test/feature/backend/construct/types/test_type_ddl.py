@@ -492,13 +492,12 @@ def test_common_definition_does_not_accept_method_body() -> None:
 
 def test_type_ddl_serialization_registration() -> None:
     dialect = _dialect(version_full=(19, 28, 0, 0, 0))
-    # A kind is read back through a caller-supplied whitelist (core
-    # 8d474dc8): the backend package registers nothing at import, so the
-    # registry this test reads through is one it assembles itself --
-    # framework nodes to resolve the nested core nodes, then this tree's
-    # own kinds.
-    from rhosocial.activerecord.backend.expression.registry import ExpressionRegistry
-    from rhosocial.activerecord.backend.expression.serialization import default_registry
+    # Kinds resolve through the dialect's own registry (core f8de2b36): the
+    # backend publishes core's kinds composed with its own, frozen, and
+    # ``OracleDialect.artifact_registry()`` returns exactly that table. It is
+    # passed explicitly rather than left to the dialect fallback so the read
+    # names the table it trusts, and nothing here mutates a process-global one.
+    registry = dialect.artifact_registry()
 
     # What an artifact can carry: a nested node, a list, a dict, a value kind.
     # Every expression below holds nothing else in a *parameter*, so each one
@@ -550,12 +549,15 @@ def test_type_ddl_serialization_registration() -> None:
         ),
     )
 
-    framework = default_registry()
-    registry = ExpressionRegistry()
-    for kind in framework.node_kinds():
-        registry.register_node(framework.resolve_node(kind))
+    # Nothing is registered here: every class below is declared in the Oracle
+    # expression package, so the backend's published registry already names
+    # all of them, and it is frozen. Asserting membership rather than
+    # registering keeps this test from building a second table that could
+    # drift from the one the dialect actually exposes.
+    assert registry.is_frozen
     for expression in round_trippable + unencodable:
-        registry.register_node(type(expression))
+        kind = type(expression).kind()
+        assert registry.resolve_node(kind) is type(expression)
     # No register_dataclass / register_enum here, and that is the plain-JSON
     # rewrite's point rather than an omission. The artifact carries a nested
     # node, a list, a dict or one of the value kinds -- full stop. A string

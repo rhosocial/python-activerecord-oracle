@@ -11,13 +11,16 @@ keeps the ActiveRecord-layer contracts and must not grow an opinion about
 which expressions exist, so each backend now owns the harness its own matrix
 runs on. Fix drift here deliberately; do not re-import it from the suite.
 
-The split-registry adaptation (register_all into default_registry via
-register_node) follows the mysql matrix's vendoring of the same module
-(python-activerecord-mysql 8961ea1), so the family's harnesses stay in step.
-The plain-JSON artifact rewrite (core 679d9817) then removed the enum and
-dataclass whitelists the suite's harness also populated: a string enum *is* a
-JSON string and needs no table, and a dataclass has no place in an artifact at
-all, so this copy registers nodes and nothing else.
+Registry ownership follows core f8de2b36: core publishes ``core_registry()``
+(core kinds only, frozen), a backend publishes its own
+``backend_registry()`` composed on top of core's, and neither is mutated by a
+caller. ``register_all`` takes a base table and returns a *new* frozen registry
+assembled from its twin, so a caller that trusts artifacts naming raw SQL opts
+in on its own copy instead of widening a process-global table. The plain-JSON
+artifact rewrite (core 679d9817) removed the enum and dataclass whitelists the
+suite's harness also populated: a string enum *is* a JSON string and needs no
+table, and a dataclass has no place in an artifact at all, so this copy
+registers nodes and nothing else.
 
 This module is the test-only home (NOT shipped as part of the core library's
 runtime API) for constructing expression instances and asserting they survive
@@ -624,28 +627,34 @@ def _alter_sequence_expr(dialect):
 
 
 def _create_type_expr(dialect):
-    from rhosocial.activerecord.backend.impl.dummy.expression import _DummyTypeDefinition
+    # The stand-in is Oracle's own concrete definition, not the dummy backend's:
+    # an artifact names a *kind*, and the table this matrix reads through is
+    # Oracle's, which refuses another backend's kinds by name (correctly). A
+    # dummy stand-in would encode ``_dummy_type_definition`` and make the
+    # round-trip assertion test the dummy backend instead of this one.
     from rhosocial.activerecord.backend.expression.objects import Type
     from rhosocial.activerecord.backend.expression.statements.ddl_type import (
         CreateTypeStatement,
     )
-    from rhosocial.activerecord.backend.expression.types import IntegerType
-
-    return CreateTypeStatement(
-        dialect, Type(dialect, "t"), _DummyTypeDefinition(dialect, IntegerType(dialect))
+    from rhosocial.activerecord.backend.impl.oracle.expression.ddl.type import (
+        OracleIncompleteTypeDefinition,
     )
+
+    return CreateTypeStatement(dialect, Type(dialect, "t"), OracleIncompleteTypeDefinition(dialect))
 
 
 def _alter_type_expr(dialect):
-    from rhosocial.activerecord.backend.impl.dummy.expression import _DummyTypeAlterAction
+    # Same reason as ``_create_type_expr``: the action the statement carries
+    # must be a kind this backend owns.
     from rhosocial.activerecord.backend.expression.objects import Type
     from rhosocial.activerecord.backend.expression.statements.ddl_type import (
         AlterTypeStatement,
     )
-
-    return AlterTypeStatement(
-        dialect, Type(dialect, "t"), [_DummyTypeAlterAction(dialect, "t2")]
+    from rhosocial.activerecord.backend.impl.oracle.expression.ddl.type import (
+        OracleAlterTypeCompileAction,
     )
+
+    return AlterTypeStatement(dialect, Type(dialect, "t"), [OracleAlterTypeCompileAction(dialect)])
 
 
 def _drop_type_expr(dialect):
@@ -1064,29 +1073,45 @@ def collect_expression_classes(package_path: str) -> Dict[str, Type[BaseExpressi
     return classes
 
 
-def register_all(classes: Dict[str, Type[BaseExpression]]) -> None:
-    """Hand the collected classes to the deserialization kind whitelist.
+def register_all(classes: Dict[str, Type[BaseExpression]], *, base: Any = None) -> Any:
+    """Assemble the registry this caller reads its own artifacts through.
 
-    Core split the class index out of the serialization module into a
-    registry: deserialization resolves a node to its class through the
-    framework's default registry, not through the ``(dialect, kind)`` render
-    registry -- the two are separate mechanisms and only the former names
-    expression classes. Core and the built-in backends populate that registry
-    on first use; registering one of those classes again is a no-op, and the
-    backend classes collected by the matrix are what this call adds.
+    Registry ownership is per-owner (core f8de2b36): core publishes frozen
+    core kinds, a backend publishes its own frozen composition, and a caller
+    who needs a different set builds a *new* table instead of widening a
+    shared one. Mutating ``core_registry()`` or ``default_registry()`` now
+    raises ``REGISTRY_FROZEN`` — and even if it did not, doing so would make
+    the kinds another test resolves depend on test order.
 
-    ``RawSQL`` and ``RawSQLPredicate`` arrive here with everything else and
-    that is deliberate: core leaves them out of the default table
+    The registry is therefore assembled here and *returned*: the caller keeps
+    the table and passes it to every decode it performs. Starting from
+    ``base.twin()`` is what keeps the base's table untouched.
+
+    ``RawSQL`` and ``RawSQLPredicate`` are delivered with everything else and
+    that is deliberate: core leaves them out of its table
     (``REGISTER_BY_DEFAULT = False``, because an untrusted artifact must not
-    choose raw SQL), and a caller who trusts the artifacts it reads opts in
-    with exactly this call. The matrix writes and reads its own artifacts, so
-    it is that caller.
-    """
-    from rhosocial.activerecord.backend.expression.serialization import default_registry
+    choose raw SQL), and a caller who trusts the artifacts it reads opts in by
+    registering them into its own copy — exactly what this call does. The
+    matrix writes and reads its own artifacts, so it is that caller.
 
-    registry = default_registry()
+    Args:
+        classes: Collected expression classes, keyed by fully-qualified name.
+        base: The table to start from; the backend's
+            ``backend_registry()`` is what a backend matrix passes, so the
+            read admits that backend's kinds as well as core's. Defaults to
+            ``core_registry()`` when no backend is in play.
+
+    Returns:
+        A frozen registry holding ``base``'s kinds plus every collected class.
+    """
+    from rhosocial.activerecord.backend.expression.serialization import core_registry
+
+    if base is None:
+        base = core_registry()
+    registry = base.twin()
     for cls in classes.values():
         registry.register_node(cls)
+    return registry.freeze()
 
 
 def assert_params_equal(a: Any, b: Any, path: str = "params") -> None:
@@ -1121,42 +1146,54 @@ def assert_params_equal(a: Any, b: Any, path: str = "params") -> None:
     assert a == b, f"{path}: {a!r} != {b!r}"
 
 
-def roundtrip_expression(fqn: str, instance: BaseExpression, dialect: Any) -> None:
-    """Assert an instance round-trips losslessly through dict / JSON / XML."""
+def roundtrip_expression(
+    fqn: str, instance: BaseExpression, dialect: Any, registry: Any = None
+) -> None:
+    """Assert an instance round-trips losslessly through dict / JSON / XML.
+
+    ``registry`` is the table the read resolves kinds through — the one
+    :func:`register_all` returned. Omitted, the decode falls back to the
+    dialect's ``artifact_registry()`` (then core's), which cannot resolve a
+    backend kind the caller registered into its own table.
+    """
     original = instance.get_params()
     for restored in (
-        _rt_dict(instance, dialect),
-        _rt_json(instance, dialect),
-        _rt_xml(instance, dialect),
+        _rt_dict(instance, dialect, registry),
+        _rt_json(instance, dialect, registry),
+        _rt_xml(instance, dialect, registry),
     ):
         assert_params_equal(restored.get_params(), original, fqn)
 
 
-def _rt_dict(instance, dialect):
+def _rt_dict(instance, dialect, registry=None):
     from rhosocial.activerecord.backend.expression.serialization import deserialize, serialize
 
-    return deserialize(serialize(instance), dialect)
+    return deserialize(serialize(instance), dialect, registry=registry)
 
 
-def _rt_json(instance, dialect):
+def _rt_json(instance, dialect, registry=None):
     from rhosocial.activerecord.backend.expression.serialization import deserialize_json, serialize_json
 
-    return deserialize_json(serialize_json(instance), dialect)
+    return deserialize_json(serialize_json(instance), dialect, registry=registry)
 
 
-def _rt_xml(instance, dialect):
+def _rt_xml(instance, dialect, registry=None):
     from rhosocial.activerecord.backend.expression.serialization import deserialize_xml, serialize_xml
 
-    return deserialize_xml(serialize_xml(instance), dialect)
+    return deserialize_xml(serialize_xml(instance), dialect, registry=registry)
 
 
-def sql_consistent(fqn: str, instance: BaseExpression, dialect: Any) -> None:
+def sql_consistent(fqn: str, instance: BaseExpression, dialect: Any, registry: Any = None) -> None:
     """Assert to_sql is identical after round-trip, when the dialect supports it."""
     try:
         expected = instance.to_sql()
     except Exception:
         return
-    for restored in (_rt_dict(instance, dialect), _rt_json(instance, dialect), _rt_xml(instance, dialect)):
+    for restored in (
+        _rt_dict(instance, dialect, registry),
+        _rt_json(instance, dialect, registry),
+        _rt_xml(instance, dialect, registry),
+    ):
         assert restored.to_sql() == expected, fqn
 
 

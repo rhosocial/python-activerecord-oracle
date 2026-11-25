@@ -24,15 +24,15 @@ Both packages, not one:
   a column field core had removed months earlier), which is why the backend's
   own expressions being green was not evidence of anything.
 
-Discovery walks the package, not ``ExpressionRegistry``
-======================================================
+Discovery walks the package, not a shared registry
+==================================================
 
-``ExpressionRegistry`` is process-global and *grows* as sibling test modules
-import their own backends, so its contents depend on which files pytest happened
-to import first. A matrix built from it passes alone and fails beside the
-statement tests, having picked up another backend's classes to render with
-Oracle -- not a meaningful thing to assert. ``collect_expression_classes`` is a
-deterministic package walk, and this file uses only that.
+A registry's contents depend on which owner assembled it and what each caller
+added to its own copy, so a matrix built *from* a registry would assert
+whatever that particular table happened to hold rather than what the packages
+declare. ``collect_expression_classes`` is a deterministic package walk, and
+this file uses only that; the read table is then assembled from the walk
+(``register_all``) so there is exactly one table and it is the matrix's own.
 
 Why ``to_sql()`` is classified rather than caught
 =================================================
@@ -153,6 +153,7 @@ from rhosocial.activerecord.backend.expression.statements.dql import (
 )
 from rhosocial.activerecord.backend.expression.sources import NamedRelationRef
 from rhosocial.activerecord.backend.expression.types import IntegerType
+from rhosocial.activerecord.backend.impl.oracle.registry import backend_registry
 
 # The round-trip harness is vendored beside this matrix (see its module
 # docstring for provenance): the testsuite retired it in e05edb0 with the
@@ -191,10 +192,10 @@ def _channel_payload(instance, channel):
 def _channel_decode(payload, dialect, channel):
     """The node ``payload`` carries, read back through ``channel``."""
     if channel == "dict":
-        return deserialize(payload, dialect)
+        return deserialize(payload, dialect, registry=REGISTRY)
     if channel == "json":
-        return deserialize_json(payload, dialect)
-    return deserialize_xml(payload, dialect)
+        return deserialize_json(payload, dialect, registry=REGISTRY)
+    return deserialize_xml(payload, dialect, registry=REGISTRY)
 
 
 def assert_bind_params_equal(a, b, path="bind parameters"):
@@ -283,17 +284,16 @@ def _collect_matrix_classes():
 
 
 REGISTERED = _collect_matrix_classes()
-# The split registry (core 8d474dc8): kinds resolve through the framework's
-# default whitelist -- core and the built-in backends are auto-populated, the
-# Oracle classes are what register_all adds. The plain-JSON rewrite
-# (core 679d9817) removed the enum and dataclass whitelists the matrix once
-# fed beside it: a string enum *is* a JSON string and needs no table, and a
-# dataclass has no place in an artifact at all, so nodes are all there is to
-# register. RawSQL and RawSQLPredicate come along with the rest -- core
-# deliberately leaves them out of the default table
-# (REGISTER_BY_DEFAULT = False, so an untrusted artifact cannot choose raw
-# SQL), and this matrix is the caller that trusts the artifacts it reads.
-register_all(REGISTERED)
+# The matrix's own read table (core f8de2b36). Every kind here resolves through
+# a registry the matrix assembled from the Oracle backend's published table
+# plus the collected classes -- never through the process-global, which is
+# frozen now that each owner publishes its own. ``register_all`` copies the
+# backend's table and adds the collected classes to the copy, so Oracle's kinds
+# and core's are both admitted, and RawSQL / RawSQLPredicate -- which core
+# deliberately leaves out of its table (REGISTER_BY_DEFAULT = False, so an
+# untrusted artifact cannot choose raw SQL) -- are admitted here because this
+# matrix writes and reads its own artifacts.
+REGISTRY = register_all(REGISTERED, base=backend_registry())
 
 
 # ---------------------------------------------------------------------------
@@ -2480,7 +2480,10 @@ class TestMatrixIntegrity:
             instance, _ = make_instance(REGISTERED[fqn], oracle_dialect)
             assert instance is not None, f"{fqn}: listed as a defect but will not build"
             expected_sql, _ = instance.to_sql()
-            assert deserialize(serialize(instance), oracle_dialect).to_sql()[0] == expected_sql, (
+            assert (
+                deserialize(serialize(instance), oracle_dialect, registry=REGISTRY).to_sql()[0]
+                == expected_sql
+            ), (
                 f"{fqn}: CORE_SERIALISATION_DEFECTS exists because core's JSON and "
                 f"XML encoders drop this class. The dict channel now loses it too, "
                 f"so the entry no longer describes the defect."
@@ -2771,15 +2774,14 @@ class TestMatrixIntegrity:
         reader resolves that kind through the deserialization whitelist, so a
         class the matrix renders but the registry cannot resolve -- or whose
         kind resolves to a different class -- would round-trip into the wrong
-        thing or nothing at all. register_all has run at module scope; this
-        re-resolves each kind and checks it lands on the same class.
+        thing or nothing at all. ``REGISTRY`` is the table this matrix decodes
+        through (``register_all`` over the Oracle backend's published
+        registry); this re-resolves each kind and checks it lands on the same
+        class.
         """
         from rhosocial.activerecord.backend.expression.registry import RegistryError
-        from rhosocial.activerecord.backend.expression.serialization import (
-            default_registry,
-        )
 
-        registry = default_registry()
+        registry = REGISTRY
         unresolved = []
         for fqn, cls in REGISTERED.items():
             kind = cls.kind()

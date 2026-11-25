@@ -433,6 +433,19 @@ class OracleDialect(
         if version is not None:
             self.version = version
 
+    def artifact_registry(self):
+        """The kinds this backend can read: core's kinds plus Oracle's own.
+
+        Oracle owns its expression package, so the composition lives here
+        rather than in core: ``backend_registry()`` is
+        ``registry_for_packages("...impl.oracle.expression", base=core_registry())``,
+        frozen and cached. A read through this dialect resolves Oracle's
+        proprietary kinds; another backend's kind is refused by name.
+        """
+        from .registry import backend_registry
+
+        return backend_registry()
+
     @staticmethod
     def _normalize_version_full(
         value: Optional[Tuple[int, ...]],
