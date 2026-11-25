@@ -46,8 +46,12 @@ from rhosocial.activerecord.backend.dialect.protocols import (
     PivotSupport,
 )
 from rhosocial.activerecord.backend.suggestion.protocols import (
+    ColumnReorderSuggestionSupport,
     CreateTableLayoutSuggestionSupport,
+    PartitionSchemeChangeSuggestionSupport,
     StringConcatenationSuggestionSupport,
+    TableConstraintChangeSuggestionSupport,
+    TableIndexChangeSuggestionSupport,
 )
 from rhosocial.activerecord.backend.dialect.mixins import (
     SQLXMLMixin,
@@ -163,6 +167,7 @@ from .mixins import (
     OracleExplainMixin,
 )
 from .suggestion import (
+    OracleColumnReorderSuggestionMixin,
     OracleCreateTableLayoutSuggestionMixin,
     OracleStringConcatenationSuggestionMixin,
     OracleDataTypeSuggestionsMixin,
@@ -172,9 +177,12 @@ from .suggestion import (
     OraclePartitionDropSuggestionMixin,
     OraclePartitionMergeSuggestionMixin,
     OraclePartitionRetentionSuggestionMixin,
+    OraclePartitionSchemeChangeSuggestionMixin,
     OraclePartitionSplitSuggestionMixin,
     OraclePartitionTableAlterSuggestionMixin,
     OraclePartitionTableDropSuggestionMixin,
+    OracleTableConstraintChangeSuggestionMixin,
+    OracleTableIndexChangeSuggestionMixin,
 )
 from .protocols.partition import OraclePartitionSupport
 from .protocols.data_type import OracleDataTypeSupport
@@ -190,6 +198,13 @@ class OracleDialect(
     # Backend suggestions first: no core mixin may shadow their answers.
     OracleCreateTableLayoutSuggestionMixin,
     OracleStringConcatenationSuggestionMixin,
+    # The four migration change-point suggestions; each echoes the frozen point
+    # with its tri-state answer filled in. They reuse the partition nodes below
+    # for the one in-place scheme change Oracle can express (HASH coalesce).
+    OracleColumnReorderSuggestionMixin,
+    OracleTableConstraintChangeSuggestionMixin,
+    OracleTableIndexChangeSuggestionMixin,
+    OraclePartitionSchemeChangeSuggestionMixin,
     # The eight partition suggestions are split one-per-file and all inherit
     # the shared base from ._common; listed together the common base lands
     # last in their C3 merge and never conflicts with another base here.
@@ -390,6 +405,10 @@ class OracleDialect(
     PivotSupport,
     CreateTableLayoutSuggestionSupport,
     StringConcatenationSuggestionSupport,
+    ColumnReorderSuggestionSupport,
+    TableConstraintChangeSuggestionSupport,
+    TableIndexChangeSuggestionSupport,
+    PartitionSchemeChangeSuggestionSupport,
     OraclePartitionSupport,
     OracleDataTypeSupport,
     OracleTypeDDLSupport,

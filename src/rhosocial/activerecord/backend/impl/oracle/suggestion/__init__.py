@@ -7,8 +7,10 @@ composed first on ``OracleDialect`` so no core mixin can shadow their answers.
 """
 
 from ._common import OraclePartitionSuggestionBase
+from .column_reorder_suggestion import OracleColumnReorderSuggestionMixin
 from .create_table_layout_suggestion import OracleCreateTableLayoutSuggestionMixin
 from .general_suggestions import OracleStringConcatenationSuggestionMixin
+from .partition_scheme_change_suggestion import OraclePartitionSchemeChangeSuggestionMixin
 from .data_type_suggestions import (
     ORACLE_DATA_TYPE_SUGGESTIONS,
     ORACLE_EXTRA_DATA_TYPE_SUGGESTIONS,
@@ -23,10 +25,13 @@ from .partition_retention_suggestion import OraclePartitionRetentionSuggestionMi
 from .partition_split_suggestion import OraclePartitionSplitSuggestionMixin
 from .partition_table_alter_suggestion import OraclePartitionTableAlterSuggestionMixin
 from .partition_table_drop_suggestion import OraclePartitionTableDropSuggestionMixin
+from .table_constraint_change_suggestion import OracleTableConstraintChangeSuggestionMixin
+from .table_index_change_suggestion import OracleTableIndexChangeSuggestionMixin
 
 __all__ = [
     "ORACLE_DATA_TYPE_SUGGESTIONS",
     "ORACLE_EXTRA_DATA_TYPE_SUGGESTIONS",
+    "OracleColumnReorderSuggestionMixin",
     "OracleCreateTableLayoutSuggestionMixin",
     "OracleDataTypeSuggestionsMixin",
     "OracleGeneratedValueSuggestionMixin",
@@ -35,9 +40,12 @@ __all__ = [
     "OraclePartitionDropSuggestionMixin",
     "OraclePartitionMergeSuggestionMixin",
     "OraclePartitionRetentionSuggestionMixin",
+    "OraclePartitionSchemeChangeSuggestionMixin",
     "OraclePartitionSplitSuggestionMixin",
     "OraclePartitionSuggestionBase",
     "OraclePartitionTableAlterSuggestionMixin",
     "OraclePartitionTableDropSuggestionMixin",
     "OracleStringConcatenationSuggestionMixin",
+    "OracleTableConstraintChangeSuggestionMixin",
+    "OracleTableIndexChangeSuggestionMixin",
 ]
