@@ -1079,7 +1079,7 @@ def register_all(classes: Dict[str, Type[BaseExpression]], *, base: Any = None) 
     Registry ownership is per-owner (core f8de2b36): core publishes frozen
     core kinds, a backend publishes its own frozen composition, and a caller
     who needs a different set builds a *new* table instead of widening a
-    shared one. Mutating ``core_registry()`` or ``default_registry()`` now
+    shared one. Mutating ``core_registry()`` or a backend table now
     raises ``REGISTRY_FROZEN`` — and even if it did not, doing so would make
     the kinds another test resolves depend on test order.
 
