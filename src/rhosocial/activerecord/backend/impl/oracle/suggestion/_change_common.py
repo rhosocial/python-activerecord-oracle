@@ -6,9 +6,11 @@ Core freezes a change point's declaration projections with ``_freeze``
 ``("params", ((name, value), ...))`` and everything else is either a primitive
 or a ``("repr", text)`` fallback. These readers decode that shape so a
 suggestion can decide, from the point alone, whether a real node can be built.
-The projections deliberately carry no expression class, so anything needing a
-concrete branch/type (e.g. an ADD CONSTRAINT) cannot be reconstructed and must
-be declined rather than guessed.
+The projections deliberately carry no expression class, so a frozen-only point
+cannot reconstruct a concrete branch/type (e.g. an ADD CONSTRAINT) and must be
+declined rather than guessed. The enriched points instead carry the model's live
+declaration alongside the projection; when a suggestion needs the branch class
+it reads that field and still declines a point that does not provide one.
 """
 
 from __future__ import annotations
