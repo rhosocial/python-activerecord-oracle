@@ -488,6 +488,39 @@ def _register_core_specials():
         lambda d: ddl_alter.DropTableConstraintAction(d, "c"),
     )
 
+    # Oracle's constraint-state actions: each carries a verb (and a validation
+    # switch) the introspective guess cannot invent.
+    def enable_constraint(d):
+        from rhosocial.activerecord.backend.impl.oracle.expression.constraint_state import (
+            OracleEnableConstraintAction,
+        )
+
+        return OracleEnableConstraintAction(d, "ck", novalidate=True)
+
+    def disable_constraint(d):
+        from rhosocial.activerecord.backend.impl.oracle.expression.constraint_state import (
+            OracleDisableConstraintAction,
+        )
+
+        return OracleDisableConstraintAction(d, "ck")
+
+    def modify_constraint(d):
+        from rhosocial.activerecord.backend.impl.oracle.expression.constraint_state import (
+            OracleModifyConstraintAction,
+        )
+
+        return OracleModifyConstraintAction(d, "ck", novalidate=True)
+
+    register_special_constructor(
+        "constraint_state.OracleEnableConstraintAction", enable_constraint
+    )
+    register_special_constructor(
+        "constraint_state.OracleDisableConstraintAction", disable_constraint
+    )
+    register_special_constructor(
+        "constraint_state.OracleModifyConstraintAction", modify_constraint
+    )
+
     # ENUM type. `values` is keyword-only behind a defaulted positional, so the
     # introspective constructor skips it and the type declares no members.
     register_special_constructor(

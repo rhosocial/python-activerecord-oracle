@@ -59,6 +59,11 @@ from .alter_table import (
     OracleMoveTableAction, OracleShrinkSpaceAction,
     OracleReadOnlyAction, OracleRowMovementAction,
 )
+from .constraint_state import (
+    OracleEnableConstraintAction,
+    OracleDisableConstraintAction,
+    OracleModifyConstraintAction,
+)
 from .ddl import (
     OracleCreateSynonymStatement, OracleDropSynonymStatement,
     OracleCreateDatabaseLinkStatement, OracleDropDatabaseLinkStatement,
@@ -140,6 +145,9 @@ __all__ = [
     'OracleSetUnusedColumnsAction', 'OracleDropUnusedColumnsAction',
     'OracleMoveTableAction', 'OracleShrinkSpaceAction',
     'OracleReadOnlyAction', 'OracleRowMovementAction',
+    # Constraint-state actions (ENABLE / DISABLE / MODIFY CONSTRAINT)
+    'OracleEnableConstraintAction', 'OracleDisableConstraintAction',
+    'OracleModifyConstraintAction',
     # SYNONYM / DATABASE LINK expressions
     'OracleCreateSynonymStatement', 'OracleDropSynonymStatement',
     'OracleCreateDatabaseLinkStatement', 'OracleDropDatabaseLinkStatement',

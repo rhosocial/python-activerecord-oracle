@@ -11,6 +11,7 @@ from .collation import OracleCollationMixin
 from .column import OracleModifyColumnMixin
 from .column_type import OracleColumnTypeMixin
 from .comment import OracleCommentMixin
+from .constraint_state import OracleConstraintStateMixin
 from .concurrency import OracleConcurrencyMixin
 from .database_link import OracleDatabaseLinkMixin
 from .datetime_op import OracleDateTimeMixin
@@ -70,6 +71,7 @@ __all__ = [
     "OracleMaterializedViewMixin",
     "OracleModifyColumnMixin",
     "OracleCommentMixin",
+    "OracleConstraintStateMixin",
     "OracleConcurrencyMixin",
     "OracleDatabaseLinkMixin",
     "OracleDMLOperationMixin",
