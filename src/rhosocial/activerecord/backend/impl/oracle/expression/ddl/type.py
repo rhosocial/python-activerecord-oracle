@@ -6,7 +6,6 @@ from __future__ import annotations
 from collections.abc import Sequence as ABCSequence
 from dataclasses import dataclass
 from enum import Enum
-import re
 from typing import Any, List, Optional, Sequence, Tuple, TYPE_CHECKING, cast
 
 from rhosocial.activerecord.backend.expression.bases import BaseExpression
@@ -15,6 +14,15 @@ from rhosocial.activerecord.backend.expression.statements.ddl_type import (
     DropTypeStatement,
     TypeAlterAction,
     TypeDefinition,
+)
+from ..._scan import (
+    collapse_whitespace,
+    contains_any_word,
+    contains_word_sequence,
+    fullmatch_dotted_identifier,
+    fullmatch_identifier,
+    squash_whitespace,
+    strip_leading_word_with_space,
 )
 
 if TYPE_CHECKING:
@@ -52,7 +60,7 @@ def _normalize_invoker_rights(value: Any) -> Optional[bool]:
     if value is None or isinstance(value, bool):
         return value
     if isinstance(value, str):
-        normalized = re.sub(r"\s+", " ", value.strip().upper())
+        normalized = collapse_whitespace(value).upper()
         if normalized == "INVOKER RIGHTS":
             return True
     raise ValueError("invoker_rights must be a bool or 'INVOKER RIGHTS'")
@@ -66,9 +74,6 @@ def _normalize_keyword(value: str, field_name: str) -> str:
 
 
 _ACCESSOR_KINDS = frozenset(("FUNCTION", "PACKAGE", "PROCEDURE", "TRIGGER", "TYPE"))
-_IDENTIFIER_PART = r'(?:[A-Za-z][A-Za-z0-9_$#]*|"(?:[^"]|"")*")'
-_IDENTIFIER_PART_RE = re.compile(_IDENTIFIER_PART)
-_ACCESSOR_NAME_RE = re.compile(rf"^{_IDENTIFIER_PART}(?:\.{_IDENTIFIER_PART})*$")
 
 
 def _validate_accessor(value: Any) -> str:
@@ -77,16 +82,12 @@ def _validate_accessor(value: Any) -> str:
     text = value.strip()
     if any(token in text for token in (";", "--", "/*", "*/", "(", ")")):
         raise ValueError("ACCESSIBLE BY items must be accessor names")
-    kind_match = re.match(
-        rf"^(?:{'|'.join(sorted(_ACCESSOR_KINDS))})\s+(.+)$",
-        text,
-        re.IGNORECASE,
-    )
-    if kind_match is not None:
-        name = kind_match.group(1).strip()
-    else:
+    name = strip_leading_word_with_space(text, _ACCESSOR_KINDS)
+    if name is None:
         name = text
-    if _ACCESSOR_NAME_RE.fullmatch(name) is None:
+    else:
+        name = name.strip()
+    if not fullmatch_dotted_identifier(name):
         raise ValueError("ACCESSIBLE BY accessor name is invalid")
     return text
 
@@ -141,7 +142,7 @@ _SQLJ_USING_CLAUSES = {
 def _normalize_sqlj_using(value: Any) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError("SQLJ USING clause is required")
-    normalized = re.sub(r"\s+", " ", value.strip().upper())
+    normalized = collapse_whitespace(value).upper()
     try:
         return _SQLJ_USING_CLAUSES[normalized]
     except KeyError as error:
@@ -153,7 +154,7 @@ def _normalize_method_kind(value: Optional[str]) -> Optional[str]:
         return None
     if not isinstance(value, str) or not value.strip():
         raise ValueError("method kind must be a non-empty string")
-    normalized = re.sub(r"\s+", " ", value.strip().upper())
+    normalized = collapse_whitespace(value).upper()
     try:
         return _METHOD_KIND_ALIASES[normalized]
     except KeyError as error:
@@ -162,7 +163,7 @@ def _normalize_method_kind(value: Optional[str]) -> Optional[str]:
 
 def _validate_method_name(value: str) -> str:
     _validate_name(value, "method name")
-    if _IDENTIFIER_PART_RE.fullmatch(value) is None:
+    if not fullmatch_identifier(value):
         raise ValueError("method name must be an Oracle identifier")
     return value
 
@@ -306,10 +307,9 @@ def _validate_object_external_names(
     for method in methods:
         if method.external_name is not None:
             raise ValueError("EXTERNAL NAME is only valid for SQLJ object types")
-        if method.declaration and re.search(
-            r"\bEXTERNAL\s+(?:NAME|VARIABLE)\b",
-            method.declaration,
-            re.IGNORECASE,
+        if method.declaration and (
+            contains_word_sequence(method.declaration, ("EXTERNAL", "NAME"))
+            or contains_word_sequence(method.declaration, ("EXTERNAL", "VARIABLE"))
         ):
             raise ValueError("EXTERNAL NAME is only valid for SQLJ object types")
 
@@ -319,7 +319,7 @@ def _coerce_dependent_handling(value: Any) -> Optional["OracleAlterTypeDependent
         return value
     if not isinstance(value, str) or not value.strip():
         raise TypeError("dependent_handling must be an OracleAlterTypeDependentHandling or string")
-    normalized = re.sub(r"\s+", " ", value.strip().upper())
+    normalized = collapse_whitespace(value).upper()
     for member in OracleAlterTypeDependentHandling:
         if member.value == normalized:
             return member
@@ -376,7 +376,7 @@ class OracleTypeMethod:
             ):
                 raise ValueError("raw method declarations cannot include structured fields")
             _validate_fragment(self.declaration, "method declaration")
-            if re.search(r"\b(?:IS|BEGIN|DECLARE|END)\b", self.declaration, re.IGNORECASE):
+            if contains_any_word(self.declaration, ("IS", "BEGIN", "DECLARE", "END")):
                 raise ValueError("method implementations belong in a separate TYPE BODY")
         else:
             normalized_kind = _normalize_method_kind(self.kind)
@@ -390,9 +390,7 @@ class OracleTypeMethod:
                 raise ValueError(f"{normalized_kind} must not define return_type")
             if normalized_kind == "CONSTRUCTOR FUNCTION":
                 return_text = str(self.return_type or "").strip()
-                if self.require_return_type and re.sub(
-                    r"\s+", " ", return_text.upper()
-                ) != "SELF AS RESULT":
+                if self.require_return_type and squash_whitespace(return_text.upper()) != "SELF AS RESULT":
                     raise ValueError("CONSTRUCTOR FUNCTION requires RETURN SELF AS RESULT")
         if self.external_name is not None:
             _validate_fragment(self.external_name, "external_name")

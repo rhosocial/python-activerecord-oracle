@@ -15,7 +15,23 @@ ROWID format: OOOOOO.FFF.BBBBBB.RRR
 """
 
 from dataclasses import dataclass
-import re
+
+_ROWID_ALPHABET = frozenset(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+)
+
+
+def _is_extended_rowid_text(value: str) -> bool:
+    """Whether *value* holds exactly 18 characters of the ROWID alphabet.
+
+    The trailing end-of-line tolerance of the pattern this replaced is kept: an
+    extra ``\\n`` after the eighteenth character still counts as the end.
+    """
+    if len(value) < 18:
+        return False
+    if not all(char in _ROWID_ALPHABET for char in value[:18]):
+        return False
+    return len(value) == 18 or (len(value) == 19 and value[18] == "\n")
 
 
 @dataclass(frozen=True)
@@ -36,7 +52,7 @@ class OracleRowID:
     value: str
     
     def __post_init__(self):
-        if not re.match(r'^[A-Za-z0-9+/]{18}$', self.value):
+        if not _is_extended_rowid_text(self.value):
             raise ValueError(f"Invalid ROWID format: {self.value}")
     
     @property
@@ -170,6 +186,6 @@ def parse_rowid(value: str) -> Union[OracleRowID, OracleURowID]:
         OracleRowID if 18-character extended format,
         OracleURowID otherwise
     """
-    if len(value) == 18 and re.match(r'^[A-Za-z0-9+/]{18}$', value):
+    if _is_extended_rowid_text(value):
         return OracleRowID(value)
     return OracleURowID(value)

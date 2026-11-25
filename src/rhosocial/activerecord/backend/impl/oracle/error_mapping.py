@@ -19,7 +19,6 @@ the caller. Nothing here opens a connection, so the mapping is testable without
 a database.
 """
 
-import re
 from typing import Any, NamedTuple, Optional
 
 from oracledb.exceptions import (
@@ -39,10 +38,9 @@ from rhosocial.activerecord.backend.errors import (
     QueryError,
     attach_diagnostics,
 )
+from ._scan import find_ora_code
 
 BACKEND_NAME = "oracle"
-
-_ORA_CODE_PATTERN = re.compile(r"ORA-(\d{5})")
 
 #: ORA numbers recognised by intent. The mapping table is the single place
 #: message text would otherwise be scattered.
@@ -99,9 +97,9 @@ def extract_ora_code(error: Exception) -> Optional[int]:
     if code is not None:
         return code
 
-    match = _ORA_CODE_PATTERN.search(str(error))
-    if match:
-        return int(match.group(1))
+    match = find_ora_code(str(error))
+    if match is not None:
+        return match
     return None
 
 

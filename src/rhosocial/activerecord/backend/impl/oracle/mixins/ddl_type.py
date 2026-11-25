@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any, Iterable, List, Optional, Tuple, cast
 
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
@@ -20,6 +19,12 @@ from rhosocial.activerecord.backend.expression.statements.ddl_type import (
 
 from .if_exists import supports_statement_if_exists
 
+from .._scan import (
+    collapse_whitespace,
+    cut_from_word,
+    leading_word_in,
+    remove_word_with_space,
+)
 from ..expression.ddl.type import (
     DropTypeBodyStatement,
     OracleAlterTypeAddAttributeAction,
@@ -378,15 +383,14 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
             return f"{kind} {method.name}{parameter_sql}"
         if method.declaration is None:
             raise ValueError("DROP method requires a method name or declaration")
-        declaration = re.sub(r"\s+", " ", method.declaration.strip())
-        declaration = re.sub(r"\bRETURN\b.*$", "", declaration, flags=re.IGNORECASE).strip()
-        declaration = re.sub(r"\bDROP\s+", "", declaration, flags=re.IGNORECASE).strip()
+        declaration = collapse_whitespace(method.declaration.strip())
+        declaration = cut_from_word(declaration, "RETURN").strip()
+        declaration = remove_word_with_space(declaration, "DROP").strip()
         if not declaration:
             raise ValueError("DROP method requires a method name or declaration")
-        if not re.match(
-            r"(?:MAP|ORDER|MEMBER|STATIC|CONSTRUCTOR)\b",
+        if not leading_word_in(
             declaration,
-            re.IGNORECASE,
+            ("MAP", "ORDER", "MEMBER", "STATIC", "CONSTRUCTOR"),
         ):
             declaration = f"MEMBER FUNCTION {declaration}"
         return declaration
@@ -477,7 +481,7 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
             raise ValueError("SQLJ object types require EXTERNAL NAME")
         parts.append(self._format_external_name(external_name))
         language = expr.language
-        if not isinstance(language, str) or re.sub(r"\s+", " ", language.strip().upper()) != "JAVA":
+        if not isinstance(language, str) or collapse_whitespace(language).upper() != "JAVA":
             raise ValueError("SQLJ object types only support LANGUAGE JAVA")
         parts.append("LANGUAGE JAVA")
         members = []

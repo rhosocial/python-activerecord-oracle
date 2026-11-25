@@ -23,6 +23,70 @@ from typing import Any, Callable, Dict, Optional, Type, Union, get_origin, get_a
 
 from rhosocial.activerecord.backend.type_adapter import BaseSQLTypeAdapter
 
+from ._scan import is_space, read_digits, skip_space
+
+_ORACLE_MONTHS = {
+    "JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6,
+    "JUL": 7, "AUG": 8, "SEP": 9, "OCT": 10, "NOV": 11, "DEC": 12,
+}
+
+
+def _parse_oracle_default_date(value: str) -> Optional[datetime]:
+    """Parse ``DD-MON-YY[YY]`` or ``DD-MON-YY[YY] HH24:MI:SS`` from the start of *value*.
+
+    A prefix may carry trailing text: the day, month and year run is what has to
+    be there, and the clock face is read only when it is complete. Returns
+    ``None`` when the shape is not there, leaving the caller's date-format
+    fallback in place.
+    """
+    text = value.upper()
+    length = len(text)
+
+    day, index = read_digits(text, 0)
+    if len(day) != 2 or index >= length or text[index] != "-":
+        return None
+
+    month_start = index + 1
+    month = text[month_start : month_start + 3]
+    if len(month) != 3 or not all("A" <= char <= "Z" for char in month):
+        return None
+    index = month_start + 3
+    if index >= length or text[index] != "-":
+        return None
+
+    year_start = index + 1
+    year_digits, year_end = read_digits(text, year_start)
+    if len(year_digits) < 2:
+        return None
+    # A 2-4 digit year, greedy like the original reading; anything after the
+    # fourth digit is left for the clock check (and then fails it).
+    year_text = year_digits[:4]
+    index = year_start + len(year_text)
+
+    hour = minute = second = None
+    if index < length and is_space(text[index]):
+        clock_index = skip_space(text, index)
+        hour_text, hour_end = read_digits(text, clock_index)
+        if len(hour_text) == 2 and hour_end < length and text[hour_end] == ":":
+            minute_text, minute_end = read_digits(text, hour_end + 1)
+            if len(minute_text) == 2 and minute_end < length and text[minute_end] == ":":
+                second_text, _ = read_digits(text, minute_end + 1)
+                if len(second_text) == 2:
+                    hour, minute, second = hour_text, minute_text, second_text
+
+    year_value = int(year_text)
+    if year_value < 100:
+        year_value += 2000 if year_value < 50 else 1900
+
+    return datetime(
+        year_value,
+        _ORACLE_MONTHS.get(month, 1),
+        int(day),
+        int(hour) if hour else 0,
+        int(minute) if minute else 0,
+        int(second) if second else 0,
+    )
+
 
 class OracleBooleanAdapter(BaseSQLTypeAdapter):
     """Adapter for converting between Python bool and Oracle booleans.
@@ -81,27 +145,9 @@ class OracleDateTimeAdapter(BaseSQLTypeAdapter):
                 pass
 
             # Try Oracle format
-            import re
-            oracle_pattern = r'(\d{2})-([A-Z]{3})-(\d{2,4})(?:\s+(\d{2}):(\d{2}):(\d{2}))?'
-            match = re.match(oracle_pattern, value.upper())
-            if match:
-                day, month_str, year, hour, minute, second = match.groups()
-                month_map = {
-                    'JAN': 1, 'FEB': 2, 'MAR': 3, 'APR': 4, 'MAY': 5, 'JUN': 6,
-                    'JUL': 7, 'AUG': 8, 'SEP': 9, 'OCT': 10, 'NOV': 11, 'DEC': 12
-                }
-                month = month_map.get(month_str, 1)
-                year_int = int(year)
-                # Handle 2-digit year
-                if year_int < 100:
-                    year_int += 2000 if year_int < 50 else 1900
-
-                return datetime(
-                    year_int, month, int(day),
-                    int(hour) if hour else 0,
-                    int(minute) if minute else 0,
-                    int(second) if second else 0
-                )
+            parsed = _parse_oracle_default_date(value)
+            if parsed is not None:
+                return parsed
         return value
 
 

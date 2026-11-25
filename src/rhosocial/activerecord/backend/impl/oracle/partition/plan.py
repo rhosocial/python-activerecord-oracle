@@ -24,11 +24,11 @@ application names, no retention default and no application vocabulary. Those
 belong to the caller.
 """
 
-import re
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any, Dict, Iterator, Optional, Sequence, Tuple, Union
 
+from .._scan import sanitize_label
 from .bounds import default_label, iter_range_bounds, normalize_interval
 
 __all__ = [
@@ -81,7 +81,7 @@ def _positive_int(value: Any, name: str) -> int:
 
 def _label_from_values(values: Sequence[Any]) -> str:
     text = "_".join(str(value) for value in values)
-    label = re.sub(r"[^0-9A-Za-z]+", "_", text).strip("_")
+    label = sanitize_label(text)
     return label or "value"
 
 

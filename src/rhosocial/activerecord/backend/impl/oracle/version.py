@@ -90,8 +90,9 @@ gate cannot answer on a number nobody measured. That is the framework's existing
 
 from __future__ import annotations
 
-import re
 from typing import Any, Iterable, Mapping, Optional, Tuple
+
+from ._scan import leading_digit_run
 
 
 #: Ask for every row whose ``VERSION`` is a plain dotted number, carrying the
@@ -116,7 +117,7 @@ VERSION_QUERY = (
     "WHERE REGEXP_LIKE(VERSION, '^[0-9]+(\\.[0-9]+)*$')"
 )
 
-_VERSION_PART_RE = re.compile(r"^\d+")
+
 
 
 def parse_version(value: Any) -> Tuple[int, ...]:
@@ -133,10 +134,10 @@ def parse_version(value: Any) -> Tuple[int, ...]:
     result = []
     for part in parts:
         text = str(part).strip()
-        match = _VERSION_PART_RE.match(text)
-        if match is None:
+        digits = leading_digit_run(text)
+        if not digits:
             break
-        result.append(int(match.group(0)))
+        result.append(int(digits))
     return tuple(result)
 
 

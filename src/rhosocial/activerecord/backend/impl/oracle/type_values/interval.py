@@ -12,7 +12,54 @@ durations between two datetime values.
 
 from dataclasses import dataclass
 from datetime import timedelta
-import re
+from typing import Optional, Tuple
+
+from .._scan import read_digits
+
+
+def _parse_year_to_month(text: str) -> Optional[Tuple[int, str, str]]:
+    """Parse ``[+-]?digits-digits`` exactly.
+
+    Returns the sign, the year digits and the month digits, or ``None`` when the
+    whole string is not that shape.
+    """
+    index = 0
+    sign = 1
+    if text.startswith("+"):
+        index = 1
+    elif text.startswith("-"):
+        sign = -1
+        index = 1
+    years, index = read_digits(text, index)
+    if not years or index >= len(text) or text[index] != "-":
+        return None
+    months, index = read_digits(text, index + 1)
+    if not months or index != len(text):
+        return None
+    return sign, years, months
+
+
+def _parse_day_to_second_clock(text: str) -> Optional[Tuple[str, str, str, str]]:
+    """Read ``HH:MM:SS[.fraction]`` from the start of *text*.
+
+    This is a prefix parse: whatever follows the clock face is ignored, and a
+    trailing dot without digits is not a fraction. Returns the hour, minute,
+    second and fraction digit strings, or ``None`` when no clock face starts
+    *text*.
+    """
+    hours, index = read_digits(text, 0)
+    if not hours or index >= len(text) or text[index] != ":":
+        return None
+    minutes, index = read_digits(text, index + 1)
+    if not minutes or index >= len(text) or text[index] != ":":
+        return None
+    seconds, index = read_digits(text, index + 1)
+    if not seconds:
+        return None
+    fraction = ""
+    if index < len(text) and text[index] == ".":
+        fraction, _ = read_digits(text, index + 1)
+    return hours, minutes, seconds, fraction
 
 
 @dataclass
@@ -102,13 +149,13 @@ class IntervalYearToMonth:
             ValueError: If string format is invalid
         """
         s = s.strip()
-        match = re.match(r'^([+-])?(\d+)-(\d+)$', s)
-        if not match:
+        parsed = _parse_year_to_month(s)
+        if parsed is None:
             raise ValueError(f"Invalid INTERVAL YEAR TO MONTH format: {s}")
-        sign = -1 if match.group(1) == '-' else 1
+        sign, years, months = parsed
         return cls(
-            years=sign * int(match.group(2)),
-            months=sign * int(match.group(3))
+            years=sign * int(years),
+            months=sign * int(months)
         )
     
     @classmethod
@@ -259,14 +306,15 @@ class IntervalDayToSecond:
             time_part = parts[0] if parts else s
         
         # Parse time part
-        time_match = re.match(r'(\d+):(\d+):(\d+)(?:\.(\d+))?', time_part)
-        if not time_match:
+        time_values = _parse_day_to_second_clock(time_part)
+        if time_values is None:
             raise ValueError(f"Invalid INTERVAL DAY TO SECOND format: {s}")
+        hours_text, minutes_text, seconds_text, fraction_text = time_values
         
-        hours = sign * int(time_match.group(1))
-        minutes = sign * int(time_match.group(2))
-        seconds = sign * int(time_match.group(3))
-        frac = sign * int(time_match.group(4) or '0')
+        hours = sign * int(hours_text)
+        minutes = sign * int(minutes_text)
+        seconds = sign * int(seconds_text)
+        frac = sign * int(fraction_text or '0')
         
         return cls(
             days=days,

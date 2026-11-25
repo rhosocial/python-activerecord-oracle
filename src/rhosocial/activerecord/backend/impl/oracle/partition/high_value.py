@@ -22,10 +22,17 @@ Anything else -- a function expression, an interval, a format this module does
 not know -- raises :class:`ValueError` and the caller records an issue.
 """
 
-import re
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Optional, Tuple
+
+from .._scan import (
+    parse_signed_decimal,
+    parse_signed_integer,
+    scan_single_quoted,
+    skip_space,
+    starts_with_word,
+)
 
 __all__ = [
     "ParsedHighValue",
@@ -46,16 +53,62 @@ _DATE_FORMATS = (
     "%Y-%m-%d %H:%M %z",
 )
 
-_TO_DATE_RE = re.compile(
-    r"(?is)^(?:to_date|to_timestamp|to_timestamp_tz)\s*\(\s*"
-    r"'(?P<value>(?:[^']|'')*)'\s*"
-    r"(?:,\s*'(?P<format>(?:[^']|'')*)'\s*"
-    r"(?:,\s*'(?:[^']|'')*'\s*)*)?\)\s*$"
-)
-_TIMESTAMP_RE = re.compile(r"(?is)^timestamp\s*'(?P<value>(?:[^']|'')*)'\s*$")
-_DATE_LITERAL_RE = re.compile(r"(?is)^date\s*'(?P<value>(?:[^']|'')*)'\s*$")
-_INTEGER_RE = re.compile(r"^[+-]?\d+$")
-_DECIMAL_RE = re.compile(r"^[+-]?(?:\d+\.\d*|\.\d+|\d+[eE][+-]?\d+)$")
+#: Function names whose first argument is the date text to read.
+_DATE_FUNCTION_NAMES = ("TO_DATE", "TO_TIMESTAMP", "TO_TIMESTAMP_TZ")
+
+
+def _scan_date_function(token: str) -> Optional[str]:
+    """The value literal of ``TO_DATE(...)``-style text, or ``None``.
+
+    The accepted shape is a listed function name, an open parenthesis, one
+    quoted value, an optional quoted format and any further quoted arguments,
+    a close parenthesis and nothing but whitespace after it.
+    """
+    name = None
+    for candidate in _DATE_FUNCTION_NAMES:
+        if starts_with_word(token, candidate):
+            name = candidate
+            break
+    if name is None:
+        return None
+    index = skip_space(token, len(name))
+    length = len(token)
+    if index >= length or token[index] != "(":
+        return None
+    index = skip_space(token, index + 1)
+    scanned = scan_single_quoted(token, index)
+    if scanned is None:
+        return None
+    value, index = scanned
+    index = skip_space(token, index)
+    if index < length and token[index] == ",":
+        while index < length and token[index] == ",":
+            index = skip_space(token, index + 1)
+            scanned = scan_single_quoted(token, index)
+            if scanned is None:
+                return None
+            index = skip_space(token, scanned[1])
+    if index >= length or token[index] != ")":
+        return None
+    index = skip_space(token, index + 1)
+    if index != length:
+        return None
+    return value
+
+
+def _scan_word_date_literal(token: str, word: str) -> Optional[str]:
+    """The value literal of ``WORD 'text'``, or ``None``."""
+    if not starts_with_word(token, word):
+        return None
+    index = skip_space(token, len(word))
+    scanned = scan_single_quoted(token, index)
+    if scanned is None:
+        return None
+    value, index = scanned
+    index = skip_space(token, index)
+    if index != len(token):
+        return None
+    return value
 
 
 @dataclass(frozen=True)
@@ -142,20 +195,22 @@ def _parse_scalar(text: str) -> Any:
     if token[0] == "'" and token[-1] == "'" and len(token) >= 2:
         return token[1:-1].replace("''", "'")
 
-    match = _TO_DATE_RE.match(token)
-    if match:
-        return _parse_date_text(match.group("value"))
-    match = _TIMESTAMP_RE.match(token)
-    if match:
-        return _parse_date_text(match.group("value"))
-    match = _DATE_LITERAL_RE.match(token)
-    if match:
-        return _parse_date_text(match.group("value"))
+    match = _scan_date_function(token)
+    if match is not None:
+        return _parse_date_text(match)
+    match = _scan_word_date_literal(token, "TIMESTAMP")
+    if match is not None:
+        return _parse_date_text(match)
+    match = _scan_word_date_literal(token, "DATE")
+    if match is not None:
+        return _parse_date_text(match)
 
-    if _INTEGER_RE.match(token):
-        return int(token)
-    if _DECIMAL_RE.match(token):
-        return float(token)
+    integer = parse_signed_integer(token)
+    if integer is not None:
+        return integer
+    decimal = parse_signed_decimal(token)
+    if decimal is not None:
+        return decimal
 
     raise ValueError("cannot parse bound token %r" % token)
 

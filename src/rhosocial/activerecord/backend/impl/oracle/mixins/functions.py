@@ -163,23 +163,23 @@ class OracleFunctionFormatMixin:
                 f"returning must be a DataType instance or type-name string, "
                 f"got {type(returning).__name__}"
             )
-        from ..functions.json import _PARAM_RE, _RETURNING_WHITELIST
+        from ..functions.json import parse_returning_type_spec, _RETURNING_WHITELIST
 
-        m = _PARAM_RE.match(returning.strip())
-        if not m:
+        spec = parse_returning_type_spec(returning.strip())
+        if spec is None:
             raise TypeError(
                 f"Unsupported Oracle RETURNING type: {returning!r}. "
                 f"Use a DataType instance or one of: "
                 f"{', '.join(sorted(_RETURNING_WHITELIST))}."
             )
-        base_name = m.group(1).upper()
-        spec = _RETURNING_WHITELIST.get(base_name)
-        if spec is None:
+        base_name = spec.name.upper()
+        type_spec = _RETURNING_WHITELIST.get(base_name)
+        if type_spec is None:
             raise TypeError(
                 f"Unsupported Oracle RETURNING type: {returning!r}. "
                 f"Allowed: {', '.join(sorted(_RETURNING_WHITELIST))}."
             )
-        cls_name, kwargs = spec
+        cls_name, kwargs = type_spec
         from rhosocial.activerecord.backend.expression import types as _types
 
         cls = getattr(_types, cls_name, None)
@@ -187,12 +187,12 @@ class OracleFunctionFormatMixin:
             from ..expression import types as _oracle_types
 
             cls = getattr(_oracle_types, cls_name)
-        if m.group(2):
+        if spec.precision:
             if cls_name == "VarCharType":
-                kwargs = {"length": int(m.group(2))}
+                kwargs = {"length": int(spec.precision)}
             elif cls_name == "DecimalType":
-                p = int(m.group(2))
-                s = int(m.group(3)) if m.group(3) else None
+                p = int(spec.precision)
+                s = int(spec.scale) if spec.scale else None
                 kwargs = {"precision": p, "scale": s}
         return cls(dialect=self, **kwargs)
 

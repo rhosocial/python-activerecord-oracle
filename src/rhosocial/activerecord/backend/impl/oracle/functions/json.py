@@ -1,8 +1,9 @@
 # src/rhosocial/activerecord/backend/impl/oracle/functions/json.py
 """Oracle JSON function factories."""
 
-import re
-from typing import Union, Any, TYPE_CHECKING
+from typing import NamedTuple, Optional, Union, Any, TYPE_CHECKING
+
+from .._scan import read_digits, read_word, skip_space
 
 if TYPE_CHECKING:
     from rhosocial.activerecord.backend.expression import bases
@@ -30,7 +31,49 @@ _RETURNING_WHITELIST = {
     "INT": ("IntegerType", {}),
 }
 
-_PARAM_RE = re.compile(r"^(\w+)\s*(?:\(\s*(\d+)\s*(?:,\s*(\d+)\s*)?\))?$")
+class ReturningTypeSpec(NamedTuple):
+    """A parsed ``NAME`` or ``NAME(p)`` / ``NAME(p, s)`` RETURNING spelling."""
+
+    name: str
+    precision: Optional[str] = None
+    scale: Optional[str] = None
+
+
+def parse_returning_type_spec(text: str) -> Optional[ReturningTypeSpec]:
+    """Parse ``NAME[ ( digits [, digits] ) ]`` exactly, or ``None``.
+
+    The shape is the closed grammar Oracle's ``RETURNING`` clause accepts for
+    this backend's whitelist: a word, optional whitespace, then either nothing
+    or one parenthesised pair of decimal runs. Arguments are returned as the
+    digit strings the caller converts, so ``NAME(4000)`` and ``NAME(10, 2)``
+    keep the distinction between "scale omitted" and "scale zero".
+    """
+    digits, index = read_word(text, 0)
+    if not digits:
+        return None
+    index = skip_space(text, index)
+    length = len(text)
+    if index == length:
+        return ReturningTypeSpec(digits)
+    if text[index] != "(":
+        return None
+    index = skip_space(text, index + 1)
+    precision, index = read_digits(text, index)
+    if not precision:
+        return None
+    index = skip_space(text, index)
+    scale = None
+    if index < length and text[index] == ",":
+        index = skip_space(text, index + 1)
+        scale, index = read_digits(text, index)
+        if not scale:
+            return None
+        index = skip_space(text, index)
+    if index < length and text[index] == ")":
+        index += 1
+        if index == length or (index + 1 == length and text[index] == "\n"):
+            return ReturningTypeSpec(digits, precision, scale)
+    return None
 
 
 def json_value(

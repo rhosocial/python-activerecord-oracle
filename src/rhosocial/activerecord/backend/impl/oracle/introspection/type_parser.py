@@ -8,7 +8,6 @@ declared type. There is deliberately no ``dialect.parse_type`` shim.
 """
 from __future__ import annotations
 
-import re
 from typing import Optional
 
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
@@ -31,6 +30,15 @@ from rhosocial.activerecord.backend.expression.types import (
     VarCharType,
     XmlType,
 )
+from .._scan import (
+    contains_word,
+    find_parenthesised_digit_run,
+    iter_digit_runs,
+    leading_word_in,
+    starts_with_any_word_sequence,
+    starts_with_word,
+    strip_word_with_space,
+)
 from ..expression.types import (
     OracleBinaryDoubleType,
     OracleBinaryFloatType,
@@ -46,25 +54,32 @@ from ..expression.types import (
 class OracleTypeParser:
     """Parse a raw Oracle type spelling into a ``DataType``, bound to a dialect."""
 
-    _ORACLE_NUMBER_TYPES = re.compile(
-        r"^(?:NUMBER|FLOAT|BINARY_FLOAT|BINARY_DOUBLE)\b", re.IGNORECASE
-    )
+    #: Numeric spellings Oracle reports at the head of a type string.
+    _NUMBER_TYPE_WORDS = ("NUMBER", "FLOAT", "BINARY_FLOAT", "BINARY_DOUBLE")
     # ``UNSIGNED`` as a whole word anywhere in a type string. Oracle's parser
     # rejects the string outright, so this can only fire on caller-supplied DDL;
     # the point is to refuse it rather than read the attribute off and return a
     # signed type. See ``_refuse_unsigned_type_string``.
-    _UNSIGNED_ATTRIBUTE = re.compile(r"\bUNSIGNED\b", re.IGNORECASE)
+    _UNSIGNED_ATTRIBUTE_WORD = "UNSIGNED"
     # NOTE: LONG RAW must be matched before LONG; _ORACLE_BLOB_TYPES is
     # checked ahead of _ORACLE_STRING_TYPES in parse() for this reason.
-    _ORACLE_STRING_TYPES = re.compile(
-        r"^(?:CHARACTER\s+VARYING|CHAR\s+VARYING|VARCHAR2|NVARCHAR2|VARCHAR|"
-        r"CHARACTER|NCHAR|CHAR|CLOB|NCLOB|LONG)\b",
-        re.IGNORECASE,
+    _STRING_TYPE_SEQUENCES = (("CHARACTER", "VARYING"), ("CHAR", "VARYING"))
+    _STRING_TYPE_WORDS = (
+        "VARCHAR2",
+        "NVARCHAR2",
+        "VARCHAR",
+        "CHARACTER",
+        "NCHAR",
+        "CHAR",
+        "CLOB",
+        "NCLOB",
+        "LONG",
     )
-    _ORACLE_BLOB_TYPES = re.compile(r"^(?:BLOB|RAW|LONG\s+RAW)\b", re.IGNORECASE)
-    _ORACLE_DATE_TYPES = re.compile(r"^(?:DATE|TIMESTAMP|INTERVAL)\b", re.IGNORECASE)
-    _ORACLE_XML_TYPES = re.compile(r"^(?:XMLTYPE|SYS\.XMLTYPE)\b", re.IGNORECASE)
-    _ORACLE_BOOLEAN_TYPES = re.compile(r"^(?:BOOLEAN|BOOL)\b", re.IGNORECASE)
+    _BLOB_TYPE_SEQUENCES = (("LONG", "RAW"),)
+    _BLOB_TYPE_WORDS = ("BLOB", "RAW")
+    _DATE_TYPE_WORDS = ("DATE", "TIMESTAMP", "INTERVAL")
+    _XML_TYPE_SPELLINGS = ("XMLTYPE", "SYS.XMLTYPE")
+    _BOOLEAN_TYPE_WORDS = ("BOOLEAN", "BOOL")
 
     #: Oracle's documented default size for a ``CHAR``/``NCHAR`` declared
     #: without one ("The default value is 1"), measured as ``DATA_LENGTH = 1``.
@@ -78,8 +93,8 @@ class OracleTypeParser:
     @staticmethod
     def _oracle_declared_length(stripped: str) -> Optional[int]:
         """The ``(n)`` Oracle wrote after a type name, or ``None``."""
-        match = re.search(r"\((\d+)", stripped)
-        return int(match.group(1)) if match else None
+        digits = find_parenthesised_digit_run(stripped)
+        return int(digits) if digits else None
 
     def _require_declared_length(self, stripped: str, word: str, example: str) -> int:
         """The declared ``(n)``, or a refusal naming Oracle's requirement."""
@@ -122,20 +137,20 @@ class OracleTypeParser:
         stripped = raw.strip()
         upper = stripped.upper()
 
-        if self._UNSIGNED_ATTRIBUTE.search(stripped):
+        if contains_word(stripped, self._UNSIGNED_ATTRIBUTE_WORD):
             self._refuse_unsigned_type_string(stripped)
 
-        if self._ORACLE_NUMBER_TYPES.match(upper):
+        if leading_word_in(upper, self._NUMBER_TYPE_WORDS):
             if upper.startswith("BINARY_FLOAT"):
                 return OracleBinaryFloatType(dialect=d)
             if upper.startswith("BINARY_DOUBLE"):
                 return OracleBinaryDoubleType(dialect=d)
             if upper.startswith("FLOAT"):
-                nums = re.findall(r"\d+", stripped)
+                nums = iter_digit_runs(stripped)
                 if nums:
                     return FloatType(dialect=d, precision=int(nums[0]))
                 return FloatType(dialect=d)
-            nums = re.findall(r"\d+", stripped)
+            nums = iter_digit_runs(stripped)
             if len(nums) >= 2:
                 p, s = int(nums[0]), int(nums[1])
                 if s == 0 and p == 10:
@@ -158,7 +173,9 @@ class OracleTypeParser:
 
         # BLOB types checked before string types so "LONG RAW" matches the
         # binary branch rather than being consumed by the "LONG" string rule.
-        if self._ORACLE_BLOB_TYPES.match(upper):
+        if starts_with_any_word_sequence(upper, self._BLOB_TYPE_SEQUENCES) or leading_word_in(
+            upper, self._BLOB_TYPE_WORDS
+        ):
             if "LONG RAW" in upper:
                 return OracleLongRawType(dialect=d)
             if "RAW" in upper:
@@ -173,7 +190,9 @@ class OracleTypeParser:
                 return OracleRawType(dialect=d, length=length)
             return BlobType(dialect=d)
 
-        if self._ORACLE_STRING_TYPES.match(upper):
+        if starts_with_any_word_sequence(upper, self._STRING_TYPE_SEQUENCES) or leading_word_in(
+            upper, self._STRING_TYPE_WORDS
+        ):
             if "NCLOB" in upper:
                 return OracleNClobType(dialect=d)
             if "CLOB" in upper:
@@ -199,12 +218,12 @@ class OracleTypeParser:
                 length=self._oracle_declared_length(stripped) or self._CHAR_DEFAULT_LENGTH,
             )
 
-        if self._ORACLE_BOOLEAN_TYPES.match(upper):
+        if leading_word_in(upper, self._BOOLEAN_TYPE_WORDS):
             return BooleanType(dialect=d)
 
-        if self._ORACLE_DATE_TYPES.match(upper):
+        if leading_word_in(upper, self._DATE_TYPE_WORDS):
             if "TIMESTAMP" in upper:
-                nums = re.findall(r"\d+", stripped)
+                nums = iter_digit_runs(stripped)
                 precision = int(nums[0]) if nums else None
                 if "WITH LOCAL TIME ZONE" in upper:
                     return OracleTimestampLtzType(dialect=d, precision=precision)
@@ -212,11 +231,12 @@ class OracleTypeParser:
                     return TimestampTzType(dialect=d, precision=precision)
                 return TimestampType(dialect=d, precision=precision)
             if "INTERVAL" in upper:
-                fields = re.sub(r"^INTERVAL\s+", "", stripped, flags=re.IGNORECASE).strip()
+                stripped_interval = strip_word_with_space(stripped, "INTERVAL")
+                fields = (stripped_interval if stripped_interval is not None else stripped).strip()
                 return IntervalType(dialect=d, fields=fields or None)
             return DateType(dialect=d)
 
-        if self._ORACLE_XML_TYPES.match(upper):
+        if any(starts_with_word(upper, spelling) for spelling in self._XML_TYPE_SPELLINGS):
             return XmlType(dialect=d)
 
         return CustomType(dialect=d, raw=stripped)
