@@ -20,7 +20,9 @@ elif sys.version_info >= (3, 12):
     from typing import _get_protocol_attrs as get_protocol_members
 
 import pytest
+from rhosocial.activerecord.backend.dialect import mixins as dialect_mixins
 from rhosocial.activerecord.backend.dialect import protocols as dialect_protocols
+from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 from rhosocial.activerecord.backend.suggestion import protocols as suggestion_protocols
 from rhosocial.activerecord.backend.impl.oracle import dialect as oracle_dialect
 
@@ -117,7 +119,15 @@ ORACLE_PROTOCOLS = [
     suggestion_protocols.FunctionSuggestionSupport,
     dialect_protocols.TransactionControlSupport,
     # --- Introspection ---
-    dialect_protocols.IntrospectionSupport,
+    # Core split the single protocol into four families. Oracle composes all
+    # four (and their async twins), so each is classified positive here; the
+    # family-level negative side -- which probes answer False and which
+    # formatters refuse -- is pinned in TestIntrospectionFamilyClassification
+    # below.
+    dialect_protocols.StructureIntrospectionSupport,
+    dialect_protocols.OperationalStatsIntrospectionSupport,
+    dialect_protocols.DataProfileIntrospectionSupport,
+    dialect_protocols.DdlExtractionIntrospectionSupport,
     # --- DDL statements ---
     dialect_protocols.AlterSequenceSupport,
     dialect_protocols.AlterTableModifierSupport,
@@ -160,7 +170,10 @@ ORACLE_PROTOCOLS = [
     # their own modules. OracleDialect composes the corresponding mixins (via
     # SQLDialectBase and the per-feature generic mixins), so each is satisfied;
     # REPEAT is the one deliberate exception, classified below.
-    dialect_protocols.AsyncIntrospectionSupport,
+    dialect_protocols.AsyncStructureIntrospectionSupport,
+    dialect_protocols.AsyncOperationalStatsIntrospectionSupport,
+    dialect_protocols.AsyncDataProfileIntrospectionSupport,
+    dialect_protocols.AsyncDdlExtractionIntrospectionSupport,
     dialect_protocols.DDLColumnSupport,
     dialect_protocols.DMLSupport,
     dialect_protocols.DQLSupport,
@@ -319,6 +332,117 @@ class TestDialectNegativeProtocolConformance:
             f"Generic protocols not classified for Oracle: {sorted(unclassified)}. "
             f"Add each to ORACLE_PROTOCOLS or ORACLE_NOT_IMPLEMENTED."
         )
+
+
+# The four introspection families -- positive presence and negative answers.
+#
+# Presence is structural: OracleDialect composes every family's core mixin, so
+# the protocol and its async twin are satisfied. Capability is not structural:
+# a family may be present while its probes answer False, because the dialect
+# declines a source a schema-scoped SELECT cannot reach. The declined probes
+# and the formatters that must refuse are the negative half of the same
+# classification, recorded per family so neither side can drift silently.
+#
+# (family, sync protocol, async protocol, declined probes, refused formatters)
+INTROSPECTION_FAMILIES = [
+    (
+        "structure",
+        dialect_protocols.StructureIntrospectionSupport,
+        dialect_protocols.AsyncStructureIntrospectionSupport,
+        ("supports_extensions",),
+        (),
+    ),
+    (
+        "operational stats",
+        dialect_protocols.OperationalStatsIntrospectionSupport,
+        dialect_protocols.AsyncOperationalStatsIntrospectionSupport,
+        (
+            "supports_runtime_stats",
+            "supports_index_stats",
+            "supports_table_stats",
+            "supports_unused_indexes_detection",
+            "supports_object_dependencies",
+        ),
+        (
+            "format_unused_indexes_query_statement",
+            "format_table_usage_stats_query_statement",
+            "format_runtime_metrics_query_statement",
+            "format_index_usage_stats_query_statement",
+            "format_object_dependency_query_statement",
+        ),
+    ),
+    (
+        "data profile",
+        dialect_protocols.DataProfileIntrospectionSupport,
+        dialect_protocols.AsyncDataProfileIntrospectionSupport,
+        ("supports_join_coverage",),
+        ("format_join_coverage_query_statement",),
+    ),
+    (
+        "ddl extraction",
+        dialect_protocols.DdlExtractionIntrospectionSupport,
+        dialect_protocols.AsyncDdlExtractionIntrospectionSupport,
+        ("supports_ddl_extraction", "supports_ddl_extraction_native"),
+        ("format_ddl_statement_query_statement",),
+    ),
+]
+
+FAMILY_IDS = [family[0] for family in INTROSPECTION_FAMILIES]
+
+
+class TestIntrospectionFamilyClassification:
+    """Classify each family's positive presence and its negative/refusal half."""
+
+    @pytest.fixture
+    def dialect(self) -> oracle_dialect.OracleDialect:
+        return oracle_dialect.OracleDialect(version=(23, 0, 0))
+
+    @pytest.mark.parametrize(
+        "family, sync, async_twin, declined, refused", INTROSPECTION_FAMILIES, ids=FAMILY_IDS
+    )
+    def test_the_family_is_structurally_present(
+        self, dialect, family, sync, async_twin, declined, refused
+    ) -> None:
+        assert isinstance(dialect, sync), family
+        assert isinstance(dialect, async_twin), family
+
+    @pytest.mark.parametrize(
+        "family, sync, async_twin, declined, refused", INTROSPECTION_FAMILIES, ids=FAMILY_IDS
+    )
+    def test_declined_probes_answer_false(
+        self, dialect, family, sync, async_twin, declined, refused
+    ) -> None:
+        for probe in declined:
+            assert getattr(dialect, probe)() is False, f"{family}: {probe}"
+
+    @pytest.mark.parametrize(
+        "family, sync, async_twin, declined, refused", INTROSPECTION_FAMILIES, ids=FAMILY_IDS
+    )
+    def test_declined_formatters_refuse(
+        self, dialect, family, sync, async_twin, declined, refused
+    ) -> None:
+        for formatter in refused:
+            with pytest.raises(UnsupportedFeatureError):
+                getattr(dialect, formatter)(None)
+
+    def test_an_absent_family_is_not_satisfied(self) -> None:
+        """A dialect without the mixins fails every family, not just the probes."""
+
+        class Bare:
+            name = "Bare"
+
+        for family, sync, async_twin, _declined, _refused in INTROSPECTION_FAMILIES:
+            assert not isinstance(Bare(), sync), family
+            assert not isinstance(Bare(), async_twin), family
+
+    def test_the_default_structure_mixin_refuses_by_name(self) -> None:
+        """An unanswered probe makes the formatter refuse, rather than run."""
+
+        class BareStructure(dialect_mixins.StructureIntrospectionMixin):
+            name = "BareStructure"
+
+        with pytest.raises(UnsupportedFeatureError, match="table introspection"):
+            BareStructure().format_table_list_query_statement(None)
 
 
 class TestTheBackendOwnAnswersAreTheEffectiveOnes:

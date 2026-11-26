@@ -45,7 +45,6 @@ Read the `False` rows first: a probe that answers `False` says the question cann
 | `supports_column_data_profile()` | `True` | What each column of a table holds, as an estimate |
 | `supports_column_value_sample()` | `True` | Which values occur, and how often, as a scan |
 | `supports_join_coverage()` | `False` | How much two columns' domains overlap |
-| `supports_partition_info()` | `False` (inherited) | Core's partition family |
 | `supports_extensions()` | `False` (inherited) | Installed add-on components |
 | `supports_sequence_introspection()` | `True` | Oracle's own sequence family |
 | `supports_synonym_introspection()` | `True` | Oracle's own synonym family |
@@ -53,7 +52,9 @@ Read the `False` rows first: a probe that answers `False` says the question cann
 
 Three of those are this backend's own switches, beside core's set: `supports_sequence_introspection()`, `supports_synonym_introspection()` and `supports_package_introspection()`. Each answers `True` because its view is an ordinary dictionary view a `SELECT` can read — `ALL_SEQUENCES`, `ALL_SYNONYMS`, `ALL_OBJECTS`.
 
-Three `False` rows are inherited rather than declared here. `supports_ddl_extraction_native()` stays `False` because the family it qualifies is already declined (`False` on a native extractor is "there is no native extraction to describe"). `supports_partition_info()` stays `False` because core's partition family has no method on this backend to oblige; Oracle has a partition-metadata switch of its own — `supports_partition_metadata_introspection()`, true from 11g — but no core family reads it and no CLI type offers it. `supports_extensions()` stays `False` for the reason core records: no catalogue of add-on components is mapped here.
+Two `False` rows are inherited rather than declared here. `supports_ddl_extraction_native()` stays `False` because the family it qualifies is already declined (`False` on a native extractor is "there is no native extraction to describe"). `supports_extensions()` stays `False` for the reason core records: no catalogue of add-on components is mapped here.
+
+Core's old `supports_partition_info()` probe no longer exists: it answered `False` for every Oracle server while this backend's partition-metadata switch — `supports_partition_metadata_introspection()`, true from 11g — is the capability the CLI's `partitions` type actually reads. The old probe therefore under-reported the server it was asked about, and the four-family split removed it rather than leave a second, misleading spelling.
 
 A `True` promises only that the statement renders and the server accepts it. It says nothing about the shape of the answer or its price; the price of every family is stated where the family is described.
 

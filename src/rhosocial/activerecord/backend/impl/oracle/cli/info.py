@@ -207,6 +207,10 @@ from rhosocial.activerecord.backend.dialect.protocols import (
     NamespaceSupport,
     SequenceObjectSupport,
     TemporalTableSupport,
+    StructureIntrospectionSupport,
+    OperationalStatsIntrospectionSupport,
+    DataProfileIntrospectionSupport,
+    DdlExtractionIntrospectionSupport,
 )
 
 from rhosocial.activerecord.backend.impl.oracle.protocols.trigger_capabilities import (
@@ -248,6 +252,13 @@ PROTOCOL_FAMILY_GROUPS: Dict[str, list] = {
         RoutineObjectSupport,
     ],
     "String Matching": [ILIKESupport],
+    # Core split introspection into four families; the panel reports each
+    # family separately so a reader can tell which question Oracle answers
+    # (structure, data) from the ones it declines (operational stats, DDL).
+    "Introspection - Structure": [StructureIntrospectionSupport],
+    "Introspection - Operational Stats": [OperationalStatsIntrospectionSupport],
+    "Introspection - Data Profile": [DataProfileIntrospectionSupport],
+    "Introspection - DDL Extraction": [DdlExtractionIntrospectionSupport],
     "Oracle-specific": [
         OracleTriggerSupport,
         OracleTableSupport,
