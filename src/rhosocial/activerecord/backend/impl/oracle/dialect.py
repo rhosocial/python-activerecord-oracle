@@ -47,7 +47,6 @@ from rhosocial.activerecord.backend.dialect.protocols import (
 from rhosocial.activerecord.backend.suggestion.protocols import (
     ColumnReorderSuggestionSupport,
     CreateTableLayoutSuggestionSupport,
-    FunctionSuggestionSupport,
     PartitionSchemeChangeSuggestionSupport,
     StringConcatenationSuggestionSupport,
     TableConstraintChangeSuggestionSupport,
@@ -405,7 +404,6 @@ class OracleDialect(
     ColumnAttributeSupport,
     PivotSupport,
     CreateTableLayoutSuggestionSupport,
-    FunctionSuggestionSupport,
     StringConcatenationSuggestionSupport,
     ColumnReorderSuggestionSupport,
     TableConstraintChangeSuggestionSupport,
