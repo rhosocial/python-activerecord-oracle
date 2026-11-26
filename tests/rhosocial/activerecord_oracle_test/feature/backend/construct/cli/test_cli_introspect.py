@@ -19,6 +19,8 @@ from rhosocial.activerecord.backend.introspection.types import (
     ColumnDataProfile,
     ColumnValueFrequency,
     JoinCoverage,
+    PartitionScheme,
+    PartitionState,
 )
 
 
@@ -155,9 +157,9 @@ class FakeIntrospector:
         self.calls.append(("packages", owner))
         return [{"OBJECT_NAME": "CUSTOMERS_PKG"}]
 
-    def list_partitions(self, table_name, schema=None):
+    def get_partition_state(self, table_name, schema=None, include_stats=False):
         self.calls.append(("partitions", table_name, schema))
-        return [{"TABLE_NAME": table_name, "PARTITION_NAME": "P1"}]
+        return PartitionState(scheme=PartitionScheme.RANGE)
 
     def list_constraints(self, table_name, schema=None):
         self.calls.append(("constraints", table_name, schema))
@@ -310,7 +312,7 @@ def patch_async_backend(monkeypatch, introspector: Any,
                          "list_triggers", "get_view_info", "list_sequences",
                          "get_sequence_info", "list_synonyms",
                          "get_synonym_info", "list_packages",
-                         "list_partitions", "list_constraints",
+                         "get_partition_state", "list_constraints",
                          "list_procedures", "get_procedure_info",
                          "list_functions", "get_function_info",
                          "list_types", "get_type_info",

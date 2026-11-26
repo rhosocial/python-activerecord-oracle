@@ -33,7 +33,16 @@ from rhosocial.activerecord.backend.impl.oracle.introspection.types import (
     OracleRoutineParameter,
     OracleTypeInfo,
 )
-from rhosocial.activerecord.backend.introspection.types import IntrospectionScope
+from rhosocial.activerecord.backend.introspection.types import (
+    ConstraintState,
+    DerivedObjectState,
+    IndexState,
+    IntrospectionScope,
+    ItemKind,
+    PartitionScheme,
+    SequenceState,
+    TableState,
+)
 
 
 # --------------------------------------------------------------------- #
@@ -456,9 +465,158 @@ CONSTRAINT_ROWS = [
 ]
 
 
-# --------------------------------------------------------------------- #
-# SQL builders
-# --------------------------------------------------------------------- #
+TABLE_STATE_ROW = {
+    "OWNER": "AR_CRM",
+    "TABLE_NAME": "ORDERS",
+    "TEMPORARY": "N",
+    "TABLESPACE_NAME": "USERS",
+    "COMPRESSION": "DISABLED",
+    "COMPRESS_FOR": None,
+    "IOT_TYPE": None,
+    "LOGGING": "YES",
+    "COMMENTS": "order history",
+}
+
+INDEX_STATE_ROWS = [
+    {
+        "OWNER": "AR_CRM",
+        "TABLE_NAME": "ORDERS",
+        "INDEX_NAME": "PK_ORDERS",
+        "UNIQUENESS": "UNIQUE",
+        "INDEX_TYPE": "NORMAL",
+        "STATUS": "VALID",
+        "VISIBILITY": "VISIBLE",
+        "CONSTRAINT_NAME": "PK_ORDERS",
+    },
+    {
+        "OWNER": "AR_CRM",
+        "TABLE_NAME": "ORDERS",
+        "INDEX_NAME": "IX_CUSTOMER",
+        "UNIQUENESS": "NONUNIQUE",
+        "INDEX_TYPE": "NORMAL",
+        "STATUS": "UNUSABLE",
+        "VISIBILITY": "INVISIBLE",
+        "CONSTRAINT_NAME": None,
+    },
+]
+
+SEQUENCE_ROWS = [
+    {
+        "SEQUENCE_OWNER": "AR_CRM",
+        "SEQUENCE_NAME": "ORDERS_SEQ",
+        "MIN_VALUE": 1,
+        "MAX_VALUE": 9999999999,
+        "INCREMENT_BY": 1,
+        "CYCLE_FLAG": "N",
+        "ORDER_FLAG": "N",
+        "CACHE_SIZE": 20,
+        "LAST_NUMBER": 42,
+    }
+]
+
+SCHEMA_ROWS = [{"USERNAME": "AR_CRM"}, {"USERNAME": "PUBLIC"}]
+
+
+class TestNeutralStateReads:
+    def test_get_table_state_reads_the_kind_storage_and_comment(self):
+        insp, executor = make_sync([TABLE_STATE_ROW])
+        state = insp.get_table_state("ORDERS", "AR_CRM")
+        assert isinstance(state, TableState)
+        assert state.name == "ORDERS"
+        assert state.schema == "AR_CRM"
+        assert state.kind == "regular"
+        assert state.storage.tablespace == "USERS"
+        assert state.comment == "order history"
+        # The partition question is a second read, and an unpartitioned table
+        # answers None, which leaves the state's partitioning slot empty.
+        assert state.partitioning is None
+        assert len(executor.questions) == 2
+
+    def test_a_temporary_table_is_named_as_such(self):
+        insp, _ = make_sync([dict(TABLE_STATE_ROW, TEMPORARY="Y")])
+        state = insp.get_table_state("ORDERS", "AR_CRM")
+        assert state.kind == "temporary"
+
+    def test_list_index_states_maps_the_global_status_and_visibility(self):
+        insp, _ = make_sync(INDEX_STATE_ROWS)
+        states = insp.list_index_states("ORDERS", "AR_CRM")
+        by_name = {state.name: state for state in states}
+        assert isinstance(by_name["PK_ORDERS"], IndexState)
+        assert by_name["PK_ORDERS"].usable is True
+        assert by_name["PK_ORDERS"].unique is True
+        assert by_name["PK_ORDERS"].backs_constraint == "PK_ORDERS"
+        assert by_name["IX_CUSTOMER"].usable is False
+        assert by_name["IX_CUSTOMER"].visible is False
+        assert by_name["IX_CUSTOMER"].backs_constraint is None
+
+    def test_list_constraint_states_maps_status_and_validation(self):
+        insp, _ = make_sync(CONSTRAINT_ROWS)
+        states = insp.list_constraint_states("ORDERS", "AR_CRM")
+        by_name = {state.name: state for state in states}
+        assert isinstance(by_name["PK_ORDERS"], ConstraintState)
+        assert by_name["PK_ORDERS"].kind == "primary_key"
+        assert by_name["PK_ORDERS"].disabled is False
+        assert by_name["PK_ORDERS"].enforced is True
+        assert by_name["CK_AMOUNT"].validated is False
+        assert by_name["CK_AMOUNT"].disabled is False
+        assert by_name["FK_ORDERS_CUSTOMER"].kind == "foreign_key"
+
+    def test_list_constraint_states_reports_a_disabled_constraint(self):
+        insp, _ = make_sync([dict(CONSTRAINT_ROWS[0], STATUS="DISABLED")])
+        (state,) = insp.list_constraint_states("ORDERS", "AR_CRM")
+        assert state.disabled is True
+        assert state.enforced is False
+
+    def test_list_sequence_states_leaves_owned_by_none(self):
+        insp, _ = make_sync(SEQUENCE_ROWS)
+        (state,) = insp.list_sequence_states("AR_CRM")
+        assert isinstance(state, SequenceState)
+        assert state.name == "ORDERS_SEQ"
+        assert state.schema == "AR_CRM"
+        assert state.owned_by is None
+        assert state.increment == 1
+
+    def test_list_schemas_reads_the_owner_names(self):
+        insp, executor = make_sync(SCHEMA_ROWS)
+        assert insp.list_schemas() == ["AR_CRM", "PUBLIC"]
+        assert "all_users" in squash(executor.questions[0][0])
+
+    def test_list_derived_objects_reports_the_constraint_backed_index(self):
+        insp, _ = make_sync(CONSTRAINT_ROWS)
+        objects = insp.list_derived_objects("ORDERS", "AR_CRM")
+        assert [o.kind for o in objects] == ["backing_index"]
+        assert isinstance(objects[0], DerivedObjectState)
+        assert objects[0].name == "PK_ORDERS"
+        assert objects[0].owned_by == "PK_ORDERS"
+
+    def test_item_exists_answers_schema_type_and_sequence(self):
+        insp, executor = make_sync(SCHEMA_ROWS)
+        assert insp.item_exists(ItemKind.SCHEMA, "ar_crm") is True
+        assert insp.item_exists(ItemKind.SCHEMA, "NOBODY") is False
+        # The type and sequence branches route to their own listings.
+        insp, _ = make_sync(OBJECT_TYPE_ROWS)
+        assert insp.item_exists(ItemKind.TYPE, "address_t", schema="AR_CRM") is True
+        assert insp.item_exists(ItemKind.TYPE, "NO_SUCH_TYPE") is False
+        insp, _ = make_sync(SEQUENCE_ROWS)
+        assert insp.item_exists(ItemKind.SEQUENCE, "orders_seq", schema="AR_CRM") is True
+        insp, _ = make_sync([])
+        assert insp.item_exists(ItemKind.SEQUENCE, "NO_SUCH_SEQ") is False
+
+    def test_item_exists_answers_false_for_a_kind_it_cannot_read(self):
+        insp, _ = make_sync([])
+        assert insp.item_exists(ItemKind.EXTENSION, "anything") is False
+
+    async def test_async_state_listings_match_the_sync_ones(self):
+        insp, _ = make_async(INDEX_STATE_ROWS)
+        states = await insp.list_index_states("ORDERS", "AR_CRM")
+        assert [state.name for state in states] == ["PK_ORDERS", "IX_CUSTOMER"]
+        insp, _ = make_async([RANGE_ROW])
+        assert (await insp.get_partition_state("ORDERS", "AR_CRM")).scheme is PartitionScheme.RANGE
+        insp, _ = make_async([])
+        assert await insp.get_partition_state("ORDERS", "AR_CRM") is None
+
+
+
 
 
 class TestPartitionStatement:
@@ -483,13 +641,23 @@ class TestPartitionStatement:
     def test_the_size_is_blocks_times_the_tablespace_block_size(self):
         insp, _ = make_sync()
         sql, _ = insp.partition_list_statement(
-            table_name="orders", schema="ar_crm"
+            table_name="orders", schema="ar_crm", include_stats=True
         ).to_sql()
         squashed = squash(sql)
         assert "user_tablespaces" in squashed
         assert "p.blocks*ts.block_size" in squashed
         # No assumed 8 KiB multiplication survives in the statement.
         assert "8192" not in squashed
+
+    def test_the_structural_read_does_not_project_statistics(self):
+        """``include_stats=True`` is what adds the row estimate and the size."""
+        insp, _ = make_sync()
+        sql, _ = insp.partition_list_statement(
+            table_name="orders", schema="ar_crm"
+        ).to_sql()
+        squashed = squash(sql)
+        assert "num_rows" not in squashed
+        assert "user_tablespaces" not in squashed
 
     @pytest.mark.parametrize("version,projects_interval", [
         ((11, 0, 0), False),
@@ -840,36 +1008,82 @@ class TestConstraintParser:
 
 
 class TestPartitionAndConstraintReads:
-    def test_list_partitions_asks_once_then_reads_the_cache(self):
+    def test_get_partition_state_asks_once_then_reads_the_cache(self):
         insp, executor = make_sync([RANGE_ROW])
-        cold = insp.list_partitions("ORDERS", "AR_CRM")
+        cold = insp.get_partition_state("ORDERS", "AR_CRM")
         assert len(executor.questions) == 1
-        warm = insp.list_partitions("orders", "ar_crm")
+        warm = insp.get_partition_state("orders", "ar_crm")
         assert len(executor.questions) == 1
         # The question upper-cases the owner and the table name, so case folds
         # into one answer only for the owner (the cache key keeps the table as
         # the caller spelled it).
         assert warm is cold
         assert executor.questions[0][1] == ("AR_CRM", "ORDERS")
+        assert cold.scheme is PartitionScheme.RANGE
+        assert cold.auto_extend is False
+        (bound,) = cold.bounds
+        assert bound.name == "P2026_01"
+        assert bound.upper == RANGE_ROW["HIGH_VALUE"]
+        assert bound.is_maxvalue is False
+        # The statistics slots are filled only when the caller asked for them.
+        assert bound.row_count is None
+        assert bound.size_bytes is None
+
+    def test_an_unpartitioned_table_answers_no_scheme(self):
+        """``None`` -- not an empty state -- is the neutral unpartitioned answer."""
+        insp, executor = make_sync([])
+        assert insp.get_partition_state("ORDERS", "AR_CRM") is None
+        assert len(executor.questions) == 1
+        assert "all_tab_partitions" in squash(executor.questions[0][0])
+
+    def test_include_stats_reads_and_surfaces_the_estimates(self):
+        insp, executor = make_sync([RANGE_ROW])
+        state = insp.get_partition_state("ORDERS", "AR_CRM", include_stats=True)
+        (bound,) = state.bounds
+        assert bound.row_count == 1200
+        assert bound.size_bytes == 65536
+        # The block-size join only exists when the statistics were asked for.
+        assert "num_rows" in squash(executor.questions[0][0])
+        assert "user_tablespaces" in squash(executor.questions[0][0])
+
+    def test_an_interval_table_answers_auto_extend(self):
+        insp, _ = make_sync([INTERVAL_ROW])
+        state = insp.get_partition_state("ORDERS", "AR_CRM")
+        assert state.scheme is PartitionScheme.INTERVAL
+        assert state.auto_extend is True
+        (bound,) = state.bounds
+        assert bound.is_maxvalue is True
+
+    def test_a_composite_table_keeps_the_subpartition_count(self):
+        insp, _ = make_sync([COMPOSITE_ROW])
+        state = insp.get_partition_state("ORDERS", "AR_CRM")
+        assert state.scheme is PartitionScheme.COMPOSITE
+        (bound,) = state.bounds
+        assert bound.subpartition_count == 4
+        assert bound.is_maxvalue is True
 
     def test_list_constraints_has_its_own_cache_entry(self):
-        insp, executor = make_sync(CONSTRAINT_ROWS)
-        insp.list_partitions("ORDERS", "AR_CRM")
-        insp.list_constraints("ORDERS", "AR_CRM")
-        insp.list_partitions("ORDERS", "AR_CRM")
-        insp.list_constraints("ORDERS", "AR_CRM")
-        assert len(executor.questions) == 2
-        keys = {
-            insp.cache.key(
+        partition_insp, partition_executor = make_sync([RANGE_ROW])
+        partition_insp.get_partition_state("ORDERS", "AR_CRM")
+        partition_insp.get_partition_state("ORDERS", "AR_CRM")
+        assert len(partition_executor.questions) == 1
+
+        constraint_insp, constraint_executor = make_sync(CONSTRAINT_ROWS)
+        constraint_insp.list_constraints("ORDERS", "AR_CRM")
+        constraint_insp.list_constraints("ORDERS", "AR_CRM")
+        assert len(constraint_executor.questions) == 1
+        assert partition_insp.cache.get(
+            partition_insp.cache.key(
                 IntrospectionScope.TABLE, "ORDERS", schema="AR_CRM",
                 extra="partitions",
-            ),
-            insp.cache.key(
+            )
+        ) is not None
+        assert constraint_insp.cache.get(
+            constraint_insp.cache.key(
                 IntrospectionScope.TABLE, "ORDERS", schema="AR_CRM",
                 extra="oracle:constraints",
-            ),
-        }
-        assert all(insp.cache.get(key) is not None for key in keys)
+            )
+        ) is not None
 
     def test_the_default_schema_is_the_connected_user(self):
         insp, _ = make_sync([RANGE_ROW], username="ar_crm")
@@ -990,7 +1204,14 @@ class TestIdentityAudit:
 # --------------------------------------------------------------------- #
 
 PARITY_METHODS = [
-    "list_partitions",
+    "get_table_state",
+    "get_partition_state",
+    "list_index_states",
+    "list_constraint_states",
+    "list_sequence_states",
+    "list_schemas",
+    "list_derived_objects",
+    "item_exists",
     "list_constraints",
     "list_procedures",
     "get_procedure_info",

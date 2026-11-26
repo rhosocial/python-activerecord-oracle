@@ -47,14 +47,17 @@ if TYPE_CHECKING:
 
 __all__ = [
     "OracleConstraintListQueryStatement",
+    "OracleIndexStateQueryStatement",
     "OraclePackageListQueryStatement",
     "OraclePartitionListQueryStatement",
     "OraclePrimaryKeyQueryStatement",
     "OracleRoutineListQueryStatement",
+    "OracleSchemaListQueryStatement",
     "OracleSequenceInfoQueryStatement",
     "OracleSequenceListQueryStatement",
     "OracleSynonymInfoQueryStatement",
     "OracleSynonymListQueryStatement",
+    "OracleTableStateQueryStatement",
     "OracleTypeListQueryStatement",
 ]
 
@@ -229,15 +232,14 @@ class OraclePackageListQueryStatement(IntrospectionExpression):
         return "format_package_list_query_statement"
 
 
-class OraclePartitionListQueryStatement(IntrospectionExpression):
-    """The partitions of one table, in declaration order.
+class OracleTableStateQueryStatement(IntrospectionExpression):
+    """One table's physical facts, in the neutral table-state shape.
 
-    The partition rows live in ``ALL_TAB_PARTITIONS``; the strategy, the
-    subpartitioning type and the interval expression live in
-    ``ALL_PART_TABLES``, which is joined on the owner and table name. The
-    tablespace's block size is read rather than assumed, so
-    ``SIZE_BYTES`` is the partition's real footprint on a database whose
-    block size is not 8 KiB.
+    ``ALL_TABLES`` carries the kind (``TEMPORARY``), the tablespace, the
+    compression setting and the IOT type; ``ALL_TAB_COMMENTS`` carries the
+    comment. The partition scheme is a second question -- see
+    :class:`OraclePartitionListQueryStatement` -- so this statement does not
+    join the partition views.
     """
 
     def __init__(
@@ -250,11 +252,106 @@ class OraclePartitionListQueryStatement(IntrospectionExpression):
         """
         Args:
             dialect: The SQL dialect to use for formatting.
-            table_name: The partitioned table.
+            table_name: The table to read.
             schema: The owner of that table.
         """
         super().__init__(dialect, schema=schema)
         self.table_name: str = table_name
+
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_table_state_query_statement"
+
+
+class OracleIndexStateQueryStatement(IntrospectionExpression):
+    """Every index on one table, with its usable/visible state.
+
+    ``ALL_INDEXES`` carries the global ``STATUS`` (``VALID``/``UNUSABLE``)
+    and ``VISIBILITY`` (``VISIBLE``/``INVISIBLE``). The constraint that a
+    primary-key or unique index backs is read from ``ALL_CONSTRAINTS`` on
+    the shared owner and index name; an ordinary index has no such row.
+    """
+
+    def __init__(
+        self,
+        dialect: "SQLDialectBase",
+        *,
+        table_name: str,
+        schema: str,
+    ):
+        """
+        Args:
+            dialect: The SQL dialect to use for formatting.
+            table_name: The indexed table.
+            schema: The owner of that table.
+        """
+        super().__init__(dialect, schema=schema)
+        self.table_name: str = table_name
+
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_index_state_query_statement"
+
+
+class OracleSchemaListQueryStatement(IntrospectionExpression):
+    """The schema (owner) names the instance exposes.
+
+    Oracle calls a schema an owner, and ``ALL_USERS`` is the view that
+    names every one the session can see. ``USER_USERS`` would answer only
+    the connecting user, which is not what a caller asking for the
+    instance's schemas means.
+    """
+
+    def __init__(self, dialect: "SQLDialectBase"):
+        """
+        Args:
+            dialect: The SQL dialect to use for formatting.
+        """
+        super().__init__(dialect)
+
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_schema_list_query_statement"
+
+
+class OraclePartitionListQueryStatement(IntrospectionExpression):
+    """The partitions of one table, in declaration order.
+
+    The partition rows live in ``ALL_TAB_PARTITIONS``; the strategy, the
+    subpartitioning type and the interval expression live in
+    ``ALL_PART_TABLES``, which is joined on the owner and table name. The
+    tablespace's block size is read rather than assumed, so
+    ``SIZE_BYTES`` is the partition's real footprint on a database whose
+    block size is not 8 KiB.
+
+    ``include_stats`` decides whether ``NUM_ROWS``/``BLOCKS`` are part of
+    the question at all. They are the optimiser's statistics rather than
+    structural metadata, and the neutral state leaves them out unless the
+    caller asked for them -- reading them is a query in its own right on an
+    engine whose statistics gathering is not free.
+    """
+
+    def __init__(
+        self,
+        dialect: "SQLDialectBase",
+        *,
+        table_name: str,
+        schema: str,
+        include_stats: bool = False,
+    ):
+        """
+        Args:
+            dialect: The SQL dialect to use for formatting.
+            table_name: The partitioned table.
+            schema: The owner of that table.
+            include_stats: Whether to project the row estimate and size.
+        """
+        super().__init__(dialect, schema=schema)
+        self.table_name: str = table_name
+        self.include_stats: bool = include_stats
 
     @property
     def format_method(self) -> str:

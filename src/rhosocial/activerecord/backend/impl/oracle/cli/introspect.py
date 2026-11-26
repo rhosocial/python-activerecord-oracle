@@ -46,7 +46,10 @@ from typing import Any, Dict, List
 from rhosocial.activerecord.backend.impl.oracle.backend import OracleBackend
 from rhosocial.activerecord.backend.impl.oracle.backend.async_backend import AsyncOracleBackend
 from rhosocial.activerecord.backend.errors import ConnectionError, QueryError
-from rhosocial.activerecord.backend.introspection.types import ProfileSource
+from rhosocial.activerecord.backend.introspection.types import (
+    PartitionState,
+    ProfileSource,
+)
 
 from .connection import add_connection_args, resolve_connection_config_from_args
 from .output import OUTPUT_CHOICES, create_provider
@@ -472,6 +475,20 @@ def _serialize_for_output(obj: Any) -> Any:
     return str(obj)
 
 
+def _partition_state_rows(state: Any) -> List[Dict[str, Any]]:
+    """The neutral partition state as one renderable row.
+
+    ``None`` from ``get_partition_state`` means "not partitioned", and the
+    neutral shape says that in its ``scheme`` slot: an empty partition
+    listing would read as "the listing ran and found nothing", which is not
+    the same answer. ``PartitionState()`` fills exactly that shape.
+    """
+    if state is None:
+        state = PartitionState()
+    data = _serialize_for_output(state)
+    return [data]
+
+
 def _value_sample_rows(samples: List[Any]) -> List[Dict[str, Any]]:
     """The value listing as rows, each carrying how it was produced.
 
@@ -589,8 +606,10 @@ def _handle_introspect_sync(args, backend: OracleBackend, provider):
 
         elif args.type == "partitions":
             # NAME is the table, as it is for columns/indexes/constraints.
-            partitions = introspector.list_partitions(args.name, schema=None)
-            data = _serialize_for_output(partitions)
+            # The answer is the neutral partition state rather than Oracle's
+            # per-partition catalogue rows.
+            state = introspector.get_partition_state(args.name, schema=None)
+            data = _partition_state_rows(state)
             provider.display_results(data, title=f"Partitions of {args.name}")
 
         elif args.type == "constraints":
@@ -854,8 +873,8 @@ async def _handle_introspect_async(args, backend: AsyncOracleBackend, provider):
             provider.display_results(data, title="Packages")
 
         elif args.type == "partitions":
-            partitions = await introspector.list_partitions(args.name, schema=None)
-            data = _serialize_for_output(partitions)
+            state = await introspector.get_partition_state(args.name, schema=None)
+            data = _partition_state_rows(state)
             provider.display_results(data, title=f"Partitions of {args.name}")
 
         elif args.type == "constraints":

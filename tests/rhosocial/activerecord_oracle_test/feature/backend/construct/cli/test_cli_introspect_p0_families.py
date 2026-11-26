@@ -17,6 +17,11 @@ import pytest
 
 from rhosocial.activerecord.backend.impl.oracle.cli import introspect as introspect_cli
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
+from rhosocial.activerecord.backend.introspection.types import (
+    PartitionBound,
+    PartitionScheme,
+    PartitionState,
+)
 
 #: The families this change adds, and the dialect switch that gates each.
 NEW_FAMILIES = {
@@ -199,7 +204,7 @@ class TestTheSyncBranches:
     @pytest.mark.parametrize(
         "type_,method,title",
         [
-            ("partitions", "list_partitions", "Partitions of orders"),
+            ("partitions", "get_partition_state", "Partitions of orders"),
             ("constraints", "list_constraints", "Constraints of orders"),
         ],
     )
@@ -208,6 +213,28 @@ class TestTheSyncBranches:
         provider = _run_sync(monkeypatch, introspector, _args(type_, "orders"))
         assert introspector.calls == [(method, ("orders",), {"schema": None})]
         assert provider.results[0][0] == title
+
+    def test_the_partition_answer_is_the_neutral_state(self, monkeypatch):
+        state = PartitionState(
+            scheme=PartitionScheme.RANGE,
+            auto_extend=False,
+            bounds=(PartitionBound(name="P2026_01", upper="2026-02-01"),),
+        )
+        introspector = RecordingIntrospector({"get_partition_state": state})
+        provider = _run_sync(monkeypatch, introspector, _args("partitions", "orders"))
+        payload = provider.results[0][1]
+        assert payload[0]["scheme"] == "range"
+        assert payload[0]["auto_extend"] is False
+        assert payload[0]["bounds"][0]["name"] == "P2026_01"
+        assert payload[0]["bounds"][0]["upper"] == "2026-02-01"
+
+    def test_an_unpartitioned_table_renders_a_null_scheme(self, monkeypatch):
+        """``None`` is rendered as the neutral state, not as an empty listing."""
+        introspector = RecordingIntrospector({"get_partition_state": None})
+        provider = _run_sync(monkeypatch, introspector, _args("partitions", "orders"))
+        payload = provider.results[0][1]
+        assert payload[0]["scheme"] is None
+        assert payload[0]["bounds"] == []
 
     @pytest.mark.parametrize(
         "type_,method,title",
@@ -273,7 +300,7 @@ class TestTheAsyncBranches:
     @pytest.mark.parametrize(
         "type_,method,expected",
         [
-            ("partitions", "list_partitions", (("orders",), {"schema": None})),
+            ("partitions", "get_partition_state", (("orders",), {"schema": None})),
             ("constraints", "list_constraints", (("orders",), {"schema": None})),
             ("procedures", "list_procedures", ((), {"owner": None})),
             ("functions", "list_functions", ((), {"owner": None})),
@@ -290,7 +317,7 @@ class TestTheAsyncBranches:
             "get_procedure_info": "calculate_tax",
             "get_function_info": "calculate_total",
             "get_type_info": "address_t",
-            "list_partitions": "orders",
+            "get_partition_state": "orders",
             "list_constraints": "orders",
         }.get(method)
         introspector = AsyncRecordingIntrospector({method: {"OBJECT_NAME": name}})

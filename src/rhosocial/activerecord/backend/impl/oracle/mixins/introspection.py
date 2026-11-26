@@ -37,14 +37,17 @@ if TYPE_CHECKING:
     )
     from ...expression.introspection import (
         OracleConstraintListQueryStatement,
+        OracleIndexStateQueryStatement,
         OraclePackageListQueryStatement,
         OraclePartitionListQueryStatement,
         OraclePrimaryKeyQueryStatement,
         OracleRoutineListQueryStatement,
+        OracleSchemaListQueryStatement,
         OracleSequenceInfoQueryStatement,
         OracleSequenceListQueryStatement,
         OracleSynonymInfoQueryStatement,
         OracleSynonymListQueryStatement,
+        OracleTableStateQueryStatement,
         OracleTypeListQueryStatement,
     )
 
@@ -1207,6 +1210,21 @@ class OracleIntrospectionMixin:
             ),
         ).to_sql()
 
+    def format_schema_list_query_statement(
+        self, expr: "OracleSchemaListQueryStatement"
+    ) -> Tuple[str, tuple]:
+        """The schema (owner) names the instance exposes, in name order."""
+        from rhosocial.activerecord.backend.expression import (
+            OrderByClause, QueryStatement,
+        )
+
+        return QueryStatement(
+            self,
+            select=[self._column("username")],
+            from_=self._relation("all_users"),
+            order_by=OrderByClause(self, [self._column("username")]),
+        ).to_sql()
+
     def format_synonym_list_query_statement(
         self, expr: "OracleSynonymListQueryStatement"
     ) -> Tuple[str, tuple]:
@@ -1284,6 +1302,123 @@ class OracleIntrospectionMixin:
     # partition of an INTERVAL table exists".
     # ------------------------------------------------------------------ #
 
+    def format_table_state_query_statement(
+        self, expr: "OracleTableStateQueryStatement"
+    ) -> Tuple[str, tuple]:
+        """One table's physical facts, plus its comment.
+
+        The kind and storage settings live in ``ALL_TABLES``; the comment is
+        a second view joined on the owner and table name. ``LEFT`` keeps a
+        table whose comment nobody set -- a missing comment is not a missing
+        table.
+        """
+        from rhosocial.activerecord.backend.expression import (
+            JoinClause, JoinType, Literal, QueryStatement,
+        )
+
+        params = expr.get_params()
+        table_name = params.get("table_name", "")
+        schema = params.get("schema", "")
+
+        comment_join = JoinClause(
+            self,
+            left_table=self._relation("all_tables", "t"),
+            right_table=self._relation("all_tab_comments", "c"),
+            join_type=JoinType.LEFT,
+            condition=self._all_of(
+                self._equals(
+                    self._column("table_name", "t"), self._column("table_name", "c")
+                ),
+                self._equals(self._column("owner", "t"), self._column("owner", "c")),
+            ),
+        )
+
+        return QueryStatement(
+            self,
+            select=[
+                self._column("owner", "t", "OWNER"),
+                self._column("table_name", "t", "TABLE_NAME"),
+                self._column("temporary", "t", "TEMPORARY"),
+                self._column("tablespace_name", "t", "TABLESPACE_NAME"),
+                self._column("compression", "t", "COMPRESSION"),
+                self._column("compress_for", "t", "COMPRESS_FOR"),
+                self._column("iot_type", "t", "IOT_TYPE"),
+                self._column("logging", "t", "LOGGING"),
+                self._column("comments", "c", "COMMENTS"),
+            ],
+            from_=comment_join,
+            where=self._where(
+                self._equals(
+                    self._column("owner", "t"),
+                    Literal(self, str(schema).upper()),
+                ),
+                self._equals(
+                    self._column("table_name", "t"),
+                    Literal(self, str(table_name).upper()),
+                ),
+            ),
+        ).to_sql()
+
+    def format_index_state_query_statement(
+        self, expr: "OracleIndexStateQueryStatement"
+    ) -> Tuple[str, tuple]:
+        """Every index on one table, with the constraint that backs it.
+
+        ``ALL_INDEXES`` names the global status and visibility; the backing
+        constraint comes from ``ALL_CONSTRAINTS`` joined on the shared owner
+        and index name. The join is ``LEFT`` because an ordinary index backs
+        no constraint, and the rows are grouped by the parser rather than
+        here: one index may be named by more than one constraint row.
+        """
+        from rhosocial.activerecord.backend.expression import (
+            JoinClause, JoinType, Literal, OrderByClause, QueryStatement,
+        )
+
+        params = expr.get_params()
+        table_name = params.get("table_name", "")
+        schema = params.get("schema", "")
+
+        with_constraint = JoinClause(
+            self,
+            left_table=self._relation("all_indexes", "i"),
+            right_table=self._relation("all_constraints", "cons"),
+            join_type=JoinType.LEFT,
+            condition=self._all_of(
+                self._equals(
+                    self._column("index_name", "cons"), self._column("index_name", "i")
+                ),
+                self._equals(
+                    self._column("owner", "cons"), self._column("owner", "i")
+                ),
+            ),
+        )
+
+        return QueryStatement(
+            self,
+            select=[
+                self._column("owner", "i", "OWNER"),
+                self._column("table_name", "i", "TABLE_NAME"),
+                self._column("index_name", "i", "INDEX_NAME"),
+                self._column("uniqueness", "i", "UNIQUENESS"),
+                self._column("index_type", "i", "INDEX_TYPE"),
+                self._column("status", "i", "STATUS"),
+                self._column("visibility", "i", "VISIBILITY"),
+                self._column("constraint_name", "cons", "CONSTRAINT_NAME"),
+            ],
+            from_=with_constraint,
+            where=self._where(
+                self._equals(
+                    self._column("owner", "i"),
+                    Literal(self, str(schema).upper()),
+                ),
+                self._equals(
+                    self._column("table_name", "i"),
+                    Literal(self, str(table_name).upper()),
+                ),
+            ),
+            order_by=OrderByClause(self, [self._column("index_name", "i")]),
+        ).to_sql()
+
     def format_partition_list_query_statement(
         self, expr: "OraclePartitionListQueryStatement"
     ) -> Tuple[str, tuple]:
@@ -1293,7 +1428,9 @@ class OracleIntrospectionMixin:
         the same read the table listing makes and for the same reason:
         ``BLOCKS`` is the tablespace's unit, not a byte count. A partition
         whose tablespace the session cannot see keeps ``SIZE_BYTES`` null
-        rather than an assumed 8 KiB multiplication.
+        rather than an assumed 8 KiB multiplication. Both the block-size
+        join and the two statistics columns exist only when ``include_stats``
+        asked for them.
 
         ``ALL_PART_TABLES.INTERVAL`` exists from 11.1 on, so it is projected
         only on a server that has it. The strategy is still answered on
@@ -1307,6 +1444,7 @@ class OracleIntrospectionMixin:
         params = expr.get_params()
         table_name = params.get("table_name", "")
         schema = params.get("schema", "")
+        include_stats = bool(params.get("include_stats", False))
 
         partitions = JoinClause(
             self,
@@ -1322,16 +1460,23 @@ class OracleIntrospectionMixin:
                 ),
             ),
         )
-        with_block_size = JoinClause(
-            self,
-            left_table=partitions,
-            right_table=self._relation("user_tablespaces", "ts"),
-            join_type=JoinType.LEFT,
-            condition=self._equals(
-                self._column("tablespace_name", "p"),
-                self._column("tablespace_name", "ts"),
-            ),
-        )
+        if include_stats:
+            # The block size is only needed for SIZE_BYTES, and it is the
+            # tablespace's own unit rather than an assumed 8 KiB. When stats
+            # were not asked for the join is skipped entirely: reading
+            # NUM_ROWS is itself a statistics query.
+            with_block_size = JoinClause(
+                self,
+                left_table=partitions,
+                right_table=self._relation("user_tablespaces", "ts"),
+                join_type=JoinType.LEFT,
+                condition=self._equals(
+                    self._column("tablespace_name", "p"),
+                    self._column("tablespace_name", "ts"),
+                ),
+            )
+        else:
+            with_block_size = partitions
 
         projection = [
             self._column("table_owner", "p", "OWNER"),
@@ -1342,13 +1487,6 @@ class OracleIntrospectionMixin:
             self._column("high_value_length", "p", "HIGH_VALUE_LENGTH"),
             self._column("tablespace_name", "p", "TABLESPACE_NAME"),
             self._column("subpartition_count", "p", "SUBPARTITION_COUNT"),
-            self._column("num_rows", "p", "NUM_ROWS"),
-            ArithmeticOperation(
-                self,
-                "mul",
-                self._column("blocks", "p"),
-                self._column("block_size", "ts"),
-            ).as_("SIZE_BYTES"),
             self._column("partitioning_type", "pt", "PARTITIONING_TYPE"),
             self._column("subpartitioning_type", "pt", "SUBPARTITIONING_TYPE"),
             self._column("partition_count", "pt", "PARTITION_COUNT"),
@@ -1357,6 +1495,18 @@ class OracleIntrospectionMixin:
             self._column("segment_created", "p", "SEGMENT_CREATED"),
             self._column("read_only", "p", "READ_ONLY"),
         ]
+        if include_stats:
+            projection.extend(
+                [
+                    self._column("num_rows", "p", "NUM_ROWS"),
+                    ArithmeticOperation(
+                        self,
+                        "mul",
+                        self._column("blocks", "p"),
+                        self._column("block_size", "ts"),
+                    ).as_("SIZE_BYTES"),
+                ]
+            )
         if self.version_at_least((11, 1, 0)):
             projection.append(self._column("interval", "pt", "INTERVAL"))
 

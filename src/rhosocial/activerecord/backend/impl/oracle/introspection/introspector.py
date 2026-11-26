@@ -25,19 +25,23 @@ Design principle: Sync and Async are separate and cannot coexist.
 """
 
 import copy
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..expression.introspection import (
         OracleConstraintListQueryStatement,
+        OracleIndexStateQueryStatement,
         OraclePackageListQueryStatement,
         OraclePartitionListQueryStatement,
         OraclePrimaryKeyQueryStatement,
         OracleRoutineListQueryStatement,
+        OracleSchemaListQueryStatement,
         OracleSequenceInfoQueryStatement,
         OracleSequenceListQueryStatement,
         OracleSynonymInfoQueryStatement,
         OracleSynonymListQueryStatement,
+        OracleTableStateQueryStatement,
         OracleTypeListQueryStatement,
     )
 
@@ -67,6 +71,16 @@ from rhosocial.activerecord.backend.introspection.types import (
     IntrospectionScope,
     ColumnValueFrequency,
     ProfileSource,
+    TableState,
+    StorageOptionsState,
+    PartitionState,
+    PartitionBound,
+    PartitionScheme,
+    IndexState,
+    ConstraintState,
+    SequenceState,
+    DerivedObjectState,
+    ItemKind,
 )
 from rhosocial.activerecord.backend.expression.types import DataType
 from .type_parser import OracleTypeParser
@@ -102,7 +116,42 @@ _TYPE_FAMILY = "oracle:types"
 #: ``IntrospectionScope.TABLE`` with the table's own entry and are told apart
 #: by these ``extra`` values.
 _PARTITION_FAMILY = "partitions"
+_PARTITION_STATS_FAMILY = "partitions:stats"
 _CONSTRAINT_FAMILY = "oracle:constraints"
+#: The neutral-state answers have their own cache namespace even where the
+#: underlying catalogue question is shared with an older family.
+_TABLE_STATE_FAMILY = "oracle:table-state"
+_INDEX_STATE_FAMILY = "oracle:index-states"
+_CONSTRAINT_STATE_FAMILY = "oracle:constraint-states"
+_SEQUENCE_STATE_FAMILY = "oracle:sequence-states"
+_SCHEMA_LIST_FAMILY = "oracle:schema-list"
+_DERIVED_OBJECT_FAMILY = "oracle:derived-objects"
+
+#: Oracle's partition strategy, as the core neutral vocabulary names it.
+#: ``UNKNOWN`` is a partitioned table whose strategy the dictionary did not
+#: spell recognisably; it is still partitioned, so it must not collapse to
+#: ``None`` (which means "not partitioned").
+_PARTITION_SCHEME_BY_STRATEGY = {
+    OraclePartitionStrategy.RANGE: PartitionScheme.RANGE,
+    OraclePartitionStrategy.LIST: PartitionScheme.LIST,
+    OraclePartitionStrategy.HASH: PartitionScheme.HASH,
+    OraclePartitionStrategy.COMPOSITE: PartitionScheme.COMPOSITE,
+    OraclePartitionStrategy.INTERVAL: PartitionScheme.INTERVAL,
+    OraclePartitionStrategy.UNKNOWN: PartitionScheme.EXPRESSION,
+}
+
+#: The ``ALL_CONSTRAINTS.CONSTRAINT_TYPE`` letters, in the neutral vocabulary.
+_CONSTRAINT_KIND_BY_CODE = {
+    "P": "primary_key",
+    "U": "unique",
+    "C": "check",
+    "R": "foreign_key",
+    "V": "with_check_option",
+    "O": "read_only",
+    "H": "hash_expression",
+    "F": "ref",
+    "S": "supplemental_logging",
+}
 
 
 def _as_int(value: Any) -> Optional[int]:
@@ -301,14 +350,43 @@ class OracleIntrospectorMixin(IntrospectorMixin):
         return OraclePackageListQueryStatement(self.dialect, owner=owner.upper())
 
     def partition_list_statement(
-        self, *, table_name: str, schema: str
+        self, *, table_name: str, schema: str, include_stats: bool = False
     ) -> "OraclePartitionListQueryStatement":
         """Return the statement that lists one table's partitions."""
         from ..expression.introspection import OraclePartitionListQueryStatement
 
         return OraclePartitionListQueryStatement(
+            self.dialect,
+            table_name=table_name,
+            schema=schema,
+            include_stats=include_stats,
+        )
+
+    def table_state_statement(
+        self, *, table_name: str, schema: str
+    ) -> "OracleTableStateQueryStatement":
+        """Return the statement that asks for one table's physical facts."""
+        from ..expression.introspection import OracleTableStateQueryStatement
+
+        return OracleTableStateQueryStatement(
             self.dialect, table_name=table_name, schema=schema
         )
+
+    def index_state_statement(
+        self, *, table_name: str, schema: str
+    ) -> "OracleIndexStateQueryStatement":
+        """Return the statement that lists one table's indexes and their state."""
+        from ..expression.introspection import OracleIndexStateQueryStatement
+
+        return OracleIndexStateQueryStatement(
+            self.dialect, table_name=table_name, schema=schema
+        )
+
+    def schema_list_statement(self) -> "OracleSchemaListQueryStatement":
+        """Return the statement that lists the schemas this instance exposes."""
+        from ..expression.introspection import OracleSchemaListQueryStatement
+
+        return OracleSchemaListQueryStatement(self.dialect)
 
     def routine_list_statement(
         self, *, owner: str, routine_kind: str
@@ -993,6 +1071,237 @@ class OracleIntrospectorMixin(IntrospectorMixin):
             )
         return partitions
 
+    def parse_table_state(
+        self,
+        rows: List[Dict[str, Any]],
+        table_name: str = "",
+        schema: str = "",
+    ) -> TableState:
+        """Turn one ``ALL_TABLES`` row into the neutral table-state shape.
+
+        A missing row still answers a :class:`TableState`: the caller asked
+        about a named table, and the neutral shape carries the name and the
+        defaults rather than a second, backend-specific way of saying
+        "absent". Oracle's ``TEMPORARY`` flag is the one kind word the view
+        carries; ``IOT_TYPE`` and ``LOGGING`` are traits beside it.
+        """
+        row = rows[0] if rows else {}
+        temporary = _word_is(row.get("TEMPORARY"), "Y")
+        iot_type = row.get("IOT_TYPE")
+        logging = row.get("LOGGING")
+        traits = []
+        if iot_type:
+            traits.append(str(iot_type).strip().lower())
+        if _word_is(logging, "NO"):
+            traits.append("nologging")
+        raw = {
+            key: row.get(key)
+            for key in ("TEMPORARY", "TABLESPACE_NAME", "COMPRESSION",
+                        "COMPRESS_FOR", "IOT_TYPE", "LOGGING")
+            if row.get(key) is not None
+        }
+        return TableState(
+            name=str(row.get("TABLE_NAME") or table_name).upper(),
+            schema=str(row.get("OWNER") or schema) or None,
+            kind="temporary" if temporary else "regular",
+            traits=tuple(traits),
+            storage=StorageOptionsState(
+                tablespace=row.get("TABLESPACE_NAME"),
+                compression=row.get("COMPRESSION"),
+                raw={
+                    "compress_for": row.get("COMPRESS_FOR"),
+                },
+            ),
+            comment=row.get("COMMENTS"),
+            raw=raw,
+        )
+
+    def parse_partition_state(
+        self,
+        partitions: List[OraclePartitionInfo],
+        table_name: str = "",
+        schema: str = "",
+        include_stats: bool = False,
+    ) -> Optional[PartitionState]:
+        """Project the partition listing onto the neutral state shape.
+
+        ``None`` means "this table is not partitioned". An interval
+        partition's expression is the neutral ``auto_extend`` flag; the
+        statistics slots are filled only when the caller asked for them.
+        """
+        if not partitions:
+            return None
+        first = partitions[0]
+        interval = next((p.interval for p in partitions if p.interval), None)
+        bounds = tuple(
+            PartitionBound(
+                name=p.partition_name,
+                upper=p.high_value,
+                is_maxvalue=p.is_max_value,
+                subpartition_count=p.subpartition_count or 0,
+                row_count=p.row_count if include_stats else None,
+                size_bytes=p.size_bytes if include_stats else None,
+                tablespace=p.tablespace_name,
+            )
+            for p in partitions
+        )
+        return PartitionState(
+            scheme=_PARTITION_SCHEME_BY_STRATEGY.get(
+                first.strategy, PartitionScheme.EXPRESSION
+            ),
+            auto_extend=interval is not None,
+            bounds=bounds,
+            raw={
+                "partition_count": first.extra.get("partition_count"),
+                "strategy": first.strategy.value,
+                "interval": interval,
+            },
+        )
+
+    def parse_index_states(
+        self,
+        rows: List[Dict[str, Any]],
+        table_name: str = "",
+        schema: str = "",
+    ) -> List[IndexState]:
+        """Project one table's index rows onto the neutral state shape.
+
+        The rows may repeat an index when more than one constraint names it;
+        the backing constraint is the first non-null name, and the index is
+        reported once. ``STATUS`` is Oracle's global index state, so an
+        ``UNUSABLE`` index is reported ``usable=False`` -- the fact a
+        migration plan must see before it relies on the index.
+        """
+        entries: Dict[str, Dict[str, Any]] = {}
+        order: List[str] = []
+        for row in rows or []:
+            name = row.get("INDEX_NAME")
+            if not name:
+                continue
+            key = str(name)
+            if key not in entries:
+                status = row.get("STATUS")
+                visibility = row.get("VISIBILITY")
+                entries[key] = {
+                    "name": key,
+                    "table": str(row.get("TABLE_NAME") or table_name).upper(),
+                    "schema": row.get("OWNER") or schema,
+                    "unique": _word_is(row.get("UNIQUENESS"), "UNIQUE"),
+                    "method": row.get("INDEX_TYPE"),
+                    "visible": (
+                        True
+                        if visibility is None
+                        else _word_is(visibility, "VISIBLE")
+                    ),
+                    "usable": (
+                        True if status is None else _word_is(status, "VALID")
+                    ),
+                    "backs_constraint": row.get("CONSTRAINT_NAME"),
+                    "raw": {
+                        "status": status,
+                        "visibility": visibility,
+                        "index_type": row.get("INDEX_TYPE"),
+                    },
+                }
+                order.append(key)
+            elif entries[key]["backs_constraint"] is None:
+                entries[key]["backs_constraint"] = row.get("CONSTRAINT_NAME")
+        return [
+            IndexState(
+                name=entries[key]["name"],
+                table=entries[key]["table"],
+                schema=entries[key]["schema"],
+                unique=entries[key]["unique"],
+                method=entries[key]["method"],
+                visible=entries[key]["visible"],
+                usable=entries[key]["usable"],
+                backs_constraint=entries[key]["backs_constraint"],
+                raw=entries[key]["raw"],
+            )
+            for key in order
+        ]
+
+    def parse_constraint_states(
+        self,
+        rows: List[Dict[str, Any]],
+        table_name: str = "",
+        schema: str = "",
+    ) -> List[ConstraintState]:
+        """Project constraint rows onto the neutral state shape.
+
+        Oracle states enforcement in ``STATUS`` (``ENABLED``/``DISABLED``)
+        and validation in ``VALIDATED`` (``VALIDATED``/``NOT VALIDATED``);
+        the two are independent answers. ``DISABLED`` therefore sets
+        ``disabled`` and clears ``enforced``, while ``NOT VALIDATED`` only
+        clears ``validated``.
+        """
+        states: List[ConstraintState] = []
+        for constraint in self.parse_constraints(rows, table_name, schema):
+            disabled = _word_is(constraint.status, "DISABLED")
+            states.append(
+                ConstraintState(
+                    name=constraint.name,
+                    table=constraint.table_name,
+                    kind=_CONSTRAINT_KIND_BY_CODE.get(
+                        str(constraint.constraint_type).upper(),
+                        str(constraint.constraint_type),
+                    ),
+                    schema=constraint.owner,
+                    validated=_word_is(constraint.validated, "VALIDATED"),
+                    enforced=not disabled,
+                    deferred=_word_is(constraint.deferred, "DEFERRED"),
+                    disabled=disabled,
+                    backing_index=constraint.index_name,
+                    raw={
+                        "constraint_type": constraint.constraint_type,
+                        "status": constraint.status,
+                        "validated": constraint.validated,
+                        "deferrable": constraint.deferrable,
+                        "rely": constraint.rely,
+                        "bad": constraint.bad,
+                    },
+                )
+            )
+        return states
+
+    def parse_sequence_states(
+        self, sequences: List[OracleSequenceInfo]
+    ) -> List[SequenceState]:
+        """Project the sequence listing onto the neutral state shape.
+
+        Oracle does not record an owning column natively -- identity
+        sequences are linked through the identity column's own dictionary
+        view -- so ``owned_by`` stays ``None`` rather than being guessed
+        from a naming convention. ``start`` is ``None`` for the same reason:
+        ``ALL_SEQUENCES`` reports no ``START_WITH``.
+        """
+        return [
+            SequenceState(
+                name=sequence.name,
+                schema=sequence.owner,
+                owned_by=None,
+                start=None,
+                increment=sequence.increment,
+                raw={
+                    "min_value": sequence.min_value,
+                    "max_value": sequence.max_value,
+                    "cycle": sequence.cycle,
+                    "cache_size": sequence.cache_size,
+                    "order": sequence.order,
+                    "last_number": sequence.last_number,
+                },
+            )
+            for sequence in sequences
+        ]
+
+    def parse_schema_names(self, rows: List[Dict[str, Any]]) -> List[str]:
+        """Read the owner names from an ``ALL_USERS`` listing."""
+        return [
+            str(row.get("USERNAME")).upper()
+            for row in rows or []
+            if row.get("USERNAME")
+        ]
+
     def parse_routines(self, rows: List[Dict[str, Any]]) -> List[OracleRoutineInfo]:
         """Turn joined ``ALL_PROCEDURES``/``ALL_ARGUMENTS`` rows into routines.
 
@@ -1579,40 +1888,229 @@ class OracleIntrospector(OracleIntrospectorMixin, AbstractIntrospector):
     # Table physical shape and declaration: partitions and constraints
     # ------------------------------------------------------------------ #
 
-    def list_partitions(
+    def get_table_state(
         self, table_name: str, schema: Optional[str] = None
-    ) -> List[OraclePartitionInfo]:
-        """Return the partitions of *table_name*, in declaration order.
+    ) -> TableState:
+        """Read the table's kind, storage options, comment and partition scheme.
 
-        Args:
-            table_name: The partitioned table.
-            schema: Oracle schema (owner) of that table. ``None`` means the
-                connected user's schema.
-
-        Returns:
-            The partitions. A table that is not partitioned answers an empty
-            list -- "no partitions" is a fact, not a capability gap.
+        The physical facts come from ``ALL_TABLES`` and its comment view; the
+        partition scheme is the same :meth:`get_partition_state` answer a
+        caller can ask for on its own. A table the catalogue does not list
+        still yields a :class:`TableState` carrying the requested name, so
+        the neutral shape has one way of saying "nothing else is known".
         """
         target_schema = self._normalise_schema(schema)
         key = self._cache.key(
             IntrospectionScope.TABLE,
             str(table_name).upper(),
             schema=target_schema,
-            extra=_PARTITION_FAMILY,
+            extra=_TABLE_STATE_FAMILY,
+        )
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        sql, params = self.table_state_statement(
+            table_name=table_name, schema=target_schema
+        ).to_sql()
+        state = self.parse_table_state(
+            self._executor.execute(sql, params),
+            str(table_name).upper(),
+            target_schema,
+        )
+        partitioning = self.get_partition_state(table_name, target_schema)
+        if partitioning is not None:
+            state = replace(state, partitioning=partitioning)
+
+        self._cache.set(key, state)
+        return state
+
+    def get_partition_state(
+        self,
+        table_name: str,
+        schema: Optional[str] = None,
+        include_stats: bool = False,
+    ) -> Optional[PartitionState]:
+        """Read the table's partition scheme and bounds.
+
+        ``None`` is the single answer for "not partitioned": the join of the
+        partition rows to the strategy row yields no row for such a table.
+        ``include_stats`` decides whether ``NUM_ROWS`` and ``SIZE_BYTES`` are
+        part of the question; the structural answer does not read them.
+        """
+        target_schema = self._normalise_schema(schema)
+        key = self._cache.key(
+            IntrospectionScope.TABLE,
+            str(table_name).upper(),
+            schema=target_schema,
+            extra=(
+                _PARTITION_STATS_FAMILY
+                if include_stats
+                else _PARTITION_FAMILY
+            ),
         )
         cached = self._cache.get(key)
         if cached is not None:
             return cached
 
         sql, params = self.partition_list_statement(
-            table_name=table_name, schema=target_schema
+            table_name=table_name, schema=target_schema, include_stats=include_stats
         ).to_sql()
         partitions = self.parse_partitions(
-            self._executor.execute(sql, params), str(table_name).upper(), target_schema
+            self._executor.execute(sql, params),
+            str(table_name).upper(),
+            target_schema,
         )
+        state = self.parse_partition_state(
+            partitions, str(table_name).upper(), target_schema, include_stats
+        )
+        if state is not None:
+            self._cache.set(key, state)
+        return state
 
-        self._cache.set(key, partitions)
-        return partitions
+    def list_index_states(
+        self, table_name: str, schema: Optional[str] = None
+    ) -> List[IndexState]:
+        """Read every index on the table, including usability and visibility."""
+        target_schema = self._normalise_schema(schema)
+        key = self._cache.key(
+            IntrospectionScope.INDEX,
+            str(table_name).upper(),
+            schema=target_schema,
+            extra=_INDEX_STATE_FAMILY,
+        )
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        sql, params = self.index_state_statement(
+            table_name=table_name, schema=target_schema
+        ).to_sql()
+        states = self.parse_index_states(
+            self._executor.execute(sql, params),
+            str(table_name).upper(),
+            target_schema,
+        )
+        self._cache.set(key, states)
+        return states
+
+    def list_constraint_states(
+        self, table_name: str, schema: Optional[str] = None
+    ) -> List[ConstraintState]:
+        """Read every constraint on the table, including its validation state."""
+        target_schema = self._normalise_schema(schema)
+        key = self._cache.key(
+            IntrospectionScope.TABLE,
+            str(table_name).upper(),
+            schema=target_schema,
+            extra=_CONSTRAINT_STATE_FAMILY,
+        )
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        sql, params = self.constraint_list_statement(
+            table_name=table_name, schema=target_schema
+        ).to_sql()
+        states = self.parse_constraint_states(
+            self._executor.execute(sql, params),
+            str(table_name).upper(),
+            target_schema,
+        )
+        self._cache.set(key, states)
+        return states
+
+    def list_sequence_states(
+        self, schema: Optional[str] = None
+    ) -> List[SequenceState]:
+        """Read the sequences this schema holds, with their owning columns."""
+        target_owner = self._normalise_owner(schema)
+        key = self._cache.key(
+            IntrospectionScope.SEQUENCE,
+            schema=target_owner,
+            extra=_SEQUENCE_STATE_FAMILY,
+        )
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        states = self.parse_sequence_states(self.list_sequences(target_owner))
+        self._cache.set(key, states)
+        return states
+
+    def list_schemas(self) -> List[str]:
+        """Read the schema (owner) names the instance exposes."""
+        key = self._cache.key(
+            IntrospectionScope.SCHEMA, "*", extra=_SCHEMA_LIST_FAMILY
+        )
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        sql, params = self.schema_list_statement().to_sql()
+        names = self.parse_schema_names(self._executor.execute(sql, params))
+        self._cache.set(key, names)
+        return names
+
+    def list_derived_objects(
+        self, table_name: str, schema: Optional[str] = None
+    ) -> List[DerivedObjectState]:
+        """Read the objects the engine created for a declaration on this table.
+
+        Oracle has no separate catalogue for the index a primary-key or
+        unique constraint created; ``ALL_CONSTRAINTS.INDEX_NAME`` is where it
+        is recorded. Those indexes are reported as ``backing_index`` objects
+        owned by the constraint.
+        """
+        target_schema = self._normalise_schema(schema)
+        key = self._cache.key(
+            IntrospectionScope.TABLE,
+            str(table_name).upper(),
+            schema=target_schema,
+            extra=_DERIVED_OBJECT_FAMILY,
+        )
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        objects = [
+            DerivedObjectState(
+                kind="backing_index",
+                name=constraint.index_name,
+                owned_by=constraint.name,
+                raw={
+                    "constraint_type": constraint.constraint_type,
+                    "constraint_name": constraint.name,
+                },
+            )
+            for constraint in self.list_constraints(table_name, target_schema)
+            if constraint.index_name
+        ]
+        self._cache.set(key, objects)
+        return objects
+
+    def item_exists(
+        self,
+        kind: ItemKind,
+        name: str,
+        schema: Optional[str] = None,
+    ) -> bool:
+        """Whether a shared object of this kind exists.
+
+        Oracle's dictionary answers schemas (``ALL_USERS``), named types
+        (``ALL_TYPES``/``ALL_COLL_TYPES``) and sequences (``ALL_SEQUENCES``).
+        The remaining :class:`ItemKind` members are not answerable here and
+        answer ``False`` rather than raising: the question is "does this
+        exist", and an object this backend cannot see is not one it can
+        claim exists.
+        """
+        if kind is ItemKind.SCHEMA:
+            return str(name).upper() in self.list_schemas()
+        if kind is ItemKind.TYPE:
+            return self.get_type_info(name, owner=schema) is not None
+        if kind is ItemKind.SEQUENCE:
+            return self.get_sequence_info(name, owner=schema) is not None
+        return False
 
     def list_constraints(
         self, table_name: str, schema: Optional[str] = None
@@ -1998,32 +2496,202 @@ class AsyncOracleIntrospector(OracleIntrospectorMixin, AsyncAbstractIntrospector
     # implementation for what each answer carries.
     # ------------------------------------------------------------------ #
 
-    async def list_partitions(
+    async def get_table_state(
         self, table_name: str, schema: Optional[str] = None
-    ) -> List[OraclePartitionInfo]:
-        """Return the partitions of *table_name*, in declaration order."""
+    ) -> TableState:
+        """Read the table's kind, storage options, comment and partition scheme."""
         target_schema = self._normalise_schema(schema)
         key = self._cache.key(
             IntrospectionScope.TABLE,
             str(table_name).upper(),
             schema=target_schema,
-            extra=_PARTITION_FAMILY,
+            extra=_TABLE_STATE_FAMILY,
+        )
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        sql, params = self.table_state_statement(
+            table_name=table_name, schema=target_schema
+        ).to_sql()
+        state = self.parse_table_state(
+            await self._executor.execute(sql, params),
+            str(table_name).upper(),
+            target_schema,
+        )
+        partitioning = await self.get_partition_state(table_name, target_schema)
+        if partitioning is not None:
+            state = replace(state, partitioning=partitioning)
+
+        self._cache.set(key, state)
+        return state
+
+    async def get_partition_state(
+        self,
+        table_name: str,
+        schema: Optional[str] = None,
+        include_stats: bool = False,
+    ) -> Optional[PartitionState]:
+        """Read the table's partition scheme and bounds."""
+        target_schema = self._normalise_schema(schema)
+        key = self._cache.key(
+            IntrospectionScope.TABLE,
+            str(table_name).upper(),
+            schema=target_schema,
+            extra=(
+                _PARTITION_STATS_FAMILY
+                if include_stats
+                else _PARTITION_FAMILY
+            ),
         )
         cached = self._cache.get(key)
         if cached is not None:
             return cached
 
         sql, params = self.partition_list_statement(
-            table_name=table_name, schema=target_schema
+            table_name=table_name, schema=target_schema, include_stats=include_stats
         ).to_sql()
         partitions = self.parse_partitions(
             await self._executor.execute(sql, params),
             str(table_name).upper(),
             target_schema,
         )
+        state = self.parse_partition_state(
+            partitions, str(table_name).upper(), target_schema, include_stats
+        )
+        if state is not None:
+            self._cache.set(key, state)
+        return state
 
-        self._cache.set(key, partitions)
-        return partitions
+    async def list_index_states(
+        self, table_name: str, schema: Optional[str] = None
+    ) -> List[IndexState]:
+        """Read every index on the table, including usability and visibility."""
+        target_schema = self._normalise_schema(schema)
+        key = self._cache.key(
+            IntrospectionScope.INDEX,
+            str(table_name).upper(),
+            schema=target_schema,
+            extra=_INDEX_STATE_FAMILY,
+        )
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        sql, params = self.index_state_statement(
+            table_name=table_name, schema=target_schema
+        ).to_sql()
+        states = self.parse_index_states(
+            await self._executor.execute(sql, params),
+            str(table_name).upper(),
+            target_schema,
+        )
+        self._cache.set(key, states)
+        return states
+
+    async def list_constraint_states(
+        self, table_name: str, schema: Optional[str] = None
+    ) -> List[ConstraintState]:
+        """Read every constraint on the table, including its validation state."""
+        target_schema = self._normalise_schema(schema)
+        key = self._cache.key(
+            IntrospectionScope.TABLE,
+            str(table_name).upper(),
+            schema=target_schema,
+            extra=_CONSTRAINT_STATE_FAMILY,
+        )
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        sql, params = self.constraint_list_statement(
+            table_name=table_name, schema=target_schema
+        ).to_sql()
+        states = self.parse_constraint_states(
+            await self._executor.execute(sql, params),
+            str(table_name).upper(),
+            target_schema,
+        )
+        self._cache.set(key, states)
+        return states
+
+    async def list_sequence_states(
+        self, schema: Optional[str] = None
+    ) -> List[SequenceState]:
+        """Read the sequences this schema holds, with their owning columns."""
+        target_owner = self._normalise_owner(schema)
+        key = self._cache.key(
+            IntrospectionScope.SEQUENCE,
+            schema=target_owner,
+            extra=_SEQUENCE_STATE_FAMILY,
+        )
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        states = self.parse_sequence_states(await self.list_sequences(target_owner))
+        self._cache.set(key, states)
+        return states
+
+    async def list_schemas(self) -> List[str]:
+        """Read the schema (owner) names the instance exposes."""
+        key = self._cache.key(
+            IntrospectionScope.SCHEMA, "*", extra=_SCHEMA_LIST_FAMILY
+        )
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        sql, params = self.schema_list_statement().to_sql()
+        names = self.parse_schema_names(await self._executor.execute(sql, params))
+        self._cache.set(key, names)
+        return names
+
+    async def list_derived_objects(
+        self, table_name: str, schema: Optional[str] = None
+    ) -> List[DerivedObjectState]:
+        """Read the objects the engine created for a declaration on this table."""
+        target_schema = self._normalise_schema(schema)
+        key = self._cache.key(
+            IntrospectionScope.TABLE,
+            str(table_name).upper(),
+            schema=target_schema,
+            extra=_DERIVED_OBJECT_FAMILY,
+        )
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        objects = [
+            DerivedObjectState(
+                kind="backing_index",
+                name=constraint.index_name,
+                owned_by=constraint.name,
+                raw={
+                    "constraint_type": constraint.constraint_type,
+                    "constraint_name": constraint.name,
+                },
+            )
+            for constraint in await self.list_constraints(table_name, target_schema)
+            if constraint.index_name
+        ]
+        self._cache.set(key, objects)
+        return objects
+
+    async def item_exists(
+        self,
+        kind: ItemKind,
+        name: str,
+        schema: Optional[str] = None,
+    ) -> bool:
+        """Whether a shared object of this kind exists."""
+        if kind is ItemKind.SCHEMA:
+            return str(name).upper() in await self.list_schemas()
+        if kind is ItemKind.TYPE:
+            return await self.get_type_info(name, owner=schema) is not None
+        if kind is ItemKind.SEQUENCE:
+            return await self.get_sequence_info(name, owner=schema) is not None
+        return False
 
     async def list_constraints(
         self, table_name: str, schema: Optional[str] = None
