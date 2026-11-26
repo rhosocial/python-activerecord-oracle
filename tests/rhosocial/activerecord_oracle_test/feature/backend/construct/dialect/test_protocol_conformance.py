@@ -5,7 +5,10 @@ This test ensures:
 1. OracleDialect implements every generic dialect protocol it claims to support.
 2. OracleDialect deliberately does NOT implement the generic protocols it does
    not claim (listed explicitly so accidental support fails the negative test).
-3. Every generic dialect protocol is classified into exactly one list, so new
+3. A family is classified by its answers, not by whether its members exist:
+   core's composition mixin makes a refused family structurally reachable, so
+   the introspection families are split into claimed and refused lists.
+4. Every generic dialect protocol is classified into exactly one list, so new
    protocols added upstream cannot silently escape the contract.
 """
 
@@ -47,7 +50,47 @@ def get_all_protocol_methods(proto: type) -> set:
     return members
 
 
-# Generic dialect protocols OracleDialect satisfies.
+# The four introspection families, split out of the old single protocol.
+#
+# A family is *claimed* only when at least one of its ``supports_*`` probes
+# answers ``True``. ``isinstance`` is never the classifier: core's composition
+# mixin gives every dialect every family member, so a refused family is still
+# structurally present. The claimed/refused split is what callers are promised.
+ORACLE_INTROSPECTION_CLAIMED = [
+    dialect_protocols.StructureIntrospectionSupport,
+    dialect_protocols.AsyncStructureIntrospectionSupport,
+    dialect_protocols.DataProfileIntrospectionSupport,
+    dialect_protocols.AsyncDataProfileIntrospectionSupport,
+]
+
+# Every probe answers False and every formatter refuses. These stay apart from
+# ORACLE_NOT_IMPLEMENTED, whose members are not structurally reachable at all.
+ORACLE_INTROSPECTION_REFUSED = [
+    dialect_protocols.OperationalStatsIntrospectionSupport,
+    dialect_protocols.AsyncOperationalStatsIntrospectionSupport,
+    dialect_protocols.DdlExtractionIntrospectionSupport,
+    dialect_protocols.AsyncDdlExtractionIntrospectionSupport,
+]
+
+# A claimed family can still decline a member: the probe answers False and the
+# formatter refuses. That is a member-level gap inside a claimed family, not a
+# whole-family refusal. (family, protocol, declined probes, refused formatters)
+INTROSPECTION_CLAIMED_DECLINED = [
+    (
+        "structure",
+        dialect_protocols.StructureIntrospectionSupport,
+        ("supports_extensions",),
+        (),
+    ),
+    (
+        "data profile",
+        dialect_protocols.DataProfileIntrospectionSupport,
+        ("supports_join_coverage",),
+        ("format_join_coverage_query_statement",),
+    ),
+]
+
+
 # Generic dialect protocols OracleDialect satisfies.
 #
 # The naming protocols and the DDL protocols are now separate trees: a
@@ -119,15 +162,9 @@ ORACLE_PROTOCOLS = [
     suggestion_protocols.FunctionSuggestionSupport,
     dialect_protocols.TransactionControlSupport,
     # --- Introspection ---
-    # Core split the single protocol into four families. Oracle composes all
-    # four (and their async twins), so each is classified positive here; the
-    # family-level negative side -- which probes answer False and which
-    # formatters refuse -- is pinned in TestIntrospectionFamilyClassification
-    # below.
-    dialect_protocols.StructureIntrospectionSupport,
-    dialect_protocols.OperationalStatsIntrospectionSupport,
-    dialect_protocols.DataProfileIntrospectionSupport,
-    dialect_protocols.DdlExtractionIntrospectionSupport,
+    # Only the families whose probes answer at least one question are claimed
+    # here; the two that answer none stay in ORACLE_INTROSPECTION_REFUSED.
+    *ORACLE_INTROSPECTION_CLAIMED,
     # --- DDL statements ---
     dialect_protocols.AlterSequenceSupport,
     dialect_protocols.AlterTableModifierSupport,
@@ -170,10 +207,6 @@ ORACLE_PROTOCOLS = [
     # their own modules. OracleDialect composes the corresponding mixins (via
     # SQLDialectBase and the per-feature generic mixins), so each is satisfied;
     # REPEAT is the one deliberate exception, classified below.
-    dialect_protocols.AsyncStructureIntrospectionSupport,
-    dialect_protocols.AsyncOperationalStatsIntrospectionSupport,
-    dialect_protocols.AsyncDataProfileIntrospectionSupport,
-    dialect_protocols.AsyncDdlExtractionIntrospectionSupport,
     dialect_protocols.DDLColumnSupport,
     dialect_protocols.DMLSupport,
     dialect_protocols.DQLSupport,
@@ -318,112 +351,103 @@ class TestDialectNegativeProtocolConformance:
             assert statement_protocol is not dialect_protocols.DataTypeSupport
             assert statement_protocol.__name__ in get_all_generic_protocols()
 
-    def test_positive_and_negative_lists_partition_all_protocols(self) -> None:
+    def test_the_classification_lists_partition_all_protocols(self) -> None:
         """Every generic protocol must be classified for Oracle."""
         all_protos = set(get_all_generic_protocols())
         positive = {p.__name__ for p in ORACLE_PROTOCOLS}
         negative = {p.__name__ for p in ORACLE_NOT_IMPLEMENTED}
+        refused = {p.__name__ for p in ORACLE_INTROSPECTION_REFUSED}
 
-        overlap = positive & negative
+        overlap = positive & (negative | refused)
         assert not overlap, f"Protocols in BOTH lists: {sorted(overlap)}"
+        assert not (
+            negative & refused
+        ), f"Protocols in both refused and negative lists: {sorted(negative & refused)}"
 
-        unclassified = all_protos - positive - negative
+        unclassified = all_protos - positive - negative - refused
         assert not unclassified, (
             f"Generic protocols not classified for Oracle: {sorted(unclassified)}. "
-            f"Add each to ORACLE_PROTOCOLS or ORACLE_NOT_IMPLEMENTED."
+            f"Add each to ORACLE_PROTOCOLS, ORACLE_INTROSPECTION_REFUSED or "
+            f"ORACLE_NOT_IMPLEMENTED."
         )
 
 
-# The four introspection families -- positive presence and negative answers.
-#
-# Presence is structural: OracleDialect composes every family's core mixin, so
-# the protocol and its async twin are satisfied. Capability is not structural:
-# a family may be present while its probes answer False, because the dialect
-# declines a source a schema-scoped SELECT cannot reach. The declined probes
-# and the formatters that must refuse are the negative half of the same
-# classification, recorded per family so neither side can drift silently.
-#
-# (family, sync protocol, async protocol, declined probes, refused formatters)
-INTROSPECTION_FAMILIES = [
-    (
-        "structure",
-        dialect_protocols.StructureIntrospectionSupport,
-        dialect_protocols.AsyncStructureIntrospectionSupport,
-        ("supports_extensions",),
-        (),
-    ),
-    (
-        "operational stats",
-        dialect_protocols.OperationalStatsIntrospectionSupport,
-        dialect_protocols.AsyncOperationalStatsIntrospectionSupport,
-        (
-            "supports_runtime_stats",
-            "supports_index_stats",
-            "supports_table_stats",
-            "supports_unused_indexes_detection",
-            "supports_object_dependencies",
-        ),
-        (
-            "format_unused_indexes_query_statement",
-            "format_table_usage_stats_query_statement",
-            "format_runtime_metrics_query_statement",
-            "format_index_usage_stats_query_statement",
-            "format_object_dependency_query_statement",
-        ),
-    ),
-    (
-        "data profile",
-        dialect_protocols.DataProfileIntrospectionSupport,
-        dialect_protocols.AsyncDataProfileIntrospectionSupport,
-        ("supports_join_coverage",),
-        ("format_join_coverage_query_statement",),
-    ),
-    (
-        "ddl extraction",
-        dialect_protocols.DdlExtractionIntrospectionSupport,
-        dialect_protocols.AsyncDdlExtractionIntrospectionSupport,
-        ("supports_ddl_extraction", "supports_ddl_extraction_native"),
-        ("format_ddl_statement_query_statement",),
-    ),
-]
-
-FAMILY_IDS = [family[0] for family in INTROSPECTION_FAMILIES]
-
-
 class TestIntrospectionFamilyClassification:
-    """Classify each family's positive presence and its negative/refusal half."""
+    """Claimed vs refused, decided by answers rather than by attributes.
+
+    ``isinstance`` passes for all eight protocols because core's composition
+    mixin supplies every member, so it is never the classifier here. A family is
+    claimed only when at least one probe answers ``True``; a family whose every
+    probe answers ``False`` and whose every formatter refuses is refused. A
+    claimed family may still decline one member, recorded separately.
+    """
 
     @pytest.fixture
     def dialect(self) -> oracle_dialect.OracleDialect:
         return oracle_dialect.OracleDialect(version=(23, 0, 0))
 
-    @pytest.mark.parametrize(
-        "family, sync, async_twin, declined, refused", INTROSPECTION_FAMILIES, ids=FAMILY_IDS
-    )
-    def test_the_family_is_structurally_present(
-        self, dialect, family, sync, async_twin, declined, refused
-    ) -> None:
-        assert isinstance(dialect, sync), family
-        assert isinstance(dialect, async_twin), family
+    @staticmethod
+    def _probes(protocol: Any) -> list:
+        return sorted(
+            name
+            for name, member in inspect.getmembers(protocol)
+            if callable(member) and name.startswith("supports_")
+        )
+
+    @staticmethod
+    def _formatters(protocol: Any) -> list:
+        return sorted(
+            name
+            for name, member in inspect.getmembers(protocol)
+            if callable(member) and name.startswith("format_")
+        )
+
+    def _probe_values(self, dialect: oracle_dialect.OracleDialect, protocol: Any) -> dict:
+        return {probe: getattr(dialect, probe)() for probe in self._probes(protocol)}
+
+    @pytest.mark.parametrize("protocol", ORACLE_INTROSPECTION_CLAIMED, ids=lambda p: p.__name__)
+    def test_claimed_family_answers_at_least_one_probe(self, dialect, protocol) -> None:
+        values = self._probe_values(dialect, protocol)
+        assert values, f"{protocol.__name__} declares no supports_* probe"
+        assert any(
+            values.values()
+        ), f"{protocol.__name__} is claimed but no probe answers True: {values}"
+
+    @pytest.mark.parametrize("protocol", ORACLE_INTROSPECTION_REFUSED, ids=lambda p: p.__name__)
+    def test_refused_family_answers_false_everywhere(self, dialect, protocol) -> None:
+        values = self._probe_values(dialect, protocol)
+        assert values, f"{protocol.__name__} declares no supports_* probe"
+        assert not any(
+            values.values()
+        ), f"{protocol.__name__} is refused but a probe answers True: {values}"
+
+    @pytest.mark.parametrize("protocol", ORACLE_INTROSPECTION_REFUSED, ids=lambda p: p.__name__)
+    def test_refused_family_refuses_every_formatter(self, dialect, protocol) -> None:
+        formatters = self._formatters(protocol)
+        assert formatters, f"{protocol.__name__} declares no formatter"
+        for formatter in formatters:
+            with pytest.raises(UnsupportedFeatureError) as excinfo:
+                getattr(dialect, formatter)(None)
+            assert formatter in str(excinfo.value)
 
     @pytest.mark.parametrize(
-        "family, sync, async_twin, declined, refused", INTROSPECTION_FAMILIES, ids=FAMILY_IDS
+        "family, protocol, declined, refused",
+        INTROSPECTION_CLAIMED_DECLINED,
+        ids=[row[0] for row in INTROSPECTION_CLAIMED_DECLINED],
     )
-    def test_declined_probes_answer_false(
-        self, dialect, family, sync, async_twin, declined, refused
+    def test_a_claimed_family_records_its_declined_members(
+        self, dialect, family, protocol, declined, refused
     ) -> None:
         for probe in declined:
             assert getattr(dialect, probe)() is False, f"{family}: {probe}"
-
-    @pytest.mark.parametrize(
-        "family, sync, async_twin, declined, refused", INTROSPECTION_FAMILIES, ids=FAMILY_IDS
-    )
-    def test_declined_formatters_refuse(
-        self, dialect, family, sync, async_twin, declined, refused
-    ) -> None:
         for formatter in refused:
             with pytest.raises(UnsupportedFeatureError):
                 getattr(dialect, formatter)(None)
+
+    def test_every_family_is_structurally_present(self, dialect) -> None:
+        """The classifier cannot be isinstance: all eight protocols pass it."""
+        for protocol in ORACLE_INTROSPECTION_CLAIMED + ORACLE_INTROSPECTION_REFUSED:
+            assert isinstance(dialect, protocol), protocol.__name__
 
     def test_an_absent_family_is_not_satisfied(self) -> None:
         """A dialect without the mixins fails every family, not just the probes."""
@@ -431,9 +455,8 @@ class TestIntrospectionFamilyClassification:
         class Bare:
             name = "Bare"
 
-        for family, sync, async_twin, _declined, _refused in INTROSPECTION_FAMILIES:
-            assert not isinstance(Bare(), sync), family
-            assert not isinstance(Bare(), async_twin), family
+        for protocol in ORACLE_INTROSPECTION_CLAIMED + ORACLE_INTROSPECTION_REFUSED:
+            assert not isinstance(Bare(), protocol), protocol.__name__
 
     def test_the_default_structure_mixin_refuses_by_name(self) -> None:
         """An unanswered probe makes the formatter refuse, rather than run."""

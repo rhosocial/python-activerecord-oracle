@@ -72,7 +72,18 @@ _TABLE_LIST_PROJECTION = (
 
 
 class OracleIntrospectionMixin:
-    """Oracle introspection capabilities backed by the data dictionary."""
+    """Oracle introspection capabilities backed by the data dictionary.
+
+    The Structure and DataProfile families are claimed: the ``ALL_*``
+    catalogue and the two row-reading statements answer them. The
+    OperationalStats and DdlExtraction families are **refused as families** --
+    every probe answers ``False`` and every formatter refuses -- because the
+    source is a ``GV$``/``V$`` performance view or a ``DBMS_METADATA``
+    procedure that schema-scoped ``SELECT`` statements cannot reach. Core's
+    composition mixin still makes every member structurally reachable; that
+    is not the same as an answer, and the per-probe docstrings below record
+    the cause.
+    """
 
     # ========== Capability Detection ==========
 
@@ -202,20 +213,24 @@ class OracleIntrospectionMixin:
         """
         return False
 
-    # The rest of core's operational and one-object families are declared
-    # gaps here, for one of two reasons. Either the answer lives in the
-    # GV$/V$ dynamic performance views -- counters about the instance this
-    # session attached to, not a schema-scoped catalogue the dictionary
-    # shape this mixin composes can name -- or it lives behind
-    # ``DBMS_METADATA``, a PL/SQL call whose result no SELECT can return.
-    # No statement for either shape exists in this dialect, so each probe
-    # answers ``False``: a caller that gates on it refuses the family before
-    # building a statement the dispatch could not render. The roundtrip
-    # suite pins every one of those statement classes as a non-render, so a
-    # probe answering ``True`` here would trade one clear refusal for a run
-    # that fails mid-query -- the defect the capability question exists to
-    # prevent. The day a statement is written, its probe flips with it; the
-    # two moves are one decision.
+    # The rest of core's OperationalStats and DdlExtraction families are
+    # *refused as families* here, not merely left partly unimplemented: every
+    # probe in each family answers ``False`` and every formatter refuses, so
+    # the classification callers see is a refusal -- core's composition mixin
+    # makes the members reachable, but an answer of ``False`` is what a family
+    # claim is judged by. The cause is one of two sources this mixin cannot
+    # reach. Either the answer lives in the GV$/V$ dynamic performance views
+    # -- counters about the instance this session attached to, not a
+    # schema-scoped catalogue the dictionary shape this mixin composes can
+    # name -- or it lives behind ``DBMS_METADATA``, a PL/SQL call whose result
+    # no SELECT can return. No statement for either shape exists in this
+    # dialect, so each probe answers ``False``: a caller that gates on it
+    # refuses the family before building a statement the dispatch could not
+    # render. The roundtrip suite pins every one of those statement classes as
+    # a non-render, so a probe answering ``True`` here would trade one clear
+    # refusal for a run that fails mid-query -- the defect the capability
+    # question exists to prevent. The day a statement is written, its probe
+    # flips with it; the two moves are one decision.
 
     def supports_unused_indexes_detection(self) -> bool:
         """False: index use is instance state, recorded in V$ views.
@@ -279,7 +294,10 @@ class OracleIntrospectionMixin:
         reason core rejects assemblies everywhere: this engine has the real
         statement, and an assembly that reads as authoritative is worse than
         an honest refusal. With neither source reachable from a SELECT there
-        is nothing to format, so the probe answers ``False``.
+        is nothing to format, so the probe answers ``False``. Both of the
+        family's probes (this one and :meth:`supports_ddl_extraction_native`)
+        answer ``False`` and its formatter refuses, so the family is refused
+        as a family rather than claimed with a partly implemented member.
         """
         return False
 

@@ -5,6 +5,10 @@ Core replaced the single ``IntrospectionSupport`` with four family protocols
 (and async twins) and deleted ``supports_partition_info`` without aliases. This
 file pins the consequences that belong to this backend:
 
+* a family is claimed only when at least one of its probes answers ``True``;
+  a family whose every probe answers ``False`` and whose every formatter
+  refuses is refused as a family, even though core's composition mixin makes
+  its members reachable (``isinstance`` is never the classifier);
 * the four families import from the new ``protocols.introspect`` modules, and
   the old names are gone;
 * a constructed dialect no longer has ``supports_partition_info``;
@@ -13,12 +17,20 @@ file pins the consequences that belong to this backend:
   under-reported.
 """
 
+import inspect
+
 import pytest
 
 from rhosocial.activerecord.backend.dialect import mixins as dialect_mixins
 from rhosocial.activerecord.backend.dialect import protocols as dialect_protocols
+from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 from rhosocial.activerecord.backend.impl.oracle.cli import introspect as introspect_cli
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
+from rhosocial.activerecord_oracle_test.feature.backend.construct.dialect.test_protocol_conformance import (
+    INTROSPECTION_CLAIMED_DECLINED,
+    ORACLE_INTROSPECTION_CLAIMED,
+    ORACLE_INTROSPECTION_REFUSED,
+)
 
 #: family -> (sync name, async name, declaring core module)
 FAMILIES = [
@@ -45,7 +57,92 @@ FAMILIES = [
 ]
 
 
-@pytest.mark.parametrize("sync_name, async_name, module", FAMILIES, ids=[f[0] for f in FAMILIES])
+def _probes(protocol: type) -> list:
+    """Every ``supports_*`` probe a family protocol declares."""
+    return sorted(
+        name
+        for name, member in inspect.getmembers(protocol)
+        if callable(member) and name.startswith("supports_")
+    )
+
+
+def _formatters(protocol: type) -> list:
+    """Every ``format_*`` formatter a family protocol declares."""
+    return sorted(
+        name
+        for name, member in inspect.getmembers(protocol)
+        if callable(member) and name.startswith("format_")
+    )
+
+
+@pytest.mark.parametrize("protocol", ORACLE_INTROSPECTION_CLAIMED, ids=lambda p: p.__name__)
+def test_a_claimed_family_has_at_least_one_answered_probe(protocol) -> None:
+    """The positive list is a capability claim: at least one probe must answer."""
+    dialect = OracleDialect(version=(23, 0, 0))
+    probes = _probes(protocol)
+    values = {probe: getattr(dialect, probe)() for probe in probes}
+    assert probes, f"{protocol.__name__} declares no supports_* probe"
+    assert any(
+        values.values()
+    ), f"{protocol.__name__} is in the claimed list but every probe answers False: {values}"
+
+
+@pytest.mark.parametrize("protocol", ORACLE_INTROSPECTION_REFUSED, ids=lambda p: p.__name__)
+def test_a_refused_family_says_false_and_refuses_by_name(protocol) -> None:
+    """The negative list is a refusal: every probe False, every formatter refuses."""
+    dialect = OracleDialect(version=(23, 0, 0))
+    probes = _probes(protocol)
+    values = {probe: getattr(dialect, probe)() for probe in probes}
+    assert probes, f"{protocol.__name__} declares no supports_* probe"
+    assert not any(
+        values.values()
+    ), f"{protocol.__name__} is in the refused list but a probe answers True: {values}"
+
+    formatters = _formatters(protocol)
+    assert formatters, f"{protocol.__name__} declares no formatter"
+    for formatter in formatters:
+        with pytest.raises(UnsupportedFeatureError) as excinfo:
+            getattr(dialect, formatter)(None)
+        assert formatter in str(excinfo.value), (
+            f"{protocol.__name__}.{formatter} refused without naming the formatter: "
+            f"{excinfo.value}"
+        )
+
+
+def test_claimed_and_refused_families_are_disjoint_and_complete() -> None:
+    """Both twins of all four families are classified exactly once."""
+    claimed = {protocol.__name__ for protocol in ORACLE_INTROSPECTION_CLAIMED}
+    refused = {protocol.__name__ for protocol in ORACLE_INTROSPECTION_REFUSED}
+    expected = {name for name, _async, _module in FAMILIES} | {
+        async_name for _name, async_name, _module in FAMILIES
+    }
+
+    assert not (claimed & refused), f"Families in BOTH lists: {sorted(claimed & refused)}"
+    assert (
+        claimed | refused == expected
+    ), f"Families not classified: {sorted(expected - (claimed | refused))}"
+
+
+@pytest.mark.parametrize(
+    "family, protocol, declined, refused",
+    INTROSPECTION_CLAIMED_DECLINED,
+    ids=[row[0] for row in INTROSPECTION_CLAIMED_DECLINED],
+)
+def test_a_claimed_family_keeps_its_declined_members(family, protocol, declined, refused) -> None:
+    """A declined member is recorded inside a claimed family, not promoted."""
+    dialect = OracleDialect(version=(23, 0, 0))
+    values = {probe: getattr(dialect, probe)() for probe in declined}
+    assert declined and not any(
+        values.values()
+    ), f"{family} declines these members, but one answers True: {values}"
+    for formatter in refused:
+        with pytest.raises(UnsupportedFeatureError):
+            getattr(dialect, formatter)(None)
+
+
+@pytest.mark.parametrize(
+    "sync_name, async_name, module", FAMILIES, ids=[row[0] for row in FAMILIES]
+)
 def test_protocols_come_from_the_family_modules(sync_name, async_name, module) -> None:
     """Both twins are the classes declared in their own ``introspect`` module."""
     sync = getattr(dialect_protocols, sync_name)
