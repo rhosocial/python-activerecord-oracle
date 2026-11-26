@@ -47,6 +47,8 @@ if TYPE_CHECKING:
 
 __all__ = [
     "OracleConstraintListQueryStatement",
+    "OracleDomainExistsQueryStatement",
+    "OracleIndexExistsQueryStatement",
     "OracleIndexStateQueryStatement",
     "OraclePackageListQueryStatement",
     "OraclePartitionListQueryStatement",
@@ -57,7 +59,9 @@ __all__ = [
     "OracleSequenceListQueryStatement",
     "OracleSynonymInfoQueryStatement",
     "OracleSynonymListQueryStatement",
+    "OracleTableExistsQueryStatement",
     "OracleTableStateQueryStatement",
+    "OracleTablespaceExistsQueryStatement",
     "OracleTypeListQueryStatement",
 ]
 
@@ -449,3 +453,124 @@ class OracleConstraintListQueryStatement(IntrospectionExpression):
     def format_method(self) -> str:
         """The dialect formatting method that renders this expression."""
         return "format_constraint_list_query_statement"
+
+
+class OracleTableExistsQueryStatement(IntrospectionExpression):
+    """Whether a table of this name exists in this schema.
+
+    ``ALL_TABLES`` names the tables the session can see, and the owner and
+    name are both part of the question: the same name in two schemas is two
+    tables. A materialized view also has a row here, because Oracle stores it
+    as a table segment; that is what the engine's own catalogue says it is.
+    """
+
+    def __init__(
+        self,
+        dialect: "SQLDialectBase",
+        *,
+        table_name: str,
+        schema: str,
+    ):
+        """
+        Args:
+            dialect: The SQL dialect to use for formatting.
+            table_name: The table whose existence is asked.
+            schema: The owner (Oracle's schema) of that table.
+        """
+        super().__init__(dialect, schema=schema)
+        self.table_name: str = table_name
+
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_table_exists_query_statement"
+
+
+class OracleIndexExistsQueryStatement(IntrospectionExpression):
+    """Whether an index of this name exists in this schema.
+
+    An index is named independently of its table, and ``ALL_INDEXES`` is
+    keyed by owner and index name -- so this question needs no table name.
+    """
+
+    def __init__(
+        self,
+        dialect: "SQLDialectBase",
+        *,
+        index_name: str,
+        owner: str,
+    ):
+        """
+        Args:
+            dialect: The SQL dialect to use for formatting.
+            index_name: The index whose existence is asked.
+            owner: The schema owning that index.
+        """
+        super().__init__(dialect, schema=owner)
+        self.index_name: str = index_name
+        self.owner: str = owner
+
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_index_exists_query_statement"
+
+
+class OracleTablespaceExistsQueryStatement(IntrospectionExpression):
+    """Whether a tablespace of this name exists.
+
+    ``USER_TABLESPACES`` is the view every session can read; the
+    ``ALL_``/``DBA_`` twins need privileges this backend cannot assume. A
+    tablespace the session cannot see is therefore reported as absent, which
+    is the limit of the readable catalogue rather than a property of the
+    instance.
+    """
+
+    def __init__(
+        self,
+        dialect: "SQLDialectBase",
+        *,
+        tablespace_name: str,
+    ):
+        """
+        Args:
+            dialect: The SQL dialect to use for formatting.
+            tablespace_name: The tablespace whose existence is asked.
+        """
+        super().__init__(dialect)
+        self.tablespace_name: str = tablespace_name
+
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_tablespace_exists_query_statement"
+
+
+class OracleDomainExistsQueryStatement(IntrospectionExpression):
+    """Whether a data use case domain of this name exists in this schema.
+
+    ``ALL_DOMAINS`` was added with the domain object in 23ai, so this
+    statement is only issued on a server the backend measured at 23 or newer.
+    """
+
+    def __init__(
+        self,
+        dialect: "SQLDialectBase",
+        *,
+        domain_name: str,
+        owner: str,
+    ):
+        """
+        Args:
+            dialect: The SQL dialect to use for formatting.
+            domain_name: The domain whose existence is asked.
+            owner: The schema owning that domain.
+        """
+        super().__init__(dialect, schema=owner)
+        self.domain_name: str = domain_name
+        self.owner: str = owner
+
+    @property
+    def format_method(self) -> str:
+        """The dialect formatting method that renders this expression."""
+        return "format_domain_exists_query_statement"

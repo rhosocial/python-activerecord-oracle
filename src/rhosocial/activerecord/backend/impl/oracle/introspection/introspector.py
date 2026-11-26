@@ -26,11 +26,13 @@ Design principle: Sync and Async are separate and cannot coexist.
 
 import copy
 from dataclasses import replace
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, FrozenSet, List, Optional, Tuple
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..expression.introspection import (
         OracleConstraintListQueryStatement,
+        OracleDomainExistsQueryStatement,
+        OracleIndexExistsQueryStatement,
         OracleIndexStateQueryStatement,
         OraclePackageListQueryStatement,
         OraclePartitionListQueryStatement,
@@ -41,7 +43,9 @@ if TYPE_CHECKING:  # pragma: no cover
         OracleSequenceListQueryStatement,
         OracleSynonymInfoQueryStatement,
         OracleSynonymListQueryStatement,
+        OracleTableExistsQueryStatement,
         OracleTableStateQueryStatement,
+        OracleTablespaceExistsQueryStatement,
         OracleTypeListQueryStatement,
     )
 
@@ -252,6 +256,42 @@ class OracleIntrospectorMixin(IntrospectorMixin):
     - parse_* implementations
     """
 
+    #: The ``ItemKind`` members Oracle has objects for and this introspector
+    #: answers from a catalogue. Every one of these must query -- returning
+    #: ``False`` here would report a backend gap as an absence on the server.
+    ITEM_EXISTS_ANSWERED: FrozenSet[ItemKind] = frozenset(
+        {
+            ItemKind.SCHEMA,
+            ItemKind.TYPE,
+            ItemKind.DOMAIN,
+            ItemKind.FUNCTION,
+            ItemKind.SEQUENCE,
+            ItemKind.TABLE,
+            ItemKind.INDEX,
+            ItemKind.TABLESPACE,
+        }
+    )
+
+    #: The ``ItemKind`` members Oracle has no objects for at all. ``False`` is
+    #: a definite answer for these, not "cannot tell".
+    ITEM_EXISTS_ABSENT: FrozenSet[ItemKind] = frozenset(
+        {
+            ItemKind.EXTENSION,
+            ItemKind.PARTITION_FUNCTION,
+            ItemKind.PARTITION_SCHEME,
+            ItemKind.FULLTEXT_CATALOG,
+        }
+    )
+
+    #: The server version an answered kind first exists at. A kind absent here
+    #: exists on every Oracle release this backend talks to. ``DOMAIN`` is the
+    #: 23ai data use case domain: before 23ai there is no such object, so a
+    #: measured older server answers ``False`` rather than querying a view that
+    #: does not exist there.
+    ITEM_EXISTS_MIN_VERSION: Dict[ItemKind, Tuple[int, ...]] = {
+        ItemKind.DOMAIN: (23, 0),
+    }
+
     @property
     def default_schema(self) -> str:
         """Return the Oracle schema (owner) from the backend config."""
@@ -289,6 +329,40 @@ class OracleIntrospectorMixin(IntrospectorMixin):
         nobody measured, which every version gate then compared against.
         """
         return getattr(self._backend, '_version', None)
+
+    def _refuse_item_kind(self, kind: ItemKind, reason: str) -> None:
+        """Refuse an ``ItemKind`` this introspector cannot answer.
+
+        A supported kind must never fall through to ``False``: that would
+        report this backend's missing catalogue query as an absence on the
+        server. The refusal names the kind so the gap is actionable.
+        """
+        from ....dialect.exceptions import UnsupportedFeatureError
+
+        raise UnsupportedFeatureError(
+            self.dialect.name,
+            f"item_exists for ItemKind.{kind.name} ({reason})",
+        )
+
+    def _item_kind_is_supported(self, kind: ItemKind) -> bool:
+        """Whether this server is known to have objects of *kind*.
+
+        A measured version older than the kind's first release answers
+        ``False`` (the engine has none). An unmeasured version refuses: it
+        cannot tell whether the engine has the object, and guessing either way
+        would be the wrong answer this method exists to prevent.
+        """
+        minimum = self.ITEM_EXISTS_MIN_VERSION.get(kind)
+        if minimum is None:
+            return True
+        version = self._get_version()
+        if version is None:
+            self._refuse_item_kind(
+                kind,
+                "the server version was not measured, so the engine's objects "
+                "cannot be classified",
+            )
+        return version >= minimum
 
     # ------------------------------------------------------------------ #
     # Statement factories — the questions, as trees the dialect spells
@@ -412,6 +486,46 @@ class OracleIntrospectorMixin(IntrospectorMixin):
 
         return OracleConstraintListQueryStatement(
             self.dialect, table_name=table_name, schema=schema
+        )
+
+    def table_exists_statement(
+        self, *, table_name: str, schema: str
+    ) -> "OracleTableExistsQueryStatement":
+        """Return the statement that asks whether a table exists."""
+        from ..expression.introspection import OracleTableExistsQueryStatement
+
+        return OracleTableExistsQueryStatement(
+            self.dialect, table_name=table_name.upper(), schema=schema.upper()
+        )
+
+    def index_exists_statement(
+        self, *, index_name: str, owner: str
+    ) -> "OracleIndexExistsQueryStatement":
+        """Return the statement that asks whether a named index exists."""
+        from ..expression.introspection import OracleIndexExistsQueryStatement
+
+        return OracleIndexExistsQueryStatement(
+            self.dialect, index_name=index_name.upper(), owner=owner.upper()
+        )
+
+    def tablespace_exists_statement(
+        self, *, tablespace_name: str
+    ) -> "OracleTablespaceExistsQueryStatement":
+        """Return the statement that asks whether a tablespace exists."""
+        from ..expression.introspection import OracleTablespaceExistsQueryStatement
+
+        return OracleTablespaceExistsQueryStatement(
+            self.dialect, tablespace_name=tablespace_name.upper()
+        )
+
+    def domain_exists_statement(
+        self, *, domain_name: str, owner: str
+    ) -> "OracleDomainExistsQueryStatement":
+        """Return the statement that asks whether a named domain exists."""
+        from ..expression.introspection import OracleDomainExistsQueryStatement
+
+        return OracleDomainExistsQueryStatement(
+            self.dialect, domain_name=domain_name.upper(), owner=owner.upper()
         )
 
 
@@ -2097,20 +2211,54 @@ class OracleIntrospector(OracleIntrospectorMixin, AbstractIntrospector):
     ) -> bool:
         """Whether a shared object of this kind exists.
 
-        Oracle's dictionary answers schemas (``ALL_USERS``), named types
-        (``ALL_TYPES``/``ALL_COLL_TYPES``) and sequences (``ALL_SEQUENCES``).
-        The remaining :class:`ItemKind` members are not answerable here and
-        answer ``False`` rather than raising: the question is "does this
-        exist", and an object this backend cannot see is not one it can
-        claim exists.
+        Every :class:`ItemKind` is classified in
+        :attr:`ITEM_EXISTS_ANSWERED` or :attr:`ITEM_EXISTS_ABSENT`, and the
+        answer follows core's one rule:
+
+        * an absent kind answers ``False`` -- the engine has no such objects;
+        * an answered kind queries its catalogue and answers what it found;
+        * an answered kind the server is too old for (``DOMAIN`` before 23ai)
+          answers ``False``, and an unmeasured version refuses rather than
+          guesses.
+
+        Nothing falls through to ``False``: an undeclared kind refuses by
+        name, so a missing catalogue query cannot disguise itself as absence.
         """
-        if kind is ItemKind.SCHEMA:
+        if kind in self.ITEM_EXISTS_ABSENT:
+            return False
+        if kind not in self.ITEM_EXISTS_ANSWERED:
+            self._refuse_item_kind(kind, "no catalogue answer is declared")
+        if not self._item_kind_is_supported(kind):
+            return False
+
+        if kind == ItemKind.SCHEMA:
             return str(name).upper() in self.list_schemas()
-        if kind is ItemKind.TYPE:
+        if kind == ItemKind.TYPE:
             return self.get_type_info(name, owner=schema) is not None
-        if kind is ItemKind.SEQUENCE:
+        if kind == ItemKind.SEQUENCE:
             return self.get_sequence_info(name, owner=schema) is not None
-        return False
+        if kind == ItemKind.FUNCTION:
+            return self.get_function_info(name, owner=schema) is not None
+        if kind == ItemKind.TABLE:
+            sql, params = self.table_exists_statement(
+                table_name=name, schema=self._normalise_schema(schema)
+            ).to_sql()
+            return bool(self._executor.execute(sql, params))
+        if kind == ItemKind.INDEX:
+            sql, params = self.index_exists_statement(
+                index_name=name, owner=self._normalise_owner(schema)
+            ).to_sql()
+            return bool(self._executor.execute(sql, params))
+        if kind == ItemKind.TABLESPACE:
+            sql, params = self.tablespace_exists_statement(tablespace_name=name).to_sql()
+            return bool(self._executor.execute(sql, params))
+        if kind == ItemKind.DOMAIN:
+            sql, params = self.domain_exists_statement(
+                domain_name=name, owner=self._normalise_owner(schema)
+            ).to_sql()
+            return bool(self._executor.execute(sql, params))
+
+        self._refuse_item_kind(kind, "the answer was not wired to a catalogue")
 
     def list_constraints(
         self, table_name: str, schema: Optional[str] = None
@@ -2684,14 +2832,47 @@ class AsyncOracleIntrospector(OracleIntrospectorMixin, AsyncAbstractIntrospector
         name: str,
         schema: Optional[str] = None,
     ) -> bool:
-        """Whether a shared object of this kind exists."""
-        if kind is ItemKind.SCHEMA:
+        """Whether a shared object of this kind exists.
+
+        Same classification and rule as the sync twin: absent kinds answer
+        ``False``, answered kinds query, a kind the measured server is too old
+        for answers ``False``, and an undeclared kind refuses by name.
+        """
+        if kind in self.ITEM_EXISTS_ABSENT:
+            return False
+        if kind not in self.ITEM_EXISTS_ANSWERED:
+            self._refuse_item_kind(kind, "no catalogue answer is declared")
+        if not self._item_kind_is_supported(kind):
+            return False
+
+        if kind == ItemKind.SCHEMA:
             return str(name).upper() in await self.list_schemas()
-        if kind is ItemKind.TYPE:
+        if kind == ItemKind.TYPE:
             return await self.get_type_info(name, owner=schema) is not None
-        if kind is ItemKind.SEQUENCE:
+        if kind == ItemKind.SEQUENCE:
             return await self.get_sequence_info(name, owner=schema) is not None
-        return False
+        if kind == ItemKind.FUNCTION:
+            return await self.get_function_info(name, owner=schema) is not None
+        if kind == ItemKind.TABLE:
+            sql, params = self.table_exists_statement(
+                table_name=name, schema=self._normalise_schema(schema)
+            ).to_sql()
+            return bool(await self._executor.execute(sql, params))
+        if kind == ItemKind.INDEX:
+            sql, params = self.index_exists_statement(
+                index_name=name, owner=self._normalise_owner(schema)
+            ).to_sql()
+            return bool(await self._executor.execute(sql, params))
+        if kind == ItemKind.TABLESPACE:
+            sql, params = self.tablespace_exists_statement(tablespace_name=name).to_sql()
+            return bool(await self._executor.execute(sql, params))
+        if kind == ItemKind.DOMAIN:
+            sql, params = self.domain_exists_statement(
+                domain_name=name, owner=self._normalise_owner(schema)
+            ).to_sql()
+            return bool(await self._executor.execute(sql, params))
+
+        self._refuse_item_kind(kind, "the answer was not wired to a catalogue")
 
     async def list_constraints(
         self, table_name: str, schema: Optional[str] = None

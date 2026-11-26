@@ -24,6 +24,7 @@ from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.introspection.introspector import (
     AsyncOracleIntrospector,
     OracleIntrospector,
+    OracleIntrospectorMixin,
 )
 from rhosocial.activerecord.backend.impl.oracle.introspection.types import (
     OracleConstraintInfo,
@@ -33,6 +34,7 @@ from rhosocial.activerecord.backend.impl.oracle.introspection.types import (
     OracleRoutineParameter,
     OracleTypeInfo,
 )
+from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 from rhosocial.activerecord.backend.introspection.types import (
     ConstraintState,
     DerivedObjectState,
@@ -95,9 +97,10 @@ def make_sync(
 def make_async(
     rows: Optional[List[Dict[str, Any]]] = None,
     username: str = "ar_crm",
+    version=(23, 0, 0),
 ) -> Tuple[AsyncOracleIntrospector, AsyncRecordingExecutor]:
     executor = AsyncRecordingExecutor(rows)
-    return AsyncOracleIntrospector(StubBackend(username), executor), executor
+    return AsyncOracleIntrospector(StubBackend(username, version), executor), executor
 
 
 def squash(sql: str) -> str:
@@ -602,9 +605,138 @@ class TestNeutralStateReads:
         insp, _ = make_sync([])
         assert insp.item_exists(ItemKind.SEQUENCE, "NO_SUCH_SEQ") is False
 
-    def test_item_exists_answers_false_for_a_kind_it_cannot_read(self):
-        insp, _ = make_sync([])
+    def test_item_exists_answers_false_for_a_kind_the_engine_lacks(self):
+        insp, executor = make_sync([])
         assert insp.item_exists(ItemKind.EXTENSION, "anything") is False
+        assert executor.questions == []
+
+
+FUNCTION_ITEM_ROW = {
+    "OWNER": "AR_CRM",
+    "OBJECT_NAME": "CALC_TOTAL",
+    "OBJECT_TYPE": "FUNCTION",
+    "OBJECT_ID": 42,
+    "SUBPROGRAM_ID": 0,
+    "POSITION": None,
+}
+
+
+def _answered_kind_cases() -> List[Tuple[ItemKind, List[Dict[str, Any]], str, Optional[str]]]:
+    """One input per answered kind that must come back ``True``.
+
+    The rows are the least a catalogue row may carry: a listing-backed branch
+    parses them into its value object, a direct-existence branch only asks
+    whether a row came back.
+    """
+    return [
+        (ItemKind.SCHEMA, SCHEMA_ROWS, "ar_crm", None),
+        (ItemKind.TYPE, OBJECT_TYPE_ROWS, "address_t", "AR_CRM"),
+        (ItemKind.SEQUENCE, SEQUENCE_ROWS, "orders_seq", "AR_CRM"),
+        (ItemKind.FUNCTION, [FUNCTION_ITEM_ROW], "calc_total", "AR_CRM"),
+        (ItemKind.TABLE, [{"TABLE_NAME": "ORDERS"}], "orders", None),
+        (ItemKind.INDEX, [{"INDEX_NAME": "IX_ORDERS"}], "ix_orders", "AR_CRM"),
+        (ItemKind.TABLESPACE, [{"TABLESPACE_NAME": "USERS"}], "users", None),
+        (
+            ItemKind.DOMAIN,
+            [{"OWNER": "AR_CRM", "NAME": "EMAIL_D"}],
+            "email_d",
+            "AR_CRM",
+        ),
+    ]
+
+
+class TestItemExistsKindClassification:
+    """Every ItemKind is declared, and a declared kind never falls through."""
+
+    def test_the_declared_sets_partition_every_item_kind(self):
+        answered = OracleIntrospectorMixin.ITEM_EXISTS_ANSWERED
+        absent = OracleIntrospectorMixin.ITEM_EXISTS_ABSENT
+        assert answered, "no kind is answered"
+        assert answered & absent == frozenset()
+        assert answered | absent == frozenset(ItemKind)
+        assert set(OracleIntrospectorMixin.ITEM_EXISTS_MIN_VERSION) <= answered
+
+    def test_the_absent_set_is_the_kinds_oracle_does_not_have(self):
+        assert OracleIntrospectorMixin.ITEM_EXISTS_ABSENT == frozenset(
+            {
+                ItemKind.EXTENSION,
+                ItemKind.PARTITION_FUNCTION,
+                ItemKind.PARTITION_SCHEME,
+                ItemKind.FULLTEXT_CATALOG,
+            }
+        )
+
+    def test_every_answered_kind_queries_and_answers_true(self):
+        for kind, rows, name, schema in _answered_kind_cases():
+            insp, executor = make_sync(rows)
+            assert insp.item_exists(kind, name, schema) is True, kind
+            assert executor.questions, f"{kind} answered without querying"
+
+    async def test_every_answered_kind_queries_and_answers_true_async(self):
+        for kind, rows, name, schema in _answered_kind_cases():
+            insp, executor = make_async(rows)
+            assert await insp.item_exists(kind, name, schema) is True, kind
+            assert executor.questions, f"{kind} answered without querying"
+
+    def test_every_absent_kind_answers_false_without_a_query(self):
+        for kind in OracleIntrospectorMixin.ITEM_EXISTS_ABSENT:
+            insp, executor = make_sync([])
+            assert insp.item_exists(kind, "anything") is False
+            assert executor.questions == [], kind
+
+    def test_an_undeclared_kind_refuses_by_name_instead_of_answering_false(self, monkeypatch):
+        monkeypatch.setattr(OracleIntrospector, "ITEM_EXISTS_ANSWERED", frozenset())
+        monkeypatch.setattr(OracleIntrospector, "ITEM_EXISTS_ABSENT", frozenset())
+        insp, executor = make_sync([], version=None)
+        with pytest.raises(UnsupportedFeatureError, match="ItemKind.SCHEMA"):
+            insp.item_exists(ItemKind.SCHEMA, "ar_crm")
+        assert executor.questions == []
+
+    def test_a_pre_23_server_has_no_domains_and_answers_false(self):
+        insp, executor = make_sync([], version=(19, 0, 0))
+        assert insp.item_exists(ItemKind.DOMAIN, "email_d", "AR_CRM") is False
+        assert executor.questions == []
+
+    def test_an_unmeasured_version_refuses_domain_rather_than_guessing(self):
+        insp, executor = make_sync([], version=None)
+        with pytest.raises(UnsupportedFeatureError, match="ItemKind.DOMAIN"):
+            insp.item_exists(ItemKind.DOMAIN, "email_d", "AR_CRM")
+        assert executor.questions == []
+
+
+class TestItemExistsStatements:
+    """The added questions read the catalogue that keys each object."""
+
+    def test_table_existence_reads_all_tables_by_owner_and_name(self):
+        insp, _ = make_sync()
+        sql, params = insp.table_exists_statement(table_name="orders", schema="ar_crm").to_sql()
+        squashed = squash(sql)
+        assert "all_tables" in squashed
+        assert "whereowner=?andtable_name=?" in squashed
+        assert params == ("AR_CRM", "ORDERS")
+
+    def test_index_existence_reads_all_indexes_without_a_table_name(self):
+        insp, _ = make_sync()
+        sql, params = insp.index_exists_statement(index_name="ix_orders", owner="ar_crm").to_sql()
+        squashed = squash(sql)
+        assert "all_indexes" in squashed
+        assert "table_name" not in squashed
+        assert params == ("AR_CRM", "IX_ORDERS")
+
+    def test_tablespace_existence_reads_the_view_every_session_can_read(self):
+        insp, _ = make_sync()
+        sql, params = insp.tablespace_exists_statement(tablespace_name="users").to_sql()
+        squashed = squash(sql)
+        assert "user_tablespaces" in squashed
+        assert "dba_tablespaces" not in squashed
+        assert params == ("USERS",)
+
+    def test_domain_existence_reads_all_domains_by_owner_and_name(self):
+        insp, _ = make_sync()
+        sql, params = insp.domain_exists_statement(domain_name="email_d", owner="ar_crm").to_sql()
+        squashed = squash(sql)
+        assert "all_domains" in squashed
+        assert params == ("AR_CRM", "EMAIL_D")
 
     async def test_async_state_listings_match_the_sync_ones(self):
         insp, _ = make_async(INDEX_STATE_ROWS)

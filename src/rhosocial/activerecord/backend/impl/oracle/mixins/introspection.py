@@ -37,6 +37,8 @@ if TYPE_CHECKING:
     )
     from ...expression.introspection import (
         OracleConstraintListQueryStatement,
+        OracleDomainExistsQueryStatement,
+        OracleIndexExistsQueryStatement,
         OracleIndexStateQueryStatement,
         OraclePackageListQueryStatement,
         OraclePartitionListQueryStatement,
@@ -47,7 +49,9 @@ if TYPE_CHECKING:
         OracleSequenceListQueryStatement,
         OracleSynonymInfoQueryStatement,
         OracleSynonymListQueryStatement,
+        OracleTableExistsQueryStatement,
         OracleTableStateQueryStatement,
+        OracleTablespaceExistsQueryStatement,
         OracleTypeListQueryStatement,
     )
 
@@ -1744,6 +1748,93 @@ class OracleIntrospectionMixin:
                     self._column("constraint_name", "cons"),
                     self._column("position", "cols"),
                 ],
+            ),
+        ).to_sql()
+
+    # ------------------------------------------------------------------ #
+    # Object existence -- one named object, answered from the catalogue
+    # that keys it. These are the questions ``item_exists`` asks; the
+    # result is only "a row came back or not", so the projection stays the
+    # object's own name column and carries no metadata.
+    # ------------------------------------------------------------------ #
+
+    def format_table_exists_query_statement(
+        self, expr: "OracleTableExistsQueryStatement"
+    ) -> Tuple[str, tuple]:
+        """Whether ``ALL_TABLES`` names this table under this owner."""
+        from rhosocial.activerecord.backend.expression import Literal, QueryStatement
+
+        params = expr.get_params()
+        table_name = str(params.get("table_name", "")).upper()
+        schema = str(params.get("schema", "")).upper()
+        return QueryStatement(
+            self,
+            select=[self._column("table_name")],
+            from_=self._relation("all_tables"),
+            where=self._where(
+                self._equals(self._column("owner"), Literal(self, schema)),
+                self._equals(self._column("table_name"), Literal(self, table_name)),
+            ),
+        ).to_sql()
+
+    def format_index_exists_query_statement(
+        self, expr: "OracleIndexExistsQueryStatement"
+    ) -> Tuple[str, tuple]:
+        """Whether ``ALL_INDEXES`` names this index under this owner."""
+        from rhosocial.activerecord.backend.expression import Literal, QueryStatement
+
+        params = expr.get_params()
+        index_name = str(params.get("index_name", "")).upper()
+        owner = str(params.get("owner", "")).upper()
+        return QueryStatement(
+            self,
+            select=[self._column("index_name")],
+            from_=self._relation("all_indexes"),
+            where=self._where(
+                self._equals(self._column("owner"), Literal(self, owner)),
+                self._equals(self._column("index_name"), Literal(self, index_name)),
+            ),
+        ).to_sql()
+
+    def format_tablespace_exists_query_statement(
+        self, expr: "OracleTablespaceExistsQueryStatement"
+    ) -> Tuple[str, tuple]:
+        """Whether ``USER_TABLESPACES`` names this tablespace.
+
+        ``USER_TABLESPACES`` carries no owner column, so the name is the
+        whole question.
+        """
+        from rhosocial.activerecord.backend.expression import Literal, QueryStatement
+
+        tablespace_name = str(expr.get_params().get("tablespace_name", "")).upper()
+        return QueryStatement(
+            self,
+            select=[self._column("tablespace_name")],
+            from_=self._relation("user_tablespaces"),
+            where=self._where(
+                self._equals(
+                    self._column("tablespace_name"),
+                    Literal(self, tablespace_name),
+                )
+            ),
+        ).to_sql()
+
+    def format_domain_exists_query_statement(
+        self, expr: "OracleDomainExistsQueryStatement"
+    ) -> Tuple[str, tuple]:
+        """Whether ``ALL_DOMAINS`` names this domain under this owner."""
+        from rhosocial.activerecord.backend.expression import Literal, QueryStatement
+
+        params = expr.get_params()
+        domain_name = str(params.get("domain_name", "")).upper()
+        owner = str(params.get("owner", "")).upper()
+        return QueryStatement(
+            self,
+            select=[self._column("name")],
+            from_=self._relation("all_domains"),
+            where=self._where(
+                self._equals(self._column("owner"), Literal(self, owner)),
+                self._equals(self._column("name"), Literal(self, domain_name)),
             ),
         ).to_sql()
 
