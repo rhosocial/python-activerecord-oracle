@@ -125,7 +125,9 @@ class TestOraclePartitionCapabilityGating:
         assert d.supports_add_partition() is True
         assert d.supports_drop_partition() is True
         assert d.supports_truncate_partition() is True
-        assert d.supports_reorganize_partition() is True
+        # Oracle has no REORGANIZE PARTITION statement: splitting is SPLIT and
+        # merging is MERGE, both asserted separately below.
+        assert d.supports_reorganize_partition() is False
         # Oracle uses EXCHANGE instead of ATTACH/DETACH.
         assert d.supports_attach_partition() is False
         assert d.supports_detach_partition() is False

@@ -407,7 +407,6 @@ class TestOracleMaintenanceCapabilityGating:
             "supports_add_partition",
             "supports_drop_partition",
             "supports_truncate_partition",
-            "supports_reorganize_partition",
             "supports_split_partition",
             "supports_merge_partition",
             "supports_exchange_partition",

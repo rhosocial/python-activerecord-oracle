@@ -169,8 +169,13 @@ class OraclePartitionMixin:
         return self.version_at_least(_ORACLE_PARTITION_MIN_VERSION)
 
     def supports_reorganize_partition(self) -> bool:
-        """Partition reorganization (SPLIT/MERGE) is supported for 11g+."""
-        return self.version_at_least(_ORACLE_PARTITION_MIN_VERSION)
+        """Whether ``ALTER TABLE ... REORGANIZE PARTITION`` is supported.
+
+        Oracle has no such statement. Splitting is ``SPLIT PARTITION`` and merging
+        is ``MERGE PARTITIONS``, each answered by its own switch; reporting True
+        here would let a caller plan a MySQL-only statement that Oracle rejects.
+        """
+        return False
 
     def supports_attach_partition(self) -> bool:
         """ATTACH PARTITION is not applicable to Oracle (use EXCHANGE)."""
