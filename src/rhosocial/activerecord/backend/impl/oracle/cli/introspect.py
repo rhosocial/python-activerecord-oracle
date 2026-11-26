@@ -475,16 +475,13 @@ def _serialize_for_output(obj: Any) -> Any:
     return str(obj)
 
 
-def _partition_state_rows(state: Any) -> List[Dict[str, Any]]:
+def _partition_state_rows(state: PartitionState) -> List[Dict[str, Any]]:
     """The neutral partition state as one renderable row.
 
-    ``None`` from ``get_partition_state`` means "not partitioned", and the
-    neutral shape says that in its ``scheme`` slot: an empty partition
-    listing would read as "the listing ran and found nothing", which is not
-    the same answer. ``PartitionState()`` fills exactly that shape.
+    An unpartitioned table answers a :class:`PartitionState` whose ``scheme``
+    is ``None``, so that slot is what the row says: the answer is always a
+    state record, never a ``None`` object to be papered over here.
     """
-    if state is None:
-        state = PartitionState()
     data = _serialize_for_output(state)
     return [data]
 

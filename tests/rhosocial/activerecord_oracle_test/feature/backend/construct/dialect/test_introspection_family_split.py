@@ -14,13 +14,17 @@ file pins the consequences that belong to this backend:
 * a constructed dialect no longer has ``supports_partition_info``;
 * the CLI's ``partitions`` family still resolves to the partition-metadata
   probe, which is version-gated from 11g -- the probe the deleted one
-  under-reported.
+  under-reported;
+* no source file or test expects a ``None`` partitioning slot: an
+  unpartitioned table answers ``PartitionState(scheme=None)``.
 """
 
 import inspect
+from pathlib import Path
 
 import pytest
 
+import rhosocial.activerecord.backend.impl.oracle as oracle_package
 from rhosocial.activerecord.backend.dialect import mixins as dialect_mixins
 from rhosocial.activerecord.backend.dialect import protocols as dialect_protocols
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
@@ -191,6 +195,43 @@ def test_the_partition_family_is_version_gated(version, expected) -> None:
     """The metadata probe carries a release gate; the old probe carried none."""
     dialect = OracleDialect(version=version)
     assert dialect.supports_partition_metadata_introspection() is expected
+
+
+#: The contract forbids a state record whose partitioning slot is ``None``.
+#: The left and right halves are concatenated so this guard's own text is not
+#: a match for the scan it runs.
+_NO_PARTITIONING_NONE = "partitioning" + "=None"
+
+
+def _python_files(root) -> list:
+    return [path for path in Path(root).rglob("*.py") if "__pycache__" not in path.parts]
+
+
+def _files_containing(files, needle):
+    return [path for path in files if needle in path.read_text(encoding="utf-8")]
+
+
+def test_no_layer_answers_a_none_partitioning_slot() -> None:
+    """``scheme=None`` on a state record is the only way to say unpartitioned.
+
+    A ``None`` partitioning slot is the shape core removed:
+    ``TableState.partitioning`` is never ``None``, so no source file or test
+    may expect it.
+    """
+    src_files = [
+        path for root in getattr(oracle_package, "__path__", []) for path in _python_files(root)
+    ]
+    tests_root = Path(__file__).resolve().parents[6]
+    test_files = _python_files(tests_root)
+
+    assert (
+        len(src_files) > 50 and len(test_files) > 50
+    ), f"the scan reached {len(src_files)} source and {len(test_files)} test files"
+    offenders = _files_containing(src_files + test_files, _NO_PARTITIONING_NONE)
+    assert not offenders, (
+        "a None partition slot is not the neutral answer; use PartitionState(scheme=None): "
+        + ", ".join(str(path) for path in offenders)
+    )
 
 
 def test_the_aggregates_declare_no_members_of_their_own() -> None:

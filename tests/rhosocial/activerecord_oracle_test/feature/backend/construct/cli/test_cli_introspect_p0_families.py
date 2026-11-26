@@ -229,8 +229,8 @@ class TestTheSyncBranches:
         assert payload[0]["bounds"][0]["upper"] == "2026-02-01"
 
     def test_an_unpartitioned_table_renders_a_null_scheme(self, monkeypatch):
-        """``None`` is rendered as the neutral state, not as an empty listing."""
-        introspector = RecordingIntrospector({"get_partition_state": None})
+        """The introspector answers an empty state; the CLI renders its scheme=None."""
+        introspector = RecordingIntrospector({"get_partition_state": PartitionState()})
         provider = _run_sync(monkeypatch, introspector, _args("partitions", "orders"))
         payload = provider.results[0][1]
         assert payload[0]["scheme"] is None

@@ -530,9 +530,19 @@ class TestNeutralStateReads:
         assert state.kind == "regular"
         assert state.storage.tablespace == "USERS"
         assert state.comment == "order history"
-        # The partition question is a second read, and an unpartitioned table
-        # answers None, which leaves the state's partitioning slot empty.
-        assert state.partitioning is None
+        # The partition question is a second read. An unpartitioned table
+        # answers an empty PartitionState -- never None -- so the slot is
+        # always filled and says "not partitioned" through scheme=None.
+        assert state.partitioning is not None
+        assert state.partitioning.scheme is None
+        assert state.partitioning.bounds == ()
+        assert len(executor.questions) == 2
+
+    async def test_async_get_table_state_reports_an_empty_partition_state(self):
+        insp, executor = make_async([TABLE_STATE_ROW])
+        state = await insp.get_table_state("ORDERS", "AR_CRM")
+        assert state.partitioning is not None
+        assert state.partitioning.scheme is None
         assert len(executor.questions) == 2
 
     def test_a_temporary_table_is_named_as_such(self):
@@ -745,7 +755,9 @@ class TestItemExistsStatements:
         insp, _ = make_async([RANGE_ROW])
         assert (await insp.get_partition_state("ORDERS", "AR_CRM")).scheme is PartitionScheme.RANGE
         insp, _ = make_async([])
-        assert await insp.get_partition_state("ORDERS", "AR_CRM") is None
+        unpartitioned = await insp.get_partition_state("ORDERS", "AR_CRM")
+        assert unpartitioned is not None
+        assert unpartitioned.scheme is None
 
 
 
@@ -1161,10 +1173,17 @@ class TestPartitionAndConstraintReads:
         assert bound.row_count is None
         assert bound.size_bytes is None
 
-    def test_an_unpartitioned_table_answers_no_scheme(self):
-        """``None`` -- not an empty state -- is the neutral unpartitioned answer."""
+    def test_an_unpartitioned_table_answers_an_empty_state(self):
+        """``scheme=None`` on a state record is the neutral unpartitioned answer."""
         insp, executor = make_sync([])
-        assert insp.get_partition_state("ORDERS", "AR_CRM") is None
+        state = insp.get_partition_state("ORDERS", "AR_CRM")
+        assert state is not None
+        assert state.scheme is None
+        assert state.bounds == ()
+        assert state.raw == {}
+        # The answer is cached like any other, so the empty state is one read.
+        warm = insp.get_partition_state("ORDERS", "AR_CRM")
+        assert warm is state
         assert len(executor.questions) == 1
         assert "all_tab_partitions" in squash(executor.questions[0][0])
 

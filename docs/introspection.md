@@ -16,6 +16,7 @@ The Oracle backend answers two of the three layers the introspection contract dr
 - **Foreign keys**: the four-way constraint join, with the delete rule and `NO ACTION` update semantics
 - **Triggers**: `ALL_TRIGGERS`, with timing, events and body
 - **Schema objects of Oracle's own**: sequences (`ALL_SEQUENCES`), synonyms (`ALL_SYNONYMS`), packages (`ALL_OBJECTS`)
+- **Partition state**: `get_partition_state()` / `get_table_state()` answer the neutral `PartitionState`, unpartitioned tables included — their `scheme` is `None`, never a `None` object
 - **Data, two ways**: an estimate profile from the dictionary, and an exact value listing bought with a scan
 
 ## What Oracle Answers
@@ -73,6 +74,7 @@ A `True` promises only that the statement renders and the server accepts it. It 
 | Sequences | `list_sequences()`, `get_sequence_info()` | `ALL_SEQUENCES` |
 | Synonyms | `list_synonyms()`, `get_synonym_info()` | `ALL_SYNONYMS` |
 | Packages | `list_packages()` | `ALL_OBJECTS`, narrowed to `PACKAGE` |
+| Partitions | `get_partition_state()`, `get_table_state()` | `ALL_TAB_PARTITIONS` ⋈ `ALL_PART_TABLES` |
 
 The `ALL_*` spelling is deliberate: these views are owner-scoped and show only the objects the account can reach, so the introspection layer never needs a privilege the schema itself would not grant. The owner is the account the connection authenticates as, and every query binds it upper case, because the dictionary stores unquoted identifiers that way. `owner="app"` and `owner="APP"` are folded to one question, so a caller's spelling cannot miss a schema that exists.
 
@@ -87,6 +89,22 @@ A few consequences of each statement, in the order a reader will meet them:
 - **Triggers.** `timing` is the dictionary's `TRIGGER_TYPE` (`BEFORE`, `AFTER`, `INSTEAD OF`), `events` are `TRIGGERING_EVENT` split on `OR`, and `definition` is `TRIGGER_BODY`.
 - **Columns.** A column record is the declaration, not the statistics. The statement projects the dictionary's statistics columns alongside the declaration, but they land on the profile family, not on the column record — and `comment` is always `None`, because Oracle keeps column comments in a separate view this family does not query. Each dimension is filled from the dictionary column that means it: `DATA_LENGTH` is bytes of storage (`22` for a `NUMBER`), `DATA_PRECISION`/`DATA_SCALE` are the numeric width (and, on a `TIMESTAMP`, `DATA_SCALE` is the fractional-seconds precision rather than a decimal scale), `CHAR_LENGTH` is the declared character length with a `DATA_LENGTH` fallback for pre-9i servers, and `RAW(n)` keeps its width because a `RAW` of another width is another column.
 - **Database info.** `name` is the connected schema, `version` is the server version the backend measured (`"unknown"` and `version_tuple` `(0, 0, 0)` when it could not), and `encoding`/`collation` are `NLS_CHARACTERSET` and `NLS_LANGUAGE`. A version nobody measured is not reported as a number.
+
+## Partition State Is Never `None`
+
+`get_partition_state(table)` and `get_table_state(table)` answer core's neutral state records, and both names — sync and async — obey one rule: **an unpartitioned table answers a `PartitionState` whose `scheme` is `None`**, never a bare `None` object.
+
+The catalogue says "not partitioned" with an empty partition listing: the join of `ALL_TAB_PARTITIONS` to `ALL_PART_TABLES` yields no row for such a table. That empty listing is a fact the engine reported, so it is reported as a state record carrying no scheme, no bounds and an empty `raw` mapping. `None` would be a second answer shape for the same fact — callers would have to test `is None` on one backend and `scheme is None` on another, which is exactly the fork the neutral record removes. The empty listing is the catalogue answering "not partitioned", not "cannot tell"; "cannot ask" is the probe's `False`, a different question answered elsewhere on this page.
+
+`get_table_state` joins that same answer into its `partitioning` slot, so the slot is always filled. `TableState.partitioning` is not optional: read `state.partitioning.scheme` rather than testing `state.partitioning`.
+
+| Call | Unpartitioned table answers |
+|------|-----------------------------|
+| `get_partition_state("orders")` | `PartitionState(scheme=None, bounds=(), auto_extend=False)` |
+| `get_table_state("orders").partitioning` | the same empty `PartitionState` |
+| CLI `introspect partitions orders` | one row whose `scheme` is `null` (JSON) or empty (table) |
+
+A partitioned table changes only the contents: `scheme` is `RANGE`, `LIST`, `HASH`, `INTERVAL` or `COMPOSITE` as `ALL_PART_TABLES` declares the strategy (`EXPRESSION` when the engine's word maps to none of those), `auto_extend` is true when an interval expression is present, and `bounds` holds one `PartitionBound` per `ALL_TAB_PARTITIONS` row.
 
 ## The Two Data Families, and Their Two Sources
 

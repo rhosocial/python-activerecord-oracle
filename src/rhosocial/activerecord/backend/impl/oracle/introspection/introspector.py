@@ -1236,15 +1236,19 @@ class OracleIntrospectorMixin(IntrospectorMixin):
         table_name: str = "",
         schema: str = "",
         include_stats: bool = False,
-    ) -> Optional[PartitionState]:
+    ) -> PartitionState:
         """Project the partition listing onto the neutral state shape.
 
-        ``None`` means "this table is not partitioned". An interval
-        partition's expression is the neutral ``auto_extend`` flag; the
-        statistics slots are filled only when the caller asked for them.
+        An empty partition listing is the catalogue answering "this table is
+        not partitioned", not "cannot tell": the answer is a
+        :class:`PartitionState` whose ``scheme`` is ``None``. A bare ``None``
+        would be a second way to say the same thing, and callers must not
+        have to test for it. An interval partition's expression is the neutral
+        ``auto_extend`` flag; the statistics slots are filled only when the
+        caller asked for them.
         """
         if not partitions:
-            return None
+            return PartitionState(scheme=None)
         first = partitions[0]
         interval = next((p.interval for p in partitions if p.interval), None)
         bounds = tuple(
@@ -2012,6 +2016,8 @@ class OracleIntrospector(OracleIntrospectorMixin, AbstractIntrospector):
         caller can ask for on its own. A table the catalogue does not list
         still yields a :class:`TableState` carrying the requested name, so
         the neutral shape has one way of saying "nothing else is known".
+        An unpartitioned table's ``partitioning`` slot is always filled with
+        an empty :class:`PartitionState` whose ``scheme`` is ``None``.
         """
         target_schema = self._normalise_schema(schema)
         key = self._cache.key(
@@ -2033,8 +2039,7 @@ class OracleIntrospector(OracleIntrospectorMixin, AbstractIntrospector):
             target_schema,
         )
         partitioning = self.get_partition_state(table_name, target_schema)
-        if partitioning is not None:
-            state = replace(state, partitioning=partitioning)
+        state = replace(state, partitioning=partitioning)
 
         self._cache.set(key, state)
         return state
@@ -2044,13 +2049,15 @@ class OracleIntrospector(OracleIntrospectorMixin, AbstractIntrospector):
         table_name: str,
         schema: Optional[str] = None,
         include_stats: bool = False,
-    ) -> Optional[PartitionState]:
+    ) -> PartitionState:
         """Read the table's partition scheme and bounds.
 
-        ``None`` is the single answer for "not partitioned": the join of the
-        partition rows to the strategy row yields no row for such a table.
-        ``include_stats`` decides whether ``NUM_ROWS`` and ``SIZE_BYTES`` are
-        part of the question; the structural answer does not read them.
+        An unpartitioned table answers a :class:`PartitionState` whose
+        ``scheme`` is ``None`` -- never a bare ``None`` object: the join of
+        the partition rows to the strategy row yields no row, and the empty
+        listing is the catalogue saying "not partitioned". ``include_stats``
+        decides whether ``NUM_ROWS`` and ``SIZE_BYTES`` are part of the
+        question; the structural answer does not read them.
         """
         target_schema = self._normalise_schema(schema)
         key = self._cache.key(
@@ -2078,8 +2085,7 @@ class OracleIntrospector(OracleIntrospectorMixin, AbstractIntrospector):
         state = self.parse_partition_state(
             partitions, str(table_name).upper(), target_schema, include_stats
         )
-        if state is not None:
-            self._cache.set(key, state)
+        self._cache.set(key, state)
         return state
 
     def list_index_states(
@@ -2668,8 +2674,7 @@ class AsyncOracleIntrospector(OracleIntrospectorMixin, AsyncAbstractIntrospector
             target_schema,
         )
         partitioning = await self.get_partition_state(table_name, target_schema)
-        if partitioning is not None:
-            state = replace(state, partitioning=partitioning)
+        state = replace(state, partitioning=partitioning)
 
         self._cache.set(key, state)
         return state
@@ -2679,8 +2684,12 @@ class AsyncOracleIntrospector(OracleIntrospectorMixin, AsyncAbstractIntrospector
         table_name: str,
         schema: Optional[str] = None,
         include_stats: bool = False,
-    ) -> Optional[PartitionState]:
-        """Read the table's partition scheme and bounds."""
+    ) -> PartitionState:
+        """Read the table's partition scheme and bounds.
+
+        Same answer shape as the sync twin: an unpartitioned table yields a
+        :class:`PartitionState` with ``scheme=None``, never ``None``.
+        """
         target_schema = self._normalise_schema(schema)
         key = self._cache.key(
             IntrospectionScope.TABLE,
@@ -2707,8 +2716,7 @@ class AsyncOracleIntrospector(OracleIntrospectorMixin, AsyncAbstractIntrospector
         state = self.parse_partition_state(
             partitions, str(table_name).upper(), target_schema, include_stats
         )
-        if state is not None:
-            self._cache.set(key, state)
+        self._cache.set(key, state)
         return state
 
     async def list_index_states(
