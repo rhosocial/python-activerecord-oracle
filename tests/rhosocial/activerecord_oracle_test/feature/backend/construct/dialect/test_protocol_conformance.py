@@ -114,7 +114,7 @@ ORACLE_PROTOCOLS = [
     dialect_protocols.FulltextIndexSupport,
     dialect_protocols.GeneratedColumnSupport,
     dialect_protocols.PartitionSupport,
-    dialect_protocols.SQLFunctionSupport,
+    suggestion_protocols.FunctionSuggestionSupport,
     dialect_protocols.TransactionControlSupport,
     # --- Introspection ---
     dialect_protocols.IntrospectionSupport,

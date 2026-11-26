@@ -41,8 +41,22 @@ def _required_arguments(func: ast.FunctionDef):
     return [a.arg for a in required]
 
 
+def _annotates_bool(func: ast.FunctionDef) -> bool:
+    """A switch declares ``-> bool``.
+
+    Missing annotation is a violation too: the switch's whole contract is "one
+    bool", so an unannotated ``supports_*`` is silently widening it.
+    """
+    annotation = func.returns
+    if isinstance(annotation, ast.Name) and annotation.id == "bool":
+        return True
+    if isinstance(annotation, ast.Constant) and annotation.value == "bool":
+        return True
+    return False
+
+
 def _offenders(tree, label):
-    """``supports_*`` methods that cannot be called without an argument."""
+    """``supports_*`` methods that are not "no argument, one bool" switches."""
     found = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.ClassDef):
@@ -55,6 +69,10 @@ def _offenders(tree, label):
             missing = _required_arguments(item)
             if missing:
                 found.append(f"{label}:{item.lineno} {item.name}({', '.join(missing)})")
+            elif not _annotates_bool(item):
+                found.append(
+                    f"{label}:{item.lineno} {item.name} does not return bool"
+                )
     return found
 
 
@@ -76,19 +94,20 @@ def test_the_scan_flags_a_planted_violation(tmp_path):
     probe = tmp_path / "_guard_probe.py"
     probe.write_text(
         "class P:\n"
-        "    def supports_thing(self, name):\n"
+        "    def supports_thing(self, name) -> bool:\n"
         "        return False\n",
         encoding="utf-8",
     )
     tree = ast.parse(probe.read_text(encoding="utf-8"))
-    assert _offenders(tree, "probe")
+    offenders = _offenders(tree, "probe")
+    assert offenders and "supports_thing(name)" in offenders[0]
 
 
 def test_the_scan_flags_a_planted_keyword_only_violation(tmp_path):
     probe = tmp_path / "_guard_probe.py"
     probe.write_text(
         "class P:\n"
-        "    def supports_thing(self, *, name):\n"
+        "    def supports_thing(self, *, name) -> bool:\n"
         "        return False\n",
         encoding="utf-8",
     )
@@ -100,9 +119,57 @@ def test_the_scan_accepts_a_defaulted_parameter(tmp_path):
     probe = tmp_path / "_guard_probe.py"
     probe.write_text(
         "class P:\n"
-        "    def supports_thing(self, name=None):\n"
+        "    def supports_thing(self, name=None) -> bool:\n"
         "        return False\n",
         encoding="utf-8",
     )
     tree = ast.parse(probe.read_text(encoding="utf-8"))
     assert not _offenders(tree, "probe")
+
+
+def test_the_scan_flags_a_non_bool_annotation(tmp_path):
+    probe = tmp_path / "_guard_probe.py"
+    probe.write_text(
+        "from typing import Dict\n"
+        "class P:\n"
+        "    def supports_thing(self) -> Dict[str, bool]:\n"
+        "        return {}\n",
+        encoding="utf-8",
+    )
+    tree = ast.parse(probe.read_text(encoding="utf-8"))
+    offenders = _offenders(tree, "probe")
+    assert offenders and "does not return bool" in offenders[0]
+
+
+def test_the_scan_flags_a_missing_annotation(tmp_path):
+    probe = tmp_path / "_guard_probe.py"
+    probe.write_text(
+        "class P:\n"
+        "    def supports_thing(self):\n"
+        "        return False\n",
+        encoding="utf-8",
+    )
+    tree = ast.parse(probe.read_text(encoding="utf-8"))
+    offenders = _offenders(tree, "probe")
+    assert offenders and "does not return bool" in offenders[0]
+
+
+def test_the_scan_accepts_a_quoted_bool_annotation(tmp_path):
+    probe = tmp_path / "_guard_probe.py"
+    probe.write_text(
+        'class P:\n    def supports_thing(self) -> "bool":\n        return False\n',
+        encoding="utf-8",
+    )
+    tree = ast.parse(probe.read_text(encoding="utf-8"))
+    assert not _offenders(tree, "probe")
+
+
+def test_no_source_file_still_declares_a_function_switch():
+    """The catalogue is a suggestion, so no ``supports_functions`` survives."""
+    hits = []
+    for path in _src_files():
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name == "supports_functions":
+                hits.append(f"{path.name}:{node.lineno}")
+    assert not hits, "\n".join(hits)

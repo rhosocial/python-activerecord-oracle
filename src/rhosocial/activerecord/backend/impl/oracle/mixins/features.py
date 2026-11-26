@@ -8,6 +8,8 @@ of ``PostgresFeaturesMixin``.
 
 from typing import Dict
 
+from rhosocial.activerecord.backend.suggestion.definitions import FunctionSuggestion
+
 
 class OracleFeaturesMixin:
     def _ddl_bind_parameter_reason(self, feature: str) -> str:
@@ -1042,7 +1044,8 @@ class OracleFeaturesMixin:
         return False
 
     # --- SQL functions ------------------------------------------------
-    def supports_functions(self) -> Dict[str, bool]:
+    def suggest_functions(self) -> "FunctionSuggestion":
+        """Return the SQL function catalogue this dialect renders."""
         from rhosocial.activerecord.backend.impl.oracle.function_versions import (
             ORACLE_FUNCTION_VERSIONS,
         )
@@ -1076,4 +1079,4 @@ class OracleFeaturesMixin:
                 result[func_name] = (
                     known_version is not None and min_ver <= known_version <= max_ver
                 )
-        return result
+        return FunctionSuggestion(result)

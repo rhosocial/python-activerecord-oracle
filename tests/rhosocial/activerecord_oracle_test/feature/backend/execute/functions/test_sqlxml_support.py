@@ -47,7 +47,7 @@ class TestOracleSQLXMLSupport:
     def test_standard_sqlxml_constructors_are_not_plain_functions(self):
         """Standard SQL/XML constructors are exposed as expression capabilities."""
         dialect = OracleDialect((19, 0, 0))
-        functions = dialect.supports_functions()
+        functions = dialect.suggest_functions().functions
 
         assert "xmltype" in functions
         assert "existsnode" in functions

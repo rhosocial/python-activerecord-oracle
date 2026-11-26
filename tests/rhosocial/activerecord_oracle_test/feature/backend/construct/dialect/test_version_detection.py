@@ -899,9 +899,8 @@ class TestBlastRadiusIsPinned:
     def test_the_set_of_capabilities_that_flip_is_exactly_the_declared_one(self):
         flipped = self._flip_set(self._dialect((19, 0, 0)), self._dialect(
             (23, 0, 0), (23, 26, 1, 0, 0), 26))
-        # ``supports_functions`` returns the whole availability map rather than
-        # a boolean, so it is audited on its own in the next test.
-        flipped.pop("supports_functions", None)
+        # The function catalogue is not a ``supports_*`` switch, so this audit
+        # never sees it; it is checked on its own in the next test.
         expected = {
             name: (False, value[0]) for name, value in FLIPPED_CAPABILITIES.items()
         }
@@ -918,9 +917,9 @@ class TestBlastRadiusIsPinned:
         assert flipped == expected
 
     def test_the_set_of_functions_that_flip_is_exactly_the_declared_one(self):
-        before = self._dialect((19, 0, 0)).supports_functions()
+        before = self._dialect((19, 0, 0)).suggest_functions().functions
         after = self._dialect(
-            (23, 0, 0), (23, 26, 1, 0, 0), 26).supports_functions()
+            (23, 0, 0), (23, 26, 1, 0, 0), 26).suggest_functions().functions
         flipped = {k for k in after if before.get(k) != after.get(k)}
         assert flipped == set(FLIPPED_FUNCTIONS), (
             f"the function table's flip set changed: "
@@ -938,8 +937,8 @@ class TestBlastRadiusIsPinned:
                 f"{name} is claimed by the gate and **not** backed by any "
                 f"reachable server: {evidence}"
             )
-        before = self._dialect((19, 0, 0)).supports_functions()[name]
-        after = self._dialect((23, 0, 0)).supports_functions()[name]
+        before = self._dialect((19, 0, 0)).suggest_functions().functions[name]
+        after = self._dialect((23, 0, 0)).suggest_functions().functions[name]
         assert before is False and after is answer
 
     @pytest.mark.parametrize("label,gate,before,after", FLIPPED_RENDERINGS)
@@ -1230,7 +1229,7 @@ class TestWithdrawnFunctionIsAbsentEverywhere:
     def test_no_version_claims_it(self, version):
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
-        funcs = OracleDialect(version).supports_functions()
+        funcs = OracleDialect(version).suggest_functions().functions
         assert "json_schema" not in funcs, (
             f"{version} claims {funcs.get('json_schema')!r} for a function no "
             f"server has"
@@ -1249,7 +1248,7 @@ class TestWithdrawnFunctionIsAbsentEverywhere:
         someone lowering a threshold."""
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
-        before = OracleDialect((19, 0, 0)).supports_functions()
-        after = OracleDialect((23, 0, 0)).supports_functions()
+        before = OracleDialect((19, 0, 0)).suggest_functions().functions
+        after = OracleDialect((23, 0, 0)).suggest_functions().functions
         assert set(WITHDRAWN_FUNCTIONS).isdisjoint(before)
         assert set(WITHDRAWN_FUNCTIONS).isdisjoint(after)

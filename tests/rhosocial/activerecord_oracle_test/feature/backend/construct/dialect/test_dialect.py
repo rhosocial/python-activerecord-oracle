@@ -304,13 +304,15 @@ class TestProtocolCompliance:
         dialect = OracleDialect(version=(19, 0, 0))
         assert isinstance(dialect, TransactionControlSupport)
 
-    def test_sql_function_protocol(self):
-        """Test SQLFunctionSupport protocol compliance."""
+    def test_function_suggestion_protocol(self):
+        """Test FunctionSuggestionSupport protocol compliance."""
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
-        from rhosocial.activerecord.backend.dialect.protocols import SQLFunctionSupport
+        from rhosocial.activerecord.backend.suggestion.protocols import (
+            FunctionSuggestionSupport,
+        )
 
         dialect = OracleDialect(version=(19, 0, 0))
-        assert isinstance(dialect, SQLFunctionSupport)
+        assert isinstance(dialect, FunctionSuggestionSupport)
 
     def test_ora_native_json_protocol(self):
         """Test OracleNativeJSONSupport protocol compliance."""
@@ -473,13 +475,17 @@ class TestTruncateCapabilities:
 
 
 class TestFunctionSupport:
-    """Test Oracle dialect function support."""
+    """Test Oracle dialect function catalogue."""
 
-    def test_supports_functions_exists(self):
-        """Test supports_functions method exists."""
+    def test_suggest_functions_exists(self):
+        """Test suggest_functions method exists."""
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
+        from rhosocial.activerecord.backend.suggestion.definitions import FunctionSuggestion
+
         dialect = OracleDialect(version=(19, 0, 0))
-        funcs = dialect.supports_functions()
+        suggestion = dialect.suggest_functions()
+        assert isinstance(suggestion, FunctionSuggestion)
+        funcs = suggestion.functions
         assert isinstance(funcs, dict)
         assert len(funcs) > 0
 
@@ -487,7 +493,7 @@ class TestFunctionSupport:
         """Test that common SQL functions are reported as available."""
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
         dialect = OracleDialect(version=(19, 0, 0))
-        funcs = dialect.supports_functions()
+        funcs = dialect.suggest_functions().functions
         assert funcs.get("count") is True
         assert funcs.get("sum") is True
         assert funcs.get("min") is True
@@ -498,7 +504,7 @@ class TestFunctionSupport:
         """Test Oracle-specific functions."""
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
         dialect = OracleDialect(version=(19, 0, 0))
-        funcs = dialect.supports_functions()
+        funcs = dialect.suggest_functions().functions
         assert funcs.get("nvl") is True
         assert funcs.get("decode") is True
         assert funcs.get("to_date") is True
@@ -508,33 +514,33 @@ class TestFunctionSupport:
         """Test JSON functions require 12c+."""
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
         old_dialect = OracleDialect(version=(9, 0, 0))
-        old_funcs = old_dialect.supports_functions()
+        old_funcs = old_dialect.suggest_functions().functions
         assert old_funcs.get("json_value") is False
 
         new_dialect = OracleDialect(version=(12, 1, 0))
-        new_funcs = new_dialect.supports_functions()
+        new_funcs = new_dialect.suggest_functions().functions
         assert new_funcs.get("json_value") is True
 
     def test_listagg_version_dependent(self):
         """Test LISTAGG requires 11g R2+."""
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
         old_dialect = OracleDialect(version=(10, 0, 0))
-        old_funcs = old_dialect.supports_functions()
+        old_funcs = old_dialect.suggest_functions().functions
         assert old_funcs.get("listagg") is False
 
         new_dialect = OracleDialect(version=(11, 2, 0))
-        new_funcs = new_dialect.supports_functions()
+        new_funcs = new_dialect.suggest_functions().functions
         assert new_funcs.get("listagg") is True
 
     def test_regexp_count_version_dependent(self):
         """Test REGEXP_COUNT requires 12c R2+."""
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
         old_dialect = OracleDialect(version=(11, 0, 0))
-        old_funcs = old_dialect.supports_functions()
+        old_funcs = old_dialect.suggest_functions().functions
         assert old_funcs.get("regexp_count") is False
 
         new_dialect = OracleDialect(version=(12, 2, 0))
-        new_funcs = new_dialect.supports_functions()
+        new_funcs = new_dialect.suggest_functions().functions
         assert new_funcs.get("regexp_count") is True
 
 

@@ -3,8 +3,8 @@
 Oracle function version requirements.
 
 Defines the minimum and maximum Oracle versions for each SQL function
-supported by the backend. Used by dialect.supports_functions() to
-build the function availability map.
+supported by the backend. Used by dialect.suggest_functions() to
+build the function availability catalogue.
 
 Version format: (major, minor, patch)
 Reference:
@@ -27,7 +27,7 @@ from typing import Dict, Optional, Tuple
 # JSON functions (12c+)
 #
 # Every entry here is a **SQL-callable function or operator**, because that is
-# what ``Dialect.supports_functions()`` answers about: whether the dialect can
+# what ``Dialect.suggest_functions()`` answers about: whether the dialect can
 # put this name in a statement.  ``ALL_PROCEDURES`` is where the server
 # registers the ones it actually has, and it is the check to run before adding
 # an entry - see the note on ``json_schema`` below, which is an entry this file
