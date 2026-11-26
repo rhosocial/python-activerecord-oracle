@@ -11,7 +11,7 @@ release it never learned which features exist.
 
 import argparse
 import json
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from rhosocial.activerecord.backend.dialect import capabilities as _cap
 from rhosocial.activerecord.backend.dialect.exceptions import DialectNotAdaptedException
@@ -117,7 +117,6 @@ def handle(args):
         dialect,
         family_groups=PROTOCOL_FAMILY_GROUPS,
         dialect_specific_groups=DIALECT_SPECIFIC_GROUPS,
-        all_args=SUPPORT_METHOD_ALL_ARGS,
         verbose=args.verbose,
     )
 
@@ -270,19 +269,6 @@ DIALECT_SPECIFIC_GROUPS = {
         )
         for protocol in protocols
     )
-}
-
-# Candidate arguments probed for the ``supports_*`` methods that require one.
-# ``_cap.check_protocol_support`` reports a method not listed here as unsupported
-# without calling it, so an entry has to name a method this dialect actually
-# takes an argument for. ``supports_explain_format`` is currently the only one
-# that does; the JSON-function and spatial probes that used to sit here named
-# MySQL protocols, and neither could ever be reached: Oracle declares no
-# ``supports_json_function`` at all, and its ``supports_spatial_type`` takes no
-# argument, so the ``elif method_name in SUPPORT_METHOD_ALL_ARGS`` branch was
-# never entered for either key.
-SUPPORT_METHOD_ALL_ARGS: Dict[str, List[str]] = {
-    "supports_explain_format": ["TEXT", "JSON", "TREE", "XML", "YAML", "DOT"],
 }
 
 

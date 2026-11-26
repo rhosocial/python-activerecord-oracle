@@ -19,8 +19,17 @@ class OracleTransactionMixin:
     def get_isolation_level_string(cls, level: IsolationLevel) -> str:
         return cls._ISOLATION_LEVELS.get(level, "READ COMMITTED")
 
-    def supports_isolation_level(self, level: IsolationLevel) -> bool:
-        return level in self._ISOLATION_LEVELS
+    def supports_isolation_level_read_uncommitted(self) -> bool:
+        return IsolationLevel.READ_UNCOMMITTED in self._ISOLATION_LEVELS
+
+    def supports_isolation_level_read_committed(self) -> bool:
+        return IsolationLevel.READ_COMMITTED in self._ISOLATION_LEVELS
+
+    def supports_isolation_level_repeatable_read(self) -> bool:
+        return IsolationLevel.REPEATABLE_READ in self._ISOLATION_LEVELS
+
+    def supports_isolation_level_serializable(self) -> bool:
+        return IsolationLevel.SERIALIZABLE in self._ISOLATION_LEVELS
 
     def supports_transaction_mode(self) -> bool:
         return True

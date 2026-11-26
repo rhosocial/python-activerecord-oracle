@@ -26,10 +26,38 @@ class OracleVectorMixin(object):
     def get_max_vector_dimension(self) -> int:
         return self.MAX_VECTOR_DIMENSION
 
-    def supports_vector_distance_metric(self, metric: str) -> bool:
+    #: Metric name -> the switch that answers for it. Oracle's
+    #: ``VECTOR_DISTANCE`` grammar names the metric as a string literal, so the
+    #: closed set of metrics it accepts is answered by one switch per member.
+    _DISTANCE_METRIC_SWITCHES = {
+        'COSINE': 'supports_vector_distance_metric_cosine',
+        'EUCLIDEAN': 'supports_vector_distance_metric_euclidean',
+        'DOT': 'supports_vector_distance_metric_dot',
+        'MANHATTAN': 'supports_vector_distance_metric_manhattan',
+        'HAMMING': 'supports_vector_distance_metric_hamming',
+    }
+
+    def supports_vector_distance_metric_cosine(self) -> bool:
+        return 'COSINE' in self.SUPPORTED_DISTANCE_METRICS
+
+    def supports_vector_distance_metric_euclidean(self) -> bool:
+        return 'EUCLIDEAN' in self.SUPPORTED_DISTANCE_METRICS
+
+    def supports_vector_distance_metric_dot(self) -> bool:
+        return 'DOT' in self.SUPPORTED_DISTANCE_METRICS
+
+    def supports_vector_distance_metric_manhattan(self) -> bool:
+        return 'MANHATTAN' in self.SUPPORTED_DISTANCE_METRICS
+
+    def supports_vector_distance_metric_hamming(self) -> bool:
+        return 'HAMMING' in self.SUPPORTED_DISTANCE_METRICS
+
+    def _supports_distance_metric(self, metric: Any) -> bool:
+        """Ask the per-metric switch; an unknown name has no switch and is unsupported."""
         if not isinstance(metric, str):
             return False
-        return metric.upper() in self.SUPPORTED_DISTANCE_METRICS
+        probe = self._DISTANCE_METRIC_SWITCHES.get(metric.upper())
+        return bool(probe) and bool(getattr(self, probe)())
 
     def _format_vector_literal_value(self, vec: Any) -> str:
         """Format a raw vector value as Oracle VECTOR string literal."""
@@ -79,7 +107,7 @@ class OracleVectorMixin(object):
             vector2 = expr.vector2
             metric = str(expr.metric).upper() or metric
 
-        if not self.supports_vector_distance_metric(metric):
+        if not self._supports_distance_metric(metric):
             from rhosocial.activerecord.backend.dialect.exceptions import (
                 UnsupportedFeatureError,
             )

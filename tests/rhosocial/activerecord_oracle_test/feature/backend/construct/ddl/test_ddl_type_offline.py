@@ -20,6 +20,8 @@ from rhosocial.activerecord.backend.expression.statements import (
     AlterTypeStatement,
     CreateTypeStatement,
     DropTypeStatement,
+    TypeAlterAction,
+    TypeDefinition,
 )
 from rhosocial.activerecord.backend.expression.types import (
     IntegerType,
@@ -770,34 +772,36 @@ class TestCapabilityGates:
             assert getattr(dialect, name)() is expected, name
 
     def test_supports_type_definition(self, dialect: OracleDialect) -> None:
-        for defn_type in (
-            OracleObjectTypeDefinition,
-            OracleSqljTypeDefinition,
-            OracleVarrayTypeDefinition,
-            OracleNestedTableTypeDefinition,
-            OracleIncompleteTypeDefinition,
-        ):
-            assert dialect.supports_type_definition(defn_type) is True
-        assert dialect.supports_type_definition(str) is False
-        assert dialect.supports_type_definition(object) is False
+        """A kind vocabulary is not a capability switch; ``supported_type_definitions`` is the reminder."""
+        assert not hasattr(dialect, "supports_type_definition")
 
     def test_supports_type_alter_action(self, dialect: OracleDialect) -> None:
-        for action_type in (
-            OracleAlterTypeAddAttributeAction,
-            OracleAlterTypeModifyAttributeAction,
-            OracleAlterTypeDropAttributeAction,
-            OracleAlterTypeAddMethodAction,
-            OracleAlterTypeDropMethodAction,
-            OracleAlterTypeLimitAction,
-            OracleAlterTypeElementTypeAction,
-            OracleAlterTypeCompileAction,
-            OracleAlterTypeFinalAction,
-            OracleAlterTypeInstantiableAction,
-            OracleAlterTypeResetAction,
-        ):
-            assert dialect.supports_type_alter_action(action_type) is True
-        assert dialect.supports_type_alter_action(str) is False
-        assert dialect.supports_type_alter_action(object) is False
+        """The action vocabulary is answered by the formatter, not by a switch."""
+        assert not hasattr(dialect, "supports_type_alter_action")
+
+    def test_format_type_definition_fails_fast_on_an_unknown_node(
+        self, dialect: OracleDialect
+    ) -> None:
+        """An unrecognised definition node is refused by the formatter itself."""
+        class UnknownDefinition(TypeDefinition):
+            @property
+            def definition_kind(self) -> str:
+                return "unknown-definition"
+
+        with pytest.raises(UnsupportedFeatureError):
+            dialect.format_type_definition(UnknownDefinition(dialect))
+
+    def test_format_type_alter_action_fails_fast_on_an_unknown_node(
+        self, dialect: OracleDialect
+    ) -> None:
+        """An unrecognised ALTER TYPE action is refused by the formatter itself."""
+        class UnknownAction(TypeAlterAction):
+            @property
+            def action_kind(self) -> str:
+                return "unknown-action"
+
+        with pytest.raises(UnsupportedFeatureError):
+            dialect.format_type_alter_action(UnknownAction(dialect))
 
     def test_supported_type_definitions_tuple(self, dialect: OracleDialect) -> None:
         assert dialect.supported_type_definitions() == dialect._TYPE_DEFINITION_TYPES

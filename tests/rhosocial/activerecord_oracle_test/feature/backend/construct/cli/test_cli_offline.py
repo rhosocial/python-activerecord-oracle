@@ -103,9 +103,6 @@ class TestInfoHelpers:
             def supports_bool(self) -> bool:
                 return True
 
-            def supports_explain_format(self, fmt: str) -> bool:
-                return True
-
             def supports_needs_arg(self, value: str) -> bool:
                 return True
 
@@ -119,8 +116,8 @@ class TestInfoHelpers:
             def supports_bool(self) -> bool:
                 return True
 
-            def supports_explain_format(self, fmt: str) -> bool:
-                return fmt == "JSON"
+            def supports_needs_arg(self, value: str) -> bool:
+                return value == "JSON"
 
             def is_thing_available(self) -> bool:
                 return False
@@ -128,18 +125,22 @@ class TestInfoHelpers:
             def supports_raises(self) -> bool:
                 raise RuntimeError("boom")
 
-        result = cap.check_protocol_support(
-            FakeDialect(), FakeProtocol, info.SUPPORT_METHOD_ALL_ARGS
-        )
+        # Oracle now declares no argument-taking probe; the generic branch is
+        # exercised here with a local table rather than a backend constant.
+        all_args = {"supports_needs_arg": ["JSON", "TEXT"]}
+        result = cap.check_protocol_support(FakeDialect(), FakeProtocol, all_args)
         assert result["supports_bool"] is True
         assert result["is_thing_available"] is False
         assert result["supports_raises"] is False
-        assert result["supports_needs_arg"] is False
-        fmt = result["supports_explain_format"]
-        assert fmt["supported"] == 1
-        assert fmt["total"] == 6
-        assert fmt["args"]["JSON"] is True
-        assert fmt["args"]["TEXT"] is False
+        needs_arg = result["supports_needs_arg"]
+        assert needs_arg["supported"] == 1
+        assert needs_arg["total"] == 2
+        assert needs_arg["args"]["JSON"] is True
+        assert needs_arg["args"]["TEXT"] is False
+
+    def test_oracle_declares_no_argument_taking_probe(self) -> None:
+        """Every ``supports_*`` is a support switch: the CLI has no argument table."""
+        assert not hasattr(info, "SUPPORT_METHOD_ALL_ARGS")
 
     def test_check_protocol_support_missing_method(self) -> None:
         class FakeProtocol:
@@ -196,7 +197,7 @@ class TestInfoHelpers:
         console = MagicMock()
         info._display_method_details(
             console,
-            "supports_explain_format",
+            "supports_arguments_are_not_a_switch",
             {"supported": 1, "total": 2, "args": {"JSON": True, "TEXT": False}},
         )
         text = " ".join(str(c) for c in console.print.call_args_list)

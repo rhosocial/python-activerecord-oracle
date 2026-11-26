@@ -7,12 +7,16 @@ the capability contract.  Regenerate via scripts/p7_generate_protocols.py
 when mixins gain new public rendering methods.
 """
 
-from typing import Any, Dict, List, Optional, Tuple
-
 from typing import Protocol
 
 class OracleTransactionSupport(Protocol):
     """Auto-generated capability protocol (P7)."""
 
-    def supports_isolation_level(self, level: IsolationLevel) -> bool:
+    def supports_isolation_level_read_uncommitted(self) -> bool:
+        ...  # pragma: no cover
+    def supports_isolation_level_read_committed(self) -> bool:
+        ...  # pragma: no cover
+    def supports_isolation_level_repeatable_read(self) -> bool:
+        ...  # pragma: no cover
+    def supports_isolation_level_serializable(self) -> bool:
         ...  # pragma: no cover

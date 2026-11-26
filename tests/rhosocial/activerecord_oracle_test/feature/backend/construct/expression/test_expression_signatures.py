@@ -150,3 +150,13 @@ class TestVectorOperandPlaceholder:
         sql, params = dialect.format_vector_distance(FakeExpr())
         assert '?' in sql
         assert '%s' not in sql
+
+    def test_unsupported_distance_metric_is_refused(self, dialect):
+        """A metric without a per-metric switch is refused by name."""
+        from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
+        class FakeExpr:
+            vector1 = VectorOperandExpression(dialect, 'vec_a')
+            vector2 = VectorOperandExpression(dialect, 'vec_b')
+            metric = 'JACCARD'
+        with pytest.raises(UnsupportedFeatureError):
+            dialect.format_vector_distance(FakeExpr())

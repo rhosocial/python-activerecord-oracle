@@ -30,6 +30,7 @@ from typing import Any, Dict, Optional, Tuple
 import pytest
 
 from rhosocial.activerecord.backend.dialect import protocols as dialect_protocols
+from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 from rhosocial.activerecord.backend.expression import (
     AllColumnsWildcard,
     Column,
@@ -124,7 +125,7 @@ def _plan_row(
 
 
 class TestOracleExplainCapabilities:
-    """Oracle advertises EXPLAIN PLAN but no ANALYZE / FORMAT options."""
+    """Oracle advertises EXPLAIN PLAN but no ANALYZE / FORMAT / option clauses."""
 
     def test_supports_explain_plan(self) -> None:
         dialect = _dialect()
@@ -136,12 +137,38 @@ class TestOracleExplainCapabilities:
         assert _dialect().supports_explain_analyze() is False
 
     @pytest.mark.parametrize(
-        "format_type",
-        [f.value for f in ExplainFormat] + ["DOT", "BASIC", "TREE"],
+        "probe",
+        [
+            "supports_explain_format_text",
+            "supports_explain_format_json",
+            "supports_explain_format_xml",
+            "supports_explain_format_yaml",
+            "supports_explain_format_tree",
+            "supports_explain_format_traditional",
+        ],
     )
-    def test_supports_explain_format_is_false_for_every_format(self, format_type) -> None:
+    def test_no_explain_format_switch_is_on(self, probe: str) -> None:
         """No FORMAT option is part of Oracle's EXPLAIN PLAN grammar."""
-        assert _dialect().supports_explain_format(format_type) is False
+        assert getattr(_dialect(), probe)() is False, probe
+
+    @pytest.mark.parametrize(
+        "probe",
+        [
+            "supports_explain_verbose",
+            "supports_explain_costs",
+            "supports_explain_buffers",
+            "supports_explain_timing",
+            "supports_explain_settings",
+            "supports_explain_wal",
+        ],
+    )
+    def test_no_explain_option_switch_is_on(self, probe: str) -> None:
+        """Oracle's EXPLAIN PLAN statement carries none of these option clauses."""
+        assert getattr(_dialect(), probe)() is False, probe
+
+    def test_the_old_format_probe_is_gone(self) -> None:
+        """``supports_explain_format`` took a format name; the switches replace it."""
+        assert not hasattr(_dialect(), "supports_explain_format")
 
 
 class TestOracleExplainRendering:
@@ -149,20 +176,44 @@ class TestOracleExplainRendering:
 
     @pytest.mark.parametrize(
         "options",
-        [
-            None,
-            ExplainOptions(),
-            ExplainOptions(analyze=True),
-            ExplainOptions(format=ExplainFormat.JSON),
-            ExplainOptions(type=ExplainType.ANALYZE, verbose=True, buffers=True, timing=True),
-        ],
-        ids=["none", "default", "analyze", "json", "analyze-verbose"],
+        [None, ExplainOptions()],
+        ids=["none", "default"],
     )
     def test_format_explain_statement_emits_exact_fallback(self, options) -> None:
-        """Every option combination renders the same SELECT-from-DUAL fallback."""
+        """An EXPLAIN that asks for no option renders the SELECT-from-DUAL fallback."""
         sql, params = _render(_dialect(), options)
         assert sql == _FALLBACK_SQL, "Oracle EXPLAIN must render the SELECT 1 fallback"
         assert params == (), "the fallback has no parameters"
+
+    @pytest.mark.parametrize(
+        "options",
+        [
+            ExplainOptions(analyze=True),
+            ExplainOptions(type=ExplainType.ANALYZE),
+            ExplainOptions(format=ExplainFormat.JSON),
+            ExplainOptions(format=ExplainFormat.TEXT),
+            ExplainOptions(costs=False),
+            ExplainOptions(buffers=True),
+            ExplainOptions(verbose=True),
+            ExplainOptions(settings=True),
+            ExplainOptions(wal=True),
+        ],
+        ids=[
+            "analyze",
+            "type-analyze",
+            "json",
+            "text",
+            "costs-off",
+            "buffers",
+            "verbose",
+            "settings",
+            "wal",
+        ],
+    )
+    def test_format_explain_statement_refuses_unsupported_options(self, options) -> None:
+        """An option Oracle's grammar has no clause for is refused, not dropped."""
+        with pytest.raises(UnsupportedFeatureError):
+            _render(_dialect(), options)
 
     def test_explain_statement_to_sql_uses_fallback(self) -> None:
         """Expression.to_sql() dispatches through format_explain_statement."""

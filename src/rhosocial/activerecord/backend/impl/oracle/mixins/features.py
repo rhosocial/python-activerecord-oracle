@@ -172,12 +172,63 @@ class OracleFeaturesMixin:
         return True
 
     # --- EXPLAIN ------------------------------------------------------
+    #
+    # Oracle spells EXPLAIN as ``EXPLAIN PLAN [SET STATEMENT_ID ...] [INTO
+    # table] FOR <statement>``: the plan is written to PLAN_TABLE as rows and
+    # the statement itself carries no ANALYZE, FORMAT, VERBOSE, COSTS, BUFFERS,
+    # TIMING, SETTINGS or WAL clause. Every switch below answers False, and
+    # ``format_explain_statement`` refuses a statement that asks for one of
+    # them rather than emitting the fallback with the request silently dropped.
     def supports_explain_analyze(self) -> bool:
         """Oracle does not support EXPLAIN ANALYZE in the standard sense."""
         return False
 
-    def supports_explain_format(self, format_type: str) -> bool:
-        """Oracle EXPLAIN PLAN writes rows to PLAN_TABLE; format options are not part of the SQL grammar."""
+    def supports_explain_verbose(self) -> bool:
+        """Oracle's EXPLAIN PLAN statement has no VERBOSE clause."""
+        return False
+
+    def supports_explain_costs(self) -> bool:
+        """Oracle's EXPLAIN PLAN statement has no COSTS clause."""
+        return False
+
+    def supports_explain_buffers(self) -> bool:
+        """Oracle's EXPLAIN PLAN statement has no BUFFERS clause."""
+        return False
+
+    def supports_explain_timing(self) -> bool:
+        """Oracle's EXPLAIN PLAN statement has no TIMING clause."""
+        return False
+
+    def supports_explain_settings(self) -> bool:
+        """Oracle's EXPLAIN PLAN statement has no SETTINGS clause."""
+        return False
+
+    def supports_explain_wal(self) -> bool:
+        """Oracle's EXPLAIN PLAN statement has no WAL clause."""
+        return False
+
+    def supports_explain_format_text(self) -> bool:
+        """Oracle's EXPLAIN PLAN statement has no ``FORMAT TEXT`` clause."""
+        return False
+
+    def supports_explain_format_json(self) -> bool:
+        """Oracle's EXPLAIN PLAN statement has no ``FORMAT JSON`` clause."""
+        return False
+
+    def supports_explain_format_xml(self) -> bool:
+        """Oracle's EXPLAIN PLAN statement has no ``FORMAT XML`` clause."""
+        return False
+
+    def supports_explain_format_yaml(self) -> bool:
+        """Oracle's EXPLAIN PLAN statement has no ``FORMAT YAML`` clause."""
+        return False
+
+    def supports_explain_format_tree(self) -> bool:
+        """Oracle's EXPLAIN PLAN statement has no ``FORMAT TREE`` clause."""
+        return False
+
+    def supports_explain_format_traditional(self) -> bool:
+        """Oracle's EXPLAIN PLAN statement has no ``FORMAT TRADITIONAL`` clause."""
         return False
 
     # --- Locking ------------------------------------------------------

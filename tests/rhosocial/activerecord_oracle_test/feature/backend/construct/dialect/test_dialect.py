@@ -170,6 +170,16 @@ class TestDialectOracleSpecificSupport:
         new_dialect = OracleDialect(version=(23, 0, 0))
         assert new_dialect.supports_vector_type() is True
 
+    def test_supports_vector_distance_metric_switches(self):
+        """Every accepted distance metric has its own no-argument switch."""
+        from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
+
+        dialect = OracleDialect(version=(23, 0, 0))
+        for metric in ("cosine", "euclidean", "dot", "manhattan", "hamming"):
+            probe = f"supports_vector_distance_metric_{metric}"
+            assert getattr(dialect, probe)() is True, probe
+        assert not hasattr(dialect, "supports_vector_distance_metric")
+
 
 class TestDialectExpressionFormatting:
     """Test dialect expression formatting methods."""
@@ -406,6 +416,16 @@ class TestTransactionControl:
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
         dialect = OracleDialect(version=(19, 0, 0))
         assert dialect.supports_isolation_level_in_begin() is False
+
+    def test_isolation_level_switches(self):
+        """One no-argument switch per IsolationLevel; Oracle accepts two."""
+        from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
+        dialect = OracleDialect(version=(19, 0, 0))
+        assert dialect.supports_isolation_level_read_committed() is True
+        assert dialect.supports_isolation_level_serializable() is True
+        assert dialect.supports_isolation_level_read_uncommitted() is False
+        assert dialect.supports_isolation_level_repeatable_read() is False
+        assert not hasattr(dialect, "supports_isolation_level")
 
     def test_format_commit(self):
         """Test COMMIT formatting."""

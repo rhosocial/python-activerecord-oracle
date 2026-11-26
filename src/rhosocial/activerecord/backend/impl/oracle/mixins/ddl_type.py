@@ -96,19 +96,6 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
         OracleNestedTableTypeDefinition,
         OracleIncompleteTypeDefinition,
     )
-    _TYPE_ACTION_TYPES = (
-        OracleAlterTypeAddAttributeAction,
-        OracleAlterTypeModifyAttributeAction,
-        OracleAlterTypeDropAttributeAction,
-        OracleAlterTypeAddMethodAction,
-        OracleAlterTypeDropMethodAction,
-        OracleAlterTypeLimitAction,
-        OracleAlterTypeElementTypeAction,
-        OracleAlterTypeCompileAction,
-        OracleAlterTypeFinalAction,
-        OracleAlterTypeInstantiableAction,
-        OracleAlterTypeResetAction,
-    )
     _TYPE_MIN_VERSION = (9, 0, 0)
     _TYPE_PERSISTABLE_MIN_VERSION = (18, 0, 0)
 
@@ -196,24 +183,6 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
 
     def supported_type_definitions(self) -> Tuple[Type[TypeDefinition], ...]:
         return self._TYPE_DEFINITION_TYPES
-
-    def supports_type_definition(
-        self,
-        definition_type: Type[TypeDefinition],
-    ) -> bool:
-        try:
-            return issubclass(definition_type, self._TYPE_DEFINITION_TYPES)
-        except TypeError:
-            return False
-
-    def supports_type_alter_action(
-        self,
-        action_type: Type[TypeAlterAction],
-    ) -> bool:
-        try:
-            return issubclass(action_type, self._TYPE_ACTION_TYPES)
-        except TypeError:
-            return False
 
     def supports_create_type_or_replace(self) -> bool:
         return self._has_type_support()
@@ -541,11 +510,6 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
             and not self.supports_type_persistable()
         ):
             raise UnsupportedFeatureError(self.name, "TYPE PERSISTABLE clause")
-        if not self.supports_type_definition(type(expr)):
-            raise UnsupportedFeatureError(
-                self.name,
-                f"TYPE definition {expr.definition_kind}",
-            )
         if isinstance(expr, OracleSqljTypeDefinition):
             return self._format_sqlj_definition(expr), ()
         if isinstance(expr, OracleObjectTypeDefinition):
@@ -556,7 +520,9 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
             return self._format_nested_table_definition(expr), ()
         if isinstance(expr, OracleIncompleteTypeDefinition):
             return "", ()
-        raise UnsupportedFeatureError(self.name, "TYPE definition")
+        raise UnsupportedFeatureError(
+            self.name, f"TYPE definition {expr.definition_kind}"
+        )
 
     def format_create_type_statement(
         self,
@@ -581,11 +547,6 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
             expr.definition, _ResolvedFlagView
         ) and expr.definition.force:
             raise ValueError("CREATE TYPE IF NOT EXISTS cannot be combined with FORCE")
-        if not self.supports_type_definition(type(expr.definition)):
-            raise UnsupportedFeatureError(
-                self.name,
-                f"TYPE definition {expr.definition.definition_kind}",
-            )
         definition_sql, definition_params = expr.definition.to_sql()
         if definition_params:
             raise ValueError("CREATE TYPE must render without bind parameters")
@@ -612,11 +573,6 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
         return " ".join(parts), tuple(definition_params)
 
     def _format_single_action(self, action: TypeAlterAction) -> Tuple[str, tuple]:
-        if not self.supports_type_alter_action(type(action)):
-            raise UnsupportedFeatureError(
-                self.name,
-                f"ALTER TYPE action {action.action_kind}",
-            )
         action_sql, params = action.to_sql()
         return action_sql, tuple(params)
 
@@ -700,11 +656,6 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
         return cast(str, family)
 
     def format_type_alter_action(self, expr: TypeAlterAction) -> Tuple[str, tuple]:
-        if not self.supports_type_alter_action(type(expr)):
-            raise UnsupportedFeatureError(
-                self.name,
-                f"ALTER TYPE action {expr.action_kind}",
-            )
         if isinstance(expr, OracleAlterTypeInstantiableAction):
             value = "INSTANTIABLE" if expr.resolved_instantiable else "NOT INSTANTIABLE"
             suffix = self._format_dependent_clause(expr)

@@ -44,16 +44,8 @@ class OracleTypeDDLSupport(
         """Whether PERSISTABLE type clauses are supported."""
         ...
 
-    def supports_type_definition(self, definition_type: Type[Any]) -> bool:
-        """Whether a type-definition class is supported."""
-        ...
-
     def supported_type_definitions(self) -> Tuple[Type[Any], ...]:
         """Return supported type-definition classes."""
-        ...
-
-    def supports_type_alter_action(self, action_type: Type[Any]) -> bool:
-        """Whether an ALTER TYPE action class is supported."""
         ...
 
     def supports_create_type_if_not_exists(self) -> bool:
