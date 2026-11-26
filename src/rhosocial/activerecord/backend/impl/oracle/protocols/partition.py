@@ -11,7 +11,7 @@ All formatters are public (no leading underscore) and declared here per
 expression-dialect-architecture §8 (no pseudo-private SQL formatters).
 """
 
-from typing import TYPE_CHECKING, Tuple
+from typing import TYPE_CHECKING, Protocol, Tuple
 
 from rhosocial.activerecord.backend.dialect.protocols import PartitionSupport
 
@@ -36,7 +36,7 @@ if TYPE_CHECKING:  # pragma: no cover
     )
 
 
-class OraclePartitionSupport(PartitionSupport):
+class OraclePartitionSupport(PartitionSupport, Protocol):
     """Oracle table partitioning support protocol.
 
     Extends the generic ``PartitionSupport`` with Oracle-specific
