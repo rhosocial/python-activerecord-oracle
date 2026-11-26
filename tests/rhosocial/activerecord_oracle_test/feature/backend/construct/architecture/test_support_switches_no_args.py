@@ -76,10 +76,47 @@ def _offenders(tree, label):
     return found
 
 
+def _base_name(node: ast.expr):
+    """The terminal name of a base expression, or ``None`` if it has none."""
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return node.attr
+    return None
+
+
+def _dialect_support_bases(tree, label):
+    """Dialects that inherit a protocol as a base.
+
+    A ``runtime_checkable`` Protocol is satisfied structurally, so a concrete
+    mixin is what earns the ``isinstance`` answer. Inheriting the protocol adds
+    only its ellipsis-bodied members to the dialect, which makes ``isinstance``
+    pass for a contract nothing implements.
+    """
+    found = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ClassDef):
+            continue
+        if not node.name.endswith("Dialect"):
+            continue
+        for base in node.bases:
+            name = _base_name(base)
+            if name is not None and name.endswith("Support"):
+                found.append(f"{label}:{node.lineno} {node.name}({name})")
+    return found
+
+
 @pytest.mark.parametrize("path", _src_files(), ids=lambda p: p.name)
 def test_support_switch_takes_no_required_argument(path):
     tree = ast.parse(path.read_text(encoding="utf-8"))
     offenders = _offenders(tree, path.name)
+    assert not offenders, "\n".join(offenders)
+
+
+@pytest.mark.parametrize("path", _src_files(), ids=lambda p: p.name)
+def test_dialect_does_not_inherit_a_protocol(path):
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    offenders = _dialect_support_bases(tree, path.name)
     assert not offenders, "\n".join(offenders)
 
 
@@ -88,6 +125,52 @@ def test_the_scan_reaches_the_source_tree():
     assert len(files) > 50, f"only {len(files)} source files were scanned"
     names = {path.name for path in files}
     assert "dialect.py" in names
+
+
+def test_the_dialect_scan_inspects_real_bases():
+    """The protocol guard is not vacuous: it finds a Dialect and its bases."""
+    files = _src_files()
+    assert files, "the scan found no source files"
+    dialect_classes = []
+    bases_inspected = 0
+    for path in files:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef) and node.name.endswith("Dialect"):
+                dialect_classes.append(f"{path.name}:{node.name}")
+                bases_inspected += len(node.bases)
+    assert dialect_classes, "no class ending 'Dialect' was found to inspect"
+    assert bases_inspected, "the found dialects declare no bases to inspect"
+
+
+def test_the_guard_flags_a_planted_protocol_base(tmp_path):
+    probe = tmp_path / "_guard_probe.py"
+    probe.write_text(
+        "import protocols\n"
+        "class ProbeDialect(protocols.CTESupport):\n"
+        "    pass\n"
+        "class OtherDialect(ThingSupport):\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+    offenders = _dialect_support_bases(ast.parse(probe.read_text(encoding="utf-8")), "probe")
+    assert offenders
+    assert "ProbeDialect(CTESupport)" in offenders[0]
+    assert "OtherDialect(ThingSupport)" in offenders[1]
+
+
+def test_the_guard_accepts_a_protocol_free_dialect(tmp_path):
+    probe = tmp_path / "_guard_probe.py"
+    probe.write_text(
+        "class ThingSupport:\n"
+        "    pass\n"
+        "class ProbeDialect(MixinA, Base):\n"
+        "    pass\n"
+        "class ProtocolConsumer(ThingSupport):\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+    assert not _dialect_support_bases(ast.parse(probe.read_text(encoding="utf-8")), "probe")
 
 
 def test_the_scan_flags_a_planted_violation(tmp_path):

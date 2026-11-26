@@ -9,49 +9,6 @@ that override version-gated capability checks and syntax formatters.
 from typing import Any, Optional, Tuple, TYPE_CHECKING
 
 from rhosocial.activerecord.backend.dialect.base import SQLDialectBase
-from rhosocial.activerecord.backend.dialect.protocols import (
-    SQLXMLSupport,
-    SQLXMLParsingSupport,
-    SQLXMLSerializationSupport,
-    SQLXMLConstructionSupport,
-    SQLXMLAggregationSupport,
-    SQLXMLQueryingSupport,
-    CollationSupport,
-    CTESupport,
-    FilterClauseSupport,
-    WindowFunctionSupport,
-    JSONSupport,
-    ReturningSupport,
-    AdvancedGroupingSupport,
-    ArraySupport,
-    ExplainSupport,
-    GraphSupport,
-    GraphTableSupport,
-    LockingSupport,
-    MergeSupport,
-    OrderedSetAggregationSupport,
-    QualifyClauseSupport,
-    TemporalTableSupport,
-    UpsertSupport,
-    LateralJoinSupport,
-    WildcardSupport,
-    JoinSupport,
-    IntrospectionSupport,
-    SetOperationSupport,
-    TruncateSupport,
-    ConstraintSupport,
-    TransactionControlSupport,
-    ColumnAttributeSupport,
-    PivotSupport,
-)
-from rhosocial.activerecord.backend.suggestion.protocols import (
-    ColumnReorderSuggestionSupport,
-    CreateTableLayoutSuggestionSupport,
-    PartitionSchemeChangeSuggestionSupport,
-    StringConcatenationSuggestionSupport,
-    TableConstraintChangeSuggestionSupport,
-    TableIndexChangeSuggestionSupport,
-)
 from rhosocial.activerecord.backend.dialect.mixins import (
     SQLXMLMixin,
     CollationMixin,
@@ -184,9 +141,6 @@ from .suggestion import (
     OracleTableConstraintChangeSuggestionMixin,
     OracleTableIndexChangeSuggestionMixin,
 )
-from .protocols.partition import OraclePartitionSupport
-from .protocols.data_type import OracleDataTypeSupport
-from .protocols.ddl_type import OracleTypeDDLSupport
 from .reserved_words import ORACLE_RESERVED_WORDS
 from .show import OracleShowDialectMixin
 
@@ -367,51 +321,6 @@ class OracleDialect(
     LpadMixin,
     RpadMixin,
     TrimMixin,
-    # ================================================================
-    # Protocols (type-annotation guarantee only)
-    # ================================================================
-    SQLXMLSupport,
-    SQLXMLParsingSupport,
-    SQLXMLSerializationSupport,
-    SQLXMLConstructionSupport,
-    SQLXMLAggregationSupport,
-    SQLXMLQueryingSupport,
-    CollationSupport,
-    CTESupport,
-    FilterClauseSupport,
-    WindowFunctionSupport,
-    JSONSupport,
-    ReturningSupport,
-    AdvancedGroupingSupport,
-    ArraySupport,
-    ExplainSupport,
-    GraphSupport,
-    GraphTableSupport,
-    LockingSupport,
-    MergeSupport,
-    OrderedSetAggregationSupport,
-    QualifyClauseSupport,
-    TemporalTableSupport,
-    UpsertSupport,
-    LateralJoinSupport,
-    WildcardSupport,
-    JoinSupport,
-    SetOperationSupport,
-    TruncateSupport,
-    ConstraintSupport,
-    IntrospectionSupport,
-    TransactionControlSupport,
-    ColumnAttributeSupport,
-    PivotSupport,
-    CreateTableLayoutSuggestionSupport,
-    StringConcatenationSuggestionSupport,
-    ColumnReorderSuggestionSupport,
-    TableConstraintChangeSuggestionSupport,
-    TableIndexChangeSuggestionSupport,
-    PartitionSchemeChangeSuggestionSupport,
-    OraclePartitionSupport,
-    OracleDataTypeSupport,
-    OracleTypeDDLSupport,
 ):
     """Oracle dialect implementation that adapts to the Oracle version.
 
@@ -419,16 +328,11 @@ class OracleDialect(
     mixin classes (see ``.mixins`` package). This class is a thin
     composition skeleton that wires them together.
 
-    The protocol block at the foot of the base list is a type-annotation
-    guarantee only: nothing dispatches through those classes, and a protocol
-    earns its place there only when listing it keeps the MRO consistent. The
-    three user-defined-type protocols are deliberately absent even though
-    :class:`~.protocols.ddl_type.OracleTypeDDLSupport` composes them. A protocol
-    mixed in ahead of the concrete mixins cannot be linearised, and the failure
-    reads as an opaque "cannot create a consistent method resolution order"
-    naming every base rather than as anything to do with protocols. Their
-    contract is asserted by ``isinstance``, which is what a structural protocol
-    is for.
+    No protocol appears among the bases. A ``runtime_checkable`` protocol is
+    satisfied structurally, so the concrete mixins are what earn the
+    ``isinstance`` answers; inheriting a protocol would only add its
+    ellipsis-bodied members to the dialect and make ``isinstance`` pass for a
+    contract nothing implements.
     """
 
     def __init__(

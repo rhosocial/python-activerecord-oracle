@@ -2,10 +2,9 @@
 """Oracle's answer to the core create-table layout suggestion protocol."""
 
 from rhosocial.activerecord.backend.suggestion.definitions import CreateTableLayoutSuggestion
-from rhosocial.activerecord.backend.suggestion.protocols import CreateTableLayoutSuggestionSupport
 
 
-class OracleCreateTableLayoutSuggestionMixin(CreateTableLayoutSuggestionSupport):
+class OracleCreateTableLayoutSuggestionMixin:
     """Report how Oracle lays out CREATE TABLE statements.
 
     Oracle defines indexes in separate ``CREATE INDEX`` statements and has no

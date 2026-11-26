@@ -6,12 +6,9 @@ from typing import Optional
 from rhosocial.activerecord.backend.suggestion.definitions import (
     ConcatenationFunctionSuggestion,
 )
-from rhosocial.activerecord.backend.suggestion.protocols import (
-    StringConcatenationSuggestionSupport,
-)
 
 
-class OracleStringConcatenationSuggestionMixin(StringConcatenationSuggestionSupport):
+class OracleStringConcatenationSuggestionMixin:
     """Oracle concatenates strings with the portable ``||`` operator.
 
     Returning ``function=None`` tells core's ``format_concatenation_operation``
