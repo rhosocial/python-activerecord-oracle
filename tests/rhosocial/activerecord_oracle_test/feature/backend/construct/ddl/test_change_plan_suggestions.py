@@ -194,8 +194,8 @@ def test_constraint_drop_returns_real_alter_table_statements(dialect):
     assert len(answer.operations) == 2
     assert all(isinstance(op, AlterTableStatement) for op in answer.operations)
     for op in answer.operations:
-        assert len(op.actions) == 1
-        assert isinstance(op.actions[0], DropTableConstraintAction)
+        assert op.action is not None
+        assert isinstance(op.action, DropTableConstraintAction)
     assert _sql(answer.operations) == (
         'ALTER TABLE "EVENTS" DROP CONSTRAINT "UQ_CREATED" '
         'ALTER TABLE "EVENTS" DROP CONSTRAINT "UQ_EMAIL"'
@@ -457,8 +457,8 @@ def test_enriched_unique_add_returns_real_add_constraint_statement(dialect):
     assert len(answer.operations) == 1
     statement = answer.operations[0]
     assert isinstance(statement, AlterTableStatement)
-    assert len(statement.actions) == 1
-    action = statement.actions[0]
+    assert statement.action is not None
+    action = statement.action
     assert isinstance(action, AddTableConstraintAction)
     # The branch kind survived the freeze and travels into the real node.
     assert isinstance(answer.new_constraint_declarations[0].branch, TableUniqueConstraint)
@@ -474,7 +474,7 @@ def test_enriched_primary_key_add_keeps_branch_kind_and_sql(dialect):
     )
     answer = dialect.suggest_table_constraint_change(_enriched_add(dialect, declaration))
     assert answer.state == "actions"
-    assert isinstance(answer.operations[0].actions[0].constraint.branch, TablePrimaryKeyConstraint)
+    assert isinstance(answer.operations[0].action.constraint.branch, TablePrimaryKeyConstraint)
     assert _sql(answer.operations) == (
         'ALTER TABLE "EVENTS" ADD CONSTRAINT "PK_EVENTS" PRIMARY KEY ("ID")'
     )
@@ -489,7 +489,7 @@ def test_enriched_check_add_keeps_branch_kind_and_sql(dialect):
     )
     answer = dialect.suggest_table_constraint_change(_enriched_add(dialect, declaration))
     assert answer.state == "actions"
-    assert isinstance(answer.operations[0].actions[0].constraint.branch, TableCheckConstraint)
+    assert isinstance(answer.operations[0].action.constraint.branch, TableCheckConstraint)
     assert _sql(answer.operations) == (
         'ALTER TABLE "EVENTS" ADD CONSTRAINT "CK_CHECK" CHECK ("A" > "B")'
     )
@@ -505,7 +505,7 @@ def test_enriched_foreign_key_add_keeps_branch_kind_and_sql(dialect):
     )
     answer = dialect.suggest_table_constraint_change(_enriched_add(dialect, declaration))
     assert answer.state == "actions"
-    assert isinstance(answer.operations[0].actions[0].constraint.branch, TableForeignKeyConstraint)
+    assert isinstance(answer.operations[0].action.constraint.branch, TableForeignKeyConstraint)
     assert _sql(answer.operations) == (
         'ALTER TABLE "EVENTS" ADD CONSTRAINT "FK_CREATED" '
         'FOREIGN KEY ("CREATED_AT") REFERENCES "PARENTS"("ID")'
@@ -591,9 +591,9 @@ def test_enriched_mixed_drop_then_add_is_one_action_per_statement(dialect):
     answer = dialect.suggest_table_constraint_change(point)
     assert answer.state == "actions"
     assert len(answer.operations) == 2
-    assert all(len(op.actions) == 1 for op in answer.operations)
-    assert isinstance(answer.operations[0].actions[0], DropTableConstraintAction)
-    assert isinstance(answer.operations[1].actions[0], AddTableConstraintAction)
+    assert all(op.action is not None for op in answer.operations)
+    assert isinstance(answer.operations[0].action, DropTableConstraintAction)
+    assert isinstance(answer.operations[1].action, AddTableConstraintAction)
     assert _sql(answer.operations) == (
         'ALTER TABLE "EVENTS" DROP CONSTRAINT "UQ_OLD" '
         'ALTER TABLE "EVENTS" ADD CONSTRAINT "UQ_CREATED" UNIQUE ("CREATED_AT")'

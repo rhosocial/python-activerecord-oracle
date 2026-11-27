@@ -46,7 +46,7 @@ class TestAlterColumnTypeRendering:
             ColumnAlterOperation.SET_DATA_TYPE,
             new_value=VarCharType(dialect, length=20),
         )
-        stmt = AlterTableStatement(dialect, Table(dialect, "t"), actions=[action])
+        stmt = AlterTableStatement(dialect, Table(dialect, "t"), action=action)
         sql, params = stmt.to_sql()
         assert sql == 'ALTER TABLE "T" MODIFY ("C" VARCHAR2(20))'
         assert "SET DATA TYPE" not in sql

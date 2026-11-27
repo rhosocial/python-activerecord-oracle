@@ -959,7 +959,7 @@ def _register_core_specials():
     register_special_constructor(
         "statements.ddl_alter.AlterTableStatement",
         lambda d: ddl_alter.AlterTableStatement(
-            d, table=_table_obj(d), actions=[ddl_alter.DropColumnAction(d, "a")]
+            d, table=_table_obj(d), action=ddl_alter.DropColumnAction(d, "a")
         ),
     )
     register_special_constructor(

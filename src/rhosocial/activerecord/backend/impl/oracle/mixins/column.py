@@ -265,15 +265,9 @@ class OracleModifyColumnMixin:
         """
         all_params: List = []
         table_sql = expr.table.to_sql()[0]
-        parts = [f"ALTER TABLE {table_sql}"]
-        action_parts = []
-        for action in expr.actions:
-            action_part, action_params = action.to_sql()
-            action_parts.append(action_part)
-            all_params.extend(action_params)
-        if action_parts:
-            parts.append(", ".join(action_parts))
-        return " ".join(parts), tuple(all_params)
+        action_sql, action_params = expr.action.to_sql()
+        all_params.extend(action_params)
+        return f"ALTER TABLE {table_sql} {action_sql}", tuple(all_params)
 
     # ----------------------------------------------------------------
     # Table-level clauses (SET UNUSED / MOVE / SHRINK / READ ONLY /

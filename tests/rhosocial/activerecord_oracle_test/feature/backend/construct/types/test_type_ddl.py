@@ -259,58 +259,38 @@ def test_persistable_clause_requires_oracle_18c() -> None:
 
 def test_alter_actions_and_dependent_handling() -> None:
     dialect = _dialect(version_full=(19, 28, 0, 0, 0))
-    actions = [
-        OracleAlterTypeAddAttributeAction(
-            dialect,
-            OracleTypeAttribute("created_at", "TIMESTAMP"),
-            dependent_handling=OracleAlterTypeDependentHandling.CASCADE,
-        ),
-        OracleAlterTypeAddAttributeAction(
-            dialect,
-            OracleTypeAttribute("tag", "VARCHAR2(20)"),
-        ),
-    ]
-    alter = AlterTypeStatement(dialect, Type(dialect, "person_t"), actions)
-    sql, params = alter.to_sql()
-    assert sql == (
-        'ALTER TYPE "PERSON_T" ADD ATTRIBUTE ("CREATED_AT" TIMESTAMP, '
-        '"TAG" VARCHAR2(20)) CASCADE'
+    created = OracleAlterTypeAddAttributeAction(
+        dialect,
+        OracleTypeAttribute("created_at", "TIMESTAMP"),
+        dependent_handling=OracleAlterTypeDependentHandling.CASCADE,
     )
-    assert params == ()
+    tag = OracleAlterTypeAddAttributeAction(
+        dialect,
+        OracleTypeAttribute("tag", "VARCHAR2(20)"),
+    )
+    assert AlterTypeStatement(dialect, Type(dialect, "person_t"), created).to_sql() == (
+        'ALTER TYPE "PERSON_T" ADD ATTRIBUTE ("CREATED_AT" TIMESTAMP) CASCADE',
+        (),
+    )
+    assert AlterTypeStatement(dialect, Type(dialect, "person_t"), tag).to_sql() == (
+        'ALTER TYPE "PERSON_T" ADD ATTRIBUTE ("TAG" VARCHAR2(20))',
+        (),
+    )
 
-    method_actions = [
-        OracleAlterTypeAddMethodAction(dialect, "MEMBER FUNCTION label RETURN VARCHAR2"),
-        OracleAlterTypeDropMethodAction(
-            dialect,
-            name="old_label",
-            kind="MEMBER FUNCTION",
-            parameters=[],
-            dependent_handling=OracleAlterTypeDependentHandling.CASCADE,
-        ),
-    ]
-    method_sql = AlterTypeStatement(dialect, Type(dialect, "person_t"), method_actions).to_sql()[0]
-    assert method_sql == (
-        'ALTER TYPE "PERSON_T" ADD MEMBER FUNCTION label RETURN VARCHAR2, '
-        'DROP MEMBER FUNCTION old_label() CASCADE'
+    add_method = OracleAlterTypeAddMethodAction(dialect, "MEMBER FUNCTION label RETURN VARCHAR2")
+    drop_label = OracleAlterTypeDropMethodAction(
+        dialect,
+        name="old_label",
+        kind="MEMBER FUNCTION",
+        parameters=[],
+        dependent_handling=OracleAlterTypeDependentHandling.CASCADE,
     )
-    with pytest.raises(UnsupportedFeatureError):
-        AlterTypeStatement(
-            dialect,
-            Type(dialect, "person_t"),
-            [actions[0], method_actions[0]],
-        ).to_sql()
-    with pytest.raises(UnsupportedFeatureError):
-        AlterTypeStatement(
-            dialect,
-            Type(dialect, "person_t"),
-            [
-                actions[0],
-                OracleAlterTypeModifyAttributeAction(
-                    dialect,
-                    OracleTypeAttribute("name", "VARCHAR2(200)"),
-                ),
-            ],
-        ).to_sql()
+    assert AlterTypeStatement(dialect, Type(dialect, "person_t"), add_method).to_sql()[0] == (
+        'ALTER TYPE "PERSON_T" ADD MEMBER FUNCTION label RETURN VARCHAR2'
+    )
+    assert AlterTypeStatement(dialect, Type(dialect, "person_t"), drop_label).to_sql()[0] == (
+        'ALTER TYPE "PERSON_T" DROP MEMBER FUNCTION old_label() CASCADE'
+    )
 
     drop_attribute = OracleAlterTypeDropAttributeAction(dialect, "created_at")
     drop_method = OracleAlterTypeDropMethodAction(

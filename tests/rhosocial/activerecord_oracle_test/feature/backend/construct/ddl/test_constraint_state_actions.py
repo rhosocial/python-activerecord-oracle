@@ -30,7 +30,7 @@ def dialect():
 
 
 def _render(dialect, action):
-    return AlterTableStatement(dialect, Table(dialect, "t"), [action]).to_sql()
+    return AlterTableStatement(dialect, Table(dialect, "t"), action).to_sql()
 
 
 class TestEnableConstraint:

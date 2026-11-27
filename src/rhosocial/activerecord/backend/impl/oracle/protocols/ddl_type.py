@@ -64,10 +64,6 @@ class OracleTypeDDLSupport(
         """Whether DROP TYPE IF EXISTS is supported."""
         ...
 
-    def supports_multiple_type_alter_actions(self) -> bool:
-        """Whether multiple ALTER TYPE actions are supported."""
-        ...
-
     def supports_create_type_body(self) -> bool:
         """Whether CREATE TYPE BODY is supported."""
         ...

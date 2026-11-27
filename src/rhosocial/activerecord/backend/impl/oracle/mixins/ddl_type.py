@@ -196,9 +196,6 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
     def supports_drop_type_if_exists(self) -> bool:
         return self._supports_type_if_exists()
 
-    def supports_multiple_type_alter_actions(self) -> bool:
-        return self._has_type_support()
-
     def supports_create_type_body(self) -> bool:
         return self._has_type_support()
 
@@ -733,20 +730,7 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
                 "ALTER TYPE IF EXISTS",
                 _TYPE_IF_EXISTS_ALTER_ALTERNATIVE,
             )
-        actions = list(expr.actions)
-        if len(actions) > 1 and not self.supports_multiple_type_alter_actions():
-            raise UnsupportedFeatureError(self.name, "multiple ALTER TYPE actions")
-        if len(actions) == 1:
-            action_sql, action_params = self._format_single_action(actions[0])
-        else:
-            family = self._validate_alter_action_sequence(actions)
-            if family.startswith("attribute."):
-                action_sql, action_params = self._format_attribute_action_group(
-                    actions,
-                    family.rsplit(".", 1)[1].upper(),
-                )
-            else:
-                action_sql, action_params = self._format_method_action_group(actions)
+        action_sql, action_params = self._format_single_action(expr.action)
         parts = ["ALTER TYPE"]
         if expr.if_exists:
             parts.append("IF EXISTS")

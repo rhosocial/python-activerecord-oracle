@@ -165,7 +165,7 @@ class OracleTableConstraintChangeSuggestionMixin:
                 # An unnamed constraint cannot be dropped by name on Oracle.
                 return answer(point, False)
             operations.append(
-                AlterTableStatement(self, table, [DropTableConstraintAction(self, name)])
+                AlterTableStatement(self, table, DropTableConstraintAction(self, name))
             )
         return answer(point, tuple(operations))
 
@@ -209,7 +209,7 @@ class OracleTableConstraintChangeSuggestionMixin:
                     AlterTableStatement(
                         self,
                         table,
-                        [AddTableConstraintAction(self, declaration)],
+                        AddTableConstraintAction(self, declaration),
                     )
                 )
             return answer(point, tuple(operations))

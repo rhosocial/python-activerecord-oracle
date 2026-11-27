@@ -1159,7 +1159,7 @@ class TestTypeIfExistsRefusalNamesTheAlternative:
             ).to_sql(),
             "supports_alter_type_if_exists": lambda: AlterTypeStatement(
                 dialect, Type(dialect, "forward_t"),
-                [OracleAlterTypeCompileAction(dialect)], if_exists=True,
+                OracleAlterTypeCompileAction(dialect), if_exists=True,
             ).to_sql(),
             "supports_drop_type_if_exists": lambda: DropTypeStatement(
                 dialect, Type(dialect, "forward_t"), if_exists=True,

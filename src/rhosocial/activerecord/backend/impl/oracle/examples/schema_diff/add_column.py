@@ -74,7 +74,7 @@ snapshot_before = builder.build()
 
 # Add `AGE` column. Oracle appends at the end (no AFTER support).
 add_col = AddColumn(dialect, ColumnDefinition(dialect, "AGE", IntegerType(dialect)))
-alter_expr = AlterTableStatement(dialect, Table(dialect, "USERS"), [add_col])
+alter_expr = AlterTableStatement(dialect, Table(dialect, "USERS"), add_col)
 sql, params = alter_expr.to_sql()
 backend.execute(sql, params)
 

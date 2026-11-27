@@ -756,7 +756,6 @@ class TestCapabilityGates:
         dialect = OracleDialect(version=version)
         for name in (
             "supports_create_type_or_replace",
-            "supports_multiple_type_alter_actions",
             "supports_create_type_body",
             "supports_drop_type_body",
             "supports_drop_type_force",
@@ -1083,7 +1082,7 @@ class TestStatementFormatting:
             (OracleAlterTypeResetAction(dialect), "RESET"),
         ]
         for action, fragment in cases:
-            sql = AlterTypeStatement(dialect, _type(dialect), [action]).to_sql()[0]
+            sql = AlterTypeStatement(dialect, _type(dialect), action).to_sql()[0]
             assert fragment in sql
 
     def test_alter_type_compile_options(self, dialect: OracleDialect) -> None:
@@ -1094,7 +1093,7 @@ class TestStatementFormatting:
             reuse_settings=True,
             compiler_parameters=["PLSQL_OPTIMIZE_LEVEL=2"],
         )
-        sql = AlterTypeStatement(dialect, _type(dialect), [action]).to_sql()[0]
+        sql = AlterTypeStatement(dialect, _type(dialect), action).to_sql()[0]
         assert "COMPILE DEBUG BODY PLSQL_OPTIMIZE_LEVEL=2 REUSE SETTINGS" in sql
 
     def test_alter_type_compile_rejects_dependent_handling(self, dialect: OracleDialect) -> None:
@@ -1108,28 +1107,6 @@ class TestStatementFormatting:
         action = OracleAlterTypeResetAction(dialect, force=True)
         with pytest.raises(ValueError, match="RESET does not accept"):
             dialect.format_type_alter_action(action)
-
-    def test_alter_type_multiple_actions_rejected(self) -> None:
-        old = OracleDialect(version=(8, 0, 0))
-        action = OracleAlterTypeFinalAction(old, final=True)
-        with pytest.raises(UnsupportedFeatureError):
-            AlterTypeStatement(old, _type(old), [action, action]).to_sql()
-
-    def test_alter_type_mixed_families_rejected(self, dialect: OracleDialect) -> None:
-        actions = [
-            OracleAlterTypeFinalAction(dialect, final=True),
-            OracleAlterTypeLimitAction(dialect, 4),
-        ]
-        with pytest.raises(UnsupportedFeatureError, match="mixed ALTER TYPE"):
-            AlterTypeStatement(dialect, _type(dialect), actions).to_sql()
-
-    def test_alter_type_multiple_limit_actions_rejected(self, dialect: OracleDialect) -> None:
-        actions = [
-            OracleAlterTypeLimitAction(dialect, 4),
-            OracleAlterTypeLimitAction(dialect, 5),
-        ]
-        with pytest.raises(UnsupportedFeatureError, match="multiple collection.limit"):
-            AlterTypeStatement(dialect, _type(dialect), actions).to_sql()
 
     def test_drop_type_force_validate(self, dialect: OracleDialect) -> None:
         assert OracleDropTypeExpression(dialect, _type(dialect), force=True).to_sql()[0] == (
