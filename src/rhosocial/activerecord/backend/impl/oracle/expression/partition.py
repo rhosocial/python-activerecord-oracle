@@ -113,6 +113,10 @@ class OraclePartitionValue(BaseExpression):
         ValueError: if a numeric value is non-finite.
     """
 
+    #: ``None`` is a partition bound value -- Oracle renders it as ``NULL`` --
+    #: so the position carries it rather than missing it.
+    NULLABLE_REQUIRED = frozenset({"value"})
+
     def __init__(self, dialect: "OracleDialect", value: Any):
         super().__init__(dialect)
         if isinstance(value, float) and not isfinite(value):
