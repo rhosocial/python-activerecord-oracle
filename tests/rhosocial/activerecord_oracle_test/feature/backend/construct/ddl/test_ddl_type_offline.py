@@ -29,7 +29,7 @@ from rhosocial.activerecord.backend.expression.types import (
 )
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 from rhosocial.activerecord.backend.impl.oracle.expression.ddl.type import (
-    DropTypeBodyStatement,
+    OracleDropTypeBodyStatement,
     OracleAlterTypeAddAttributeAction,
     OracleAlterTypeAddMethodAction,
     OracleAlterTypeCompileAction,
@@ -708,8 +708,8 @@ class TestStatementExpressions:
 
     def test_drop_type_body_validation(self, dialect: OracleDialect) -> None:
         with pytest.raises((TypeError, AttributeError)):
-            DropTypeBodyStatement(dialect, "not_a_type")
-        stmt = DropTypeBodyStatement(dialect, _type(dialect))
+            OracleDropTypeBodyStatement(dialect, "not_a_type")
+        stmt = OracleDropTypeBodyStatement(dialect, _type(dialect))
         assert stmt.format_method == "format_drop_type_body_statement"
 
 
@@ -1129,11 +1129,11 @@ class TestStatementFormatting:
         assert replace.to_sql()[0].startswith("CREATE OR REPLACE TYPE BODY")
 
     def test_drop_type_body(self, dialect: OracleDialect) -> None:
-        sql = DropTypeBodyStatement(dialect, _type(dialect), if_exists=True).to_sql()[0]
+        sql = OracleDropTypeBodyStatement(dialect, _type(dialect), if_exists=True).to_sql()[0]
         assert sql == 'DROP TYPE BODY IF EXISTS "SAMPLE_T"'
 
     def test_drop_type_body_unsupported_version(self) -> None:
         old = OracleDialect(version=(8, 0, 0))
-        stmt = DropTypeBodyStatement(old, _type(old))
+        stmt = OracleDropTypeBodyStatement(old, _type(old))
         with pytest.raises(UnsupportedFeatureError, match="DROP TYPE BODY"):
             stmt.to_sql()

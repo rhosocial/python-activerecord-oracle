@@ -1283,8 +1283,8 @@ def _register_oracle_specials():
         OracleDropSequenceStatement,
     )
     from rhosocial.activerecord.backend.impl.oracle.expression.trigger import (
-        DisableTriggerStatement,
-        EnableTriggerStatement,
+        OracleDisableTriggerStatement,
+        OracleEnableTriggerStatement,
     )
 
     def analyze_expression(d):
@@ -1480,10 +1480,10 @@ def _register_oracle_specials():
         return OracleDropSequenceStatement(d, sequence=Sequence(d, "seq"))
 
     def disable_trigger(d):
-        return DisableTriggerStatement(d, trigger=Trigger(d, "trg"))
+        return OracleDisableTriggerStatement(d, trigger=Trigger(d, "trg"))
 
     def enable_trigger(d):
-        return EnableTriggerStatement(d, trigger=Trigger(d, "trg"))
+        return OracleEnableTriggerStatement(d, trigger=Trigger(d, "trg"))
 
     def drop_type_body(d):
         return OracleDropTypeBodyExpression(d, type=_type_obj(d))
@@ -1591,8 +1591,8 @@ def _register_oracle_specials():
         ("partition_lifecycle.OracleTruncatePartitionStatement", truncate_partition_expression),
         ("sequence.OracleCreateSequenceStatement", create_sequence),
         ("sequence.OracleDropSequenceStatement", drop_sequence),
-        ("trigger.DisableTriggerStatement", disable_trigger),
-        ("trigger.EnableTriggerStatement", enable_trigger),
+        ("trigger.OracleDisableTriggerStatement", disable_trigger),
+        ("trigger.OracleEnableTriggerStatement", enable_trigger),
         # The Oracle TYPE tree once exported every action and definition under
         # two names (OracleAlterTypeXxxAction and an OracleTypeXxxAction /
         # OracleAddTypeXxxAction alias). Both were registered to the same
@@ -1619,7 +1619,7 @@ def _register_oracle_specials():
         ("type.OracleSqljTypeDefinition", sqlj_definition),
         ("type.OracleVarrayTypeDefinition", varray_definition),
         ("type.OracleNestedTableTypeDefinition", nested_table_definition),
-        ("type.DropTypeBodyStatement", drop_type_body),
+        ("type.OracleDropTypeBodyStatement", drop_type_body),
         ("type.OracleDropTypeBodyExpression", drop_type_body),
         # Oracle's own DROP TYPE adds FORCE / VALIDATE, and the guess hands it
         # strings for the type and the flags, which its superclass refuses.

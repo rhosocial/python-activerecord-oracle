@@ -18,7 +18,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
 
 
-class TableCompressionClauseExpression(BaseExpression):
+class OracleTableCompressionClauseExpression(BaseExpression):
     """Expression wrapping ``format_table_compression_clause_expression``.
 
     Renders an Oracle table-compression clause such as ``NOCOMPRESS``
@@ -45,7 +45,7 @@ class TableCompressionClauseExpression(BaseExpression):
         return "format_table_compression_clause_expression"
 
 
-class TablespaceClauseExpression(BaseExpression):
+class OracleTablespaceClauseExpression(BaseExpression):
     """Expression wrapping ``format_tablespace_clause_expression``.
 
     Renders an Oracle ``TABLESPACE <name>`` clause.

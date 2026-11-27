@@ -2,7 +2,7 @@
 from typing import Any, Dict, Tuple, List, Union, TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover
-    from ..expression.vector import VectorLiteralExpression, VectorOperandExpression
+    from ..expression.vector import OracleVectorLiteralExpression, OracleVectorOperandExpression
 
 
 class OracleVectorMixin(object):
@@ -77,8 +77,8 @@ class OracleVectorMixin(object):
             return vec
         raise TypeError(f"Cannot format vector literal from {type(vec).__name__}")
 
-    def format_vector_literal_expression(self, expr: "VectorLiteralExpression") -> Tuple[str, tuple]:
-        """Format a VectorLiteralExpression as Oracle VECTOR string literal."""
+    def format_vector_literal_expression(self, expr: "OracleVectorLiteralExpression") -> Tuple[str, tuple]:
+        """Format a OracleVectorLiteralExpression as Oracle VECTOR string literal."""
         return self._format_vector_literal_value(expr.vec), ()
 
     def format_vector_distance(
@@ -139,8 +139,8 @@ class OracleVectorMixin(object):
         params.append(operand)
         return self.p()
 
-    def format_vector_operand_expression(self, expr: "VectorOperandExpression") -> Tuple[str, tuple]:
-        """Format a VectorOperandExpression into SQL and params."""
+    def format_vector_operand_expression(self, expr: "OracleVectorOperandExpression") -> Tuple[str, tuple]:
+        """Format a OracleVectorOperandExpression into SQL and params."""
         params: List[Any] = []
         sql = self._format_vector_operand_raw(expr.operand, params)
         return sql, tuple(params)

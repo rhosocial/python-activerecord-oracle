@@ -20,40 +20,40 @@ print("1. Hierarchical Query Expressions")
 print("-" * 40)
 
 from rhosocial.activerecord.backend.impl.oracle.expression import (
-    ConnectByRootExpression,
-    SysConnectByPathExpression,
-    PriorExpression,
-    LevelExpression,
-    ConnectByIsLeafExpression,
+    OracleConnectByRootExpression,
+    OracleSysConnectByPathExpression,
+    OraclePriorExpression,
+    OracleLevelExpression,
+    OracleConnectByIsLeafExpression,
 )
 from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
 dialect = OracleDialect(version=(19, 0, 0))
 
-root_expr = ConnectByRootExpression(dialect, column="employee_id")
+root_expr = OracleConnectByRootExpression(dialect, column="employee_id")
 sql, params = root_expr.to_sql()
 print("CONNECT_BY_ROOT expression:")
 print(f"  SQL: {sql}")
 print(f"  Params: {params}")
 
-path_expr = SysConnectByPathExpression(dialect, column="name", separator="/")
+path_expr = OracleSysConnectByPathExpression(dialect, column="name", separator="/")
 sql, params = path_expr.to_sql()
 print("\nSYS_CONNECT_BY_PATH expression:")
 print(f"  SQL: {sql}")
 print(f"  Params: {params}")
 
-prior_expr = PriorExpression(dialect, column="manager_id")
+prior_expr = OraclePriorExpression(dialect, column="manager_id")
 sql, params = prior_expr.to_sql()
 print("\nPRIOR expression:")
 print(f"  SQL: {sql}")
 print(f"  Params: {params}")
 
-level_expr = LevelExpression(dialect)
+level_expr = OracleLevelExpression(dialect)
 sql, params = level_expr.to_sql()
 print("\nLEVEL pseudo-column:")
 print(f"  SQL: {sql}")
 
-is_leaf = ConnectByIsLeafExpression(dialect)
+is_leaf = OracleConnectByIsLeafExpression(dialect)
 sql, params = is_leaf.to_sql()
 print("\nCONNECT_BY_ISLEAF:")
 print(f"  SQL: {sql}")

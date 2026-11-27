@@ -30,14 +30,13 @@ from rhosocial.activerecord.backend.impl.oracle.expression.partition_lifecycle i
     OracleCoalescePartitionExpression,
 )
 from rhosocial.activerecord.backend.impl.oracle.registry import backend_registry
-from rhosocial.activerecord.backend.impl.sqlite.expression.vacuum import (
-    SQLiteVacuumStatement,
-)
 
 ORACLE_KIND = "oracle_coalesce_partition_expression"
-# Named through the class rather than typed out: the point is that this kind is
-# another backend's, so it has to be the kind SQLite actually derives.
-FOREIGN_KIND = SQLiteVacuumStatement.kind()
+# A kind name from another backend. Spelled out rather than imported: importing
+# the foreign package would make this repository's tests depend on that backend,
+# which the import-boundary rule forbids. The assertion only needs a name Oracle
+# does not publish.
+FOREIGN_KIND = "sqlite_vacuum_statement"
 
 
 def test_dialect_registry_resolves_oracle_proprietary_kind():
@@ -118,8 +117,8 @@ def test_formatter_declaring_nodes_are_auto_discovered():
     and the kinds resolve back to the classes that declared the names.
     """
     from rhosocial.activerecord.backend.impl.oracle.expression.hierarchical import (
-        LevelExpression,
-        PriorExpression,
+        OracleLevelExpression,
+        OraclePriorExpression,
     )
     from rhosocial.activerecord.backend.impl.oracle.expression.hint import (
         OracleHintExpression,
@@ -133,8 +132,8 @@ def test_formatter_declaring_nodes_are_auto_discovered():
 
     registry = backend_registry()
     kinded = (
-        ("level_expression", LevelExpression),
-        ("prior_expression", PriorExpression),
+        ("oracle_level_expression", OracleLevelExpression),
+        ("oracle_prior_expression", OraclePriorExpression),
         ("oracle_hint_expression", OracleHintExpression),
         ("oracle_sequence_value_expression", OracleSequenceValueExpression),
         ("oracle_query_locks_expression", OracleQueryLocksExpression),
@@ -143,4 +142,3 @@ def test_formatter_declaring_nodes_are_auto_discovered():
         assert kind in registry.node_kinds()
         assert registry.resolve_node(kind) is cls
         assert isinstance(cls.format_method, property)
-

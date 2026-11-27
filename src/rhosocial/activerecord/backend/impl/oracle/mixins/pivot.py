@@ -5,9 +5,10 @@ from typing import Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..expression.pivot import (
+        OraclePivot,
         OracleUnpivot,
-        PivotXMLExpression,
-        UnpivotColumnsExpression,
+        OraclePivotXMLExpression,
+        OracleUnpivotColumnsExpression,
     )
 
 
@@ -23,7 +24,7 @@ class OraclePivotMixin:
     def supports_pivot_xml(self) -> bool:
         return self.version_at_least((11, 0, 0))
 
-    def format_oracle_pivot(self, expr) -> Tuple[str, tuple]:
+    def format_oracle_pivot(self, expr: "OraclePivot") -> Tuple[str, tuple]:
         """Render an ``OraclePivot`` clause.
 
         The clause's values are rendered in place rather than bound, because
@@ -39,7 +40,7 @@ class OraclePivotMixin:
             if isinstance(value, str):
                 value_parts.append(f"'{value}' AS \"{value}\"")
             else:
-                value_parts.append(f"{value} AS \"{value}\"")
+                value_parts.append(f'{value} AS "{value}"')
 
         values_str = ", ".join(value_parts)
         sql = (
@@ -58,9 +59,7 @@ class OraclePivotMixin:
             sql = f"{sql} {dialect.format_identifier(expr.alias)}"
         return (sql, ())
 
-    def format_pivot_xml_expression(
-        self, expr: "PivotXMLExpression"
-    ) -> Tuple[str, tuple]:
+    def format_pivot_xml_expression(self, expr: "OraclePivotXMLExpression") -> Tuple[str, tuple]:
         """Render a ``PIVOT XML`` clause with its dynamic ``IN`` subquery."""
         sql = (
             f"PIVOT XML ("
@@ -74,9 +73,7 @@ class OraclePivotMixin:
     def format_oracle_unpivot(self, expr: "OracleUnpivot") -> Tuple[str, tuple]:
         """Render an ``OracleUnpivot`` clause with its NULL handling."""
         include = "INCLUDE NULLS " if expr.include_nulls else "EXCLUDE NULLS "
-        columns_str = ", ".join(
-            self.format_identifier(c) for c in expr.columns
-        )
+        columns_str = ", ".join(self.format_identifier(c) for c in expr.columns)
 
         sql = (
             f"UNPIVOT {include}"
@@ -91,7 +88,7 @@ class OraclePivotMixin:
         return (sql, ())
 
     def format_unpivot_columns_expression(
-        self, expr: "UnpivotColumnsExpression"
+        self, expr: "OracleUnpivotColumnsExpression"
     ) -> Tuple[str, tuple]:
         """Render an UNPIVOT clause whose columns carry output aliases.
 

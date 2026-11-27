@@ -86,7 +86,7 @@ class OraclePivot(BaseExpression):
         return "format_oracle_pivot"
 
 
-class PivotXMLExpression(BaseExpression):
+class OraclePivotXMLExpression(BaseExpression):
     """Oracle PIVOT XML clause for dynamic pivoting.
 
     PIVOT XML allows for dynamic column specification using
@@ -174,7 +174,7 @@ class OracleUnpivot(BaseExpression):
         return "format_oracle_unpivot"
 
 
-class UnpivotColumnsExpression(BaseExpression):
+class OracleUnpivotColumnsExpression(BaseExpression):
     """Oracle UNPIVOT with column aliasing.
 
     Allows specifying aliases for unpivoted columns.

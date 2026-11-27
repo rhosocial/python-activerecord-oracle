@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 class OracleExpressionMixin:
     """Oracle-specific expression formatting that delegates to ``to_sql``."""
 
-    def format_named_relation(self, expr: "BaseExpression") -> Tuple[str, tuple]:
+    def format_named_relation(self, expr: "OracleNamedRelationRef") -> Tuple[str, tuple]:
         """Format a ``FROM`` reference to a named relation for Oracle.
 
         The relation's name, the ``@"DBLINK"`` suffix and the alias all come

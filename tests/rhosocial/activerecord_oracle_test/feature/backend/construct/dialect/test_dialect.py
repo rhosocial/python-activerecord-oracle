@@ -187,10 +187,10 @@ class TestDialectExpressionFormatting:
     def test_format_connect_by(self):
         """Test CONNECT BY formatting."""
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
-        from rhosocial.activerecord.backend.impl.oracle.expression import ConnectByRootExpression
+        from rhosocial.activerecord.backend.impl.oracle.expression import OracleConnectByRootExpression
 
         dialect = OracleDialect(version=(19, 0, 0))
-        expr = ConnectByRootExpression(dialect, column="id")
+        expr = OracleConnectByRootExpression(dialect, column="id")
         
         sql, params = expr.to_sql()
         assert "CONNECT_BY_ROOT" in sql

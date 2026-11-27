@@ -7,10 +7,10 @@ including hierarchical queries (CONNECT BY), PIVOT/UNPIVOT, and query hints.
 """
 
 from .hierarchical import (
-    ConnectByExpression, PriorExpression,
-    ConnectByRootExpression, SysConnectByPathExpression,
-    ConnectByIsLeafExpression, ConnectByIsCycleExpression,
-    LevelExpression, SiblingsExpression
+    OracleConnectByExpression, OraclePriorExpression,
+    OracleConnectByRootExpression, OracleSysConnectByPathExpression,
+    OracleConnectByIsLeafExpression, OracleConnectByIsCycleExpression,
+    OracleLevelExpression, OracleSiblingsExpression
 )
 from .pivot import OraclePivot, OracleUnpivot
 from .hint import (
@@ -82,16 +82,16 @@ from .ddl import (
     OracleAlterTypeCompileAction, OracleAlterTypeFinalAction,
     OracleAlterTypeInstantiableAction, OracleAlterTypeResetAction,
     OracleCreateTypeBodyStatement, OracleDropTypeExpression,
-    DropTypeBodyStatement, OracleDropTypeBodyExpression,
+    OracleDropTypeBodyStatement, OracleDropTypeBodyExpression,
 )
 from .analyze import (
     OracleAnalyzeMode, OracleAnalyzeStatement,
 )
 from .objects import OracleRemoteName, OraclePackage, OracleTable
 from .sources import OracleNamedRelationRef
-from .vector import VectorLiteralExpression, VectorOperandExpression
-from .table import TableCompressionClauseExpression, TablespaceClauseExpression
-from .trigger import DisableTriggerStatement, EnableTriggerStatement
+from .vector import OracleVectorLiteralExpression, OracleVectorOperandExpression
+from .table import OracleTableCompressionClauseExpression, OracleTablespaceClauseExpression
+from .trigger import OracleDisableTriggerStatement, OracleEnableTriggerStatement
 from .functions import (
     OracleListaggFunction,
     OraclePercentileContFunction,
@@ -104,10 +104,10 @@ from .functions import (
 __all__ = [
 'OracleColumnDefinition', 'OracleColumnOptions',
 # Hierarchical query expressions
-'ConnectByExpression', 'PriorExpression',
-'ConnectByRootExpression', 'SysConnectByPathExpression',
-'ConnectByIsLeafExpression', 'ConnectByIsCycleExpression',
-'LevelExpression', 'SiblingsExpression',
+'OracleConnectByExpression', 'OraclePriorExpression',
+'OracleConnectByRootExpression', 'OracleSysConnectByPathExpression',
+'OracleConnectByIsLeafExpression', 'OracleConnectByIsCycleExpression',
+'OracleLevelExpression', 'OracleSiblingsExpression',
     # PIVOT/UNPIVOT expressions
     'OraclePivot', 'OracleUnpivot',
     # Query hints
@@ -168,17 +168,17 @@ __all__ = [
     'OracleAlterTypeCompileAction', 'OracleAlterTypeFinalAction',
     'OracleAlterTypeInstantiableAction', 'OracleAlterTypeResetAction',
     'OracleCreateTypeBodyStatement', 'OracleDropTypeExpression',
-    'DropTypeBodyStatement', 'OracleDropTypeBodyExpression',
+    'OracleDropTypeBodyStatement', 'OracleDropTypeBodyExpression',
     # ANALYZE TABLE expressions
     'OracleAnalyzeMode', 'OracleAnalyzeStatement',
     # Schema objects and named-relation references
     'OracleRemoteName', 'OraclePackage', 'OracleTable', 'OracleNamedRelationRef',
     # Vector expressions
-    'VectorLiteralExpression', 'VectorOperandExpression',
+    'OracleVectorLiteralExpression', 'OracleVectorOperandExpression',
     # Table clause expressions
-    'TableCompressionClauseExpression', 'TablespaceClauseExpression',
+    'OracleTableCompressionClauseExpression', 'OracleTablespaceClauseExpression',
     # Trigger DDL expressions
-    'DisableTriggerStatement', 'EnableTriggerStatement',
+    'OracleDisableTriggerStatement', 'OracleEnableTriggerStatement',
     # Oracle derived function-call nodes (LISTAGG / PERCENTILE / JSON)
     'OracleListaggFunction', 'OraclePercentileContFunction',
     'OraclePercentileDiscFunction', 'OracleJsonValueFunction',

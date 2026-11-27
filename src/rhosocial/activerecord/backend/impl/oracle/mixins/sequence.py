@@ -8,6 +8,7 @@ from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeature
 from .if_exists import supports_statement_if_exists
 
 if TYPE_CHECKING:  # pragma: no cover
+    from ..expression.sequence import OracleSequenceValueExpression
     from rhosocial.activerecord.backend.expression.statements import (
         AlterSequenceStatement,
         CreateSequenceStatement,
@@ -134,7 +135,7 @@ class OracleSequenceMixin:
         return False
 
     def format_oracle_sequence_value_expression(
-        self, expr
+        self, expr: "OracleSequenceValueExpression"
     ) -> Tuple[str, tuple]:
         """Render ``seq.NEXTVAL`` or ``seq.CURRVAL`` for the node's mode.
 
@@ -222,10 +223,7 @@ class OracleSequenceMixin:
                 raise UnsupportedFeatureError(
                     self.name,
                     "CREATE SEQUENCE IF NOT EXISTS",
-                    suggestion=(
-                        f"{self.name} does not support CREATE SEQUENCE "
-                        "IF NOT EXISTS."
-                    ),
+                    suggestion=(f"{self.name} does not support CREATE SEQUENCE " "IF NOT EXISTS."),
                 )
             parts.append("IF NOT EXISTS")
         parts.append(expr.sequence.to_sql()[0])
@@ -234,10 +232,7 @@ class OracleSequenceMixin:
                 raise UnsupportedFeatureError(
                     self.name,
                     "CREATE SEQUENCE START",
-                    suggestion=(
-                        f"{self.name} does not support the START WITH "
-                        "sequence option."
-                    ),
+                    suggestion=(f"{self.name} does not support the START WITH " "sequence option."),
                 )
             parts.append(f"START WITH {expr.start}")
         if expr.increment is not None:
@@ -246,8 +241,7 @@ class OracleSequenceMixin:
                     self.name,
                     "CREATE SEQUENCE INCREMENT",
                     suggestion=(
-                        f"{self.name} does not support the INCREMENT BY "
-                        "sequence option."
+                        f"{self.name} does not support the INCREMENT BY " "sequence option."
                     ),
                 )
             parts.append(f"INCREMENT BY {expr.increment}")
@@ -256,10 +250,7 @@ class OracleSequenceMixin:
                 raise UnsupportedFeatureError(
                     self.name,
                     "CREATE SEQUENCE MINVALUE",
-                    suggestion=(
-                        f"{self.name} does not support the MINVALUE sequence "
-                        "option."
-                    ),
+                    suggestion=(f"{self.name} does not support the MINVALUE sequence " "option."),
                 )
             parts.append(f"MINVALUE {expr.minvalue}")
         if expr.maxvalue is not None:
@@ -267,10 +258,7 @@ class OracleSequenceMixin:
                 raise UnsupportedFeatureError(
                     self.name,
                     "CREATE SEQUENCE MAXVALUE",
-                    suggestion=(
-                        f"{self.name} does not support the MAXVALUE sequence "
-                        "option."
-                    ),
+                    suggestion=(f"{self.name} does not support the MAXVALUE sequence " "option."),
                 )
             parts.append(f"MAXVALUE {expr.maxvalue}")
         if expr.cycle or expr.no_cycle:
@@ -278,10 +266,7 @@ class OracleSequenceMixin:
                 raise UnsupportedFeatureError(
                     self.name,
                     "CREATE SEQUENCE CYCLE",
-                    suggestion=(
-                        f"{self.name} does not support the CYCLE sequence "
-                        "option."
-                    ),
+                    suggestion=(f"{self.name} does not support the CYCLE sequence " "option."),
                 )
             parts.append("CYCLE" if expr.cycle else "NOCYCLE")
         if expr.cache is not None:
@@ -289,10 +274,7 @@ class OracleSequenceMixin:
                 raise UnsupportedFeatureError(
                     self.name,
                     "CREATE SEQUENCE CACHE",
-                    suggestion=(
-                        f"{self.name} does not support the CACHE sequence "
-                        "option."
-                    ),
+                    suggestion=(f"{self.name} does not support the CACHE sequence " "option."),
                 )
             parts.append(f"CACHE {expr.cache}")
         if expr.no_cache:
@@ -300,10 +282,7 @@ class OracleSequenceMixin:
                 raise UnsupportedFeatureError(
                     self.name,
                     "CREATE SEQUENCE CACHE",
-                    suggestion=(
-                        f"{self.name} does not support the CACHE sequence "
-                        "option."
-                    ),
+                    suggestion=(f"{self.name} does not support the CACHE sequence " "option."),
                 )
             parts.append("NOCACHE")
         if expr.order or expr.no_order:
@@ -311,10 +290,7 @@ class OracleSequenceMixin:
                 raise UnsupportedFeatureError(
                     self.name,
                     "CREATE SEQUENCE ORDER",
-                    suggestion=(
-                        f"{self.name} does not support the ORDER sequence "
-                        "option."
-                    ),
+                    suggestion=(f"{self.name} does not support the ORDER sequence " "option."),
                 )
             parts.append("ORDER" if expr.order else "NOORDER")
         # ``owned_by`` is declared by the core CreateSequenceStatement alone;
@@ -337,9 +313,7 @@ class OracleSequenceMixin:
                 )
         return " ".join(parts), ()
 
-    def format_drop_sequence_statement(
-        self, expr: "DropSequenceStatement"
-    ) -> Tuple[str, tuple]:
+    def format_drop_sequence_statement(self, expr: "DropSequenceStatement") -> Tuple[str, tuple]:
         """Format ``DROP SEQUENCE`` for Oracle.
 
         Raises:
@@ -373,18 +347,13 @@ class OracleSequenceMixin:
                 raise UnsupportedFeatureError(
                     self.name,
                     "DROP SEQUENCE IF EXISTS",
-                    suggestion=(
-                        f"{self.name} does not support DROP SEQUENCE "
-                        "IF EXISTS."
-                    ),
+                    suggestion=(f"{self.name} does not support DROP SEQUENCE " "IF EXISTS."),
                 )
             parts.append("IF EXISTS")
         parts.append(expr.sequence.to_sql()[0])
         return " ".join(parts), ()
 
-    def format_alter_sequence_statement(
-        self, expr: "AlterSequenceStatement"
-    ) -> Tuple[str, tuple]:
+    def format_alter_sequence_statement(self, expr: "AlterSequenceStatement") -> Tuple[str, tuple]:
         """Format ``ALTER SEQUENCE`` for Oracle.
 
         Oracle's ALTER grammar differs from the SQL standard core renders in
@@ -459,8 +428,7 @@ class OracleSequenceMixin:
                     self.name,
                     "ALTER SEQUENCE INCREMENT",
                     suggestion=(
-                        f"{self.name} does not support the INCREMENT BY "
-                        "sequence option."
+                        f"{self.name} does not support the INCREMENT BY " "sequence option."
                     ),
                 )
             parts.append(f"INCREMENT BY {expr.increment}")
@@ -469,10 +437,7 @@ class OracleSequenceMixin:
                 raise UnsupportedFeatureError(
                     self.name,
                     "ALTER SEQUENCE MINVALUE",
-                    suggestion=(
-                        f"{self.name} does not support the MINVALUE sequence "
-                        "option."
-                    ),
+                    suggestion=(f"{self.name} does not support the MINVALUE sequence " "option."),
                 )
             parts.append(f"MINVALUE {expr.minvalue}")
         if expr.maxvalue is not None:
@@ -480,10 +445,7 @@ class OracleSequenceMixin:
                 raise UnsupportedFeatureError(
                     self.name,
                     "ALTER SEQUENCE MAXVALUE",
-                    suggestion=(
-                        f"{self.name} does not support the MAXVALUE sequence "
-                        "option."
-                    ),
+                    suggestion=(f"{self.name} does not support the MAXVALUE sequence " "option."),
                 )
             parts.append(f"MAXVALUE {expr.maxvalue}")
         if expr.cycle or expr.no_cycle:
@@ -491,10 +453,7 @@ class OracleSequenceMixin:
                 raise UnsupportedFeatureError(
                     self.name,
                     "ALTER SEQUENCE CYCLE",
-                    suggestion=(
-                        f"{self.name} does not support the CYCLE sequence "
-                        "option."
-                    ),
+                    suggestion=(f"{self.name} does not support the CYCLE sequence " "option."),
                 )
             parts.append("CYCLE" if expr.cycle else "NOCYCLE")
         if expr.cache is not None:
@@ -502,10 +461,7 @@ class OracleSequenceMixin:
                 raise UnsupportedFeatureError(
                     self.name,
                     "ALTER SEQUENCE CACHE",
-                    suggestion=(
-                        f"{self.name} does not support the CACHE sequence "
-                        "option."
-                    ),
+                    suggestion=(f"{self.name} does not support the CACHE sequence " "option."),
                 )
             parts.append(f"CACHE {expr.cache}")
         if expr.no_cache:
@@ -513,10 +469,7 @@ class OracleSequenceMixin:
                 raise UnsupportedFeatureError(
                     self.name,
                     "ALTER SEQUENCE CACHE",
-                    suggestion=(
-                        f"{self.name} does not support the CACHE sequence "
-                        "option."
-                    ),
+                    suggestion=(f"{self.name} does not support the CACHE sequence " "option."),
                 )
             parts.append("NOCACHE")
         if expr.order or expr.no_order:
@@ -524,10 +477,7 @@ class OracleSequenceMixin:
                 raise UnsupportedFeatureError(
                     self.name,
                     "ALTER SEQUENCE ORDER",
-                    suggestion=(
-                        f"{self.name} does not support the ORDER sequence "
-                        "option."
-                    ),
+                    suggestion=(f"{self.name} does not support the ORDER sequence " "option."),
                 )
             parts.append("ORDER" if expr.order else "NOORDER")
         # ``owned_by`` is declared by the core AlterSequenceStatement alone;

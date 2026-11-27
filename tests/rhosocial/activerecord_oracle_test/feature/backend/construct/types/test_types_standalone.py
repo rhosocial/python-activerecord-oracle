@@ -113,11 +113,11 @@ class TestExpressionModule:
     def test_import_hierarchical_expressions(self):
         """Test hierarchical expression imports."""
         from rhosocial.activerecord.backend.impl.oracle.expression import (
-            ConnectByExpression, PriorExpression,
-            ConnectByRootExpression, SysConnectByPathExpression,
-            LevelExpression
+            OracleConnectByExpression, OraclePriorExpression,
+            OracleConnectByRootExpression, OracleSysConnectByPathExpression,
+            OracleLevelExpression
         )
-        assert ConnectByExpression is not None
+        assert OracleConnectByExpression is not None
     
     def test_import_pivot_expressions(self):
         """Test pivot expression imports."""
@@ -138,13 +138,13 @@ class TestExpressionModule:
     def test_expression_to_sql(self):
         """Test expression SQL generation."""
         from rhosocial.activerecord.backend.impl.oracle.expression import (
-            ConnectByRootExpression, OracleForUpdateExpression
+            OracleConnectByRootExpression, OracleForUpdateExpression
         )
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
         
         dialect = OracleDialect(version=(19, 0, 0))
         
-        root_expr = ConnectByRootExpression(dialect, column="employee_id")
+        root_expr = OracleConnectByRootExpression(dialect, column="employee_id")
         sql, params = root_expr.to_sql()
         assert "CONNECT_BY_ROOT" in sql
         

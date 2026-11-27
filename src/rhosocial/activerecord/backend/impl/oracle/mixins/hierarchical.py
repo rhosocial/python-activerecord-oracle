@@ -5,14 +5,14 @@ from typing import Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..expression.hierarchical import (
-        ConnectByExpression,
-        ConnectByIsCycleExpression,
-        ConnectByIsLeafExpression,
-        ConnectByRootExpression,
-        LevelExpression,
-        PriorExpression,
-        SiblingsExpression,
-        SysConnectByPathExpression,
+        OracleConnectByExpression,
+        OracleConnectByIsCycleExpression,
+        OracleConnectByIsLeafExpression,
+        OracleConnectByRootExpression,
+        OracleLevelExpression,
+        OraclePriorExpression,
+        OracleSiblingsExpression,
+        OracleSysConnectByPathExpression,
     )
 
 
@@ -35,7 +35,7 @@ class OracleHierarchicalMixin:
         return True
 
     def format_connect_by_expression(
-        self, expr: "ConnectByExpression"
+        self, expr: "OracleConnectByExpression"
     ) -> Tuple[str, tuple]:
         """Render ``[START WITH cond] CONNECT BY [NOCYCLE] cond``.
 
@@ -58,18 +58,18 @@ class OracleHierarchicalMixin:
 
         return (" ".join(parts), tuple(params))
 
-    def format_prior_expression(self, expr: "PriorExpression") -> Tuple[str, tuple]:
+    def format_prior_expression(self, expr: "OraclePriorExpression") -> Tuple[str, tuple]:
         """Render the ``PRIOR`` operator applied to a column."""
         return (f"PRIOR {self.format_identifier(expr.column)}", ())
 
     def format_connect_by_root_expression(
-        self, expr: "ConnectByRootExpression"
+        self, expr: "OracleConnectByRootExpression"
     ) -> Tuple[str, tuple]:
         """Render the ``CONNECT_BY_ROOT`` operator applied to a column."""
         return (f"CONNECT_BY_ROOT {self.format_identifier(expr.column)}", ())
 
     def format_sys_connect_by_path_expression(
-        self, expr: "SysConnectByPathExpression"
+        self, expr: "OracleSysConnectByPathExpression"
     ) -> Tuple[str, tuple]:
         """Render ``SYS_CONNECT_BY_PATH(column, separator)``.
 
@@ -82,23 +82,23 @@ class OracleHierarchicalMixin:
         )
 
     def format_connect_by_is_leaf_expression(
-        self, expr: "ConnectByIsLeafExpression"
+        self, expr: "OracleConnectByIsLeafExpression"
     ) -> Tuple[str, tuple]:
         """Render the ``CONNECT_BY_ISLEAF`` pseudo-column."""
         return ("CONNECT_BY_ISLEAF", ())
 
     def format_connect_by_is_cycle_expression(
-        self, expr: "ConnectByIsCycleExpression"
+        self, expr: "OracleConnectByIsCycleExpression"
     ) -> Tuple[str, tuple]:
         """Render the ``CONNECT_BY_ISCYCLE`` pseudo-column."""
         return ("CONNECT_BY_ISCYCLE", ())
 
-    def format_level_expression(self, expr: "LevelExpression") -> Tuple[str, tuple]:
+    def format_level_expression(self, expr: "OracleLevelExpression") -> Tuple[str, tuple]:
         """Render the ``LEVEL`` pseudo-column."""
         return ("LEVEL", ())
 
     def format_siblings_expression(
-        self, expr: "SiblingsExpression"
+        self, expr: "OracleSiblingsExpression"
     ) -> Tuple[str, tuple]:
         """Render ``ORDER SIBLINGS BY col [ASC|DESC], ...``.
 

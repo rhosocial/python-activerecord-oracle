@@ -2,7 +2,7 @@
 from typing import Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover
-    from ..expression.table import TableCompressionClauseExpression, TablespaceClauseExpression
+    from ..expression.table import OracleTableCompressionClauseExpression, OracleTablespaceClauseExpression
 
 
 class OracleTableMixin(object):
@@ -78,8 +78,10 @@ class OracleTableMixin(object):
         """Oracle has no copyright-compatibility mode (e.g. MySQL forks)."""
         return False
 
-    def format_table_compression_clause_expression(self, expr: "TableCompressionClauseExpression") -> Tuple[str, tuple]:
-        """Format a TableCompressionClauseExpression into SQL and params."""
+    def format_table_compression_clause_expression(
+        self, expr: "OracleTableCompressionClauseExpression"
+    ) -> Tuple[str, tuple]:
+        """Format a OracleTableCompressionClauseExpression into SQL and params."""
         mode = expr.mode
         if mode is None:
             return "NOCOMPRESS", ()
@@ -88,6 +90,6 @@ class OracleTableMixin(object):
             return "NOCOMPRESS", ()
         return f"COMPRESS FOR {normalized}", ()
 
-    def format_tablespace_clause_expression(self, expr: "TablespaceClauseExpression") -> Tuple[str, tuple]:
-        """Format a TablespaceClauseExpression into SQL and params."""
+    def format_tablespace_clause_expression(self, expr: "OracleTablespaceClauseExpression") -> Tuple[str, tuple]:
+        """Format a OracleTablespaceClauseExpression into SQL and params."""
         return f"TABLESPACE {self.format_identifier(expr.tablespace_name)}", ()

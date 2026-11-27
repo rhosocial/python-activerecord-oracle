@@ -4,6 +4,14 @@ from typing import List, Tuple, Union, TYPE_CHECKING
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 
 if TYPE_CHECKING:
+    from ..expression.alter_table import (
+        OracleDropUnusedColumnsAction,
+        OracleMoveTableAction,
+        OracleReadOnlyAction,
+        OracleRowMovementAction,
+        OracleSetUnusedColumnsAction,
+        OracleShrinkSpaceAction,
+    )
     from rhosocial.activerecord.backend.expression.statements import AlterTableStatement
     from rhosocial.activerecord.backend.expression.statements.ddl_alter import (
         AddColumn,
@@ -76,9 +84,7 @@ class OracleModifyColumnMixin:
     def supports_modify_type_with_data(self) -> bool:
         return True
 
-    def format_alter_column_action(
-        self, expr: "AlterColumnAction"
-    ) -> Tuple[str, tuple]:
+    def format_alter_column_action(self, expr: "AlterColumnAction") -> Tuple[str, tuple]:
         """Format an ``ALTER COLUMN`` action for Oracle.
 
         Oracle has no ``SET DATA TYPE`` spelling: a type change is a column
@@ -121,7 +127,8 @@ class OracleModifyColumnMixin:
         if operation in ("SET DEFAULT", "DROP DEFAULT"):
             if not self.supports_alter_column_default():
                 raise UnsupportedFeatureError(
-                    self.name, f"ALTER COLUMN {operation}",
+                    self.name,
+                    f"ALTER COLUMN {operation}",
                     f"{self.name} does not support ALTER COLUMN SET/DROP DEFAULT.",
                 )
             col = self.format_identifier(expr.column_name)
@@ -133,7 +140,8 @@ class OracleModifyColumnMixin:
         if operation in ("SET NOT NULL", "DROP NOT NULL"):
             if not self.supports_alter_column_nullability():
                 raise UnsupportedFeatureError(
-                    self.name, "ALTER COLUMN",
+                    self.name,
+                    "ALTER COLUMN",
                     f"{self.name} does not support ALTER COLUMN SET/DROP NOT NULL.",
                 )
             col = self.format_identifier(expr.column_name)
@@ -160,9 +168,7 @@ class OracleModifyColumnMixin:
         sql = f"RENAME COLUMN {self.format_identifier(expr.old_name)} TO {self.format_identifier(expr.new_name)}"
         return sql, ()
 
-    def format_drop_column_action(
-        self, expr: Union["DropColumn", str]
-    ) -> Tuple[str, tuple]:
+    def format_drop_column_action(self, expr: Union["DropColumn", str]) -> Tuple[str, tuple]:
         """Format DROP COLUMN action for ALTER TABLE.
 
         Oracle does not support ``DROP COLUMN IF EXISTS``. The plain form
@@ -174,8 +180,7 @@ class OracleModifyColumnMixin:
             raise UnsupportedFeatureError(
                 self.name,
                 "ALTER TABLE DROP COLUMN IF EXISTS",
-                "Oracle does not support IF EXISTS on DROP COLUMN. "
-                "Pre-check USER_TAB_COLUMNS.",
+                "Oracle does not support IF EXISTS on DROP COLUMN. " "Pre-check USER_TAB_COLUMNS.",
             )
         if isinstance(expr, str):
             col_name = expr
@@ -253,9 +258,7 @@ class OracleModifyColumnMixin:
             )
         return super().format_drop_table_constraint_action(expr)
 
-    def format_alter_table_statement(
-        self, expr: "AlterTableStatement"
-    ) -> Tuple[str, tuple]:
+    def format_alter_table_statement(self, expr: "AlterTableStatement") -> Tuple[str, tuple]:
         """Format an ALTER TABLE statement with clean clause joining.
 
         Mirrors the generic core implementation but joins the rendered action
@@ -294,7 +297,7 @@ class OracleModifyColumnMixin:
     def supports_row_movement(self) -> bool:
         return True
 
-    def format_set_unused_action(self, expr) -> Tuple[str, tuple]:
+    def format_set_unused_action(self, expr: "OracleSetUnusedColumnsAction") -> Tuple[str, tuple]:
         """Format ``SET UNUSED (c1, c2)`` for ALTER TABLE."""
         if self.version < (9, 0, 0):
             raise UnsupportedFeatureError(
@@ -308,7 +311,9 @@ class OracleModifyColumnMixin:
         cols = ", ".join(self.format_identifier(c) for c in expr.columns)
         return f"SET UNUSED ({cols})", ()
 
-    def format_drop_unused_columns_action(self, expr) -> Tuple[str, tuple]:
+    def format_drop_unused_columns_action(
+        self, expr: "OracleDropUnusedColumnsAction"
+    ) -> Tuple[str, tuple]:
         """Format ``DROP UNUSED COLUMNS`` for ALTER TABLE."""
         if self.version < (9, 0, 0):
             raise UnsupportedFeatureError(
@@ -321,7 +326,7 @@ class OracleModifyColumnMixin:
             )
         return "DROP UNUSED COLUMNS", ()
 
-    def format_move_table_statement(self, expr) -> Tuple[str, tuple]:
+    def format_move_table_statement(self, expr: "OracleMoveTableAction") -> Tuple[str, tuple]:
         """Format the ``MOVE`` clause for ALTER TABLE."""
         if self.version < (9, 0, 0):
             raise UnsupportedFeatureError(
@@ -334,7 +339,7 @@ class OracleModifyColumnMixin:
             )
         return "MOVE", ()
 
-    def format_shrink_space_statement(self, expr) -> Tuple[str, tuple]:
+    def format_shrink_space_statement(self, expr: "OracleShrinkSpaceAction") -> Tuple[str, tuple]:
         """Format ``SHRINK SPACE [CASCADE]`` for ALTER TABLE."""
         if self.version < (10, 0, 0):
             raise UnsupportedFeatureError(
@@ -350,7 +355,7 @@ class OracleModifyColumnMixin:
             sql += " CASCADE"
         return sql, ()
 
-    def format_read_only_statement(self, expr) -> Tuple[str, tuple]:
+    def format_read_only_statement(self, expr: "OracleReadOnlyAction") -> Tuple[str, tuple]:
         """Format ``READ ONLY`` / ``READ WRITE`` for ALTER TABLE."""
         if self.version < (11, 1, 0):
             raise UnsupportedFeatureError(
@@ -363,7 +368,7 @@ class OracleModifyColumnMixin:
             )
         return ("READ ONLY" if expr.read_only else "READ WRITE"), ()
 
-    def format_row_movement_statement(self, expr) -> Tuple[str, tuple]:
+    def format_row_movement_statement(self, expr: "OracleRowMovementAction") -> Tuple[str, tuple]:
         """Format ``ENABLE | DISABLE ROW MOVEMENT`` for ALTER TABLE."""
         if self.version < (9, 0, 0):
             raise UnsupportedFeatureError(

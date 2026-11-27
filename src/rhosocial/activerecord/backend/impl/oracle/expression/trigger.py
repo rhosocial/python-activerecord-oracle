@@ -19,7 +19,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
 
 
-class DisableTriggerStatement(BaseExpression):
+class OracleDisableTriggerStatement(BaseExpression):
     """Expression wrapping ``format_disable_trigger_statement``.
 
     Renders an ``ALTER TRIGGER <name> DISABLE`` statement.
@@ -55,7 +55,7 @@ class DisableTriggerStatement(BaseExpression):
         return "format_disable_trigger_statement"
 
 
-class EnableTriggerStatement(BaseExpression):
+class OracleEnableTriggerStatement(BaseExpression):
     """Expression wrapping ``format_enable_trigger_statement``.
 
     Renders an ``ALTER TRIGGER <name> ENABLE`` statement.

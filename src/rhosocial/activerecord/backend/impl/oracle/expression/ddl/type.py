@@ -1402,7 +1402,7 @@ class OracleDropTypeExpression(DropTypeStatement):
         self.validate = validate
 
 
-class DropTypeBodyStatement(BaseExpression):
+class OracleDropTypeBodyStatement(BaseExpression):
     """Oracle DROP TYPE BODY expression.
 
     ``schema`` is a deprecated alias of ``schema_name``; both are stored
@@ -1429,7 +1429,7 @@ class DropTypeBodyStatement(BaseExpression):
         return "format_drop_type_body_statement"
 
 
-class OracleDropTypeBodyExpression(DropTypeBodyStatement):
+class OracleDropTypeBodyExpression(OracleDropTypeBodyStatement):
     """Oracle-prefixed alias for DROP TYPE BODY."""
 
 
@@ -1456,6 +1456,6 @@ __all__ = [
     "OracleAlterTypeResetAction",
     "OracleCreateTypeBodyStatement",
     "OracleDropTypeExpression",
-    "DropTypeBodyStatement",
+    "OracleDropTypeBodyStatement",
     "OracleDropTypeBodyExpression",
 ]

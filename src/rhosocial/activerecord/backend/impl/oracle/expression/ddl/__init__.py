@@ -24,7 +24,7 @@ from .synonym import (
     OracleDropSynonymStatement,
 )
 from .type import (
-    DropTypeBodyStatement,
+    OracleDropTypeBodyStatement,
     OracleAlterTypeAddAttributeAction,
     OracleAlterTypeAddMethodAction,
     OracleAlterTypeCompileAction,
@@ -85,6 +85,6 @@ __all__ = [
     "OracleAlterTypeResetAction",
     "OracleCreateTypeBodyStatement",
     "OracleDropTypeExpression",
-    "DropTypeBodyStatement",
+    "OracleDropTypeBodyStatement",
     "OracleDropTypeBodyExpression",
 ]

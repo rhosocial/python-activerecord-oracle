@@ -26,7 +26,7 @@ from .._scan import (
     remove_word_with_space,
 )
 from ..expression.ddl.type import (
-    DropTypeBodyStatement,
+    OracleDropTypeBodyStatement,
     OracleAlterTypeAddAttributeAction,
     OracleAlterTypeAddMethodAction,
     OracleAlterTypeCompileAction,
@@ -804,7 +804,7 @@ class OracleTypeDDLMixin(UserDefinedTypeMixin):
 
     def format_drop_type_body_statement(
         self,
-        expr: DropTypeBodyStatement,
+        expr: OracleDropTypeBodyStatement,
     ) -> Tuple[str, tuple]:
         if not self.supports_type_objects() or not self.supports_drop_type_body():
             raise UnsupportedFeatureError(self.name, "DROP TYPE BODY")

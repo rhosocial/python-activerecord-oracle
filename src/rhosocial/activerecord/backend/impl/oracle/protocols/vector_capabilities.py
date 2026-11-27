@@ -10,7 +10,7 @@ when mixins gain new public rendering methods.
 from typing import TYPE_CHECKING, Protocol, Tuple
 
 if TYPE_CHECKING:  # pragma: no cover
-    from ..expression.vector import VectorLiteralExpression, VectorOperandExpression
+    from ..expression.vector import OracleVectorLiteralExpression, OracleVectorOperandExpression
 
 class OracleVectorSupport(Protocol):
     """Auto-generated capability protocol (P7)."""
@@ -27,7 +27,7 @@ class OracleVectorSupport(Protocol):
         ...  # pragma: no cover
     def supports_vector_distance_metric_hamming(self) -> bool:
         ...  # pragma: no cover
-    def format_vector_literal_expression(self, expr: 'VectorLiteralExpression') -> Tuple[str, tuple]:
+    def format_vector_literal_expression(self, expr: 'OracleVectorLiteralExpression') -> Tuple[str, tuple]:
         ...  # pragma: no cover
-    def format_vector_operand_expression(self, expr: 'VectorOperandExpression') -> Tuple[str, tuple]:
+    def format_vector_operand_expression(self, expr: 'OracleVectorOperandExpression') -> Tuple[str, tuple]:
         ...  # pragma: no cover

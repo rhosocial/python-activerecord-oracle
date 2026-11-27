@@ -2,9 +2,12 @@
 """Oracle COMMENT ON formatter mixin."""
 
 from enum import Enum
-from typing import Tuple
+from typing import Tuple, TYPE_CHECKING
 
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
+
+if TYPE_CHECKING:  # pragma: no cover
+    from ..expression.comment import OracleCommentOnStatement
 
 
 class OracleCommentMixin:
@@ -25,9 +28,7 @@ class OracleCommentMixin:
         """
         return True
 
-    def format_comment_on_statement(
-        self, expr
-    ) -> Tuple[str, tuple]:
+    def format_comment_on_statement(self, expr: "OracleCommentOnStatement") -> Tuple[str, tuple]:
         """Format a standalone ``COMMENT ON`` statement.
 
         Accepts the Oracle expression and the core

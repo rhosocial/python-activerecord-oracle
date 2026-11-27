@@ -17,7 +17,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
 
 
-class VectorLiteralExpression(BaseExpression):
+class OracleVectorLiteralExpression(BaseExpression):
     """Expression wrapping ``format_vector_literal_expression``.
 
     Formats a vector value as an Oracle ``VECTOR`` string literal suitable
@@ -43,7 +43,7 @@ class VectorLiteralExpression(BaseExpression):
         return "format_vector_literal_expression"
 
 
-class VectorOperandExpression(BaseExpression):
+class OracleVectorOperandExpression(BaseExpression):
     """Expression wrapping ``format_vector_operand_expression``.
 
     Formats a single vector operand for embedding in SQL, appending the

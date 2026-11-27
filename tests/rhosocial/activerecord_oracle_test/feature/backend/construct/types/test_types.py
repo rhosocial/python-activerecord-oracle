@@ -182,15 +182,15 @@ class TestExpressionModule:
     def test_import_hierarchical_expressions(self):
         """Test hierarchical expression imports."""
         from rhosocial.activerecord.backend.impl.oracle.expression import (
-            ConnectByExpression, PriorExpression,
-            ConnectByRootExpression, SysConnectByPathExpression,
-            LevelExpression
+            OracleConnectByExpression, OraclePriorExpression,
+            OracleConnectByRootExpression, OracleSysConnectByPathExpression,
+            OracleLevelExpression
         )
-        assert ConnectByExpression is not None
-        assert PriorExpression is not None
-        assert ConnectByRootExpression is not None
-        assert SysConnectByPathExpression is not None
-        assert LevelExpression is not None
+        assert OracleConnectByExpression is not None
+        assert OraclePriorExpression is not None
+        assert OracleConnectByRootExpression is not None
+        assert OracleSysConnectByPathExpression is not None
+        assert OracleLevelExpression is not None
     
     def test_import_pivot_expressions(self):
         """Test pivot expression imports."""
@@ -214,19 +214,19 @@ class TestExpressionModule:
     
     def test_connect_by_root(self):
         """Test CONNECT_BY_ROOT expression."""
-        from rhosocial.activerecord.backend.impl.oracle.expression import ConnectByRootExpression
+        from rhosocial.activerecord.backend.impl.oracle.expression import OracleConnectByRootExpression
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
         dialect = OracleDialect(version=(19, 0, 0))
-        expr = ConnectByRootExpression(dialect, column="employee_id")
+        expr = OracleConnectByRootExpression(dialect, column="employee_id")
         sql, params = expr.to_sql()
         assert "CONNECT_BY_ROOT" in sql
     
     def test_sys_connect_by_path(self):
         """Test SYS_CONNECT_BY_PATH expression."""
-        from rhosocial.activerecord.backend.impl.oracle.expression import SysConnectByPathExpression
+        from rhosocial.activerecord.backend.impl.oracle.expression import OracleSysConnectByPathExpression
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
         dialect = OracleDialect(version=(19, 0, 0))
-        expr = SysConnectByPathExpression(dialect, column="name", separator="/")
+        expr = OracleSysConnectByPathExpression(dialect, column="name", separator="/")
         sql, params = expr.to_sql()
         assert "SYS_CONNECT_BY_PATH" in sql
         assert "'/'" in sql

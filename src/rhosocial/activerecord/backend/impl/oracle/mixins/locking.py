@@ -11,9 +11,11 @@ This mixin is mixed into :class:`OracleDialect` alongside the other
 dialect mixins. All methods are defensive and side-effect free; they
 return strings or booleans only.
 """
+
 from typing import Any, List, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from ..expression.locking import OracleForUpdateExpression, OracleLockTableStatement
     from rhosocial.activerecord.backend.expression.query_parts import ForUpdateClause
 
 
@@ -51,6 +53,7 @@ class OracleLockingMixin(object):
     def supports_lock_timeout(self) -> bool:
         """Oracle has no SET lock_wait timeout; uses WAIT n / NOWAIT inline."""
         return False
+
     # endregion
 
     # region syntax helpers
@@ -125,17 +128,18 @@ class OracleLockingMixin(object):
             sql_parts.append("NOWAIT")
         elif skip_locked:
             if not self.supports_for_update_skip_locked():
-                raise UnsupportedFeatureError(
-                    self.name, "SKIP LOCKED (requires Oracle 11g+)"
-                )
+                raise UnsupportedFeatureError(self.name, "SKIP LOCKED (requires Oracle 11g+)")
             sql_parts.append("SKIP LOCKED")
         elif isinstance(wait, int) and wait >= 0:
             sql_parts.append(f"WAIT {wait}")
 
         return " ".join(sql_parts), tuple(all_params)
+
     # endregion
 
-    def format_oracle_for_update_expression(self, expr) -> Tuple[str, tuple]:
+    def format_oracle_for_update_expression(
+        self, expr: "OracleForUpdateExpression"
+    ) -> Tuple[str, tuple]:
         """Render an ``OracleForUpdateExpression``.
 
         Oracle's options are mutually exclusive and ordered ``FOR UPDATE [OF
@@ -158,7 +162,9 @@ class OracleLockingMixin(object):
 
         return (" ".join(parts), ())
 
-    def format_oracle_lock_table_statement(self, expr) -> Tuple[str, tuple]:
+    def format_oracle_lock_table_statement(
+        self, expr: "OracleLockTableStatement"
+    ) -> Tuple[str, tuple]:
         """Render an ``OracleLockTableStatement``.
 
         A table-level lock is a statement the dialect spells, so the node
@@ -169,10 +175,7 @@ class OracleLockingMixin(object):
         Oracle's spelling; the constructor is what refuses a mode Oracle has
         no form of.
         """
-        sql = (
-            f"LOCK TABLE {self.format_identifier(expr.table)} "
-            f"IN {expr.mode.upper()} MODE"
-        )
+        sql = f"LOCK TABLE {self.format_identifier(expr.table)} " f"IN {expr.mode.upper()} MODE"
         if expr.nowait:
             sql += " NOWAIT"
         return (sql, ())

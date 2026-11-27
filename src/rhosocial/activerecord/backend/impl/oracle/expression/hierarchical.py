@@ -17,7 +17,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from ..dialect import OracleDialect
 
 
-class ConnectByExpression(BaseExpression):
+class OracleConnectByExpression(BaseExpression):
     """Oracle CONNECT BY clause for hierarchical queries.
 
     Hierarchical queries retrieve data in a hierarchical order,
@@ -29,8 +29,8 @@ class ConnectByExpression(BaseExpression):
         CONNECT BY PRIOR employee_id = manager_id
 
     Example usage:
-        condition = PriorExpression(dialect, column="employee_id")
-        connect_by = ConnectByExpression(dialect, condition=condition)
+        condition = OraclePriorExpression(dialect, column="employee_id")
+        connect_by = OracleConnectByExpression(dialect, condition=condition)
 
     Args:
         dialect: the Oracle dialect instance.
@@ -57,7 +57,7 @@ class ConnectByExpression(BaseExpression):
         return "format_connect_by_expression"
 
 
-class PriorExpression(BaseExpression):
+class OraclePriorExpression(BaseExpression):
     """Oracle PRIOR operator for hierarchical queries.
 
     The PRIOR operator references the parent row's value in a
@@ -68,7 +68,7 @@ class PriorExpression(BaseExpression):
         PRIOR employee_id = manager_id
 
     Example usage:
-        prior_expr = PriorExpression(dialect, column="employee_id")
+        prior_expr = OraclePriorExpression(dialect, column="employee_id")
 
     Args:
         dialect: the Oracle dialect instance.
@@ -85,7 +85,7 @@ class PriorExpression(BaseExpression):
         return "format_prior_expression"
 
 
-class ConnectByRootExpression(BaseExpression):
+class OracleConnectByRootExpression(BaseExpression):
     """Oracle CONNECT_BY_ROOT operator for hierarchical queries.
 
     Returns the root row's value for the specified column.
@@ -97,7 +97,7 @@ class ConnectByRootExpression(BaseExpression):
         CONNECT BY PRIOR employee_id = manager_id
 
     Example usage:
-        root_expr = ConnectByRootExpression(dialect, column="employee_id")
+        root_expr = OracleConnectByRootExpression(dialect, column="employee_id")
 
     Args:
         dialect: the Oracle dialect instance.
@@ -114,7 +114,7 @@ class ConnectByRootExpression(BaseExpression):
         return "format_connect_by_root_expression"
 
 
-class SysConnectByPathExpression(BaseExpression):
+class OracleSysConnectByPathExpression(BaseExpression):
     """Oracle SYS_CONNECT_BY_PATH function for hierarchical queries.
 
     Generates a path string from root to current node, useful for
@@ -124,7 +124,7 @@ class SysConnectByPathExpression(BaseExpression):
         SYS_CONNECT_BY_PATH(name, '/') -> '/CEO/VP/Manager'
 
     Example usage:
-        path_expr = SysConnectByPathExpression(dialect, column="name", separator="/")
+        path_expr = OracleSysConnectByPathExpression(dialect, column="name", separator="/")
 
     Args:
         dialect: the Oracle dialect instance.
@@ -148,7 +148,7 @@ class SysConnectByPathExpression(BaseExpression):
         return "format_sys_connect_by_path_expression"
 
 
-class ConnectByIsLeafExpression(BaseExpression):
+class OracleConnectByIsLeafExpression(BaseExpression):
     """Oracle CONNECT_BY_ISLEAF pseudo-column.
 
     Returns 1 if the current row is a leaf in the hierarchy
@@ -167,7 +167,7 @@ class ConnectByIsLeafExpression(BaseExpression):
         return "format_connect_by_is_leaf_expression"
 
 
-class ConnectByIsCycleExpression(BaseExpression):
+class OracleConnectByIsCycleExpression(BaseExpression):
     """Oracle CONNECT_BY_ISCYCLE pseudo-column.
 
     Returns 1 if the current row has a child that is also
@@ -186,7 +186,7 @@ class ConnectByIsCycleExpression(BaseExpression):
         return "format_connect_by_is_cycle_expression"
 
 
-class LevelExpression(BaseExpression):
+class OracleLevelExpression(BaseExpression):
     """Oracle LEVEL pseudo-column for hierarchical queries.
 
     Returns the level number of the current row in the hierarchy.
@@ -200,7 +200,7 @@ class LevelExpression(BaseExpression):
         START WITH manager_id IS NULL
 
     Example usage:
-        level_expr = LevelExpression(dialect)
+        level_expr = OracleLevelExpression(dialect)
     """
 
     @property
@@ -209,7 +209,7 @@ class LevelExpression(BaseExpression):
         return "format_level_expression"
 
 
-class SiblingsExpression(BaseExpression):
+class OracleSiblingsExpression(BaseExpression):
     """Oracle ORDER SIBLINGS BY clause.
 
     Orders siblings at each level of the hierarchy while

@@ -5,9 +5,23 @@ from typing import Any, List, Tuple, TYPE_CHECKING
 
 from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
 
+
+def _as_sql_string_literal(text: str) -> str:
+    """Double embedded single quotes in a value bound for a SQL string literal.
+
+    The PL/SQL ``IF NOT EXISTS`` fallback embeds a declared DDL statement inside
+    ``EXECUTE IMMEDIATE '...'``. Escaping happens here, at the point where a
+    value becomes a string-literal atom, so the formatter only concatenates
+    already-escaped fragments instead of rewriting finished SQL text.
+    """
+    return text.replace("'", "''")
+
+
 if TYPE_CHECKING:
     from rhosocial.activerecord.backend.expression.statements import (
-        CreateTableStatement, ColumnDefinition, TableConstraint,
+        CreateTableStatement,
+        ColumnDefinition,
+        TableConstraint,
     )
 
 
@@ -38,9 +52,7 @@ class OracleDDLMixin:
         """
         return True
 
-    def format_create_table_statement(
-        self, expr: "CreateTableStatement"
-    ) -> Tuple[str, tuple]:
+    def format_create_table_statement(self, expr: "CreateTableStatement") -> Tuple[str, tuple]:
         """Format CREATE TABLE statement for Oracle.
 
         Oracle accepts the native ``IF NOT EXISTS`` clause from 19c Release
@@ -65,8 +77,7 @@ class OracleDDLMixin:
 
         if not isinstance(expr.table, Table):
             raise TypeError(
-                f"CreateTableStatement.table must be a Table, "
-                f"got {type(expr.table).__name__}"
+                f"CreateTableStatement.table must be a Table, " f"got {type(expr.table).__name__}"
             )
 
         table_options = expr.table_options
@@ -75,7 +86,8 @@ class OracleDDLMixin:
             # statement (no inline table option); a comment on the table
             # options is never silently dropped.
             raise UnsupportedFeatureError(
-                self.name, "TABLE COMMENT",
+                self.name,
+                "TABLE COMMENT",
                 "Oracle has no inline table comment; use a standalone "
                 "COMMENT ON TABLE statement.",
             )
@@ -83,20 +95,19 @@ class OracleDDLMixin:
             # Oracle has no table inheritance; a declared INHERITS clause is
             # never silently dropped.
             raise UnsupportedFeatureError(
-                self.name, "table INHERITS",
+                self.name,
+                "table INHERITS",
                 "Oracle does not support table inheritance.",
             )
         if expr.storage_options is not None:
             # Oracle has no generic WITH (...) storage options clause.
             raise UnsupportedFeatureError(
-                self.name, "storage options",
-                "Oracle does not support the generic WITH (...) storage "
-                "options clause.",
+                self.name,
+                "storage options",
+                "Oracle does not support the generic WITH (...) storage " "options clause.",
             )
         all_params: List[Any] = []
-        native_if_not_exists = bool(
-            expr.if_not_exists and self.supports_if_not_exists_table()
-        )
+        native_if_not_exists = bool(expr.if_not_exists and self.supports_if_not_exists_table())
         parts = ["CREATE"]
         if expr.temporary:
             parts.append("GLOBAL TEMPORARY")
@@ -157,8 +168,8 @@ class OracleDDLMixin:
             # Oracle has no IF NOT EXISTS for CREATE TABLE before that
             # capability; guard with a user_tables existence check inside an
             # anonymous block. The DDL is dynamic SQL, so any embedded single
-            # quotes must be doubled.
-            embedded = statement.replace("'", "''")
+            # quotes must be doubled before it becomes a string literal.
+            embedded = _as_sql_string_literal(statement)
             table_upper = expr.table.name.upper()
             statement = (
                 f"DECLARE v_cnt NUMBER; "
@@ -193,13 +204,16 @@ class OracleDDLMixin:
         from rhosocial.activerecord.backend.impl.oracle.expression.column import (
             OracleColumnDefinition,
         )
+
         if expr.comment:
             # Oracle annotates column comments through the standalone
             # COMMENT ON COLUMN statement (no inline column clause); a
             # comment on a column definition is never silently dropped.
             from rhosocial.activerecord.backend.dialect.exceptions import UnsupportedFeatureError
+
             raise UnsupportedFeatureError(
-                self.name, "COLUMN COMMENT",
+                self.name,
+                "COLUMN COMMENT",
                 "Oracle has no inline column comment; use a standalone "
                 "COMMENT ON COLUMN statement.",
             )
@@ -346,9 +360,7 @@ class OracleDDLMixin:
         if wants_deferral and not self.supports_deferrable_constraint():
             if expr.deferrable or expr.not_deferrable:
                 feature = (
-                    "constraint DEFERRABLE"
-                    if expr.deferrable
-                    else "constraint NOT DEFERRABLE"
+                    "constraint DEFERRABLE" if expr.deferrable else "constraint NOT DEFERRABLE"
                 )
             else:
                 feature = (

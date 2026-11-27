@@ -15,27 +15,27 @@ class TestHierarchicalExpressions:
     def test_import_hierarchical(self):
         """Test importing hierarchical expressions."""
         from rhosocial.activerecord.backend.impl.oracle.expression import (
-            ConnectByExpression, PriorExpression,
-            ConnectByRootExpression, SysConnectByPathExpression,
-            ConnectByIsLeafExpression, ConnectByIsCycleExpression,
-            LevelExpression, SiblingsExpression
+            OracleConnectByExpression, OraclePriorExpression,
+            OracleConnectByRootExpression, OracleSysConnectByPathExpression,
+            OracleConnectByIsLeafExpression, OracleConnectByIsCycleExpression,
+            OracleLevelExpression, OracleSiblingsExpression
         )
-        assert ConnectByExpression is not None
-        assert PriorExpression is not None
-        assert ConnectByRootExpression is not None
-        assert SysConnectByPathExpression is not None
-        assert ConnectByIsLeafExpression is not None
-        assert ConnectByIsCycleExpression is not None
-        assert LevelExpression is not None
-        assert SiblingsExpression is not None
+        assert OracleConnectByExpression is not None
+        assert OraclePriorExpression is not None
+        assert OracleConnectByRootExpression is not None
+        assert OracleSysConnectByPathExpression is not None
+        assert OracleConnectByIsLeafExpression is not None
+        assert OracleConnectByIsCycleExpression is not None
+        assert OracleLevelExpression is not None
+        assert OracleSiblingsExpression is not None
 
     def test_connect_by_root(self):
         """Test CONNECT_BY_ROOT expression."""
-        from rhosocial.activerecord.backend.impl.oracle.expression import ConnectByRootExpression
+        from rhosocial.activerecord.backend.impl.oracle.expression import OracleConnectByRootExpression
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
         dialect = OracleDialect(version=(19, 0, 0))
-        expr = ConnectByRootExpression(dialect, column="employee_id")
+        expr = OracleConnectByRootExpression(dialect, column="employee_id")
         sql, params = expr.to_sql()
         assert "CONNECT_BY_ROOT" in sql
         assert "EMPLOYEE_ID" in sql  # Oracle uppercase
@@ -43,11 +43,11 @@ class TestHierarchicalExpressions:
 
     def test_sys_connect_by_path(self):
         """Test SYS_CONNECT_BY_PATH expression."""
-        from rhosocial.activerecord.backend.impl.oracle.expression import SysConnectByPathExpression
+        from rhosocial.activerecord.backend.impl.oracle.expression import OracleSysConnectByPathExpression
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
         dialect = OracleDialect(version=(19, 0, 0))
-        expr = SysConnectByPathExpression(dialect, column="name", separator="/")
+        expr = OracleSysConnectByPathExpression(dialect, column="name", separator="/")
         sql, params = expr.to_sql()
         assert "SYS_CONNECT_BY_PATH" in sql
         assert "'/'" in sql
@@ -55,44 +55,44 @@ class TestHierarchicalExpressions:
 
     def test_level_expression(self):
         """Test LEVEL pseudo-column."""
-        from rhosocial.activerecord.backend.impl.oracle.expression import LevelExpression
+        from rhosocial.activerecord.backend.impl.oracle.expression import OracleLevelExpression
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
         dialect = OracleDialect(version=(19, 0, 0))
-        expr = LevelExpression(dialect)
+        expr = OracleLevelExpression(dialect)
         sql, params = expr.to_sql()
         assert sql == "LEVEL"
         assert params == ()
 
     def test_connect_by_isleaf(self):
         """Test CONNECT_BY_ISLEAF pseudo-column."""
-        from rhosocial.activerecord.backend.impl.oracle.expression import ConnectByIsLeafExpression
+        from rhosocial.activerecord.backend.impl.oracle.expression import OracleConnectByIsLeafExpression
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
         dialect = OracleDialect(version=(19, 0, 0))
-        expr = ConnectByIsLeafExpression(dialect)
+        expr = OracleConnectByIsLeafExpression(dialect)
         sql, params = expr.to_sql()
         assert sql == "CONNECT_BY_ISLEAF"
         assert params == ()
 
     def test_connect_by_iscycle(self):
         """Test CONNECT_BY_ISCYCLE pseudo-column."""
-        from rhosocial.activerecord.backend.impl.oracle.expression import ConnectByIsCycleExpression
+        from rhosocial.activerecord.backend.impl.oracle.expression import OracleConnectByIsCycleExpression
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
         dialect = OracleDialect(version=(19, 0, 0))
-        expr = ConnectByIsCycleExpression(dialect)
+        expr = OracleConnectByIsCycleExpression(dialect)
         sql, params = expr.to_sql()
         assert sql == "CONNECT_BY_ISCYCLE"
         assert params == ()
 
     def test_prior_expression(self):
         """Test PRIOR expression."""
-        from rhosocial.activerecord.backend.impl.oracle.expression import PriorExpression
+        from rhosocial.activerecord.backend.impl.oracle.expression import OraclePriorExpression
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
         dialect = OracleDialect(version=(19, 0, 0))
-        expr = PriorExpression(dialect, column="employee_id")
+        expr = OraclePriorExpression(dialect, column="employee_id")
         sql, params = expr.to_sql()
         assert "PRIOR" in sql
         assert "EMPLOYEE_ID" in sql
@@ -100,11 +100,11 @@ class TestHierarchicalExpressions:
 
     def test_siblings_expression(self):
         """Test ORDER SIBLINGS BY expression."""
-        from rhosocial.activerecord.backend.impl.oracle.expression import SiblingsExpression
+        from rhosocial.activerecord.backend.impl.oracle.expression import OracleSiblingsExpression
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
 
         dialect = OracleDialect(version=(19, 0, 0))
-        expr = SiblingsExpression(dialect, columns=["name", "id"], ascending=[True, False])
+        expr = OracleSiblingsExpression(dialect, columns=["name", "id"], ascending=[True, False])
         sql, params = expr.to_sql()
         assert "ORDER SIBLINGS BY" in sql
         assert "NAME" in sql
@@ -458,21 +458,21 @@ class TestDialectSupport:
         """
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
         from rhosocial.activerecord.backend.impl.oracle.expression import (
-            ConnectByExpression,
+            OracleConnectByExpression,
             OracleHintExpression,
             OraclePivot,
             OracleUnpivot,
         )
         from rhosocial.activerecord.backend.impl.oracle.expression.hierarchical import (
-            PriorExpression,
+            OraclePriorExpression,
         )
         from rhosocial.activerecord.backend.expression.core import Column
         from rhosocial.activerecord.backend.expression.predicates import IsNullPredicate
 
         dialect = OracleDialect(version=(19, 0, 0))
-        connect_by = ConnectByExpression(
+        connect_by = OracleConnectByExpression(
             dialect,
-            condition=PriorExpression(dialect, column="employee_id"),
+            condition=OraclePriorExpression(dialect, column="employee_id"),
             start_with=IsNullPredicate(dialect, Column(dialect, "manager_id")),
         )
         assert "CONNECT BY" in connect_by.to_sql()[0]
@@ -507,11 +507,11 @@ class TestDialectSupport:
         """
         from rhosocial.activerecord.backend.impl.oracle.dialect import OracleDialect
         from rhosocial.activerecord.backend.impl.oracle.expression import (
-            ConnectByIsLeafExpression,
+            OracleConnectByIsLeafExpression,
         )
 
         dialect = OracleDialect(version=(19, 0, 0))
-        expr = ConnectByIsLeafExpression()
+        expr = OracleConnectByIsLeafExpression()
         sql, params = expr.to_sql(dialect)
 
         assert sql == "CONNECT_BY_ISLEAF"

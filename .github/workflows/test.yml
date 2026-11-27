@@ -18,6 +18,36 @@ permissions:
   contents: read
 
 jobs:
+  # Isolated from the database legs: the rule modules read source, ASTs,
+  # registries and type names only. No Oracle service is needed here.
+  formal-rules-contracts:
+    name: Formal rules contracts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Install activerecord and testsuite from git
+        run: |
+          pip install "rhosocial-activerecord @ git+https://github.com/rhosocial/python-activerecord.git@feature/activerecord-migration"  # NOSONAR
+          pip install "rhosocial-activerecord-testsuite @ git+https://github.com/rhosocial/python-activerecord-testsuite.git@feature/activerecord-migration"  # NOSONAR
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Formal rules contracts
+        run: |
+          export PYTHONPATH=src:tests
+          python -m pytest tests/rhosocial/activerecord_oracle_test/feature/rules -q -p no:warnings
+
   test-oracle-18c:
     name: Python 3.14 / Oracle 18c
     runs-on: ubuntu-latest
