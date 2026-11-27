@@ -1650,9 +1650,9 @@ UNCONSTRUCTIBLE: tuple = (
     "rhosocial.activerecord.backend.expression.statements.ddl_partition.PartitionByListClause",
     "rhosocial.activerecord.backend.expression.statements.ddl_partition.PartitionByRangeClause",
     "rhosocial.activerecord.backend.expression.statements.ddl_alter.AlterConstraintAction",
-    "rhosocial.activerecord.backend.expression.uuid.UUIDCastFunction",
-    "rhosocial.activerecord.backend.expression.uuid.UUIDConstantExpression",
-    "rhosocial.activerecord.backend.expression.uuid.UUIDGenerationExpression",
+    # The three UUID value nodes are no longer here: their constructors stopped
+    # refusing a dialect, and their capability answer comes from the formatter
+    # or from the dispatch, both of which the matrix classifies.
 )
 
 #: Classes that construct but cannot render.
@@ -2236,6 +2236,13 @@ UNMODELLED_FORMATTERS = {
     "emulate it)": ("format_repeat_expression",),
     "the TableSource root (every concrete row source overrides its formatter; "
     "the root carries nothing but an alias and is never rendered)": ("format_table_source",),
+    "the UUID value nodes (this dialect composes no UUID support mixin: it "
+    "spells no UUID generation, constant or text-to-UUID cast, so all three "
+    "nodes reach the dispatch and find no base method declared)": (
+        "format_uuid_generation_expression",
+        "format_uuid_constant_expression",
+        "format_uuid_cast",
+    ),
 }
 
 
