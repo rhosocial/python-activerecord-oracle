@@ -62,10 +62,6 @@ class OracleTableMixin(object):
         """Oracle Advanced Compression Option: COMPRESS/NOCOMPRESS, OLTP COMPRESS."""
         return True
 
-    def supports_partition_option(self) -> bool:
-        """Partitioning is wired via OraclePartitionMixin in dialect.py."""
-        return True
-
     def supports_iot(self) -> bool:
         """Index-Organized Tables via ORGANIZATION INDEX are supported."""
         return True

@@ -7,7 +7,7 @@ the capability contract.  Regenerate via scripts/p7_generate_protocols.py
 when mixins gain new public rendering methods.
 """
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Tuple
 
 from typing import Protocol
 
@@ -31,8 +31,6 @@ class OracleTableSupport(Protocol):
     def supports_tablespace_option(self) -> bool:
         ...  # pragma: no cover
     def supports_compress_option(self) -> bool:
-        ...  # pragma: no cover
-    def supports_partition_option(self) -> bool:
         ...  # pragma: no cover
     def supports_iot(self) -> bool:
         ...  # pragma: no cover
