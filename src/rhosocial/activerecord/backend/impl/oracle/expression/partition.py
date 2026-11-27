@@ -428,3 +428,18 @@ class OracleReferencePartitionClause(OraclePartitionClause):
         self.method = "REFERENCE"
         self.keys: List[BaseExpression] = []
         self.fk_constraint = fk_constraint
+
+    def check_renderable(self) -> None:
+        """REFERENCE carries no key columns; the constraint is its payload.
+
+        Core's ``PartitionClause.check_renderable`` requires at least one key
+        expression, which is what a generic strategy clause needs and what this
+        clause deliberately does not have -- the foreign key decides placement,
+        so the base check must not be inherited. The identifier is the one thing
+        this clause cannot render without.
+        """
+        if not isinstance(self.fk_constraint, str) or not self.fk_constraint.strip():
+            raise TypeError(
+                f"{type(self).__name__}.fk_constraint must be a non-empty string, "
+                f"got {self.fk_constraint!r}"
+            )

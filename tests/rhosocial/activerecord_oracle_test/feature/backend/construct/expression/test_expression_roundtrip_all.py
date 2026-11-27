@@ -420,13 +420,9 @@ def _register_core_specials():
     )
     from rhosocial.activerecord.backend.expression.types.enum_ import EnumType
 
-    # ALTER CONSTRAINT / VALIDATE CONSTRAINT are not registered here at all.
-    # Core made ``constraint_kind`` a required keyword-only parameter, and the
-    # introspective constructor skips keyword-only parameters behind defaulted
-    # positionals, so the guess cannot build one; a factory would build it only
-    # to serialise a *branch class* through the three encodings, which is a core
-    # serialisation question rather than one this backend has an oracle for.
-    # They are pinned in ``UNCONSTRUCTIBLE`` instead.
+    # VALIDATE CONSTRAINT needs no factory: core made ``constraint_name`` a
+    # required positional, so the introspective constructor reaches it and the
+    # class round-trips like everything else.
 
     # Core predicates whose operand slots the generic guess fills with plain
     # strings. This is the wildcard-split follow-up core's commit ``61a1a458``
@@ -464,6 +460,27 @@ def _register_core_specials():
             d, DomainCheckConstraint(d, _column_predicate(d), name="chk")
         ),
     )
+
+    # Core's strategy clauses. Oracle spells partitioning only through its own
+    # ``OraclePartitionBy*`` nodes, but the core clause is still a legal node:
+    # a real ``Column`` key list builds it, and ``format_partition_clause``
+    # then refuses it as a non-render belonging to this dialect's own tree --
+    # the same pin the generic ``PartitionClause`` already carries below.
+    from rhosocial.activerecord.backend.expression.statements.ddl_partition import (
+        PartitionByHashClause,
+        PartitionByListClause,
+        PartitionByRangeClause,
+    )
+
+    for _name, _clause in (
+        ("PartitionByHashClause", PartitionByHashClause),
+        ("PartitionByListClause", PartitionByListClause),
+        ("PartitionByRangeClause", PartitionByRangeClause),
+    ):
+        register_special_constructor(
+            f"statements.ddl_partition.{_name}",
+            lambda d, _c=_clause: _c(d, [Column(d, "id")]),
+        )
 
     # ADD TABLE CONSTRAINT. The guess supplies a bare string where a
     # TableConstraint belongs, and the formatter reads its fields.
@@ -1166,6 +1183,18 @@ def _register_core_specials():
         lambda d: ColumnGeneratedConstraint(d, _inline_column_expression(d), storage_type=None),
     )
 
+    # ALTER CONSTRAINT. The enforcement keyword and the constraint kind are
+    # the action's own grammar, and core now carries the kind as a *spelling*
+    # rather than a class object, so a real CHECK branch builds here and
+    # round-trips through all three channels. The render is then refused by
+    # this dialect's capability probe, which the matrix classifies.
+    register_special_constructor(
+        "statements.ddl_alter.AlterConstraintAction",
+        lambda d: ddl_alter.AlterConstraintAction(
+            d, "ck", enforced=True, constraint_kind=TableCheckConstraint
+        ),
+    )
+
 
 def _inline_column_expression(dialect):
     """A value expression a DDL position accepts: inlined, never bound.
@@ -1614,46 +1643,31 @@ _register_oracle_specials()
 
 #: Classes the generic introspective constructor cannot build.
 #:
-#: Measured, not assumed: each entry below was built by hand first, with arguments
-#: the class actually accepts, and refused while constructing.
+#: Empty, and that is the finding rather than an omission. Every entry that
+#: lived here has been retired by a registered constructor, with a payload the
+#: class actually accepts:
 #:
-#: The three UUID nodes all refuse in ``__init__`` rather than in ``to_sql()`` --
-#: Oracle spells no UUID SQL, so the answer is the same for every argument and no
-#: registered constructor can change it. The nil/max constant only shows that once
-#: it is given a *valid* ``which``: an invalid one raises ValueError first, which is
-#: a different answer entirely and hides the dialect's.
+#: * ``AlterConstraintAction`` was pinned for a reason that read as structural
+#:   rather than a capability -- core's ``constraint_kind`` was a required
+#:   keyword-only parameter behind defaulted positionals, so the guess could
+#:   not reach it, and a factory would have had to hand it a *branch class*,
+#:   which no artifact channel can encode. Core now carries the kind as a
+#:   spelling that the constructor resolves back to its branch, so a factory
+#:   supplying ``enforced=True`` and a CHECK branch builds an action that
+#:   round-trips through dict, JSON and XML.
+#: * ``PartitionByHashClause`` / ``PartitionByListClause`` /
+#:   ``PartitionByRangeClause`` needed a non-empty key list, which the guess
+#:   supplies as ``[]``. Core's ``PartitionClause`` collects and
+#:   ``check_renderable()`` judges the list at render time, so a factory with a
+#:   real ``Column`` key builds them; their non-render then belongs to this
+#:   dialect's partitioning tree and is pinned in ``LEGITIMATE_NON_RENDERS``
+#:   beside the generic clause, which is the stronger position.
 #:
-#: ``AlterConstraintAction`` fails for a reason that is structural rather than a
-#: capability: core made ``constraint_kind`` a required *keyword-only*
-#: parameter and the introspective constructor skips keyword-only parameters
-#: that sit behind defaulted positionals, so no generic guess reaches it. A
-#: dedicated factory would have to hand ``constraint_kind`` a branch class --
-#: and a class object has no encoding in the dict/JSON/XML channels, so the
-#: round-trip could not be asserted even if it were built. Pinning it here
-#: records that it is *out of the matrix's reach*, not that Oracle refuses it;
-#: the render path itself is covered by ``test_oracle_clause_pair_guard`` and
-#: the backend's own constraint tests. Its sibling ``ValidateConstraintAction``
-#: used to sit here for the same reason and no longer does: core made its
-#: arguments required, so the generic constructor reaches them and the class
-#: round-trips like everything else.
-#:
-#: The tuple stays because a class that starts failing to build must be pinned here
-#: with the fault located, not left to become a silent skip;
+#: The tuple stays because a class that starts failing to build must be pinned
+#: here with the fault located, not left to become a silent skip;
 #: :func:`TestMatrixIntegrity.test_unconstructible_list_is_exact` fails in both
 #: directions when the sets disagree.
-UNCONSTRUCTIBLE: tuple = (
-    # Core's strategy clauses require a non-empty key list, which the generic
-    # heuristic cannot supply (it builds `keys=[]`). They are user-facing
-    # suggestion nodes; the renderable counterpart on this dialect is the
-    # Oracle-specific partition clause covered in the expression matrix.
-    "rhosocial.activerecord.backend.expression.statements.ddl_partition.PartitionByHashClause",
-    "rhosocial.activerecord.backend.expression.statements.ddl_partition.PartitionByListClause",
-    "rhosocial.activerecord.backend.expression.statements.ddl_partition.PartitionByRangeClause",
-    "rhosocial.activerecord.backend.expression.statements.ddl_alter.AlterConstraintAction",
-    # The three UUID value nodes are no longer here: their constructors stopped
-    # refusing a dialect, and their capability answer comes from the formatter
-    # or from the dispatch, both of which the matrix classifies.
-)
+UNCONSTRUCTIBLE: tuple = ()
 
 #: Classes that construct but cannot render.
 #:
@@ -1912,6 +1926,26 @@ LEGITIMATE_NON_RENDERS: Dict[str, tuple] = {
     # --- backend starts accepting fails here.
     "rhosocial.activerecord.backend.expression.statements.ddl_partition."
     "PartitionClause": (
+        TypeError,
+        "Oracle table partitioning requires an Oracle-specific partition",
+    ),
+    # The three core strategy clauses are the same answer reached through their
+    # own classes: the formatter inspects the type, and a core ``PartitionBy*``
+    # is no more the Oracle node than the generic clause is. They construct --
+    # a real ``Column`` key is enough -- and refuse exactly as ``PartitionClause``
+    # does, so each is pinned rather than exempted from construction.
+    "rhosocial.activerecord.backend.expression.statements.ddl_partition."
+    "PartitionByHashClause": (
+        TypeError,
+        "Oracle table partitioning requires an Oracle-specific partition",
+    ),
+    "rhosocial.activerecord.backend.expression.statements.ddl_partition."
+    "PartitionByListClause": (
+        TypeError,
+        "Oracle table partitioning requires an Oracle-specific partition",
+    ),
+    "rhosocial.activerecord.backend.expression.statements.ddl_partition."
+    "PartitionByRangeClause": (
         TypeError,
         "Oracle table partitioning requires an Oracle-specific partition",
     ),
