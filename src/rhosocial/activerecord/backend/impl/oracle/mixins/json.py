@@ -107,11 +107,11 @@ class OracleJSONFunctionMixin(object):
         existing: Tuple = tuple(params) if params else ()
         return f"JSON_MERGE_PATCH({col_expr}, {self.p()})", existing + (patch_json,)
 
-    def format_json_array(self, *elements: Any) -> Tuple[str, tuple]:
+    def build_json_array(self, *elements: Any) -> Tuple[str, tuple]:
         """Format JSON_ARRAY function."""
         return f"JSON_ARRAY({', '.join(str(e) for e in elements)})", ()
 
-    def format_json_object(self, *pairs: Tuple[str, str]) -> Tuple[str, tuple]:
+    def build_json_object(self, *pairs: Tuple[str, str]) -> Tuple[str, tuple]:
         """Format JSON_OBJECT function using Oracle KEY/VALUE syntax."""
         parts = [f"KEY {k} VALUE {v}" for k, v in pairs]
         return f"JSON_OBJECT({', '.join(parts)})", ()

@@ -49,6 +49,6 @@ class OracleOptimizerHintMixin(object):
             return f"/*+ {name.upper()}({inner}) */", ()
         return f"/*+ {name.upper()} */", ()
 
-    def format_multiple_hints(self, *hints: str) -> Tuple[str, tuple]:
+    def build_multiple_hints(self, *hints: str) -> Tuple[str, tuple]:
         """Format multiple pre-formatted hints into one comment block."""
         return f"/*+ {' '.join(hints)} */", ()

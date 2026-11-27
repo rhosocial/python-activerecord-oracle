@@ -141,13 +141,13 @@ class TestVectorOperandPlaceholder:
         assert params == ('some_value',)
 
     def test_distance_expression_uses_question_mark(self, dialect):
-        """Verify format_vector_distance builds SQL with '?' placeholders."""
+        """Verify build_vector_distance builds SQL with '?' placeholders."""
         from rhosocial.activerecord.backend.impl.oracle.expression.vector import OracleVectorOperandExpression
         class FakeExpr:
             vector1 = OracleVectorOperandExpression(dialect, 'vec_a')
             vector2 = OracleVectorOperandExpression(dialect, 'vec_b')
             metric = 'COSINE'
-        sql, params = dialect.format_vector_distance(FakeExpr())
+        sql, params = dialect.build_vector_distance(FakeExpr())
         assert '?' in sql
         assert '%s' not in sql
 
@@ -159,4 +159,4 @@ class TestVectorOperandPlaceholder:
             vector2 = OracleVectorOperandExpression(dialect, 'vec_b')
             metric = 'JACCARD'
         with pytest.raises(UnsupportedFeatureError):
-            dialect.format_vector_distance(FakeExpr())
+            dialect.build_vector_distance(FakeExpr())

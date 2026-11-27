@@ -48,13 +48,10 @@ ALLOW_LIST: Dict[str, str] = {
         "the CREATE/ALTER/DROP TYPE formatters all name the same object the "
         "same way instead of each concatenating a name and an owner."
     ),
-    "vector.py:OracleVectorMixin._format_vector_operand_raw": (
-        "Sub-node renderer: it renders one raw vector operand as SQL plus its "
-        "bind parameter, the shared piece of VECTOR_DISTANCE and the operand "
-        "expression. It carries no grammar of its own -- the operators around "
-        "the operand stay with their formatter."
-    ),
 }
+# ``_format_vector_operand_raw`` is deliberately not listed: since the vector
+# distance value renderer became ``build_vector_distance`` (it is not a dispatch
+# target), only ``format_vector_operand_expression`` remains a public caller.
 
 
 def _self_calls(node: ast.AST) -> Set[str]:

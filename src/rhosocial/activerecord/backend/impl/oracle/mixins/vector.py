@@ -81,7 +81,7 @@ class OracleVectorMixin(object):
         """Format a OracleVectorLiteralExpression as Oracle VECTOR string literal."""
         return self._format_vector_literal_value(expr.vec), ()
 
-    def format_vector_distance(
+    def build_vector_distance(
         self, expr: Union[Dict[str, Any], Any]
     ) -> Tuple[str, tuple]:
         """Format a vector distance expression.

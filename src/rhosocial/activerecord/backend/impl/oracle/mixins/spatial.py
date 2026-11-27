@@ -40,7 +40,7 @@ class OracleSpatialMixin(object):
         """Return whether geodetic (lon/lat) spatial indexes are supported."""
         return True
 
-    def format_spatial_literal(self, expr: Any) -> Tuple[str, tuple]:
+    def build_spatial_literal(self, expr: Any) -> Tuple[str, tuple]:
         """Format a Python geometry value as an SDO_GEOMETRY SQL literal.
 
         When the supplied object exposes an ``sdo_geom_to_wkt`` helper, the
@@ -86,7 +86,7 @@ class OracleSpatialMixin(object):
             oracle_name = f"MDSYS.{oracle_name}"
         return f"{oracle_name}({', '.join(args)})", ()
 
-    def format_spatial_index_options(
+    def build_spatial_index_options(
         self, expr: Union[Dict[str, Any], str, None]
     ) -> Tuple[str, tuple]:
         """Format the DDL clause appended to a CREATE INDEX statement.
