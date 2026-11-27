@@ -9,7 +9,9 @@ pairwise distinguishable:
   construction is refused by ``ValueError``);
 * the positive parameter set -- the positive spelling is emitted;
 * the negative parameter set -- the negative spelling is emitted;
-* both set -- construction is refused by ``ValueError``.
+* both set -- refused by ``ValueError``: at construction for clauses that
+  still judge there, at render time for expressions whose backend formatter
+  opts into the core ``validate()`` method.
 
 A formatter that reads only one side of a pair makes the two states render the
 same SQL; a node that still defaults one side makes "unspecified" collide with a
@@ -40,7 +42,6 @@ from rhosocial.activerecord.backend.expression.statements import (
     AlterSequenceStatement,
     CreateMaterializedViewStatement,
     CreateSequenceStatement,
-    CreateTableAsStatement,
     CreateTypeStatement,
     DropMaterializedViewStatement,
     DropTableStatement,
@@ -99,6 +100,10 @@ class PairSite:
     a_refuse: Optional[str] = None
     b_refuse: Optional[str] = None
     none_forbidden: Tuple[str, ...] = field(default_factory=tuple)
+    #: Where the both-set refusal lands. Core sequence/identity expressions
+    #: collect both spellings and are refused by the backend formatter at
+    #: render time; clauses that still judge at construction refuse there.
+    both_phase: str = "construct"
 
 
 def _outcome(site: PairSite, dialect: OracleDialect, state: str) -> Tuple:
@@ -141,6 +146,7 @@ SITES = (
         "CreateSequenceStatement cycle/no_cycle",
         lambda d, kw: CreateSequenceStatement(d, Sequence(d, "s"), **kw),
         {"none": {}, "a": {"cycle": True}, "b": {"no_cycle": True}, "both": {"cycle": True, "no_cycle": True}},
+        both_phase="render-error",
         a_render=r"(?<!NO)CYCLE",
         b_render=r"NOCYCLE",
         none_forbidden=(r"(?<!NO)CYCLE", r"NOCYCLE"),
@@ -149,6 +155,7 @@ SITES = (
         "CreateSequenceStatement order/no_order",
         lambda d, kw: CreateSequenceStatement(d, Sequence(d, "s"), **kw),
         {"none": {}, "a": {"order": True}, "b": {"no_order": True}, "both": {"order": True, "no_order": True}},
+        both_phase="render-error",
         a_render=r"(?<!NO)ORDER",
         b_render=r"NOORDER",
         none_forbidden=(r"(?<!NO)ORDER", r"NOORDER"),
@@ -157,6 +164,7 @@ SITES = (
         "CreateSequenceStatement cache/no_cache",
         lambda d, kw: CreateSequenceStatement(d, Sequence(d, "s"), **kw),
         {"none": {}, "a": {"cache": 10}, "b": {"no_cache": True}, "both": {"cache": 10, "no_cache": True}},
+        both_phase="render-error",
         a_render=r"(?<!NO)CACHE 10",
         b_render=r"NOCACHE",
         none_forbidden=(r"(?<!NO)CACHE", r"NOCACHE"),
@@ -165,6 +173,7 @@ SITES = (
         "AlterSequenceStatement cycle/no_cycle",
         lambda d, kw: AlterSequenceStatement(d, Sequence(d, "s"), **kw),
         {"none": {}, "a": {"cycle": True}, "b": {"no_cycle": True}, "both": {"cycle": True, "no_cycle": True}},
+        both_phase="render-error",
         a_render=r"(?<!NO)CYCLE",
         b_render=r"NOCYCLE",
         none_forbidden=(r"(?<!NO)CYCLE", r"NOCYCLE"),
@@ -173,6 +182,7 @@ SITES = (
         "AlterSequenceStatement order/no_order",
         lambda d, kw: AlterSequenceStatement(d, Sequence(d, "s"), **kw),
         {"none": {}, "a": {"order": True}, "b": {"no_order": True}, "both": {"order": True, "no_order": True}},
+        both_phase="render-error",
         a_render=r"(?<!NO)ORDER",
         b_render=r"NOORDER",
         none_forbidden=(r"(?<!NO)ORDER", r"NOORDER"),
@@ -181,6 +191,7 @@ SITES = (
         "AlterSequenceStatement cache/no_cache",
         lambda d, kw: AlterSequenceStatement(d, Sequence(d, "s"), **kw),
         {"none": {}, "a": {"cache": 10}, "b": {"no_cache": True}, "both": {"cache": 10, "no_cache": True}},
+        both_phase="render-error",
         a_render=r"(?<!NO)CACHE 10",
         b_render=r"NOCACHE",
         none_forbidden=(r"(?<!NO)CACHE", r"NOCACHE"),
@@ -190,6 +201,7 @@ SITES = (
         "IdentityClause cycle/no_cycle",
         lambda d, kw: IdentityClause(d, **kw),
         {"none": {}, "a": {"cycle": True}, "b": {"no_cycle": True}, "both": {"cycle": True, "no_cycle": True}},
+        both_phase="render-error",
         a_render=r"(?<!NO)CYCLE\)",
         b_render=r"NOCYCLE\)",
         none_forbidden=(r"(?<!NO)CYCLE", r"NOCYCLE"),
@@ -198,6 +210,7 @@ SITES = (
         "IdentityClause order/no_order",
         lambda d, kw: IdentityClause(d, **kw),
         {"none": {}, "a": {"order": True}, "b": {"no_order": True}, "both": {"order": True, "no_order": True}},
+        both_phase="render-error",
         a_render=r"(?<!NO)ORDER\)",
         b_render=r"NOORDER\)",
         none_forbidden=(r"(?<!NO)ORDER", r"NOORDER"),
@@ -206,6 +219,7 @@ SITES = (
         "IdentityClause cache/no_cache",
         lambda d, kw: IdentityClause(d, **kw),
         {"none": {}, "a": {"cache": 10}, "b": {"no_cache": True}, "both": {"cache": 10, "no_cache": True}},
+        both_phase="render-error",
         a_render=r"(?<!NO)CACHE 10\)",
         b_render=r"NOCACHE\)",
         none_forbidden=(r"(?<!NO)CACHE", r"NOCACHE"),
@@ -310,7 +324,10 @@ SITES = (
         lambda d, kw: ForeignKeyConstraint(
             d, columns=["a"], foreign_key_table=Table(d, "t2"), foreign_key_columns=["b"], **kw
         ),
-        {"none": {}, "a": {"enforced": True}, "b": {"not_enforced": True}, "both": {"enforced": True, "not_enforced": True}},
+        {
+            "none": {}, "a": {"enforced": True}, "b": {"not_enforced": True},
+            "both": {"enforced": True, "not_enforced": True},
+        },
         a_refuse="constraint ENFORCED",
         b_refuse="constraint NOT ENFORCED",
         none_forbidden=(r"ENFORCED",),
@@ -324,7 +341,10 @@ SITES = (
             # is the same thing every other caller of a DDL condition writes.
             d, branch=TableCheckConstraint(d, Literal(d, 1, inline=True)), **kw
         ),
-        {"none": {}, "a": {"enforced": True}, "b": {"not_enforced": True}, "both": {"enforced": True, "not_enforced": True}},
+        {
+            "none": {}, "a": {"enforced": True}, "b": {"not_enforced": True},
+            "both": {"enforced": True, "not_enforced": True},
+        },
         a_refuse="constraint ENFORCED",
         b_refuse="constraint NOT ENFORCED",
         none_forbidden=(r"ENFORCED",),
@@ -414,7 +434,10 @@ SITES = (
     PairSite(
         "OracleVarrayTypeDefinition persistable/not_persistable (already target shape)",
         lambda d, kw: OracleVarrayTypeDefinition(d, element_type="NUMBER", size_limit=10, **kw),
-        {"none": {}, "a": {"persistable": True}, "b": {"persistable": False}, "both": {"persistable": True, "not_persistable": True}},
+        {
+            "none": {}, "a": {"persistable": True}, "b": {"persistable": False},
+            "both": {"persistable": True, "not_persistable": True},
+        },
         a_render=r"(?<!NOT )PERSISTABLE",
         b_render=r"NOT PERSISTABLE",
         none_forbidden=(r"PERSISTABLE",),
@@ -437,7 +460,10 @@ SITES = (
     PairSite(
         "OracleReadOnlyAction read_only/read_write",
         lambda d, kw: OracleReadOnlyAction(d, **kw),
-        {"none": {}, "a": {"read_only": True}, "b": {"read_write": True}, "both": {"read_only": True, "read_write": True}},
+        {
+            "none": {}, "a": {"read_only": True}, "b": {"read_write": True},
+            "both": {"read_only": True, "read_write": True},
+        },
         mandatory=True,
         a_render=r"READ ONLY",
         b_render=r"READ WRITE",
@@ -460,11 +486,16 @@ def test_pair_states_are_pairwise_distinguishable(site: PairSite) -> None:
     dialect = _dialect()
     outcomes = {state: _outcome(site, dialect, state) for state in ("none", "a", "b", "both")}
 
-    # 1. Both sides set is API misuse: ValueError at construction.
+    # 1. Both sides set is API misuse: ValueError, at construction for clauses
+    #    still judged there and at render time for the opt-in validators.
     both = outcomes["both"]
-    assert both[0] == "construct", f"{site.name}: both-set must fail at construction, got {both!r}"
+    assert both[0] == site.both_phase, (
+        f"{site.name}: both-set must fail at {site.both_phase}, got {both!r}"
+    )
     assert both[1] == "ValueError", f"{site.name}: both-set must raise ValueError, got {both!r}"
-    assert "mutually exclusive" in both[2], f"{site.name}: both-set message must say 'mutually exclusive', got {both[2]!r}"
+    assert "mutually exclusive" in both[2], (
+        f"{site.name}: both-set message must say 'mutually exclusive', got {both[2]!r}"
+    )
 
     # 2. Neither set: no spelling (optional) or a named refusal (mandatory).
     none = outcomes["none"]

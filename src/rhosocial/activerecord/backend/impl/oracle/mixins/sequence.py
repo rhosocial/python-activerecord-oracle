@@ -205,6 +205,8 @@ class OracleSequenceMixin:
                 f"got {type(expr.sequence).__name__}"
             )
 
+        expr.validate()
+
         if not self.supports_sequence():
             raise UnsupportedFeatureError(
                 self.name,
@@ -422,6 +424,8 @@ class OracleSequenceMixin:
                 f"{type(expr).__name__}.sequence must be a Sequence, "
                 f"got {type(expr.sequence).__name__}"
             )
+
+        expr.validate()
 
         if not self.supports_sequence():
             raise UnsupportedFeatureError(
