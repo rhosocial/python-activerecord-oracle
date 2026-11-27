@@ -43,6 +43,23 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
 
+      - name: Create Oracle scenario config
+        # The rules are DB-free, but tests/conftest.py imports support.oracle,
+        # which reads this file at import time. Supply the same minimal config
+        # the other jobs use; no connection is made here.
+        run: |
+          cat > oracle_scenarios.yaml << EOF
+          scenarios:
+            oracle_26ai:
+              host: localhost
+              port: 1521
+              username: system
+              password: password
+              service_name: FREEPDB1
+              encoding: AL32UTF8
+          EOF
+          echo "ORACLE_SCENARIOS_CONFIG_PATH=$(pwd)/oracle_scenarios.yaml" >> $GITHUB_ENV
+
       - name: Formal rules contracts
         run: |
           export PYTHONPATH=src:tests
