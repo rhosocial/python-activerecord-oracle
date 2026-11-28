@@ -67,6 +67,7 @@ jobs:
 
   test-oracle-18c:
     name: Python 3.14 / Oracle 18c
+    needs: formal-rules-contracts
     runs-on: ubuntu-latest
 
     services:
@@ -177,12 +178,12 @@ jobs:
       - name: Run tests
         run: |
           export PYTHONPATH=src:tests
-          python -m pytest tests/ --tb=short -n auto --dist=loadgroup -x --ignore=tests/benchmark
+          python -m pytest tests/ --tb=short -n auto --dist=loadgroup -x --ignore=tests/benchmark --ignore=tests/rhosocial/activerecord_oracle_test/feature/rules
 
       - name: Run tests with coverage
         run: |
           export PYTHONPATH=src:tests
-          python -m pytest tests/ --tb=short -n auto --dist=loadgroup --cov=rhosocial.activerecord.backend.impl.oracle --cov-branch --cov-report=xml --ignore=tests/benchmark
+          python -m pytest tests/ --tb=short -n auto --dist=loadgroup --cov=rhosocial.activerecord.backend.impl.oracle --cov-branch --cov-report=xml --ignore=tests/benchmark --ignore=tests/rhosocial/activerecord_oracle_test/feature/rules
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -195,6 +196,7 @@ jobs:
 
   test-oracle-21c:
     name: Python 3.14 / Oracle 21c
+    needs: formal-rules-contracts
     runs-on: ubuntu-latest
 
     services:
@@ -305,12 +307,12 @@ jobs:
       - name: Run tests
         run: |
           export PYTHONPATH=src:tests
-          python -m pytest tests/ --tb=short -n auto --dist=loadgroup -x --ignore=tests/benchmark
+          python -m pytest tests/ --tb=short -n auto --dist=loadgroup -x --ignore=tests/benchmark --ignore=tests/rhosocial/activerecord_oracle_test/feature/rules
 
       - name: Run tests with coverage
         run: |
           export PYTHONPATH=src:tests
-          python -m pytest tests/ --tb=short -n auto --dist=loadgroup --cov=rhosocial.activerecord.backend.impl.oracle --cov-branch --cov-report=xml --ignore=tests/benchmark
+          python -m pytest tests/ --tb=short -n auto --dist=loadgroup --cov=rhosocial.activerecord.backend.impl.oracle --cov-branch --cov-report=xml --ignore=tests/benchmark --ignore=tests/rhosocial/activerecord_oracle_test/feature/rules
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -323,6 +325,7 @@ jobs:
 
   test-oracle-26ai:
     name: Python 3.14 / Oracle 26ai
+    needs: formal-rules-contracts
     runs-on: ubuntu-latest
 
     services:
@@ -432,12 +435,12 @@ jobs:
       - name: Run tests
         run: |
           export PYTHONPATH=src:tests
-          python -m pytest tests/ --tb=short -n 2 --dist=loadgroup -x --ignore=tests/benchmark
+          python -m pytest tests/ --tb=short -n 2 --dist=loadgroup -x --ignore=tests/benchmark --ignore=tests/rhosocial/activerecord_oracle_test/feature/rules
 
       - name: Run tests with coverage
         run: |
           export PYTHONPATH=src:tests
-          python -m pytest tests/ --tb=short -n 2 --dist=loadgroup --cov=rhosocial.activerecord.backend.impl.oracle --cov-branch --cov-report=xml --ignore=tests/benchmark
+          python -m pytest tests/ --tb=short -n 2 --dist=loadgroup --cov=rhosocial.activerecord.backend.impl.oracle --cov-branch --cov-report=xml --ignore=tests/benchmark --ignore=tests/rhosocial/activerecord_oracle_test/feature/rules
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -459,6 +462,7 @@ jobs:
   # against and is deliberately not declared here.
   test-python-315:
     name: Python 3.15 / Oracle 26ai
+    needs: formal-rules-contracts
     runs-on: ubuntu-latest
 
     services:
@@ -568,12 +572,12 @@ jobs:
       - name: Run tests
         run: |
           export PYTHONPATH=src:tests
-          python -m pytest tests/ --tb=short -n 2 --dist=loadgroup -x --ignore=tests/benchmark
+          python -m pytest tests/ --tb=short -n 2 --dist=loadgroup -x --ignore=tests/benchmark --ignore=tests/rhosocial/activerecord_oracle_test/feature/rules
 
       - name: Run tests with coverage
         run: |
           export PYTHONPATH=src:tests
-          python -m pytest tests/ --tb=short -n 2 --dist=loadgroup --cov=rhosocial.activerecord.backend.impl.oracle --cov-branch --cov-report=xml --ignore=tests/benchmark
+          python -m pytest tests/ --tb=short -n 2 --dist=loadgroup --cov=rhosocial.activerecord.backend.impl.oracle --cov-branch --cov-report=xml --ignore=tests/benchmark --ignore=tests/rhosocial/activerecord_oracle_test/feature/rules
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -590,6 +594,7 @@ jobs:
   # Oracle CI does not fan out. Feature jobs above are left untouched.
   benchmark-oracle-26ai:
     name: Benchmark / Oracle 26ai
+    needs: formal-rules-contracts
     runs-on: ubuntu-latest
     permissions:
       contents: read
