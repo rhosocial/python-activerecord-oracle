@@ -104,6 +104,7 @@ test does not appear anywhere else in the output, and removing it must change
 the SQL.
 """
 
+import importlib
 import inspect
 from typing import Dict
 
@@ -159,11 +160,12 @@ from rhosocial.activerecord.backend.impl.oracle.registry import backend_registry
 # docstring for provenance): the testsuite retired it in e05edb0 with the
 # direction that round-trip coverage moves to the owning repository.
 from expression_roundtrip_harness import (
+    SpecialConstructorRegistry,
     assert_params_equal,
     collect_expression_classes,
     make_instance,
     register_all,
-    register_special_constructor,
+    special_constructors,
 )
 
 ORACLE_EXPR_PKG = "rhosocial.activerecord.backend.impl.oracle.expression"
@@ -409,7 +411,7 @@ def _integer_column(dialect, name="col"):
 # several modules export identically named classes.
 
 
-def _register_core_specials():
+def _register_core_specials(registry: SpecialConstructorRegistry) -> None:
     """Core classes whose introspective guess cannot build a renderable object."""
     from rhosocial.activerecord.backend.expression import xml as xml_mod
     from rhosocial.activerecord.backend.expression.query_parts import JoinClause
@@ -442,11 +444,11 @@ def _register_core_specials():
     # a spelling the dialect owns, so a node constructed with a bare string
     # renders a wire word into the SQL -- which is the whole defect that
     # commit fixed, and passing ``"LIKE"`` here reintroduced it in the matrix.
-    register_special_constructor(
+    registry.register(
         "predicates.LikePredicate",
         lambda d: LikePredicate(d, LikeOperator.LIKE, Column(d, "a"), Literal(d, "%x%")),
     )
-    register_special_constructor(
+    registry.register(
         "predicates.ILikePredicate",
         lambda d: ILikePredicate(d, Column(d, "a"), "%x%"),
     )
@@ -454,7 +456,7 @@ def _register_core_specials():
     # ADD DOMAIN CHECK. Widens a SQLPredicate into a DomainCheckConstraint and
     # needs one; the guess supplies a bare comparison whose literal would have to
     # render as a bind parameter, which DDL cannot carry.
-    register_special_constructor(
+    registry.register(
         "statements.ddl_domain.AddDomainCheckAction",
         lambda d: AddDomainCheckAction(
             d, DomainCheckConstraint(d, _column_predicate(d), name="chk")
@@ -477,7 +479,7 @@ def _register_core_specials():
         ("PartitionByListClause", PartitionByListClause),
         ("PartitionByRangeClause", PartitionByRangeClause),
     ):
-        register_special_constructor(
+        registry.register(
             f"statements.ddl_partition.{_name}",
             lambda d, _c=_clause: _c(d, [Column(d, "id")]),
         )
@@ -486,7 +488,7 @@ def _register_core_specials():
     # TableConstraint belongs, and the formatter reads its fields.
     # (Core renamed the alter-table actions to their *Action spellings --
     # the kinds follow the class names.)
-    register_special_constructor(
+    registry.register(
         "statements.ddl_alter.AddTableConstraintAction",
         lambda d: ddl_alter.AddTableConstraintAction(
             d,
@@ -500,7 +502,7 @@ def _register_core_specials():
     # dialect refuses and which says nothing about the name form it does spell.
     # Supply the name -- the only address Oracle accepts -- so the matrix
     # observes the render path that exists rather than a malformed action.
-    register_special_constructor(
+    registry.register(
         "statements.ddl_alter.DropTableConstraintAction",
         lambda d: ddl_alter.DropTableConstraintAction(d, "c"),
     )
@@ -528,19 +530,19 @@ def _register_core_specials():
 
         return OracleModifyConstraintAction(d, "ck", novalidate=True)
 
-    register_special_constructor(
+    registry.register(
         "constraint_state.OracleEnableConstraintAction", enable_constraint
     )
-    register_special_constructor(
+    registry.register(
         "constraint_state.OracleDisableConstraintAction", disable_constraint
     )
-    register_special_constructor(
+    registry.register(
         "constraint_state.OracleModifyConstraintAction", modify_constraint
     )
 
     # ENUM type. `values` is keyword-only behind a defaulted positional, so the
     # introspective constructor skips it and the type declares no members.
-    register_special_constructor(
+    registry.register(
         "types.enum_.EnumType", lambda d: EnumType(d, values=["first", "second"])
     )
 
@@ -558,19 +560,19 @@ def _register_core_specials():
     def window_specification(dialect):
         return WindowSpecification(dialect, partition_by=[Column(dialect, "a")])
 
-    register_special_constructor("advanced_functions.WindowSpecification", window_specification)
-    register_special_constructor(
+    registry.register("advanced_functions.WindowSpecification", window_specification)
+    registry.register(
         "advanced_functions.WindowDefinition",
         lambda dialect: WindowDefinition(dialect, "w", window_specification(dialect)),
     )
-    register_special_constructor(
+    registry.register(
         "advanced_functions.WindowClause",
         lambda dialect: WindowClause(
             dialect,
             [WindowDefinition(dialect, "w", window_specification(dialect))],
         ),
     )
-    register_special_constructor(
+    registry.register(
         "advanced_functions.CaseExpression",
         lambda dialect: CaseExpression(
             dialect,
@@ -588,11 +590,11 @@ def _register_core_specials():
         ModifyColumnAction,
     )
 
-    register_special_constructor(
+    registry.register(
         "statements.ddl_alter.AddColumnAction",
         lambda dialect: AddColumnAction(dialect, column=_integer_column(dialect)),
     )
-    register_special_constructor(
+    registry.register(
         "statements.ddl_alter.ModifyColumnAction",
         lambda dialect: ModifyColumnAction(dialect, column=_integer_column(dialect)),
     )
@@ -601,11 +603,11 @@ def _register_core_specials():
     # cannot spell, and the source must be an expression.
     from rhosocial.activerecord.backend.expression import datetime as datetime_mod
 
-    register_special_constructor(
+    registry.register(
         "datetime._ExtractBase",
         lambda d: datetime_mod._ExtractBase(d, "YEAR", Column(d, "created_at")),
     )
-    register_special_constructor(
+    registry.register(
         "datetime.ExtractFieldExpression",
         lambda d: datetime_mod.ExtractFieldExpression(d, "YEAR", Column(d, "created_at")),
     )
@@ -616,7 +618,7 @@ def _register_core_specials():
         SubstringExpression,
     )
 
-    register_special_constructor(
+    registry.register(
         "functions.string.SubstringExpression",
         lambda d: SubstringExpression(d, Column(d, "name"), Literal(d, 1)),
     )
@@ -628,7 +630,7 @@ def _register_core_specials():
         ArithmeticOperator,
     )
 
-    register_special_constructor(
+    registry.register(
         "operators.ArithmeticOperation",
         lambda d: ArithmeticOperation(d, ArithmeticOperator.ADD, Literal(d, 1), Literal(d, 2)),
     )
@@ -640,7 +642,7 @@ def _register_core_specials():
         SetOperationKind,
     )
 
-    register_special_constructor(
+    registry.register(
         "query_sources.SetOperation",
         lambda d: SetOperation(
             d,
@@ -654,7 +656,7 @@ def _register_core_specials():
     # name a word form, and an empty ``parts`` renders nothing, so the matrix's
     # own instance said nothing about the dialect. A factory makes the instance
     # the matrix walks a real compound query whose SQL is pinned below.
-    register_special_constructor(
+    registry.register(
         "statements.dql.SetOperationStatement",
         lambda d: SetOperationStatement(d, SetOperationKind.UNION_ALL, _compound_arms(d)),
     )
@@ -684,7 +686,7 @@ def _register_core_specials():
         "XMLAnnotation",
     ):
         _ann_cls = getattr(declared_mod, _ann_name)
-        register_special_constructor(
+        registry.register(
             f"declared.{_ann_name}",
             lambda d, _c=_ann_cls: _c(d, FunctionCall(d, "FUNC", niladic=True)),
         )
@@ -698,7 +700,7 @@ def _register_core_specials():
         TriggerTiming,
     )
 
-    register_special_constructor(
+    registry.register(
         "statements.ddl_trigger.CreateTriggerStatement",
         lambda dialect: CreateTriggerStatement(
             dialect,
@@ -718,7 +720,7 @@ def _register_core_specials():
         MergeActionType,
     )
 
-    register_special_constructor(
+    registry.register(
         "statements.dml.MergeAction",
         lambda dialect: MergeAction(
             dialect,
@@ -732,7 +734,7 @@ def _register_core_specials():
     # Column constraint. The branch names the kind and the production refuses
     # a branch that is not one; the guess supplies a string where a
     # ColumnConstraintBranch belongs.
-    register_special_constructor(
+    registry.register(
         "statements.ddl_table.ColumnConstraint",
         lambda dialect: ColumnConstraint(
             dialect, branch=ColumnNotNullConstraint(dialect), name="c"
@@ -745,7 +747,7 @@ def _register_core_specials():
         ReferencesClause,
     )
 
-    register_special_constructor(
+    registry.register(
         "statements.ddl_table.ReferencesClause",
         lambda dialect: ReferencesClause(dialect, Table(dialect, "other"), ["b"]),
     )
@@ -755,7 +757,7 @@ def _register_core_specials():
     from rhosocial.activerecord.backend.expression.collation import CollateFunction
     from rhosocial.activerecord.backend.impl.oracle.collation import OracleCollation
 
-    register_special_constructor(
+    registry.register(
         "collation.CollateFunction",
         lambda dialect: CollateFunction(
             dialect, Column(dialect, "name"), OracleCollation.BINARY_CI
@@ -768,7 +770,7 @@ def _register_core_specials():
         TemporalOptionsExpression,
     )
 
-    register_special_constructor(
+    registry.register(
         "datetime.TemporalOptionsExpression",
         lambda dialect: TemporalOptionsExpression(dialect, {"as_of": "2020-01-01"}),
     )
@@ -783,12 +785,12 @@ def _register_core_specials():
     def graph_vertex(dialect):
         return graph_mod.GraphVertex(dialect, "n", NodeTable(dialect, "people"))
 
-    register_special_constructor("graph.GraphVertex", graph_vertex)
-    register_special_constructor(
+    registry.register("graph.GraphVertex", graph_vertex)
+    registry.register(
         "graph.PathPattern",
         lambda dialect: graph_mod.PathPattern(dialect, graph_vertex(dialect)),
     )
-    register_special_constructor(
+    registry.register(
         "graph.MatchClause",
         lambda dialect: graph_mod.MatchClause(
             dialect, graph_mod.PathPattern(dialect, graph_vertex(dialect))
@@ -801,7 +803,7 @@ def _register_core_specials():
     def named_relation(dialect):
         return NamedRelationRef(dialect, _table_obj(dialect))
 
-    register_special_constructor("sources.relation.NamedRelationRef", named_relation)
+    registry.register("sources.relation.NamedRelationRef", named_relation)
 
     def oracle_named_relation(dialect):
         from rhosocial.activerecord.backend.impl.oracle.expression.sources import (
@@ -810,20 +812,20 @@ def _register_core_specials():
 
         return OracleNamedRelationRef(dialect, _table_obj(dialect))
 
-    register_special_constructor("sources.OracleNamedRelationRef", oracle_named_relation)
+    registry.register("sources.OracleNamedRelationRef", oracle_named_relation)
 
     # SQL/XML. Every one of these takes a sequence, and a sequence of nothing is
     # not a statement: XMLATTRIBUTES over no attribute, XMLCONCAT over no part,
     # XMLFOREST over no item, XMLTABLE with no columns and no row document.
-    register_special_constructor(
+    registry.register(
         "xml.XMLAttributesExpression",
         lambda d: xml_mod.XMLAttributesExpression(d, [xml_mod.XMLAttribute(Literal(d, "v"), "a")]),
     )
-    register_special_constructor(
+    registry.register(
         "xml.XMLConcatExpression",
         lambda d: xml_mod.XMLConcatExpression(d, [Literal(d, "a"), Literal(d, "b")]),
     )
-    register_special_constructor(
+    registry.register(
         "xml.XMLForestExpression",
         lambda d: xml_mod.XMLForestExpression(d, [xml_mod.XMLForestItem(Literal(d, "v"), "a")]),
     )
@@ -848,73 +850,73 @@ def _register_core_specials():
     )
     from rhosocial.activerecord.backend.expression.statements import ddl_table as ddl_tbl
 
-    register_special_constructor(
+    registry.register(
         "statements.ddl_table.DropTableStatement",
         lambda d: ddl_tbl.DropTableStatement(d, table=_table_obj(d)),
     )
-    register_special_constructor(
+    registry.register(
         "statements.ddl_truncate.TruncateStatement",
         lambda d: ddl_truncate.TruncateStatement(d, table=_table_obj(d)),
     )
-    register_special_constructor(
+    registry.register(
         "statements.ddl_index.CreateIndexStatement",
         lambda d: ddl_index.CreateIndexStatement(
             d, index=_index_obj(d), table=_table_obj(d), columns=[Column(d, "a")]
         ),
     )
-    register_special_constructor(
+    registry.register(
         "statements.ddl_index.DropIndexStatement",
         lambda d: ddl_index.DropIndexStatement(d, index=_index_obj(d)),
     )
-    register_special_constructor(
+    registry.register(
         "statements.ddl_index.CreateFulltextIndexStatement",
         lambda d: ddl_index.CreateFulltextIndexStatement(
             d, index=_index_obj(d), table=_table_obj(d), columns=[Column(d, "a")]
         ),
     )
-    register_special_constructor(
+    registry.register(
         "statements.ddl_index.DropFulltextIndexStatement",
         lambda d: ddl_index.DropFulltextIndexStatement(d, index=_index_obj(d), table=_table_obj(d)),
     )
-    register_special_constructor(
+    registry.register(
         "statements.ddl_schema.CreateSchemaStatement",
         lambda d: ddl_schema.CreateSchemaStatement(d, schema=_schema_obj(d)),
     )
-    register_special_constructor(
+    registry.register(
         "statements.ddl_schema.DropSchemaStatement",
         lambda d: ddl_schema.DropSchemaStatement(d, schema=_schema_obj(d)),
     )
-    register_special_constructor(
+    registry.register(
         "statements.ddl_sequence.CreateSequenceStatement",
         lambda d: ddl_sequence.CreateSequenceStatement(d, sequence=_sequence_obj(d)),
     )
-    register_special_constructor(
+    registry.register(
         "statements.ddl_sequence.DropSequenceStatement",
         lambda d: ddl_sequence.DropSequenceStatement(d, sequence=_sequence_obj(d)),
     )
-    register_special_constructor(
+    registry.register(
         "statements.ddl_sequence.AlterSequenceStatement",
         lambda d: ddl_sequence.AlterSequenceStatement(d, sequence=_sequence_obj(d), start=1),
     )
-    register_special_constructor(
+    registry.register(
         "statements.ddl_view.CreateViewStatement",
         lambda d: ddl_view.CreateViewStatement(d, view=_view_obj(d), query=_one_column_query(d)),
     )
-    register_special_constructor(
+    registry.register(
         "statements.ddl_view.DropViewStatement",
         lambda d: ddl_view.DropViewStatement(d, view=_view_obj(d)),
     )
-    register_special_constructor(
+    registry.register(
         "statements.ddl_view.CreateMaterializedViewStatement",
         lambda d: ddl_view.CreateMaterializedViewStatement(
             d, view=_materialized_view_obj(d), query=_one_column_query(d)
         ),
     )
-    register_special_constructor(
+    registry.register(
         "statements.ddl_view.DropMaterializedViewStatement",
         lambda d: ddl_view.DropMaterializedViewStatement(d, view=_materialized_view_obj(d)),
     )
-    register_special_constructor(
+    registry.register(
         "statements.ddl_view.RefreshMaterializedViewStatement",
         lambda d: ddl_view.RefreshMaterializedViewStatement(d, view=_materialized_view_obj(d)),
     )
@@ -922,26 +924,26 @@ def _register_core_specials():
     # bound to the one under test. The testsuite's shared factory supplies an
     # unbound IntegerType, which renders nothing; re-registering it here is what
     # makes the class render at all.
-    register_special_constructor("statements.ddl_table.ColumnDefinition", _integer_column)
-    register_special_constructor(
+    registry.register("statements.ddl_table.ColumnDefinition", _integer_column)
+    registry.register(
         "statements.ddl_table.CreateTableStatement",
         lambda d: ddl_tbl.CreateTableStatement(
             d, table=_table_obj(d), columns=[_integer_column(d)]
         ),
     )
-    register_special_constructor(
+    registry.register(
         "statements.ddl_table.CreateTableAsStatement",
         lambda d: ddl_tbl.CreateTableAsStatement(
             d, table=_table_obj(d), as_query=_one_column_query(d)
         ),
     )
-    register_special_constructor(
+    registry.register(
         "statements.ddl_table.CreateTableLikeStatement",
         lambda d: ddl_tbl.CreateTableLikeStatement(
             d, table=_table_obj(d), like_table=Table(d, "other")
         ),
     )
-    register_special_constructor(
+    registry.register(
         "statements.ddl_table.CreateTableCloneStatement",
         lambda d: ddl_tbl.CreateTableCloneStatement(
             d,
@@ -950,19 +952,19 @@ def _register_core_specials():
             mode=ddl_tbl.CreateTableCloneMode.CLONE,
         ),
     )
-    register_special_constructor(
+    registry.register(
         "statements.ddl_table.CreateTableFromTemplateStatement",
         lambda d: ddl_tbl.CreateTableFromTemplateStatement(
             d, table=_table_obj(d), template=_one_column_query(d)
         ),
     )
-    register_special_constructor(
+    registry.register(
         "statements.ddl_comment.CommentOnStatement",
         lambda d: ddl_comment.CommentOnStatement(
             d, ddl_comment.CommentObjectType.TABLE, _table_obj(d), "a comment"
         ),
     )
-    register_special_constructor(
+    registry.register(
         "statements.ddl_function.CreateFunctionStatement",
         lambda d: ddl_fn.CreateFunctionStatement(
             d,
@@ -973,13 +975,13 @@ def _register_core_specials():
     )
     # ALTER TABLE's actions name the index they drop, and the statement names the
     # table it alters; both are objects, so both need one.
-    register_special_constructor(
+    registry.register(
         "statements.ddl_alter.AlterTableStatement",
         lambda d: ddl_alter.AlterTableStatement(
             d, table=_table_obj(d), action=ddl_alter.DropColumnAction(d, "a")
         ),
     )
-    register_special_constructor(
+    registry.register(
         "statements.ddl_alter.DropIndexAction",
         lambda d: ddl_alter.DropIndexAction(d, index=_index_obj(d)),
     )
@@ -1003,19 +1005,19 @@ def _register_core_specials():
             ),
         )
 
-    register_special_constructor("statements.ddl_type.CreateTypeStatement", create_type)
-    register_special_constructor(
+    registry.register("statements.ddl_type.CreateTypeStatement", create_type)
+    registry.register(
         "statements.ddl_type.DropTypeStatement",
         lambda d: ddl_type.DropTypeStatement(d, type=_type_obj(d)),
     )
-    register_special_constructor(
+    registry.register(
         "statements.ddl_trigger.DropTriggerStatement",
         lambda d: ddl_trigger.DropTriggerStatement(
             d, trigger=Trigger(d, "trg"), table=_table_obj(d)
         ),
     )
     # INSERT names the table it writes; a VALUES source needs one row.
-    register_special_constructor(
+    registry.register(
         "statements.dml.InsertStatement",
         lambda d: dml.InsertStatement(
             d,
@@ -1024,21 +1026,21 @@ def _register_core_specials():
             source=dml.ValuesSource(d, [[Literal(d, 1)]]),
         ),
     )
-    register_special_constructor(
+    registry.register(
         "dml.ValuesSource",
         lambda d: dml.ValuesSource(d, [[Literal(d, 1)]]),
     )
-    register_special_constructor(
+    registry.register(
         "statements.dml.UpdateStatement",
         lambda d: dml.UpdateStatement(d, table=_table_obj(d), assignments={"a": Literal(d, 1)}),
     )
-    register_special_constructor(
+    registry.register(
         "dml.DeleteStatement",
         lambda d: dml.DeleteStatement(d, tables=[_table_obj(d)]),
     )
     # A JOIN carries no condition or USING clause unless one is given, so the
     # empty join the guess builds is refused by the formatter.
-    register_special_constructor(
+    registry.register(
         "query_parts.JoinClause",
         lambda d: JoinClause(
             d,
@@ -1078,18 +1080,18 @@ def _register_core_specials():
     def _match_clause(dialect):
         return graph_mod.MatchClause(dialect, _path_pattern(dialect))
 
-    register_special_constructor("graph.GraphVertex", _graph_vertex)
-    register_special_constructor("graph.PathPattern", _path_pattern)
-    register_special_constructor("graph.MatchClause", _match_clause)
-    register_special_constructor(
+    registry.register("graph.GraphVertex", _graph_vertex)
+    registry.register("graph.PathPattern", _path_pattern)
+    registry.register("graph.MatchClause", _match_clause)
+    registry.register(
         "graph.VertexTable",
         lambda d: graph_mod.VertexTable(d, _node_table(d)),
     )
-    register_special_constructor(
+    registry.register(
         "graph.EdgeTableDefinition",
         lambda d: graph_mod.EdgeTableDefinition(d, _edge_table_obj(d), ["a"], ["b"]),
     )
-    register_special_constructor(
+    registry.register(
         "graph.CreatePropertyGraphStatement",
         lambda d: graph_mod.CreatePropertyGraphStatement(
             d,
@@ -1098,17 +1100,17 @@ def _register_core_specials():
             edge_tables=[graph_mod.EdgeTableDefinition(d, _edge_table_obj(d), ["a"], ["b"])],
         ),
     )
-    register_special_constructor(
+    registry.register(
         "graph.DropPropertyGraphStatement",
         lambda d: graph_mod.DropPropertyGraphStatement(d, graph=_property_graph(d)),
     )
-    register_special_constructor(
+    registry.register(
         "graph.AlterPropertyGraphStatement",
         lambda d: graph_mod.AlterPropertyGraphStatement(
             d, graph=_property_graph(d), action="DROP", target="LABEL v"
         ),
     )
-    register_special_constructor(
+    registry.register(
         "graph.GraphTableExpression",
         lambda d: graph_mod.GraphTableExpression(
             d,
@@ -1137,7 +1139,7 @@ def _register_core_specials():
             [XMLTableColumn("c", "VARCHAR(10)", path=RawSQL(dialect, "'.'"))],
         )
 
-    register_special_constructor("xml.XMLTableExpression", xml_table)
+    registry.register("xml.XMLTableExpression", xml_table)
 
     # CUSTOM. Its ``raw`` slot exists to carry the SQL type name and defaults to the
     # empty string, which the filler skips and the class refuses while constructing.
@@ -1151,7 +1153,7 @@ def _register_core_specials():
 
         return CustomType(dialect, raw="VARCHAR2(10)")
 
-    register_special_constructor("types.custom.CustomType", custom_type)
+    registry.register("types.custom.CustomType", custom_type)
 
     # The column must survive all three encodings, not just dict. XMLTableColumn was
     # a plain class, so core's JSON and XML encoders dropped the whole COLUMNS list
@@ -1170,15 +1172,15 @@ def _register_core_specials():
         TableCheckConstraint,
     )
 
-    register_special_constructor(
+    registry.register(
         "statements.ddl_table.ColumnCheckConstraint",
         lambda d: ColumnCheckConstraint(d, _column_predicate(d)),
     )
-    register_special_constructor(
+    registry.register(
         "statements.ddl_table.TableCheckConstraint",
         lambda d: TableCheckConstraint(d, condition=_column_predicate(d)),
     )
-    register_special_constructor(
+    registry.register(
         "statements.ddl_table.ColumnGeneratedConstraint",
         lambda d: ColumnGeneratedConstraint(d, _inline_column_expression(d), storage_type=None),
     )
@@ -1188,7 +1190,7 @@ def _register_core_specials():
     # rather than a class object, so a real CHECK branch builds here and
     # round-trips through all three channels. The render is then refused by
     # this dialect's capability probe, which the matrix classifies.
-    register_special_constructor(
+    registry.register(
         "statements.ddl_alter.AlterConstraintAction",
         lambda d: ddl_alter.AlterConstraintAction(
             d, "ck", enforced=True, constraint_kind=TableCheckConstraint
@@ -1207,7 +1209,7 @@ def _inline_column_expression(dialect):
     return Literal(dialect, 1, inline=True)
 
 
-def _register_oracle_specials():
+def _register_oracle_specials(registry: SpecialConstructorRegistry) -> None:
     """Oracle's own expressions, each of which carries an object or a payload."""
     from rhosocial.activerecord.backend.impl.oracle.expression import (
         partition as part_mod,
@@ -1630,11 +1632,23 @@ def _register_oracle_specials():
         ("partition_lifecycle._OraclePartitionMaintenanceExpression", partition_maintenance_base),
     )
     for suffix, factory in registrations:
-        register_special_constructor(suffix, factory)
+        registry.register(suffix, factory)
 
 
-_register_core_specials()
-_register_oracle_specials()
+@pytest.fixture(scope="session")
+def special_registry():
+    """The one registry this matrix reads its instances through.
+
+    Registration is deliberately *not* done at import time: a module-level
+    call would put these entries in whichever process-global table the harness
+    happened to own, so which registrations a consumer saw would depend on
+    import order. The session fixture gives this matrix its own registry and
+    passes it explicitly to every construction below.
+    """
+    registry = SpecialConstructorRegistry()
+    _register_core_specials(registry)
+    _register_oracle_specials(registry)
+    return registry
 
 
 # ---------------------------------------------------------------------------
@@ -2472,10 +2486,10 @@ def oracle_dialect():
 
 
 @pytest.fixture(params=[fqn for fqn in sorted(REGISTERED)], ids=sorted(REGISTERED))
-def oracle_expr_case(request, oracle_dialect):
+def oracle_expr_case(request, oracle_dialect, special_registry):
     fqn = request.param
     cls = REGISTERED[fqn]
-    instance, source = make_instance(cls, oracle_dialect)
+    instance, source = make_instance(cls, oracle_dialect, special_registry)
     if instance is None:
         assert fqn in UNCONSTRUCTIBLE, (
             f"{fqn} cannot be built by the generic constructor ({source}) and is "
@@ -2530,7 +2544,7 @@ class TestOracleExpressionRoundtrip:
 class TestMatrixIntegrity:
     """Guards on the matrix and its lists, so neither can quietly change."""
 
-    def test_unconstructible_list_is_exact(self, oracle_dialect):
+    def test_unconstructible_list_is_exact(self, oracle_dialect, special_registry):
         """Pin the unconstructible tuple against what the constructor really skips.
 
         Two directions are checked. A class named here that now builds has gained
@@ -2541,7 +2555,7 @@ class TestMatrixIntegrity:
             sorted(
                 fqn
                 for fqn in REGISTERED
-                if make_instance(REGISTERED[fqn], oracle_dialect)[0] is None
+                if make_instance(REGISTERED[fqn], oracle_dialect, special_registry)[0] is None
             )
         )
         assert actual == tuple(sorted(UNCONSTRUCTIBLE)), (
@@ -2554,7 +2568,30 @@ class TestMatrixIntegrity:
             "Each new entry needs a reason in the comment above UNCONSTRUCTIBLE."
         )
 
-    def test_core_serialisation_defects_still_lose_the_class(self, oracle_dialect):
+    def test_special_registry_survives_other_module_import_order(self, special_registry):
+        """A fresh registry's keys do not depend on what was imported around it.
+
+        Importing this module used to call the registration helpers at module
+        scope, mutating the harness's module global. A registry built before
+        that import and one built after it then disagreed, so which entries a
+        consumer saw depended on collection order. Build one on each side of a
+        sibling test-module import and compare: both must be the untouched base
+        table, while the fixture's registry alone carries Oracle's entries.
+        """
+        before = SpecialConstructorRegistry()
+        importlib.import_module("test_expression_signatures")
+        after = SpecialConstructorRegistry()
+        assert set(before.entries) == set(after.entries) == set(special_constructors())
+        assert "sources.OracleNamedRelationRef" in special_registry.entries
+        assert "sources.OracleNamedRelationRef" not in after.entries
+        # A suffix shared with the base table is overwritten in the fixture's
+        # registry only; a fresh registry still holds the base factory.
+        assert (
+            special_registry.entries["graph.GraphVertex"]
+            is not after.entries["graph.GraphVertex"]
+        )
+
+    def test_core_serialisation_defects_still_lose_the_class(self, oracle_dialect, special_registry):
         """Each listed channel still drops its class, and ``dict`` still does not.
 
         The two directions matter separately. A channel core no longer breaks has
@@ -2562,7 +2599,7 @@ class TestMatrixIntegrity:
         means core fixed the defect, and the whole entry should go.
         """
         for fqn, channels in CORE_SERIALISATION_DEFECTS.items():
-            instance, _ = make_instance(REGISTERED[fqn], oracle_dialect)
+            instance, _ = make_instance(REGISTERED[fqn], oracle_dialect, special_registry)
             assert instance is not None, f"{fqn}: listed as a defect but will not build"
             expected_sql, _ = instance.to_sql()
             assert (
@@ -2610,7 +2647,7 @@ class TestMatrixIntegrity:
             f"CORE_ARTIFACT_GAPS names classes that were not registered: " f"{sorted(unknown)}"
         )
 
-    def test_core_artifact_gaps_list_is_exact(self, oracle_dialect):
+    def test_core_artifact_gaps_list_is_exact(self, oracle_dialect, special_registry):
         """Pin the artifact gaps against what the encoders actually lose.
 
         Observed rather than assumed: each class the matrix covers is encoded
@@ -2636,7 +2673,7 @@ class TestMatrixIntegrity:
         """
         observed: Dict[str, set] = {}
         for fqn in sorted(REGISTERED):
-            instance, _source = make_instance(REGISTERED[fqn], oracle_dialect)
+            instance, _source = make_instance(REGISTERED[fqn], oracle_dialect, special_registry)
             if instance is None:
                 continue
             try:
@@ -2670,7 +2707,7 @@ class TestMatrixIntegrity:
 " f"  pinned but not lost: " f"{sorted(k for k in declared if observed.get(k) != declared[k])}\
 " f"  lost but not pinned: {sorted(set(observed) - set(declared))}"
 
-    def test_core_artifact_gaps_still_lose_the_class(self, oracle_dialect):
+    def test_core_artifact_gaps_still_lose_the_class(self, oracle_dialect, special_registry):
         """Each pinned channel still loses its class, and the others still work.
 
         Both directions, separately, and on the round-trip rather than on the
@@ -2680,7 +2717,7 @@ class TestMatrixIntegrity:
         :func:`assert_sql_roundtrip_classified` is what catches that one.
         """
         for fqn, channels in CORE_ARTIFACT_GAPS.items():
-            instance, _ = make_instance(REGISTERED[fqn], oracle_dialect)
+            instance, _ = make_instance(REGISTERED[fqn], oracle_dialect, special_registry)
             assert instance is not None, f"{fqn}: pinned as a gap but will not build"
             try:
                 expected_sql, expected_params = instance.to_sql()
@@ -2744,14 +2781,14 @@ class TestMatrixIntegrity:
             f"{sorted(unknown)}"
         )
 
-    def test_pinned_non_render_really_does_not_render(self, oracle_dialect):
+    def test_pinned_non_render_really_does_not_render(self, oracle_dialect, special_registry):
         """Each pinned entry still raises what it claims, for the stated reason.
 
         Without this, an entry could sit in the tuple for a class that renders
         perfectly well, and the matrix would be asserting nothing about it.
         """
         for fqn, (expected_type, fragment) in LEGITIMATE_NON_RENDERS.items():
-            instance, source = make_instance(REGISTERED[fqn], oracle_dialect)
+            instance, source = make_instance(REGISTERED[fqn], oracle_dialect, special_registry)
             assert instance is not None, (
                 f"{fqn} is pinned as a non-render but could not be constructed " f"({source})"
             )
@@ -2761,7 +2798,7 @@ class TestMatrixIntegrity:
                 f"{fqn}: expected the message to mention {fragment!r}, got: " f"{exc_info.value}"
             )
 
-    def test_unmodelled_formatter_list_is_exact(self, oracle_dialect):
+    def test_unmodelled_formatter_list_is_exact(self, oracle_dialect, special_registry):
         """Pin the unmodelled-formatter table against what the dialect lacks.
 
         Observed rather than assumed: for each class the matrix covers, either
@@ -2788,7 +2825,7 @@ class TestMatrixIntegrity:
         """
         observed = set()
         for fqn in sorted(REGISTERED):
-            instance, source = make_instance(REGISTERED[fqn], oracle_dialect)
+            instance, source = make_instance(REGISTERED[fqn], oracle_dialect, special_registry)
             if instance is None:
                 continue
             try:
@@ -2879,7 +2916,7 @@ class TestMatrixIntegrity:
             not unresolved
         ), f"the matrix covers classes the registry cannot resolve: {unresolved}"
 
-    def test_coverage_report(self, oracle_dialect):
+    def test_coverage_report(self, oracle_dialect, special_registry):
         """Surface the classification distribution, so coverage stays transparent.
 
         One class is counted once, by whichever branch
@@ -2907,7 +2944,7 @@ class TestMatrixIntegrity:
         """
         counts: Dict[str, int] = {}
         for fqn in sorted(REGISTERED):
-            instance, _source = make_instance(REGISTERED[fqn], oracle_dialect)
+            instance, _source = make_instance(REGISTERED[fqn], oracle_dialect, special_registry)
             if instance is None:
                 counts["unbuildable"] = counts.get("unbuildable", 0) + 1
                 continue
